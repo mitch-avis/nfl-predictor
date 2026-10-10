@@ -130,6 +130,136 @@ export interface PowerOut {
   division_standings: TablePayload | null
 }
 
+/** One game on the confidence pool sheet; `result` and `points_won` are set once it is final. */
+export interface SheetRow {
+  game_id: string
+  points: number | null
+  pick: string | null
+  opponent: string | null
+  pick_is_home: boolean | null
+  away_abbr: string
+  home_abbr: string
+  kickoff: string | null
+  pick_win_prob: number | null
+  expected_points: number | null
+  away_score: number | null
+  home_score: number | null
+  result: 'win' | 'loss' | 'tie' | null
+  points_won: number | null
+  /** On a sheet of the picks entered before the lock: the points and pick predicted since, when they differ. */
+  newer_points: number | null
+  newer_pick: string | null
+}
+
+/**
+ * A week's confidence pool sheet: picks by points, the lock (first kickoff) and the scoring. When
+ * the predictions were rewritten after the lock, `picks_file` names the pre-lock picks it shows.
+ */
+export interface ConfidenceSheet {
+  run_id: string | null
+  source: string
+  season: number | null
+  week: number | null
+  generated_at: string | null
+  rows: SheetRow[]
+  games: number
+  max_points: number
+  expected_points: number | null
+  games_final: number
+  points_won: number | null
+  points_possible: number | null
+  lock_at: string | null
+  generated_after_lock: boolean | null
+  rank_problem: string | null
+  picks_file: string | null
+  newer_predictions_at: string | null
+  changed_after_lock: number
+}
+
+/** A game's whole-point tiebreak entry and the p10 to p90 bands behind it. */
+export interface TiebreakGame {
+  game_id: string
+  away_abbr: string
+  home_abbr: string
+  kickoff: string | null
+  slot: string | null
+  total_points: number | null
+  home_points: number | null
+  away_points: number | null
+  total_raw: number | null
+  home_raw: number | null
+  away_raw: number | null
+  total_p10: number | null
+  total_p90: number | null
+  home_p10: number | null
+  home_p90: number | null
+  away_p10: number | null
+  away_p90: number | null
+}
+
+/** The week's highest or lowest team score, and the team projected to have it. */
+export interface ScoreEstimate {
+  points: number | null
+  median: number | null
+  p10: number | null
+  p90: number | null
+  projected_team: string | null
+  projected_points: number | null
+}
+
+export interface Tiebreakers {
+  run_id: string | null
+  source: string
+  season: number | null
+  week: number | null
+  generated_at: string | null
+  games: TiebreakGame[]
+  default_game_ids: string[]
+  highest: ScoreEstimate
+  lowest: ScoreEstimate
+}
+
+export interface SurvivorRequest {
+  season: number
+  start_week: number
+  used_teams: string[]
+  /** How many weeks from the start week the plans show as near-term picks; every week is solved. */
+  horizon_weeks: number
+}
+
+/** One week's pick in a survivor plan; `later` marks a lookahead pick. */
+export interface SurvivorPick {
+  week: number
+  team: string
+  opponent: string
+  is_home: boolean
+  win_prob: number
+  game_id: string
+  kickoff: string | null
+  later: boolean
+  cumulative_survival: number
+}
+
+export interface SurvivorPlan {
+  rank: number
+  picks: SurvivorPick[]
+  survival: number
+  later_survival: number | null
+  total_survival: number
+}
+
+export interface SurvivorOut {
+  season: number
+  start_week: number
+  planned_weeks: number[]
+  later_weeks: number[]
+  missing_weeks: number[]
+  used_teams: string[]
+  teams: string[]
+  plans: SurvivorPlan[]
+  future_values: { team: string; value: number }[]
+}
+
 export interface CalibrationBin {
   bin_lower: number
   bin_upper: number
@@ -150,10 +280,19 @@ export interface FeatureImportanceRow {
   splits: number | null
 }
 
+/**
+ * `rows` ranks the features over both heads (the default view); `margin_rows` ranks every feature
+ * by the margin head alone, with `value` and `splits` for that head, and is empty when the run
+ * recorded no per-head numbers.
+ */
 export interface FeatureImportance {
   measure: FeatureImportanceMeasure | null
   rows: FeatureImportanceRow[]
+  margin_rows: FeatureImportanceRow[]
 }
+
+/** Which ranking the feature importance chart plots: both heads added, or the margin head alone. */
+export type ImportanceHead = 'combined' | 'margin'
 
 export interface MetricStrategyEntry {
   metric: string

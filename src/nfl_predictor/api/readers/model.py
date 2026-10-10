@@ -99,16 +99,57 @@ average gain per split summed over encoded columns and heads, reported as
 
 def _empty_importance() -> dict[str, Any]:
     """Return the importance payload for a run without usable importance."""
-    return {"measure": None, "rows": []}
+    return {"measure": None, "rows": [], "margin_rows": []}
+
+
+def _value_at(block: dict[str, Any], key: str, index: int) -> float | None:
+    """Return ``block[key][index]`` as a float when it is a number, else ``None``."""
+    values = block.get(key)
+    if isinstance(values, list) and index < len(values):
+        value = values[index]
+        return float(value) if isinstance(value, int | float) else None
+    return None
+
+
+def _ranked_rows(
+    names: list[Any],
+    ranking: dict[str, Any],
+    heads: tuple[dict[str, Any], dict[str, Any]],
+    key: str,
+) -> list[dict[str, Any]]:
+    """Return one row per feature with a number under ``ranking[key]``, largest value first.
+
+    ``value`` and ``splits`` come from ``ranking`` (the combined block or one head's block);
+    ``margin_value`` and ``total_value`` from the two heads.
+    """
+    margin, total = heads
+    rows: list[dict[str, Any]] = []
+    for index, name in enumerate(names):
+        value = _value_at(ranking, key, index)
+        if value is None:
+            continue
+        rows.append(
+            {
+                "feature": str(name),
+                "value": value,
+                "margin_value": _value_at(margin, key, index),
+                "total_value": _value_at(total, key, index),
+                "splits": _value_at(ranking, "weight", index),
+            }
+        )
+    rows.sort(key=lambda row: float(row["value"]), reverse=True)
+    return rows
 
 
 def feature_importance(path: Path, top: int = TOP_FEATURES) -> dict[str, Any]:
     """Return the top base features by the best importance measure the file records.
 
-    The payload is ``{measure, rows}``; each row is
-    ``{feature, value, margin_value, total_value, splits}``, where ``value`` is the measure
-    over both heads, ``margin_value``/``total_value`` the same measure per head and ``splits``
-    the split count over both heads.
+    The payload is ``{measure, rows, margin_rows}``; each row is
+    ``{feature, value, margin_value, total_value, splits}``. In ``rows`` the features rank by
+    the measure over both heads, ``value`` is that sum and ``splits`` the split count over both
+    heads. ``margin_rows`` ranks every feature by the margin head alone, so ``value`` is the
+    margin head's measure and ``splits`` its split count; it is empty when the file records no
+    margin head. ``margin_value``/``total_value`` are the measure per head in both lists.
     """
     base = _opt_dict(_dict(load_json(path)).get("base_features"))
     if base is None:
@@ -119,36 +160,21 @@ def feature_importance(path: Path, top: int = TOP_FEATURES) -> dict[str, Any]:
     total = _dict(base.get("total"))
     found = next(
         (
-            (key, measure, values)
+            (key, measure)
             for key, measure in IMPORTANCE_MEASURES
-            if (values := _opt_list(combined.get(key))) is not None
+            if _opt_list(combined.get(key)) is not None
         ),
         None,
     )
     if names is None or found is None:
         return _empty_importance()
-    key, measure, values = found
-
-    def _at(block: dict[str, Any], block_key: str, index: int) -> float | None:
-        block_values = block.get(block_key)
-        if isinstance(block_values, list) and index < len(block_values):
-            value = block_values[index]
-            return float(value) if isinstance(value, int | float) else None
-        return None
-
-    rows: list[dict[str, Any]] = [
-        {
-            "feature": str(name),
-            "value": float(value),
-            "margin_value": _at(margin, key, i),
-            "total_value": _at(total, key, i),
-            "splits": _at(combined, "weight", i),
-        }
-        for i, (name, value) in enumerate(zip(names, values, strict=False))
-        if isinstance(value, int | float)
-    ]
-    rows.sort(key=lambda r: float(r["value"]), reverse=True)
-    return {"measure": measure, "rows": rows[:top]}
+    key, measure = found
+    heads = (margin, total)
+    return {
+        "measure": measure,
+        "rows": _ranked_rows(names, combined, heads, key)[:top],
+        "margin_rows": _ranked_rows(names, margin, heads, key)[:top],
+    }
 
 
 def wf_compare(path: Path) -> TablePayload:

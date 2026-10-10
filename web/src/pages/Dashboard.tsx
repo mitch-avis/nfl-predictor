@@ -5,7 +5,7 @@ import { NAV_ITEMS } from '@/app/nav'
 import { ErrorState } from '@/components/common/ErrorState'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatTile } from '@/components/common/StatTile'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatNumber, formatPercent, formatRelative, seasonWeekLabel } from '@/utils/format'
 
@@ -36,9 +36,6 @@ export function DashboardPage() {
                 </CardTitle>
                 <CardDescription>{item.description}</CardDescription>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground">
-                {item.phase !== undefined ? `Coming in phase ${item.phase}` : 'Available now'}
-              </CardContent>
             </Card>
           </Link>
         ))}

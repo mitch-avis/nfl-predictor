@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING
 
 from nfl_predictor import week_builder
 from nfl_predictor.api.errors import NotFoundError
+from nfl_predictor.api.pool.kickoff import first_kickoff
 from nfl_predictor.api.readers.data_status import current_season_week, unattached_files
+from nfl_predictor.api.readers.predictions import load_frame
 from nfl_predictor.api.runs import active
+from nfl_predictor.api.runs.files import week_of
 from nfl_predictor.api.schemas.data import PredictionQuery, WeekQuery, WeekRef
 
 if TYPE_CHECKING:
@@ -48,32 +51,57 @@ def get_index(request: Request) -> RunIndex:
     return index
 
 
+def _stage_weeks(
+    index: RunIndex, active_run: RunSummary | None
+) -> set[tuple[int | None, int | None]]:
+    """Return the weeks other runs predicted as their own week, by their predictions stage."""
+    return {
+        (run.season, run.week)
+        for run in index.runs()
+        if (active_run is None or run.run_id != active_run.run_id)
+        and run.run_files.predictions_marked
+    }
+
+
 def available_weeks(
     settings: Settings, index: RunIndex, active_run: RunSummary | None
 ) -> list[WeekRef]:
-    """List the weeks a client can select.
+    """List the weeks a client can select, each with the file the routes resolve it to.
 
-    Weeks that already have predictions come first, from the active run, other runs, and then
-    unattached ``data/predict`` files. Weeks of the current season that are still unplayed and have
-    no predictions follow with source ``available``, so the selector can offer to generate them.
+    Weeks that already have predictions come first: the active run's own week, the other weeks
+    predicted into it (unless another run's predictions stage wrote that week, which then stands
+    for it), other runs (a run whose predictions stage wrote a week before one whose newest file
+    merely is for it), and then unattached ``data/predict`` files. Weeks of the current season
+    that are still unplayed and have no predictions follow with source ``available``, so the
+    selector can offer to generate them.
     """
     refs: list[WeekRef] = []
     seen: set[tuple[str, int | None, int | None]] = set()
     predicted: set[tuple[int | None, int | None]] = set()
+    stage_weeks = _stage_weeks(index, active_run)
     if active_run and active_run.run_files.predictions is not None:
-        refs.append(
-            WeekRef(
-                season=active_run.season,
-                week=active_run.week,
-                source="active",
-                run_id=active_run.run_id,
-                label=f"Week {active_run.week} (active run)",
+        own = (active_run.season, active_run.week)
+        others = [
+            key
+            for key in active_run.run_files.week_predictions
+            if key != own and key not in stage_weeks
+        ]
+        for season, week in [own, *others]:
+            refs.append(
+                WeekRef(
+                    season=season,
+                    week=week,
+                    source="active",
+                    run_id=active_run.run_id,
+                    label=f"Week {week} (active run)",
+                )
             )
-        )
-        seen.add(("run", active_run.season, active_run.week))
-        predicted.add((active_run.season, active_run.week))
+            seen.add(("run", season, week))
+            predicted.add((season, week))
     for run in index.runs():
         if run.run_files.predictions is None or run is active_run:
+            continue
+        if not run.run_files.predictions_marked and (run.season, run.week) in stage_weeks:
             continue
         key = ("run", run.season, run.week)
         if key in seen:
@@ -140,22 +168,51 @@ def _explicit_run_source(db: Database, index: RunIndex, run_id: str) -> Predicti
     return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
 
 
+def _own_source(run: RunSummary, source: str) -> PredictionSource | None:
+    """Return a run's own week's predictions as a source, or ``None`` when it has none."""
+    own = run.run_files.predictions
+    if own is None:
+        return None
+    return PredictionSource(own, source, run, run.season, run.week)
+
+
+def _ahead_source(current: RunSummary, query: WeekQuery) -> PredictionSource | None:
+    """Return a week the active run holds besides its own (predicted ahead), if it fits."""
+    for (season, week), path in current.run_files.week_predictions.items():
+        if _matches(query, season, week):
+            return PredictionSource(path, "active", current, season, week)
+    return None
+
+
 def _run_source(db: Database, index: RunIndex, query: WeekQuery) -> PredictionSource | None:
-    """Return the active run's predictions when they fit the query, else any run's that do."""
+    """Return the run file that fits the query.
+
+    Precedence: the active run's own week (also when no week was asked for); else the newest
+    other run whose predictions stage wrote that week; else a week predicted ahead into the active
+    run; else the newest other run whose newest predictions file is for that week.
+    """
     current = active.resolve_active_run(db, index)
     wants_week = query.season is not None or query.week is not None
     if (
-        current
+        current is not None
         and current.run_files.predictions is not None
         and (not wants_week or _matches(query, current.season, current.week))
     ):
-        return PredictionSource(
-            current.run_files.predictions, "active", current, current.season, current.week
-        )
-    for run in index.runs():
-        if run.run_files.predictions is not None and _matches(query, run.season, run.week):
-            return PredictionSource(run.run_files.predictions, "run", run, run.season, run.week)
-    return None
+        return _own_source(current, "active")
+    others = [
+        run
+        for run in index.runs()
+        if run.run_files.predictions is not None
+        and (current is None or run.run_id != current.run_id)
+        and _matches(query, run.season, run.week)
+    ]
+    for run in others:
+        if run.run_files.predictions_marked:
+            return _own_source(run, "run")
+    ahead = _ahead_source(current, query) if current is not None else None
+    if ahead is not None:
+        return ahead
+    return _own_source(others[0], "run") if others else None
 
 
 def _unattached_source(settings: Settings, query: WeekQuery) -> PredictionSource | None:
@@ -166,6 +223,50 @@ def _unattached_source(settings: Settings, query: WeekQuery) -> PredictionSource
                 Path(item["path"]), "unattached", None, item["season"], item["week"]
             )
     return None
+
+
+def _week_picks_file(src: PredictionSource) -> Path | None:
+    """Return the run's picks file for ``src``'s week, if the run wrote one."""
+    picks = src.run.run_files.picks if src.run else None
+    if picks is None or not picks.is_file() or week_of(picks) != (src.season, src.week):
+        return None
+    return picks
+
+
+def pre_lock_picks_file(src: PredictionSource) -> Path | None:
+    """Return the week's picks file when it was written before the lock and ``src`` after it.
+
+    Pool picks are single-shot before the week's first kickoff. When the week's predictions are
+    rewritten after that kickoff (a lines refresh chains a new prediction), the picks file the
+    weekly run wrote before it still holds the picks that count.
+    """
+    picks = _week_picks_file(src)
+    if picks is None:
+        return None
+    lock = first_kickoff(load_frame(src.path).to_dicts())
+    if lock is None:
+        return None
+    locked_at = lock.timestamp()
+    if picks.stat().st_mtime < locked_at < src.path.stat().st_mtime:
+        return picks
+    return None
+
+
+def current_picks_file(src: PredictionSource) -> Path | None:
+    """Return the run's picks file when it still describes ``src``, else ``None``.
+
+    The weekly run writes the picks file beside its own week's predictions. It describes ``src``
+    when it is for the same week and no older than ``src.path``, or when it was written before the
+    week's lock and ``src`` after it (the single-shot picks). Otherwise, predicting the week again
+    before the lock or predicting a later week leaves it behind, and the picks then come from the
+    predictions themselves.
+    """
+    picks = _week_picks_file(src)
+    if picks is None:
+        return None
+    if picks.stat().st_mtime >= src.path.stat().st_mtime:
+        return picks
+    return pre_lock_picks_file(src)
 
 
 def resolve_predictions(

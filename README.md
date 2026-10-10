@@ -1006,7 +1006,33 @@ project's outputs and, for admins, run its jobs from a browser. The backend inde
 predictions, confidence picks, betting table (totals are never actionable), power rankings,
 model metrics and data status; the Jobs pages run the ETL, a lines-only refresh
 (`src/nfl_predictor/lines_refresh.py`), future-week inputs (`src/nfl_predictor/week_builder.py`),
-training, prediction, walk-forward and the reports as streamed background subprocesses.
+training, prediction, walk-forward and the reports as streamed background subprocesses. A week
+predicted ahead with the Predictions page's Generate action lands in the active run beside the
+run's own week, and both stay selectable; once a newer weekly run predicts that week as its own,
+the newer run's predictions stand for it.
+
+The Pool page (`src/nfl_predictor/api/pool/`, routes under `/api/pool`) turns a week's
+predictions into pool entries and never changes a probability, pick or rank:
+
+- **Confidence sheet**: the picks with the points to assign, read from the existing confidence
+  ranks (ranks that are not the unique `1..N` are reported, not repaired), the expected points,
+  the lock (the week's first kickoff, since picks are single-shot) with a warning when the
+  predictions were written after it, and, once games end, the points won under the pool rules
+  below (final scores from the predictions file or `data/all_data.csv`). When the predictions were
+  rewritten after the lock (a lines refresh chains a new prediction) and the weekly run's picks
+  file was written before it, the sheet, its points and the picks download come from that picks
+  file, and the newer ranks show only as notes. Copy it, or download it as CSV
+  (`GET /api/predictions/picks?format=csv`).
+- **Tiebreakers**: whole-point total, home and road entries for any two games (the latest Sunday
+  and Monday kickoffs preselected, since the pool names its games each week), with p10 to p90
+  bands from the quantile models, and the week's highest and lowest team scores, estimated as
+  the extremes of normal team scores rather than the best and worst projections.
+- **Survivor**: one team a week, each team once, a loss or a tie ending the entry. For each
+  possible pick this week, every later week with predictions is assigned exactly (the
+  assignment of weeks to distinct teams that maximizes the chance of surviving them all,
+  `scipy.optimize.linear_sum_assignment`), so a team worth more later is saved; the next few
+  weeks show as near-term picks. Weeks without predictions are listed; predict them first to plan
+  for them. The teams already used are kept in the browser, per season.
 
 ```bash
 nfl-predictor users create-user <name> --role admin   # once
@@ -1122,7 +1148,9 @@ Training/backtests can write a run directory containing reproducible artifacts.
   margin and total heads. Its `measures` block describes each key. The web Model page
   ranks base features by combined mean |SHAP|; runs without SHAP fall back to combined total
   gain, and runs written before `schema_version` 2 to the per-split average summed over columns
-  (which favors features with many categories), each labelled as such. `nfl-predictor explain`
+  (which favors features with many categories), each labelled as such. A "Margin head only"
+  switch ranks every feature by the same measure for the margin head alone, the head that sets
+  the win probabilities and picks. `nfl-predictor explain`
   uses the same TreeSHAP values for one head, per encoded column, on a sample of any dataset.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, the resolved XGBoost device, the floor's recorded sigma (`floor_sigma`), feature list, and
@@ -1150,6 +1178,9 @@ Training/backtests can write a run directory containing reproducible artifacts.
 - Max weekly points: `N*(N+1)/2`.
 - Realized points: `sum(confidence_value * 1[pick_correct])`.
 - Ties count as incorrect.
+- Picks are single-shot: made once, before the week's first game, with no in-week updates. The web
+  app's confidence sheet scores a week by these rules and flags predictions written after the
+  first kickoff.
 
 ## Score rounding / realism (optional)
 

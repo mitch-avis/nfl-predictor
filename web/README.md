@@ -73,7 +73,10 @@ web/src/
   api/          fetch client, payload types, TanStack Query hooks
   app/          shell, sidebar, theme, auth gate, navigation
   pages/        one component per route
-  components/   ui/ (shadcn primitives), common/ (shared pieces)
+  components/   ui/ (shadcn primitives), common/ (shared pieces), one folder per page area
+                (pool/ for the Pool page's sheet, tiebreakers and survivor plans, model/, ...)
+  hooks/        URL, storage and viewport hooks (useWeekParams: the week a page shows)
+  test/         vitest setup and renderWithProviders (router and tooltip providers)
   utils/        cn() and formatting helpers  (not src/lib: that path is gitignored)
 ```
 

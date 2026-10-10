@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.53.0] - 2026-10-10
+
+### Changed
+
+- The web sidebar and overview group the pages into sections, and Power Rankings and the new Teams
+  page link to each other.
+- Context columns such as schedule strength shade in a muted slate hue instead of the grade
+  gradient.
+- The API gzips responses of 500 bytes or more at level 6 for clients that accept it; the job log
+  stream is sent uncompressed.
+
+### Added
+
+- Team and quarterback pages over the ported ratings and season statistics: `/teams` and `/qbs`
+  with their detail pages (ratings with rank ranges, weekly rating history, game logs with each
+  opponent's season rating and league tier, opponent profiles), `/schedules` (every team-season
+  since 1999 ranked on schedule strength), `/rank-ranges`, `/head-to-head`, and a team-and-
+  quarterback tab in the Glossary. They read `data/ratings/{season}_{kind}.parquet` through
+  read-only routes under `/api/ratings`, take labels, tooltips and shading from the metric
+  registry, and compare up to four rows side by side. No job writes those tables yet, so the
+  pages show where they read from until one does.
+
+### Removed
+
+- The web API's `sos_data_dir` setting (`NFLP_SOS_DATA_DIR`): the pages read the data directory's
+  `ratings/` folder.
+
+### Fixed
+
+- `web/README.md` names the job interpreter's setting `NFLP_PYTHON_EXECUTABLE` (it said
+  `NFLP_PYTHON`, which the settings ignore).
+
 ## [0.52.0] - 2026-10-10
 
 ### Changed

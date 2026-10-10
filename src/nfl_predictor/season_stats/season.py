@@ -29,6 +29,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from nfl_predictor.season_stats.game_logs import (
+    QB_GAME_ORDER,
+    TEAM_GAME_ORDER,
     build_qb_game_logs,
     build_qb_game_stats,
     build_team_game_logs,
@@ -203,8 +205,11 @@ def build_season_tables(
     """
     team_rating_columns = _rating_columns(team_ratings, TEAM_RATING_INPUT_COLUMNS, "Team ratings")
     qb_rating_columns = _rating_columns(qb_ratings, QB_RATING_INPUT_COLUMNS, "QB ratings")
-    weekly_df = games.team_games
-    qb_df = games.qb_games
+    # The season rows and profiles sum each team's and passer's games in row order, and Polars
+    # sums a group in yet another order when the frame is flagged sorted by the group key; sorting
+    # here gives every caller the same order and the same flag, so the same bits.
+    weekly_df = games.team_games.sort(TEAM_GAME_ORDER)
+    qb_df = games.qb_games.sort(QB_GAME_ORDER)
 
     win_totals = compute_win_totals(weekly_df)
     team_combined = compute_all_teams_per_game(weekly_df).join(win_totals, on="team", how="left")

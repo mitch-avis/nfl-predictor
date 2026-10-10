@@ -409,3 +409,31 @@ def test_build_season_tables_leave_out_profiles_no_opponent_game_supports() -> N
     assert tables.opponent_profiles is None
     assert "opponent_profiles" not in tables.tables()
     assert not [column for column in tables.combined.columns if column.startswith("opp_")]
+
+
+def test_build_season_tables_sum_each_teams_games_in_one_order_whatever_the_input_order() -> None:
+    """Floats sum to other last bits in another order: 0.1 + 0.2 + 0.3 is not 0.3 + 0.2 + 0.1."""
+    # Arrange
+    epa = [0.1, 0.2, 0.3, 0.7, 0.11, 0.13]
+    weekly = _weekly_df().with_columns(
+        pl.Series("offensive_epa", [epa[index % len(epa)] for index in range(_weekly_df().height)])
+    )
+    shuffled = season_tables.SeasonGames(
+        team_games=weekly.reverse(), qb_games=_qb_df().reverse(), schedule=_schedule_df()
+    )
+    ordered = season_tables.SeasonGames(
+        team_games=weekly, qb_games=_qb_df(), schedule=_schedule_df()
+    )
+    expected = season_tables.build_season_tables(
+        ordered, _pbp(), team_ratings=_team_ratings(), qb_ratings=_qb_ratings()
+    )
+
+    # Act
+    tables = season_tables.build_season_tables(
+        shuffled, _pbp(), team_ratings=_team_ratings(), qb_ratings=_qb_ratings()
+    )
+
+    # Assert
+    assert {
+        name: frame.equals(expected.tables()[name]) for name, frame in tables.tables().items()
+    } == (dict.fromkeys(expected.tables(), True))

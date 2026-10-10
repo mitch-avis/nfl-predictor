@@ -803,6 +803,8 @@ def forward_selection(runner: Runner) -> dict[str, Any]:
                 "label": COMPONENT_NAMES[name],
                 "candidate": settings_label(candidate),
                 "current": settings_label(kept),
+                "candidate_settings": settings_dict(candidate),
+                "current_settings": settings_dict(kept),
                 **comparison,
                 "kept": verdict,
             }
@@ -901,12 +903,56 @@ def rolling_home_field_values(schedule: pl.DataFrame, *, travel: bool) -> dict[s
     }
 
 
+def pre_kickoff_starters(
+    runner: Runner, previous: Runner, selection: dict[str, Any]
+) -> dict[str, Any]:
+    """Score the presets with every game rated for the team's previous starter.
+
+    A completed game's starter is the passer on its first dropback, known only at kickoff.
+    ``previous`` rates every game with the team's last starter instead, as known before kickoff,
+    while its ratings still roll in the actual starter's game. A diagnostic: the rule reads the
+    forward selection, not this.
+    """
+    outcome = runner.window.outcome
+    presets = {"market-free": selection["market_free"], "win-total": selection["anchored"]}
+    rows = []
+    for label, settings in presets.items():
+        actual = runner.probability(settings)
+        pre_kickoff = previous.probability(settings)
+        rows.append(
+            {
+                "preset": f"{label}: {settings_label(settings)}",
+                "actual_starter": summary(outcome, actual),
+                "previous_starter": summary(outcome, pre_kickoff),
+                "previous_minus_actual": paired(outcome, pre_kickoff, actual),
+            }
+        )
+    step = next(s for s in selection["steps"] if s["component"] == "quarterback")
+    candidate = elo_ratings.EloSettings(**step["candidate_settings"])
+    current = elo_ratings.EloSettings(**step["current_settings"])
+    gain = paired(outcome, previous.probability(candidate), previous.probability(current))
+    return {
+        "presets": rows,
+        "quarterback_step": {
+            "candidate": settings_label(candidate),
+            "current": settings_label(current),
+            "with_actual_starters": {
+                key: step[key] for key in ("brier_diff", "brier_ci", "log_loss_diff", "log_loss_ci")
+            },
+            "with_previous_starters": gain,
+        },
+    }
+
+
 def evaluate(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) -> dict[str, Any]:
     """Run every check, the seeding decision, the selection and the diagnostics."""
     inputs = load_inputs(data_dir, fivethirtyeight_path, win_totals_path)
     window = evaluation_window(inputs.schedule)
     box = elo_quarterbacks.quarterback_box_scores(inputs.plays)
     adjustments = elo_quarterbacks.value_qb_adjustments(inputs.schedule, box)
+    previous_adjustments = elo_quarterbacks.value_qb_adjustments(
+        inputs.schedule, box, pre_game_starter="last_starter"
+    )
     seeds = fivethirtyeight_seeds(inputs.fivethirtyeight)
     runners = {
         "plain": Runner(inputs, window, adjustments),
@@ -914,6 +960,7 @@ def evaluate(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) 
     }
     seeding = seeding_decision(runners)
     runner = runners["seeded"] if seeding["kept"] else runners["plain"]
+    previous = Runner(inputs, window, previous_adjustments, seeds=runner.seeds)
     selection = forward_selection(runner)
     market_free = selection["market_free"]
     anchored = selection["anchored"]
@@ -946,6 +993,15 @@ def evaluate(data_dir: Path, fivethirtyeight_path: Path, win_totals_path: Path) 
             "anchored_label": settings_label(anchored),
         },
         "single_components": single_components(runner),
+        "pre_kickoff_starters": pre_kickoff_starters(
+            runner,
+            previous,
+            {
+                "market_free": market_free,
+                "anchored": anchored,
+                "steps": selection["steps"],
+            },
+        ),
         "summaries": {
             name: summary(window.outcome, p) for name, p in {**finals, **references}.items()
         },
@@ -1123,6 +1179,46 @@ def _diagnostic_lines(result: dict[str, Any]) -> list[str]:
     lines += _table(
         ["component", "Brier diff", "95% interval", "log-loss diff", "95% interval"],
         [[row["label"], *_comparison_cells(row)] for row in result["single_components"]],
+    )
+    starters = result["pre_kickoff_starters"]
+    lines += ["## Starters known before kickoff", ""]
+    lines += _paragraph(
+        "A diagnostic: the rule reads the forward selection above, not this. A completed game's",
+        "starter is the passer on its first dropback, known only at kickoff. Here every game is",
+        "rated for the team's previous starter instead, as known before kickoff, while the",
+        "ratings still roll in the actual starter's game. Difference is previous minus actual.",
+    )
+    lines += _table(
+        [
+            "preset",
+            "actual-starter Brier",
+            "previous-starter Brier",
+            "Brier diff",
+            "95% interval",
+            "log-loss diff",
+            "95% interval",
+        ],
+        [
+            [
+                row["preset"],
+                _number(row["actual_starter"]["brier"]),
+                _number(row["previous_starter"]["brier"]),
+                *_comparison_cells(row["previous_minus_actual"]),
+            ]
+            for row in starters["presets"]
+        ],
+    )
+    step = starters["quarterback_step"]
+    lines += _paragraph(
+        f"The quarterback step ({step['candidate']} against {step['current']}), candidate minus",
+        "current:",
+    )
+    lines += _table(
+        ["starters", "Brier diff", "95% interval", "log-loss diff", "95% interval"],
+        [
+            ["actual (the rule's step)", *_comparison_cells(step["with_actual_starters"])],
+            ["previous", *_comparison_cells(step["with_previous_starters"])],
+        ],
     )
     playoff = result["playoff_games"]
     lines += ["## Playoff games, 2007-2025", ""]

@@ -152,6 +152,12 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none measured on the snapshot.
 - **How to reverse it**: in `ratings_build.RatingsBuild`, drop `load_qb_games_before`.
 - **Review**: not yet reviewed.
+- **After the review** (`4fb3905`): the leakage case now runs on the synthetic league with weekly
+  player stats and snap counts filled in, and rewrites from the week on the plays' EPA, passer
+  ids and names and dropback, pass, run, kneel, spike and special-teams flags, the player
+  stats, the snap counts, the roster weeks and the scores; the ETL-level case moved from week 2,
+  where `ratings_sos` is null by construction, to week 3 and rewrites the same play values and
+  the scores.
 
 ## 7. The pre-week passer rows are ordered by passer id
 
@@ -186,6 +192,14 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none for the quarterback family.
 - **How to reverse it**: inline the function back into `attach_qb_features`.
 - **Review**: not yet reviewed.
+- **After the merge with the play-by-play integration**: the function takes the run's
+  play-by-play starters, so a completed game's side reads its play-by-play starter and every
+  other side its named one (`2c5d028`; `integration_pbp_elo.md`, entry 1.7), and its name
+  fallback reads only the passers of games before the row's week (`06e9863`): a later passer
+  sharing an abbreviation (a 2026 rookie `J.Daniels`, say) can no longer make an earlier name
+  ambiguous, and a debutant's own debut can no longer name him in a training row while the same
+  name stays unknown before kickoff. With today's identity file neither changes a published
+  value.
 
 ## 9. The quarterback feature's evidence column: dropbacks before the week
 
@@ -244,6 +258,11 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none.
 - **How to reverse it**: add `qb_season` in `RatingsBuild._tables`.
 - **Review**: not yet reviewed.
+- **After the review** (`37599f3`): every table is written to a temporary file in the same
+  directory and moved over the published one, as `lines_refresh._write_atomic` does, so a web
+  page that reads `data/ratings/` during a web-launched ETL sees the old file or the new one,
+  never half of one; a failed write leaves the old file and no temporary file
+  (`test_a_failed_table_write_leaves_the_published_file_whole`).
 
 ## 12. A season without a qualified passer gets no quarterback tables
 
@@ -260,6 +279,11 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none (the features read the pre-week tables).
 - **How to reverse it**: `_has_qualified_passer` in `ratings_build.py`.
 - **Review**: not yet reviewed.
+- **After the review** (`9f2e7a3`): the guard asks for a qualified passer among the passers the
+  fit rates (a game with a dropback). A season whose qualified passers had no dropback recorded
+  passed the old guard and then stopped the ETL with `ColumnNotFoundError` in the rank summary,
+  for the same reason as the season without a qualified passer
+  (`test_quarterback_tables_need_a_qualified_passer_the_fit_rates`).
 
 ## 13. The weeks that get pre-week ratings
 
@@ -293,6 +317,13 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none.
 - **How to reverse it**: `ratings_build.load_ratings_sources`.
 - **Review**: not yet reviewed.
+- **After the merge with the play-by-play integration**: the loader asks only for the
+  play-by-play seasons before the first one the ETL loaded, so the current season, which has no
+  plays before kickoff, is requested once (`0cb7c00`;
+  `test_sources_never_ask_again_for_a_season_the_etl_asked_for`). The ETL now loads the sources
+  through `load_ratings_sources` itself and hands the players file and weekly rosters it loaded
+  to every season's quarterback identity, so a current-season run downloads each of them once
+  (`d9a2c6b`; `nflverse_sources.QbIdentitySources`).
 
 ## 15. The ratings in the season cache
 
@@ -374,7 +405,27 @@ Scripts and their reports, run from the repository root with the worktree's envi
   averages 8 to 12): loading the other sources and building the adapter's rows 9.0 s, building
   every season 442.8 s (a full rebuild), building only 2026 (the season in progress, with its
   weekly rank ranges) 21.4 s (an incremental run), the season cache's extra input and output
-  0.6 s, attaching the features 0.2 s, writing the 254 tables 0.2 s.
+  0.6 s, attaching the features 0.2 s, writing the 254 tables 0.2 s. The incremental step grows
+  through the season, since the season in progress refits its weekly rank ranges for every week
+  played: the independent review timed 2025 built as the season in progress at 51.5 s against
+  19.5 s for the same season finished, so late in a season an incremental run spends about 60 s
+  on the ratings.
 - **Feature-value impact**: none.
 - **How to reverse it**: not applicable.
+- **Review**: not yet reviewed.
+
+## 19. A team whose games have no final score keeps its ratings row
+
+- **What differs**: the published `ratings` table inner-joined the score-based SRS (and the
+  schedule strength and game count) onto the fit's teams, and the SRS solve drops every game
+  without a final score, so a team whose played games all lacked one vanished from the table.
+- **Options**: (a) left-join them and leave such a team's SRS null, with a warning; (b) warn and
+  keep the inner join.
+- **Decision**: (a) (`519444c`; `ratings.season.build_team_ratings`).
+- **Reasoning**: the fit rates the team from its plays, so the table should carry it; only the
+  score-based column has nothing to report.
+- **Data**: `test_build_team_season_keeps_teams_whose_games_have_no_final_score`; the published
+  parity test is unchanged, so every table with its scores present is the same.
+- **Feature-value impact**: none (the features read the pre-week tables).
+- **How to reverse it**: the inner joins in `build_team_ratings`.
 - **Review**: not yet reviewed.

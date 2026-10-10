@@ -7,10 +7,39 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pandas as pd
 import pytest
+from scipy.stats import norm
 
 from nfl_predictor.reporting import betting_report
+
+_SIGMA = 13.5
+_SPLIT_COLUMNS = [
+    "market_home_prob_spread",
+    "edge_beyond_spread_home_prob",
+    "spread_moneyline_gap_home_prob",
+]
+
+
+def _spread_predictions(home_spread: list[float]) -> pd.DataFrame:
+    """Return two games whose home win probabilities are the floor of their margins."""
+    margins = np.array([3.0, -2.0])
+    return pd.DataFrame(
+        {
+            "game_id": ["g1", "g2"],
+            "away_abbr": ["A", "C"],
+            "home_abbr": ["B", "D"],
+            "home_win_prob": norm.cdf(margins / _SIGMA),
+            "predicted_margin": margins,
+            "predicted_total": [44.0, 41.0],
+            "home_moneyline": [-120.0, 135.0],
+            "away_moneyline": [110.0, -150.0],
+            "home_spread": home_spread,
+            "away_spread": [-value for value in home_spread],
+            "total_line": [43.5, 40.5],
+        }
+    )
 
 
 def test_moneyline_to_implied_prob_negative() -> None:
@@ -164,3 +193,79 @@ def test_a_missing_edge_reads_strong() -> None:
 
     # Assert
     assert action == "STRONG"
+
+
+def test_build_betting_report_edge_is_the_sum_of_beyond_and_gap() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0])
+
+    # Act
+    report = betting_report.build_betting_report(predictions, floor_sigma=_SIGMA)
+
+    # Assert
+    np.testing.assert_allclose(
+        report["edge_home_prob"],
+        report["edge_beyond_spread_home_prob"] + report["spread_moneyline_gap_home_prob"],
+        rtol=0,
+        atol=1e-15,
+    )
+
+
+def test_build_betting_report_spread_probability_is_the_floor_at_the_market_margin() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0])
+
+    # Act
+    report = betting_report.build_betting_report(predictions, floor_sigma=_SIGMA)
+
+    # Assert
+    by_game = report.set_index("game_id")["market_home_prob_spread"]
+    expected = norm.cdf(np.array([2.5, -3.0]) / _SIGMA)
+    np.testing.assert_allclose(by_game.loc[["g1", "g2"]], expected, rtol=0, atol=1e-15)
+
+
+def test_build_betting_report_without_floor_sigma_leaves_the_split_missing() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0])
+
+    # Act
+    report = betting_report.build_betting_report(predictions)
+
+    # Assert
+    assert report[_SPLIT_COLUMNS].isna().all().all()
+
+
+def test_build_betting_report_game_without_a_spread_leaves_its_split_missing() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, float("nan")])
+
+    # Act
+    report = betting_report.build_betting_report(predictions, floor_sigma=_SIGMA)
+
+    # Assert
+    missing = report.set_index("game_id")[_SPLIT_COLUMNS].isna()
+    assert missing.loc[["g1", "g2"]].to_numpy().tolist() == [[False] * 3, [True] * 3]
+
+
+def test_build_betting_report_without_a_spread_column_leaves_the_split_missing() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0]).drop(columns=["home_spread", "away_spread"])
+
+    # Act
+    report = betting_report.build_betting_report(predictions, floor_sigma=_SIGMA)
+
+    # Assert
+    assert report[_SPLIT_COLUMNS].isna().all().all()
+
+
+def test_build_betting_report_floor_sigma_leaves_the_existing_columns_unchanged() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0])
+    without_sigma = betting_report.build_betting_report(predictions)
+
+    # Act
+    with_sigma = betting_report.build_betting_report(predictions, floor_sigma=_SIGMA)
+
+    # Assert
+    existing = [column for column in without_sigma.columns if column not in _SPLIT_COLUMNS]
+    pd.testing.assert_frame_equal(with_sigma[existing], without_sigma[existing])

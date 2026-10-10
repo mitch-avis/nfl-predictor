@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from tests.sos_port_scripts import load_script
+from tests.sos_port_scripts import load_sos_port_script
 
-elo_qb_alt = load_script("elo_qb_alt")
+elo_qb_alt = load_sos_port_script("elo_qb_alt")
 
 TABLE_SCHEMA = {
     "week": pl.Int64,

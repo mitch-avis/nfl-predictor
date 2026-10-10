@@ -168,12 +168,13 @@ small and local.
   source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
   browser (signing in needs a typed password); the user should look at the pages once.
 - The own Elo's alternative quarterback adjustment (the ported quarterback rating in place of
-  538's VALUE): two implementer attempts stopped on an API limit before writing anything. Their
-  transcripts show why: each response spent its whole 16,000-token output budget deliberating
-  over design choices the brief had left open (six responses in a row), not on output size. A
-  third attempt runs with every choice fixed in the brief (the scale `25` Elo points per point
-  times the dropbacks per team-game of earlier seasons, VALUE's starters and team rule, the
-  earlier-season fallbacks); it is report-only and nothing depends on it.
+  538's VALUE), merged as `0.57.1`, reviewed: VALUE stays (Brier +0.00524 [+0.00319, +0.00725]
+  for the ported rating). Two implementer attempts had stopped on an API limit before writing
+  anything: each response spent its whole 16,000-token output budget deliberating over design
+  choices the brief had left open; the third, with every choice fixed in the brief, finished.
+  Its check found that the published quarterback week-by-week tables use the penalty chosen on
+  the whole season (a mild look-ahead in past seasons' displayed histories; no feature or
+  evaluation reads them).
 - Power rankings (phase 5, reviewed in two rounds, `models/step6/rankings/REVIEW.md`): the
   pre-registered scoring (next-week margin MAE, 2008-2025 from week 2, 4,400 games), applied as
   written, picks the blend of the ported team rating and a model rating over the ported rating
@@ -183,20 +184,8 @@ small and local.
   -0.151 [-0.208, -0.094] (weights on the ported rating 0.7 in 2008-2009, 0.6 in 2010-2014, 0.5
   from 2015). The supplement averages each game's predicted margin over the seeds before the fit,
   where rule 13 averages per-game loss differences; the reviewer computed both and the outcome is
-  the same (-0.146 [-0.202, -0.090]). Switching what the weekly run publishes
-  (`config/weekly_run.yaml`, default the composite) is the user's call; if the blend is chosen,
-  the weekly run also needs a source for the model's predictions (the implementer recommends the
-  run's own stage-1 folds for the current season plus the floor-sigma reference runs for the
-  previous season's week 1). Weigh: the model rating comes from the market-anchored model, so a
-  published blend partly carries the betting line (the user prefers a stats-only view); the ported
-  rating alone and the current composite tie each other.
-- Question: should a market-free run leave out the market-informed Elo groups automatically? Today
-  `--exclude-market` (and the weekly run's market-free mode) drops only line columns, per the
-  step-5 design the user accepted; the `qb_elos.csv` Elo and, after a rebuild, the own Elo's
-  win-total preset still enter unless `--disable-feature-groups elo,own_elo_wt` (or the weekly
-  run's `disable_feature_groups`) is set. The integration adds a warning, not an automatic drop.
-  The reviewer recommends automatic (high confidence); the cost is that market-free results stop
-  being comparable with earlier market-free runs that kept the `elo` group.
+  the same (-0.146 [-0.202, -0.090]). Decided by the user (see "User decisions during the run").
+
 - Pre-existing defect found in review and fixed on a branch (held with step 6): an upcoming
   game's `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` were filled with 0.0 (and
   every playoff game's), while the completed rows the model trains on carry the real pre-game
@@ -216,6 +205,27 @@ small and local.
   because the current season's schedule is downloaded again on every ETL run; recheck before the
   Paris game (2026-10-25) and add a roof override then if it is still wrong
   (`.agents/sos_port/decisions/pbp_columns.md`).
+
+## User decisions during the run (2026-10-10, about 13:20)
+
+Asked at the user's check-in, each with its context and a recommendation; recorded as answered.
+
+- **Power rankings**: the weekly run publishes the blend (half the ported team rating, half the
+  model rating, weight `0.5` by the measured rule) instead of the composite. The user's aim for the
+  rankings: an as-objective-as-possible snapshot of current strength on a neutral field, using
+  all available data (the rankings make no predictions, so the market-informed model half is
+  fine). Implementation (on the step-6 branch, held with the merge): the default, and the weekly
+  run's own stage-1 folds plus the averaged floor-sigma reference runs as the model's predictions.
+- **The stats-only model and win totals**: the model without game lines and without anchoring may
+  keep the preseason win-total prior the Elo groups carry (`elo`, `own_elo_wt`); the mode means
+  "no game lines", and its log message and help text say so. The strict variant (also
+  `--disable-feature-groups elo,own_elo_wt`) stays the step-6 test bench. The user's goal for that
+  model: predict outcomes and scores from the ETL's own data, not from the game line as a
+  baseline. Production picks stay on the anchored model, which ties the market.
+- **Betting labels**: run a pre-registered test of today's labels (the whole edge) against labels
+  on the model's part beyond the spread, governed by the games with real moneylines; a tie keeps
+  today's labels, and any switch goes back to the user.
+- **Feature ideas** (referee, weather, attendance, team health): a later session.
 
 ## Snapshots and timings
 

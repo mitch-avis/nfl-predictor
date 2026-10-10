@@ -18,7 +18,7 @@ wins (a tie is not one). Intervals are 95% percentile intervals over
 
 | input | detail |
 | --- | --- |
-| code commit | `e8f56c43a032000d878b669edf5961aed6b8fd74` |
+| code commit | `ff14dec20c49f0bb150aed00c43763e917c65d8e` |
 | data directory | `/home/mitch/workspace/nfl-predictor/data` |
 | schedule cache files (1999-2025) SHA-256 | `05caf797be2c0d80f4d88ece1f58fc688a3f05b71fba37eb2bbd0ba1c07a1c3f` |
 | play-by-play cache files (1999-2025) SHA-256 | `d62eae99d3c0240c226d8565ed678045303ccff4973281a387774de23869683a` |
@@ -265,6 +265,23 @@ to GSIS ids through `meta_data.csv`).
 | --- | --- | --- | --- |
 | 1999-2025 | 13921 | 0.9981 | 0.9666 |
 | 2007-2025 | 9879 | 0.9979 | 0.9699 |
+
+### 538's rolling updates
+
+538's seasons 2007-2022: how often the next published value is the candidate rolling
+update of the published one (within 0.01 Elo points). A quarterback's value moves with
+his own starts; the team's (value minus adjustment) with each game of the season.
+
+| rating | rate | updates | median abs gap | within 0.01 |
+| --- | --- | --- | --- | --- |
+| quarterback | 0.10 | 8618 | 0.0000 | 1.000 |
+| quarterback | 0.05 | 8618 | 4.2978 | 0.001 |
+| team | 0.10 | 8106 | 4.4366 | 0.000 |
+| team | 0.05 | 8106 | 0.0007 | 0.551 |
+
+At a team's first game of a season, 538's stated rule (a third of the previous season's
+end-of-season team value, two thirds the starter's preseason value) against the published team
+value: 480 season starts, median gap 4.52 Elo points, within 0.01 for 0.002 of them.
 
 ### Quarterback adjustments
 

@@ -415,6 +415,41 @@
         "team_games": 1632
       }
     ],
+    "rolling_updates": {
+      "quarterback": [
+        {
+          "median_abs_gap": 7.105427357601002e-15,
+          "rate": 0.1,
+          "share_within_0.01": 1.0,
+          "updates": 8618
+        },
+        {
+          "median_abs_gap": 4.297842404893601,
+          "rate": 0.05,
+          "share_within_0.01": 0.0012763982362497099,
+          "updates": 8618
+        }
+      ],
+      "team": [
+        {
+          "median_abs_gap": 4.4366011693490535,
+          "rate": 0.1,
+          "share_within_0.01": 0.0004934616333580064,
+          "updates": 8106
+        },
+        {
+          "median_abs_gap": 0.0006916592792833853,
+          "rate": 0.05,
+          "share_within_0.01": 0.5510732790525537,
+          "updates": 8106
+        }
+      ],
+      "team_preseason": {
+        "median_abs_gap": 4.515847006557308,
+        "season_starts": 480,
+        "share_within_0.01": 0.0020833333333333333
+      }
+    },
     "starters": {
       "1999-2025": {
         "first_passer_agrees": 0.9981323180805977,
@@ -448,7 +483,7 @@
       "path": "/home/mitch/scratch/elo_research/nfl-elo-game/data/nfl_games.csv",
       "sha256": "af16cf3c5848393057fad07feea278f0a85ab7b57ddbfe42ed96b5c80e7d519d"
     },
-    "git_commit": "e8f56c43a032000d878b669edf5961aed6b8fd74",
+    "git_commit": "ff14dec20c49f0bb150aed00c43763e917c65d8e",
     "meta_data": {
       "path": "/home/mitch/workspace/nfl-predictor/data/meta_data.csv",
       "sha256": "7cc566a5d76ebbd7e585134744115d3ad6dedcfb56157fd39889643e1daeeaa6"

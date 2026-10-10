@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import polars as pl
@@ -28,9 +29,6 @@ from nfl_predictor.ratings.pbp_inputs import quarterback_rows
 from nfl_predictor.ratings.pre_week import RatingsHistory
 from nfl_predictor.ratings.season import BootstrapSettings, TeamSeasonRatings
 from nfl_predictor.utils.polars import qb_starters, ratings_build
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _FAST = BootstrapSettings(resamples=20, seed=0)
 _LAST = SEASONS[-1]
@@ -664,3 +662,40 @@ def test_quarterback_tables_need_a_qualified_passer_the_fit_rates(
 
     # Assert
     assert found is qualified
+
+
+def test_published_tables_replace_each_file_whole(tmp_path: Path) -> None:
+    # Arrange
+    directory = tmp_path / "ratings"
+    ratings_build.write_published_tables({"2024_ratings": pl.DataFrame({"a": [1]})}, directory)
+
+    # Act
+    ratings_build.write_published_tables({"2024_ratings": pl.DataFrame({"a": [2]})}, directory)
+
+    # Assert
+    assert pl.read_parquet(directory / "2024_ratings.parquet").get_column("a").to_list() == [2]
+    assert sorted(path.name for path in directory.iterdir()) == ["2024_ratings.parquet"]
+
+
+def test_a_failed_table_write_leaves_the_published_file_whole(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    directory = tmp_path / "ratings"
+    ratings_build.write_published_tables({"2024_ratings": pl.DataFrame({"a": [1]})}, directory)
+
+    def interrupted(_frame: pl.DataFrame, file: str | Path, *_args: Any, **_kwargs: Any) -> None:
+        Path(file).write_bytes(b"half a parquet file")
+        msg = "disk full"
+        raise OSError(msg)
+
+    monkeypatch.setattr(pl.DataFrame, "write_parquet", interrupted)
+
+    # Act
+    with pytest.raises(OSError, match="disk full"):
+        ratings_build.write_published_tables({"2024_ratings": pl.DataFrame({"a": [2]})}, directory)
+
+    # Assert
+    monkeypatch.undo()
+    assert pl.read_parquet(directory / "2024_ratings.parquet").get_column("a").to_list() == [1]
+    assert sorted(path.name for path in directory.iterdir()) == ["2024_ratings.parquet"]

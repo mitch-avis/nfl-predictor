@@ -34,6 +34,12 @@ For each season the script:
    differs is reported; its values are still compared, exactly when the published column holds
    whole numbers.
 
+After the seasons it ranks every published season's schedules (``schedule_ranks.rank_schedules``
+over each ``{season}_ratings.parquet``) and compares that leaderboard, as above, with what that
+project's own ``schedules.rank_schedules`` returns for the same files. That function is imported
+from the checkout, each module it loads first checked against its blob at the frozen commit and
+nothing compiled to disk; it reads the ratings files and nothing else.
+
 It writes ``SEASON_STATS_PARITY.md`` and ``season_stats_parity.json`` and exits 1 if any cell is
 outside the tolerance or any table differs in columns or rows.
 """
@@ -48,8 +54,10 @@ os.environ.setdefault("POLARS_MAX_THREADS", "1")
 import argparse
 import datetime as dt
 import hashlib
+import importlib
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -58,17 +66,20 @@ import time
 from dataclasses import asdict, dataclass, field
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
 import polars as pl
 from nflreadpy.downloader import NflverseDownloader
 
 from nfl_predictor import constants
-from nfl_predictor.season_stats import published_logs, sources
+from nfl_predictor.season_stats import published_logs, schedule_ranks, sources
 from nfl_predictor.season_stats import season as season_tables
 from nfl_predictor.season_stats.pooled_rates import rate_parts
 from nfl_predictor.season_stats.team_stats_expanded import TEAM_FORMULA_RATES
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
@@ -111,6 +122,14 @@ SUPPLIED_COLUMNS = {
 MAX_LISTED_DIFFERENCES = 40
 # A download parameter, as nflreadpy's cache key reads it (``CacheManager._get_cache_key``).
 type DownloadParameter = str | int | float | bool
+# The modules of that project the leaderboard check imports, with their git blob ids at the
+# frozen commit (``git rev-parse 9081bce:<path>`` in that checkout).
+SOURCE_MODULE_BLOBS = {
+    "nfl_sos_ratings/__init__.py": "3191d6bbdeec9b2e66dd4b73d5ac69fcbaface91",
+    "nfl_sos_ratings/config.py": "46b752a589059b6b28b91c1695cf3354a2dbba63",
+    "nfl_sos_ratings/schedules.py": "aba86f7f1ac5ef3cbd23c47d3a22fd07e2f41b7c",
+}
+RATINGS_FILE = re.compile(r"(?P<season>\d{4})_ratings\.parquet")
 
 
 def default_source() -> Path:
@@ -248,7 +267,7 @@ def relabel_washington(frame: pl.DataFrame) -> tuple[pl.DataFrame, int]:
 class TableComparison:
     """How one rebuilt table compares with its published file."""
 
-    season: int
+    season: int | None  # None for the schedule leaderboard, which spans every season
     kind: str
     rows: int = 0
     columns: int = 0
@@ -285,7 +304,7 @@ def _is_float(dtype: pl.DataType) -> bool:
 
 
 def compare_tables(
-    season: int,
+    season: int | None,
     kind: str,
     published: pl.DataFrame,
     rebuilt: pl.DataFrame,
@@ -461,6 +480,63 @@ def compare_from_published_logs(
     return comparisons, sorted(team_rates), sorted(qb_rates)
 
 
+def git_blob_id(path: Path) -> str:
+    """Return the id git gives a file's content as a blob, as ``git hash-object`` prints it."""
+    content = path.read_bytes()
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content, usedforsecurity=False).hexdigest()
+
+
+def source_rank_schedules(source: Path) -> Callable[[Path], pl.DataFrame]:
+    """Return that project's ``schedules.rank_schedules``, imported from its checkout.
+
+    Every module the import loads must match its blob at the frozen commit
+    (``SOURCE_MODULE_BLOBS``), and nothing is compiled to disk.
+    """
+    root = source.resolve()
+    for name, blob in SOURCE_MODULE_BLOBS.items():
+        if git_blob_id(root / name) != blob:
+            msg = f"{root / name} differs from the frozen commit {SOURCE_COMMIT}"
+            raise SystemExit(msg)
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, str(root))
+    try:
+        module = importlib.import_module("nfl_sos_ratings.schedules")
+    finally:
+        sys.path.remove(str(root))
+    imported = {
+        Path(file).resolve().relative_to(root).as_posix()
+        for name, loaded in sys.modules.items()
+        if name.split(".")[0] == "nfl_sos_ratings" and (file := getattr(loaded, "__file__", None))
+    }
+    unchecked = sorted(imported - SOURCE_MODULE_BLOBS.keys())
+    if unchecked:
+        msg = f"the import loaded modules not checked against the frozen commit: {unchecked}"
+        raise SystemExit(msg)
+    return module.rank_schedules
+
+
+def compare_schedule_leaderboard(
+    source: Path, hashes: dict[str, str]
+) -> tuple[TableComparison, list[int]]:
+    """Rank every published season's schedules here and with that project's code, and compare.
+
+    Both rank the same published ratings files; this port reads them with Washington as ``WSH``.
+    Returns the comparison and the seasons this port ranked.
+    """
+    ratings_by_season: dict[int, pl.DataFrame] = {}
+    for path in sorted((source / "data").glob("*_ratings.parquet")):
+        match = RATINGS_FILE.fullmatch(path.name)
+        if match is None:
+            continue
+        hashes[path.name] = sha256_file(path)
+        ratings_by_season[int(match["season"])] = relabel_washington(pl.read_parquet(path))[0]
+    rebuilt = schedule_ranks.rank_schedules(ratings_by_season)
+    published = source_rank_schedules(source)(source / "data")
+    ranked = sorted(rebuilt.get_column("season").unique().to_list())
+    return compare_tables(None, "schedule_leaderboard", published, rebuilt), ranked
+
+
 def run_season(season: int, source: Path, cache_dir: Path, hashes: dict[str, str]) -> SeasonRun:
     """Build one season through the loaders and compare every table with its published file."""
     started = time.perf_counter()
@@ -590,6 +666,42 @@ def _season_list(seasons: list[int]) -> str:
     return ", ".join(str(run[0]) if len(run) == 1 else f"{run[0]}-{run[-1]}" for run in runs)
 
 
+def _leaderboard_lines(board: dict[str, Any]) -> list[str]:
+    """Return the report section on the schedule leaderboard."""
+    lines = [
+        "",
+        "## Schedule leaderboard",
+        "",
+        "Every published season's schedules ranked by `schedule_ranks.rank_schedules` from the",
+        "published ratings (`{season}_ratings.parquet`), compared as above with what",
+        "`nfl-sos-ratings`' own `schedules.rank_schedules` returns for the same files at the",
+        "frozen commit (imported from the checkout, each module checked against its blob",
+        "there). Both leave out a season still in progress. A column whose type differs is",
+        "listed; its values are compared all the same.",
+        "",
+        f"- Seasons ranked: {_season_list(board['seasons'])}",
+        (
+            f"- Team-seasons: {board['rows']:,}; cells compared: {board['cells']:,};"
+            f" bit-identical: {board['identical']:,}; within tolerance:"
+            f" {board['within_tolerance']:,}; outside: {board['outside']:,}"
+        ),
+        (
+            "- Column types that differ (rebuilt first): "
+            + (", ".join(f"`{d}`" for d in board["dtype_differences"]) or "none")
+        ),
+        f"- Published team codes read as `WSH` instead of `WAS`: {board['relabeled_cells']:,}",
+        f"- Column or row differences: {'; '.join(board['structure']) or 'none'}",
+    ]
+    lines += [
+        f"- Outside tolerance: `{d['column']}` ({d['row']}): published {d['published']!r},"
+        f" rebuilt {d['rebuilt']!r}"
+        for d in board["differences"]
+    ]
+    passed = board["outside"] == 0 and not board["structure"]
+    lines.append(f"- Result: **{'PASS' if passed else 'FAIL'}**")
+    return lines
+
+
 def _markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
     seasons = report["seasons"]
@@ -704,6 +816,7 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         _code_list(report["rates_not_rebuilt"]["qb"]),
     ]
+    lines += _leaderboard_lines(report["schedule_leaderboard"])
     lines += [
         "",
         "## Timings",
@@ -808,6 +921,7 @@ def main(argv: list[str] | None = None) -> int:
             f" compare {run.compare_seconds:.1f}s, failed: {failed or 'none'}\n"
         )
         runs.append(run)
+    leaderboard, ranked_seasons = compare_schedule_leaderboard(args.source, hashes)
     total = time.perf_counter() - started
     summary = _summary([c for run in runs for c in run.comparisons], KINDS)
     log_summary = _summary(
@@ -840,11 +954,13 @@ def main(argv: list[str] | None = None) -> int:
         "published_files": dict(sorted(hashes.items())),
         "summary": summary,
         "published_log_summary": log_summary,
+        "schedule_leaderboard": {"seasons": ranked_seasons, **asdict(leaderboard)},
         "rates_not_rebuilt": {
             "team": sorted({rate for run in runs for rate in run.team_rates_not_rebuilt}),
             "qb": sorted({rate for run in runs for rate in run.qb_rates_not_rebuilt}),
         },
-        "passed": all(
+        "passed": leaderboard.passed
+        and all(
             part["outside"] == 0 and part["tables_with_structure_differences"] == 0
             for part in (summary, log_summary)
         ),
@@ -874,6 +990,11 @@ def main(argv: list[str] | None = None) -> int:
             f" {part['unchecked_cells']:,} not rebuilt (not compared);"
             f" {part['tables_with_structure_differences']} tables with structure differences\n"
         )
+    sys.stderr.write(
+        f"schedule leaderboard: {leaderboard.rows:,} team-seasons, {leaderboard.cells:,} cells:"
+        f" {leaderboard.identical:,} identical, {leaderboard.outside:,} outside;"
+        f" structure differences: {leaderboard.structure or 'none'}\n"
+    )
     return 0 if report["passed"] else 1
 
 

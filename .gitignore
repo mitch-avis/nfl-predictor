@@ -225,6 +225,8 @@ models/
 *.joblib
 *.pkl
 *.parquet
+# The parity check's attribution table is a report tracked beside it (.agents/sos_port/README.md).
+!.agents/sos_port/parity_attributions.parquet
 *.feather
 
 # Generated reports (the leakage audit writes here by default)

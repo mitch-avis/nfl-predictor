@@ -72,6 +72,7 @@ from nfl_predictor.ratings.team_rating import (
     fit_team_ratings_by_week,
     fit_team_ratings_with_previous_penalties,
 )
+from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.adjusted_strength import solve_srs
 
 if TYPE_CHECKING:
@@ -171,20 +172,25 @@ def build_team_ratings(
         prior_without: The preseason prior source of the head-to-head-excluded refits.
 
     Returns:
-        ``TEAM_RATINGS_ORDER`` columns, best team first.
+        ``TEAM_RATINGS_ORDER`` columns, best team first. A team whose every game lacks a final
+        score keeps its row with a null ``SRS`` (the score-based rating), and a warning names it.
 
     """
     games_played = team_games.group_by("team", maintain_order=True).len("games_played")
     schedule = compute_team_schedule_strength(team_games, fit, prior_without=prior_without)
     srs = solve_srs(team_games, "point_margin", team_col="team", opponent_col="opponent_team")
-    return (
-        fit.ratings.join(schedule, on="team")
-        .join(srs, on="team")
+    ratings = (
+        fit.ratings.join(schedule, on="team", how="left", maintain_order="left")
+        .join(srs, on="team", how="left", maintain_order="left")
         .rename({"srs_rating": "SRS"})
-        .join(games_played, on="team")
+        .join(games_played, on="team", how="left", maintain_order="left")
         .select(TEAM_RATINGS_ORDER)
         .sort("team_rating", descending=True)
     )
+    unscored = sorted(ratings.filter(pl.col("SRS").is_null()).get_column("team").to_list())
+    if unscored:
+        log.warning("SRS: no final score for %s; their SRS is null", unscored)
+    return ratings
 
 
 def build_team_rank_summaries(

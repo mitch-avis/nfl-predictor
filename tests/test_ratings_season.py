@@ -137,6 +137,30 @@ def test_build_team_season_ratings_publish_columns_in_order() -> None:
     assert ratings.columns == ["team", "games_played", *TEAM_RATING_COLUMNS, "sos", "SRS"]
 
 
+def test_build_team_season_keeps_teams_whose_games_have_no_final_score(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A played game without a final score leaves its teams in the table, without an SRS."""
+    # Arrange
+    unscored = ("MIA", "NYJ")
+    team_games = _team_games().with_columns(
+        pl.when(pl.col("team").is_in(unscored) | pl.col("opponent_team").is_in(unscored))
+        .then(None)
+        .otherwise(pl.col("point_margin"))
+        .alias("point_margin")
+    )
+
+    # Act
+    ratings = build_team_season(2025, team_games, _history(), bootstrap=_BOOTSTRAP).ratings
+
+    # Assert
+    srs = dict(ratings.select("team", "SRS").iter_rows())
+    assert sorted(srs) == sorted(_TEAMS)
+    assert (srs["MIA"], srs["NYJ"]) == (None, None)
+    assert srs["BUF"] is not None
+    assert "no final score for ['MIA', 'NYJ']" in caplog.text
+
+
 def test_build_team_season_ratings_rank_the_strongest_team_first() -> None:
     # Act
     ratings = _team_season().ratings

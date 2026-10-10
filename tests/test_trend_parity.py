@@ -1,12 +1,13 @@
-"""Parity: a game's trend features do not depend on whether the game has been played.
+"""Parity: a game's features do not depend on whether the game has been played.
 
 The model trains on completed rows and predicts upcoming ones, so every pre-game feature of a
-game must be the same in both. A small season (four teams, seven regular-season weeks and one
-playoff round, with team stats and ELO rows) runs through ``data_collection.process_season``
-twice: with every game played, and with one week and every week after it unplayed (no scores
-and no team-stat rows; the ELO rows stay, since an upcoming week has its pre-game ratings),
-the way they look before that week's kickoff. Every trend column of that week's rows must be
-the same in the two builds, for the last regular-season week and for the playoff round.
+game must be the same in both. A small season (one division's four teams with their coaches,
+seven regular-season weeks and one playoff round, with team stats and ELO rows) runs through
+``data_collection.process_season`` twice: with every game played, and with one week and every
+week after it unplayed (no scores and no team-stat rows; the ELO rows stay, since an upcoming
+week has its pre-game ratings), the way they look before that week's kickoff. Every column of
+that week's rows but the two scores must be the same in the two builds, for the last
+regular-season week and for the playoff round.
 """
 
 from __future__ import annotations
@@ -21,17 +22,28 @@ from polars.testing import assert_frame_equal
 
 from nfl_predictor import constants, data_collection
 
-_TEAMS = ("AAA", "BBB", "CCC", "DDD")
+# One division, so the division standings carry values too.
+_TEAMS = ("BUF", "MIA", "NE", "NYJ")
 _SEASON = 2021
 # Enough weeks for a team's last four games to differ from its season-to-date mean.
 _REGULAR_WEEKS = 7
 _PLAYOFF_WEEK = constants.get_regular_season_weeks(_SEASON) + 1
-_KEYS = ["game_id", "season", "week", "away_abbr", "home_abbr"]
-_TREND_COLUMNS = [
-    column
-    for base in constants.TREND_FEATURE_COLUMNS
-    for column in (f"away_{base}", f"home_{base}", f"{base}_diff")
-]
+_SCORES = ("away_score", "home_score")
+# A column of each feature family the world exercises, so the comparison cannot pass empty.
+_FAMILY_COLUMNS = {
+    "away_scoring_margin_4wk_trend",
+    "home_turnover_margin_4wk_trend",
+    "elo_4wk_trend_diff",
+    "away_qb_elo_4wk_trend",
+    "home_qb_value_4wk_trend",
+    "away_elo_pre",
+    "away_points_scored",
+    "home_wins",
+    "away_division_rank",
+    "away_adj_srs",
+    "home_sos_played_adj",
+    "away_coach_win_pct_prior",
+}
 
 
 @dataclass(frozen=True)
@@ -116,6 +128,8 @@ def _world() -> _World:
                     "home_abbr": home,
                     "away_score": away_points,
                     "home_score": home_points,
+                    "away_coach": f"Coach {away}",
+                    "home_coach": f"Coach {home}",
                 }
             )
             elo_rows.append(_elo_row(rng, week, away, home))
@@ -142,41 +156,37 @@ def _without_results(world: _World, from_week: int) -> _World:
     )
 
 
-def _trend_rows(world: _World, week: int) -> pl.DataFrame:
-    """Build the season and return the week's trend columns, one row per game."""
+def _week_rows(world: _World, week: int) -> pl.DataFrame:
+    """Build the season and return the week's rows without the scores, one row per game."""
     rows = data_collection.process_season(
         _SEASON,
         world.schedule,
         world.team_stats,
         data_collection.SeasonInputs(min_season=_SEASON, elo_df=world.elo),
     )
-    return (
-        rows.filter(pl.col("week") == week)
-        .select(*_KEYS, *[column for column in _TREND_COLUMNS if column in rows.columns])
-        .sort("game_id")
-    )
+    return rows.filter(pl.col("week") == week).drop(_SCORES).sort("game_id")
 
 
 @pytest.mark.parametrize(
     "week", [_REGULAR_WEEKS, _PLAYOFF_WEEK], ids=["last-regular-week", "playoff-round"]
 )
-def test_unplayed_games_carry_the_trends_of_their_completed_rows(week: int) -> None:
+def test_unplayed_games_match_their_completed_rows_but_for_the_scores(week: int) -> None:
+    """An unplayed week's rows equal its completed rows in every column but the two scores.
+
+    The guards keep the comparison from passing empty: the week's games are all there, every
+    feature family the world exercises is among the compared columns, and the scoring-margin
+    trend, which once differed, is non-zero on every compared row.
+    """
     # Arrange
     world = _world()
-    completed = _trend_rows(world, week)
+    completed = _week_rows(world, week)
     unplayed = _without_results(world, from_week=week)
 
     # Act
-    upcoming = _trend_rows(unplayed, week)
+    upcoming = _week_rows(unplayed, week)
 
     # Assert
     assert completed.height == len(_slate(week))
-    assert {
-        "away_scoring_margin_4wk_trend",
-        "home_turnover_margin_4wk_trend",
-        "elo_4wk_trend_diff",
-        "away_qb_elo_4wk_trend",
-        "home_qb_value_4wk_trend",
-    } <= set(completed.columns)
+    assert set(completed.columns) >= _FAMILY_COLUMNS
     assert completed.select(pl.col("away_scoring_margin_4wk_trend").abs().min()).item() > 0
     assert_frame_equal(upcoming, completed)

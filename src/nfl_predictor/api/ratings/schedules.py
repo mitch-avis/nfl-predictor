@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nfl_predictor.api.ratings.columns import metric_table
-from nfl_predictor.api.ratings.files import SEASON_FILE, read_table
+from nfl_predictor.api.ratings.files import SEASON_FILE, RatingsTableMissingError, read_table
 from nfl_predictor.api.schemas.ratings import MetricColumnOut, ScheduleRanksOut
 from nfl_predictor.season_stats.schedule_ranks import rank_schedules
 
@@ -59,7 +59,14 @@ _LOCAL_COLUMNS = {
 
 
 def _ratings_by_season(ratings_dir: Path) -> dict[int, pl.DataFrame]:
-    """Return every season's team ratings table in ``ratings_dir``."""
+    """Return every season's team ratings table in ``ratings_dir``.
+
+    A table removed between the folder scan and its read (an ETL rewriting the folder) is left out.
+
+    Raises:
+        RatingsTableUnreadableError: If a table exists but cannot be read.
+
+    """
     if not ratings_dir.is_dir():
         return {}
     seasons = []
@@ -67,7 +74,13 @@ def _ratings_by_season(ratings_dir: Path) -> dict[int, pl.DataFrame]:
         match = SEASON_FILE.match(path.name)
         if match is not None and match["kind"] == RATINGS_KIND:
             seasons.append(int(match["season"]))
-    return {season: read_table(ratings_dir, season, RATINGS_KIND) for season in sorted(seasons)}
+    tables: dict[int, pl.DataFrame] = {}
+    for season in sorted(seasons):
+        try:
+            tables[season] = read_table(ratings_dir, season, RATINGS_KIND)
+        except RatingsTableMissingError:
+            continue
+    return tables
 
 
 def schedule_ranks(ratings_dir: Path) -> ScheduleRanksOut:

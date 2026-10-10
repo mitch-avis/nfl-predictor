@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 from tests.api import ratings_factories as factories
 
-from nfl_predictor.api.ratings import glossary, schedules
+from nfl_predictor.api.ratings import files, glossary, schedules
 from nfl_predictor.api.readers import cache
 
 if TYPE_CHECKING:
@@ -69,6 +69,29 @@ def test_schedule_ranks_skip_a_season_in_progress(tmp_path: Path) -> None:
 
     # Assert
     assert (ranks.seasons, ranks.skipped_seasons, ranks.count) == ([2025], [2026], 2)
+
+
+def test_schedule_ranks_skip_a_season_whose_table_vanished(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A table removed between the folder scan and its read drops out instead of failing."""
+    # Arrange
+    _write_ratings(tmp_path, 2024, {"BUF": -2.0, "WSH": 0.25}, games=17)
+    _write_ratings(tmp_path, 2025, {"BUF": 1.0, "KC": 0.0}, games=17)
+    read = files.read_table
+
+    def vanish_2024(ratings_dir: Path, season: int, kind: str) -> pl.DataFrame:
+        if season == 2024:
+            raise files.RatingsTableMissingError(season, kind)
+        return read(ratings_dir, season, kind)
+
+    monkeypatch.setattr(schedules, "read_table", vanish_2024)
+
+    # Act
+    ranks = schedules.schedule_ranks(tmp_path)
+
+    # Assert
+    assert (ranks.seasons, ranks.skipped_seasons, ranks.count) == ([2025], [], 2)
 
 
 def test_schedule_ranks_ignore_other_kinds_and_names(tmp_path: Path) -> None:

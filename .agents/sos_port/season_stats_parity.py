@@ -276,6 +276,7 @@ class TableComparison:
     within_tolerance: int = 0
     outside: int = 0
     supplied_cells: int = 0
+    supplied_identical: int = 0
     unchecked_cells: int = 0
     relabeled_cells: int = 0
     max_abs_difference: float = 0.0
@@ -339,9 +340,11 @@ def compare_tables(
         if column in unchecked:
             result.unchecked_cells += published.height
             continue
+        identical_before = result.identical
+        _compare_column(result, column, theirs, mine, published)
         if column in supplied:
             result.supplied_cells += published.height
-        _compare_column(result, column, theirs, mine, published)
+            result.supplied_identical += result.identical - identical_before
     return result
 
 
@@ -621,6 +624,7 @@ def _summary(comparisons: list[TableComparison], kinds: tuple[str, ...]) -> dict
             "within_tolerance": sum(c.within_tolerance for c in rows),
             "outside": sum(c.outside for c in rows),
             "supplied_cells": sum(c.supplied_cells for c in rows),
+            "supplied_identical": sum(c.supplied_identical for c in rows),
             "unchecked_cells": sum(c.unchecked_cells for c in rows),
             "relabeled_cells": sum(c.relabeled_cells for c in rows),
             "max_abs_difference": max((c.max_abs_difference for c in rows), default=0.0),
@@ -634,6 +638,7 @@ def _summary(comparisons: list[TableComparison], kinds: tuple[str, ...]) -> dict
         "within_tolerance": sum(c.within_tolerance for c in comparisons),
         "outside": sum(c.outside for c in comparisons),
         "supplied_cells": sum(c.supplied_cells for c in comparisons),
+        "supplied_identical": sum(c.supplied_identical for c in comparisons),
         "unchecked_cells": sum(c.unchecked_cells for c in comparisons),
         "relabeled_cells": sum(c.relabeled_cells for c in comparisons),
         "tables_with_structure_differences": sum(1 for c in comparisons if c.structure),
@@ -705,6 +710,7 @@ def _leaderboard_lines(board: dict[str, Any]) -> list[str]:
 def _markdown(report: dict[str, Any]) -> str:
     summary = report["summary"]
     seasons = report["seasons"]
+    computed = summary["cells"] - summary["supplied_cells"]
     in_progress = (
         f"; {CURRENT_SEASON} in progress at the frozen commit" if CURRENT_SEASON in seasons else ""
     )
@@ -745,9 +751,20 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "## Headline counts",
         "",
+        "The rating columns of `combined` and `qb_combined` are copied from the published ratings",
+        "(the ratings port reproduces those), so their cells are counted apart from the cells this",
+        "port computes.",
+        "",
         f"- Tables compared: {summary['tables']}",
-        f"- Cells compared: {summary['cells']:,}",
-        f"- Bit-identical: {summary['identical']:,}",
+        f"- Cells compared: {summary['cells']:,}; bit-identical {summary['identical']:,}",
+        (
+            f"- Of them, computed by the port: {computed:,}; bit-identical"
+            f" {summary['identical'] - summary['supplied_identical']:,}"
+        ),
+        (
+            "- Of them, rating columns copied from the published ratings:"
+            f" {summary['supplied_cells']:,}; bit-identical {summary['supplied_identical']:,}"
+        ),
         (
             f"- Within tolerance but not bit-identical: {summary['within_tolerance']:,}"
             f" (largest difference {summary['max_abs_difference']:.3g})"
@@ -755,10 +772,6 @@ def _markdown(report: dict[str, Any]) -> str:
         f"- Outside tolerance: {summary['outside']:,}",
         f"- Tables with column or row differences: {summary['tables_with_structure_differences']}",
         f"- Tables with a column type that differs: {summary['tables_with_dtype_differences']}",
-        (
-            f"- Cells taken from the published ratings (rating columns of `combined` and"
-            f" `qb_combined`): {summary['supplied_cells']:,}"
-        ),
         f"- Published team codes read as `WSH` instead of `WAS`: {summary['relabeled_cells']:,}",
         f"- Result: **{'PASS' if report['passed'] else 'FAIL'}**",
         "",
@@ -791,6 +804,10 @@ def _markdown(report: dict[str, Any]) -> str:
         (
             f"- Cells compared: {logs['cells']:,}; bit-identical {logs['identical']:,}; within"
             f" tolerance {logs['within_tolerance']:,}; outside {logs['outside']:,}"
+        ),
+        (
+            f"- Of those, cells the port computed: {logs['cells'] - logs['supplied_cells']:,};"
+            f" taken from the published ratings: {logs['supplied_cells']:,}"
         ),
         f"- Cells not rebuilt by the adapter (not compared): {logs['unchecked_cells']:,}",
         f"- Tables with column or row differences: {logs['tables_with_structure_differences']}",
@@ -928,7 +945,9 @@ def main(argv: list[str] | None = None) -> int:
         [c for run in runs for c in run.published_log_comparisons], PUBLISHED_LOG_KINDS
     )
     report = {
-        "command": " ".join(["python", ".agents/sos_port/season_stats_parity.py", *(argv or [])]),
+        "command": " ".join(
+            [".venv/bin/python", ".agents/sos_port/season_stats_parity.py", *(argv or [])]
+        ),
         "code_commit": code_commit(),
         "source": str(args.source),
         "source_commit": head,

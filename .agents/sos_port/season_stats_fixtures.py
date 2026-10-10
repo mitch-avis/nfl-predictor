@@ -304,8 +304,8 @@ def _tables_from_logs(
     qb_logs = qb_logs.with_columns(pl.col("team", "opponent_team").replace(relabel))
     ratings = ratings.with_columns(pl.col("team").replace(relabel))
     games = season_tables.SeasonGames(
-        team_games=published_logs.team_games_from_published(team_logs),
-        qb_games=published_logs.qb_games_from_published(qb_logs),
+        team_games=published_logs.team_stat_rows_from_published(team_logs),
+        qb_games=published_logs.qb_stat_rows_from_published(qb_logs),
         schedule=season_tables.played_schedule(
             sources.prepare_schedule(
                 sources.normalize_team_codes(schedule, ("home_team", "away_team"))

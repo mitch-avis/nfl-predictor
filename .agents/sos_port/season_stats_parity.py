@@ -426,12 +426,12 @@ def compare_from_published_logs(
     team_logs, _ = relabel_washington(published["team_game_logs"])
     qb_logs, _ = relabel_washington(published["qb_game_logs"])
     from_logs = season_tables.SeasonGames(
-        team_games=published_logs.team_games_from_published(team_logs),
-        qb_games=published_logs.qb_games_from_published(qb_logs),
+        team_games=published_logs.team_stat_rows_from_published(team_logs),
+        qb_games=published_logs.qb_stat_rows_from_published(qb_logs),
         schedule=games.schedule,
     )
     team_rates = set(rate_parts(games.team_games.columns)) - set(
-        published_logs.recovered_team_rates(team_logs.columns)
+        published_logs.rebuilt_team_rates(team_logs.columns)
     )
     qb_rates = set(rate_parts(games.qb_games.columns))
     tables = season_tables.build_season_tables(

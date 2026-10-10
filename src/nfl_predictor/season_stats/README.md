@@ -72,7 +72,7 @@ rather than tabulate nothing.
 
 `published_logs.py` turns the game logs that project published back into the rows the season
 tables read. The published logs leave out each rate's hidden parts; the adapter rebuilds those the
-published columns determine (`recovered_team_rates`), so a season row built from published logs
+published columns determine (`rebuilt_team_rates`), so a season row built from published logs
 matches the published one only on the columns those parts cover.
 
 ## Determinism

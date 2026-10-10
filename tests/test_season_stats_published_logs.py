@@ -29,21 +29,21 @@ def _team_logs() -> pl.DataFrame:
     ).sort("team", "week", "game_id")
 
 
-def test_team_games_from_published_rebuilds_per_snap_rate_parts() -> None:
+def test_team_stat_rows_from_published_rebuilds_per_snap_rate_parts() -> None:
     # Arrange
     rate = "passing_yards_per_offensive_snap"
 
     # Act
-    games = published_logs.team_games_from_published(_team_logs())
+    games = published_logs.team_stat_rows_from_published(_team_logs())
 
     # Assert
     assert games.get_column(numerator_column(rate)).to_list() == [250.0, 200.0, 180.0, 150.0]
     assert games.get_column(denominator_column(rate)).to_list() == [60, 50, 55, 65]
 
 
-def test_team_games_from_published_rebuilds_a_ratio_of_published_columns() -> None:
+def test_team_stat_rows_from_published_rebuilds_a_ratio_of_published_columns() -> None:
     # Act
-    games = published_logs.team_games_from_published(_team_logs())
+    games = published_logs.team_stat_rows_from_published(_team_logs())
 
     # Assert
     parts = games.select(
@@ -52,19 +52,19 @@ def test_team_games_from_published_rebuilds_a_ratio_of_published_columns() -> No
     assert parts == [(20, 30), (10, 20), (15, 25), (30, 40)]
 
 
-def test_team_games_from_published_leaves_a_ratio_of_a_dropped_column_without_parts() -> None:
+def test_team_stat_rows_from_published_leaves_a_ratio_of_a_dropped_column_without_parts() -> None:
     """EPA per dropback divides the dropbacks' EPA, a working column the logs leave out."""
     # Act
-    games = published_logs.team_games_from_published(_team_logs())
+    games = published_logs.team_stat_rows_from_published(_team_logs())
 
     # Assert
     assert numerator_column("epa_per_dropback") not in games.columns
-    assert "epa_per_dropback" not in published_logs.recovered_team_rates(_team_logs().columns)
+    assert "epa_per_dropback" not in published_logs.rebuilt_team_rates(_team_logs().columns)
 
 
-def test_team_games_from_published_takes_a_mirrored_rates_parts_from_the_opponent() -> None:
+def test_team_stat_rows_from_published_takes_a_mirrored_rates_parts_from_the_opponent() -> None:
     # Act
-    games = published_logs.team_games_from_published(_team_logs())
+    games = published_logs.team_stat_rows_from_published(_team_logs())
 
     # Assert
     parts = games.select(
@@ -73,20 +73,20 @@ def test_team_games_from_published_takes_a_mirrored_rates_parts_from_the_opponen
     assert parts == [(15, 25), (30, 40), (20, 30), (10, 20)]
 
 
-def test_team_games_from_published_keeps_the_published_rows_and_columns() -> None:
+def test_team_stat_rows_from_published_keeps_the_published_rows_and_columns() -> None:
     # Act
-    games = published_logs.team_games_from_published(_team_logs())
+    games = published_logs.team_stat_rows_from_published(_team_logs())
 
     # Assert
     assert games.select(_team_logs().columns).equals(_team_logs())
 
 
-def test_team_games_from_published_without_a_mirrored_rate_adds_only_own_parts() -> None:
+def test_team_stat_rows_from_published_without_a_mirrored_rate_adds_only_own_parts() -> None:
     # Arrange
     logs = _team_logs().drop("completion_pct_allowed")
 
     # Act
-    games = published_logs.team_games_from_published(logs)
+    games = published_logs.team_stat_rows_from_published(logs)
 
     # Assert
     assert [column for column in games.columns if column not in logs.columns] == [
@@ -97,9 +97,9 @@ def test_team_games_from_published_without_a_mirrored_rate_adds_only_own_parts()
     ]
 
 
-def test_a_season_row_from_published_logs_pools_a_recovered_rate() -> None:
+def test_a_season_row_from_published_logs_pools_a_rebuilt_rate() -> None:
     # Arrange
-    games = published_logs.team_games_from_published(_team_logs())
+    games = published_logs.team_stat_rows_from_published(_team_logs())
 
     # Act
     season = compute_all_teams_per_game(games).filter(pl.col("team") == "DEN")
@@ -109,15 +109,15 @@ def test_a_season_row_from_published_logs_pools_a_recovered_rate() -> None:
     assert season.get_column("passing_yards_per_offensive_snap").item() == pytest.approx(450 / 110)
 
 
-def test_recovered_team_rates_lists_each_rate_it_rebuilds() -> None:
+def test_rebuilt_team_rates_lists_each_rate_it_rebuilds() -> None:
     # Act
-    rates = published_logs.recovered_team_rates(_team_logs().columns)
+    rates = published_logs.rebuilt_team_rates(_team_logs().columns)
 
     # Assert
     assert rates == ("passing_yards_per_offensive_snap", "completion_pct", "completion_pct_allowed")
 
 
-def test_qb_games_from_published_reads_the_passers_rows_without_the_game_context() -> None:
+def test_qb_stat_rows_from_published_reads_the_passers_rows_without_the_game_context() -> None:
     # Arrange
     logs = pl.DataFrame(
         {
@@ -138,20 +138,20 @@ def test_qb_games_from_published_reads_the_passers_rows_without_the_game_context
     )
 
     # Act
-    games = published_logs.qb_games_from_published(logs)
+    games = published_logs.qb_stat_rows_from_published(logs)
 
     # Assert
     assert games.columns == ["game_id", "week", "team_abbr", "qb_id", "qb_name", "qb_dropbacks"]
     assert set(game_logs.QB_LOG_CONTEXT_COLUMNS).isdisjoint(games.columns)
 
 
-def test_team_games_from_published_returns_rows_in_the_builders_order() -> None:
+def test_team_stat_rows_from_published_returns_rows_in_the_builders_order() -> None:
     """The season rows sum each team's games in this order, as from the play-by-play build."""
     # Arrange
     logs = _team_logs().reverse()
 
     # Act
-    games = published_logs.team_games_from_published(logs)
+    games = published_logs.team_stat_rows_from_published(logs)
 
     # Assert
     assert games.select(game_logs.TEAM_GAME_ORDER).equals(
@@ -159,7 +159,7 @@ def test_team_games_from_published_returns_rows_in_the_builders_order() -> None:
     )
 
 
-def test_qb_games_from_published_returns_rows_in_the_builders_order() -> None:
+def test_qb_stat_rows_from_published_returns_rows_in_the_builders_order() -> None:
     # Arrange
     logs = pl.DataFrame(
         {
@@ -172,7 +172,7 @@ def test_qb_games_from_published_returns_rows_in_the_builders_order() -> None:
     )
 
     # Act
-    games = published_logs.qb_games_from_published(logs)
+    games = published_logs.qb_stat_rows_from_published(logs)
 
     # Assert
     assert games.select("team_abbr", "week").rows() == [("DEN", 1), ("DEN", 2), ("KC", 1)]

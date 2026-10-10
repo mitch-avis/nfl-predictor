@@ -15,7 +15,7 @@ published columns determine, as the code that wrote them defines them:
 Every other rate keeps no parts: its numerator or denominator is a working column the logs drop
 (the dropbacks' EPA behind EPA per dropback) or a count the logs do not carry (the passes with a
 completion probability over expected). A season row built from these inputs averages such a rate
-per game instead, so it is a check of that rate only where :func:`recovered_team_rates` lists it.
+per game instead, so it is a check of that rate only where :func:`rebuilt_team_rates` lists it.
 The quarterback rows rebuild every pooled rate from published totals (``qb_stats.QB_RATES``)
 except the completion percentage over expected, whose parts the logs drop.
 """
@@ -71,15 +71,15 @@ def _mirror_specs(columns: Collection[str]) -> list[tuple[str, str, str]]:
     ]
 
 
-def recovered_team_rates(columns: Collection[str]) -> tuple[str, ...]:
-    """Return the rates whose hidden parts :func:`team_games_from_published` rebuilds."""
+def rebuilt_team_rates(columns: Collection[str]) -> tuple[str, ...]:
+    """Return the rates whose hidden parts :func:`team_stat_rows_from_published` rebuilds."""
     return (
         *(rate for _, _, rate in _own_specs(columns)),
         *(rate for _, _, rate in _mirror_specs(columns)),
     )
 
 
-def team_games_from_published(logs: pl.DataFrame) -> pl.DataFrame:
+def team_stat_rows_from_published(logs: pl.DataFrame) -> pl.DataFrame:
     """Return published team game logs as season-table input rows, recoverable parts rebuilt.
 
     Args:
@@ -87,7 +87,7 @@ def team_games_from_published(logs: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         ``logs`` with the hidden numerator and denominator of every rate of
-        :func:`recovered_team_rates`, in the builders' row order (``game_logs.TEAM_GAME_ORDER``)
+        :func:`rebuilt_team_rates`, in the builders' row order (``game_logs.TEAM_GAME_ORDER``)
 
     """
     own = [
@@ -122,7 +122,7 @@ def team_games_from_published(logs: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def qb_games_from_published(logs: pl.DataFrame) -> pl.DataFrame:
+def qb_stat_rows_from_published(logs: pl.DataFrame) -> pl.DataFrame:
     """Return published QB game logs as the season tables read passer-game rows.
 
     The passer's team is ``team_abbr``, and the game's opponent, venue, and result, which the logs
@@ -137,7 +137,7 @@ def qb_games_from_published(logs: pl.DataFrame) -> pl.DataFrame:
 
 
 __all__ = [
-    "qb_games_from_published",
-    "recovered_team_rates",
-    "team_games_from_published",
+    "qb_stat_rows_from_published",
+    "rebuilt_team_rates",
+    "team_stat_rows_from_published",
 ]

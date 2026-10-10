@@ -316,12 +316,13 @@ listed by no identity source), the passer before the rusher on one play. A game 
 names no starter for (an upcoming game, every postseason game, a game without play-by-play, and
 the six 1999-2025 team-games without a first-quarter quarterback snap) takes the starter the ETL
 names (`away_qb`/`home_qb`: the projected starter of an upcoming game). nflverse's schedule
-columns `away_qb_id`/`home_qb_id` are not read. A named starter maps to
-a GSIS id through `data/meta_data.csv`, a read-only copy of `../nfeloqb/Other Data/meta_data.csv`
-made the same way as `data/qb_elos.csv`; without the file only the play-by-play starters and the
-abbreviated passer names identify quarterbacks, and the ETL logs a warning. Career rates need every
-earlier season, so the ETL reads the cached play-by-play from 1999 even when `--min-season` is
-later.
+columns `away_qb_id`/`home_qb_id` are not read. A named starter maps to a GSIS id through
+`data/meta_data.csv`, a read-only copy of `../nfeloqb/Other Data/meta_data.csv` made the same way
+as `data/qb_elos.csv`, else through the play-by-play passer name (`F.Last`) when exactly one
+passer of the games before the row's week has it; without the file only the play-by-play
+starters and those passer names identify quarterbacks, and the ETL logs a warning. Career rates
+need every earlier season, so the ETL reads the cached play-by-play from 1999 even when
+`--min-season` is later.
 
 TeamRankings data is cached under `data/<season>/` as week-level CSVs; enable debug logging to see
 cache hits. Use `--timing` to log per-step runtimes and `--debug-logs` for detailed ETL diagnostics.

@@ -14,7 +14,8 @@ Pipeline:
    is also the play-by-play ``passer_player_id``. Names that map to more than one id are
    dropped as ambiguous, and ``constants.QB_NAME_ALIASES`` covers Elo spellings the metadata
    lacks. A name still unmapped falls back to the play-by-play passer name, abbreviated as
-   ``F.Last``, when that abbreviation belongs to exactly one passer.
+   ``F.Last``, when that abbreviation belongs to exactly one passer among the games before the
+   row's week, so a later passer can neither name a row nor make its name ambiguous.
 2. Quarterback games. ``aggregate_qb_game_stats`` sums one row per
    ``(season, week, team, quarterback)`` over dropbacks, using the team families' dropback
    definition (``pbp.dropback_condition``). Sums only; rates come later.
@@ -324,27 +325,40 @@ def _abbreviated(name: pl.Expr) -> pl.Expr:
     )
 
 
-def _passer_name_map(qb_games: pl.DataFrame) -> pl.DataFrame:
-    """Return play-by-play passer names that belong to exactly one quarterback id."""
-    pairs = qb_games.select("passer_name", "qb_id").drop_nulls().unique(maintain_order=True)
-    unique_names = (
-        pairs.group_by("passer_name", maintain_order=True).len().filter(pl.col("len") == 1)
+def _passer_name_firsts(qb_games: pl.DataFrame) -> pl.DataFrame:
+    """Return each play-by-play passer name and id with the ordering key of their first game."""
+    return (
+        _keyed(qb_games)
+        .select("passer_name", "qb_id", _KEY)
+        .drop_nulls(["passer_name", "qb_id"])
+        .group_by("passer_name", "qb_id", maintain_order=True)
+        .agg(pl.col(_KEY).min().alias("_first_key"))
     )
-    return pairs.join(unique_names.select("passer_name"), on="passer_name", how="inner")
 
 
 def _resolve_ids(
     targets: pl.DataFrame, identity: pl.DataFrame, passer_names: pl.DataFrame
 ) -> pl.DataFrame:
-    """Attach ``qb_id`` to ``targets`` (column ``qb_name``) via identity, then passer names."""
+    """Attach ``qb_id`` to ``targets`` (``_ROW``, ``_KEY`` and ``qb_name``).
+
+    A name maps through ``identity``; a name it lacks takes the id of the one play-by-play
+    passer whose abbreviated name matches it among the games strictly before the row's
+    ``_KEY`` (``passer_names``, from ``_passer_name_firsts``), so a later passer can neither
+    name a row nor make its name ambiguous. With no such passer, or more than one, the id
+    stays null.
+    """
     resolved = targets.join(identity, on="qb_name", how="left")
-    fallback = (
-        resolved.filter(pl.col("qb_id").is_null() & pl.col("qb_name").is_not_null())
-        .with_columns(_abbreviated(pl.col("qb_name")).alias("passer_name"))
-        .drop("qb_id")
-        .join(passer_names, on="passer_name", how="left")
-        .drop("passer_name")
+    unresolved = resolved.filter(pl.col("qb_id").is_null() & pl.col("qb_name").is_not_null())
+    earlier = (
+        unresolved.select(_ROW, _KEY, _abbreviated(pl.col("qb_name")).alias("passer_name"))
+        .join(passer_names, on="passer_name", how="inner")
+        .filter(pl.col("_first_key") < pl.col(_KEY))
+        .group_by(_ROW, maintain_order=True)
+        .agg(pl.col("qb_id").n_unique().alias("_passers"), pl.col("qb_id").first())
+        .filter(pl.col("_passers") == 1)
+        .select(_ROW, "qb_id")
     )
+    fallback = unresolved.drop("qb_id").join(earlier, on=_ROW, how="left")
     matched = resolved.filter(pl.col("qb_id").is_not_null() | pl.col("qb_name").is_null())
     return pl.concat([matched, fallback.select(matched.columns)]).sort(_ROW)
 
@@ -406,9 +420,15 @@ def expected_starter_ids(
         starter is known or the name cannot be identified.
 
     """
-    passer_names = _passer_name_map(qb_games)
+    passer_names = _passer_name_firsts(qb_games)
+    key = (
+        (pl.col("season") * 100 + pl.col("week")).cast(pl.Int64)
+        if {"season", "week"} <= set(games.columns)
+        else pl.lit(None, dtype=pl.Int64)
+    )
     rows = games.select(
         pl.int_range(pl.len(), dtype=pl.UInt32).alias(_ROW),
+        key.alias(_KEY),
         *(
             (
                 pl.col(f"{side}_qb").cast(pl.String)
@@ -420,7 +440,7 @@ def expected_starter_ids(
     )
     ids = rows.select(_ROW)
     for side in _SIDES:
-        targets = rows.select(_ROW, pl.col(f"{side}_qb").alias("qb_name"))
+        targets = rows.select(_ROW, _KEY, pl.col(f"{side}_qb").alias("qb_name"))
         named = _resolve_ids(targets, identity, passer_names).select(_ROW, "qb_id")
         found = _play_by_play_ids(games, starters, side).rename({"qb_id": "_starter"})
         ids = ids.join(

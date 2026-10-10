@@ -13,18 +13,23 @@ _IDENTITY = pl.DataFrame(
 
 
 def _qb_games(passers: list[tuple[str, str]]) -> pl.DataFrame:
-    """Return one quarterback-game row per ``(qb_id, passer_name)`` with zero sums."""
+    """Return one 2023 week-1 quarterback-game row per ``(qb_id, passer_name)``."""
+    return _qb_games_at([(qb_id, name, 2023, 1) for qb_id, name in passers])
+
+
+def _qb_games_at(passers: list[tuple[str, str, int, int]]) -> pl.DataFrame:
+    """Return one quarterback-game row per ``(qb_id, passer_name, season, week)``, zero sums."""
     rows = [
         {
-            "season": 2023,
-            "week": 1,
+            "season": season,
+            "week": week,
             "team_abbr": "NE",
             "opponent_abbr": "NYJ",
             "qb_id": qb_id,
             "passer_name": name,
             **dict.fromkeys(qb_stats.QB_GAME_SUM_COLUMNS, 0.0),
         }
-        for qb_id, name in passers
+        for qb_id, name, season, week in passers
     ]
     return pl.DataFrame(rows, schema=qb_stats.QB_GAME_SCHEMA)
 
@@ -82,6 +87,33 @@ def test_expected_starter_ids_leave_an_ambiguous_abbreviation_unknown() -> None:
 
     # Assert
     assert starters.rows() == [(None, "A")]
+
+
+def test_a_later_season_passer_with_the_same_abbreviation_leaves_the_name_resolved() -> None:
+    """A rookie three seasons later must not make an earlier row's name ambiguous."""
+    # Arrange
+    games = _games([("Jayden Daniels", "Name A")])
+    passers = _qb_games_at([("JD24", "J.Daniels", 2023, 1), ("JD26", "J.Daniels", 2026, 1)])
+
+    # Act
+    starters = qb_stats.expected_starter_ids(games, passers, _IDENTITY)
+
+    # Assert
+    assert starters.rows() == [("JD24", "A")]
+
+
+def test_a_passer_first_seen_in_the_rows_week_or_later_does_not_name_it() -> None:
+    """The fallback reads only games before the row's week, as the row's own features do."""
+    # Arrange
+    games = _games([("Joe Burrow", "Name A"), ("Joe Burrow", "Name B")])
+    games = games.with_columns(pl.Series("week", [2, 3]))
+    passers = _qb_games_at([("JB", "J.Burrow", 2023, 2)])
+
+    # Act
+    starters = qb_stats.expected_starter_ids(games, passers, _IDENTITY)
+
+    # Assert
+    assert starters.rows() == [(None, "A"), ("JB", "B")]
 
 
 def test_expected_starter_ids_leave_unknown_and_missing_names_unknown() -> None:

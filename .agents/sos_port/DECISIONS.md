@@ -181,3 +181,19 @@ repository's own play-by-play column list.
   SRS (the ratings package covers it), its command-line parts and file writing.
 - **Display data only**: these tables are whole-season values, not pre-week values, and feed the
   web pages, never the model.
+
+### Leaving feature groups out of production (`0.52.0`)
+
+Full records: [decisions/feature_groups.md](decisions/feature_groups.md) (10 entries). Review: one
+independent round (verdict "merge as is") plus three hardening items checked by the session.
+
+- **One resolver** decides which columns a set of disabled groups removes, for the backtest,
+  `nfl-predictor train` and both weekly stages, so an adopted walk-forward arm and production
+  train on exactly the same columns (checked for the four combinations the step-6 arms use).
+- **The setting ships empty** (`disable_feature_groups: []` in `config/weekly_run.yaml`), so no
+  weekly output changes; setting a value after the measurement is a default change held for the
+  user.
+- **A saved model records** the groups and the columns it left out in `metadata.json`; the pickled
+  model needs nothing new, because its feature list already says what it was trained on.
+- **A group that matches no column warns** once per command, against the data it loaded (so an
+  older dataset build without a group cannot silently train differently from the adopted arm).

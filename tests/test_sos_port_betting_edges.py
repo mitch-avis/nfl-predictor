@@ -261,6 +261,29 @@ def test_render_report_gap_dominated_recommends_beyond_and_names_the_command(
     assert edges.RECOMMEND_BEYOND in report
 
 
+def test_render_report_rule_reads_the_all_games_group_not_a_later_one(tmp_path: Path) -> None:
+    # Arrange
+    model_led = edges.summarize(
+        _decomposed(edge=[0.10, -0.08, 0.01, 0.01], gap=[0.01, -0.01, 0.0, 0.0])
+    )
+    gap_led = edges.summarize(
+        _decomposed(edge=[0.10, -0.08, 0.01, 0.01], gap=[0.09, -0.07, 0.0, 0.0])
+    )
+    inputs = edges.ReportInputs(
+        checkpoint_dir=tmp_path,
+        folds=1,
+        fold_rows=4,
+        floor_difference=0.0,
+        metadata_path=tmp_path / "market_lines_metadata.json",
+    )
+
+    # Act
+    report = edges.render_report([(edges.ALL_GAMES, model_led), ("2025 alone", gap_led)], inputs)
+
+    # Assert
+    assert f"Recommendation: {edges.RECOMMEND_KEEP}." in report
+
+
 def test_main_writes_every_group_of_the_scored_games(tmp_path: Path) -> None:
     # Arrange
     checkpoints = tmp_path / "checkpoints"

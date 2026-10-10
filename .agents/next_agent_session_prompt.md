@@ -6,13 +6,19 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
 `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-10, roadmap steps 4 and 5 closed, step 6 phase 1 in progress)
+## State (written 2026-10-10, roadmap steps 4 and 5 closed, step 6 running autonomously)
 
-- `main` is at `0.45.0` (`ad07198`), pushed. The main checkout is on `feat/sos-port-inventory`
-  (off `main`, the plan commit `cacd301` plus this file). The other branch is `feat/web-ui`:
-  leave it alone. `scripts/gate.sh --web` exits `0`
-  on this tree (1580 passed, coverage 93.29%), and the environment is synced with the LightGBM
-  CUDA flags.
+- The user asked on 2026-10-10 (about 02:00) for step 6 to run autonomously to completion, with
+  final approvals batched at the end and every difference between the two repos decided by the
+  session and logged in `.agents/sos_port/DECISIONS.md`. What that authorizes and what stays held
+  for the user, the streams, their dependencies and the measurement ladder are in
+  `.agents/step6_plan.md`: read it first.
+- `main` is at `0.45.0` (`ad07198`), pushed, and the main checkout stays on `main` (the user's web
+  server and weekly runs import its code). Step-6 work lives in the integration worktree
+  `~/scratch/step6` on `feat/step6-sos-port`; implementer branches merge into it. The other
+  branch is `feat/web-ui`: leave it alone. `scripts/gate.sh --web` exits `0` on `main` (1580
+  passed, coverage 93.29%), and the main checkout's environment is synced with the LightGBM CUDA
+  flags.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed
@@ -59,17 +65,14 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
 
 ## Next
 
-1. Roadmap step 6, phase 1 (the scripted inventory of `nfl-sos-ratings` and the play-by-play
-   parity check), on branch `feat/sos-port-inventory`. The user accepted the plan on 2026-10-10
-   (recorded under step 6, item 1 in `TODO.md`, commit `cacd301`): a full inventory with a
-   mapping file that fails on any unclassified column, exact-and-explained parity for 1999-2025
-   with each mismatch attributed by a counterfactual adjustment, and report only (no production
-   code or data changes; the proposed fixes batch with phase 3). An `implementer` subagent was
-   launched the same day in its own worktree to write `.agents/sos_port/` (`inventory.py`,
-   `parity.py`, their generated reports, `FINDINGS.md`, `README.md`). If this session ended
-   before it reported, check `git worktree list` and its branch for the state; then a separate
-   `reviewer` re-runs both scripts and checks provenance before the counts enter any doc, and
-   the delegating session writes `CHANGELOG.md` and the version (`0.45.1`).
+1. Roadmap step 6, every phase, per the stream table in `.agents/step6_plan.md` (which records
+   each stream's branch and state). Phase 1 (the scripted inventory of `nfl-sos-ratings` and
+   the play-by-play parity check) follows the plan the user accepted on 2026-10-10 (step 6,
+   item 1 in `TODO.md`); its differences now go to the decision log rather than waiting for the
+   user. If this session ended mid-stream, check `git worktree list` and each stream's branch;
+   a separate `reviewer` checks every chunk (and re-runs any script whose numbers enter a doc)
+   before it merges into `feat/step6-sos-port`, and the delegating session writes
+   `CHANGELOG.md` and the version at each merge.
 2. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
    a `constants.MODELS_PATH` read at call time by the five places that build `ROOT_DIR /
    "models"` (`walk_forward.DEFAULT_CHECKPOINT_DIR`, `cli/backtest.py`, `ml/artifacts.py`,

@@ -29,8 +29,11 @@ Quarterback-game rows (``QB_GAME_SCHEMA``), one per passer and game:
 - ``qb_dropback_epa``: the expected points added on those dropbacks, spikes left out.
 - ``qb_attempts``: his pass attempts, for the rankings qualifier.
 
-Row order is kept: the fits sum over rows in the order given, so the same rows in another order
-can move a rating in its last bits (see :mod:`nfl_predictor.ratings.ridge`).
+The checks refuse a null ``game_id``, ``week``, ``team``, ``opponent_team`` or ``qb_id``, an empty
+or blank text id or team (play-by-play has rows whose ``posteam`` is an empty string), and two rows
+for one team or passer in a game. Row order is kept: the fits sum over rows in the order given, so
+the same rows in another order can move a rating in its last bits (see
+:mod:`nfl_predictor.ratings.ridge`).
 """
 
 from typing import TYPE_CHECKING
@@ -78,8 +81,8 @@ def _conformed(
     """Return ``frame`` reduced to ``schema``'s columns and types, after checking its rows.
 
     Raises:
-        ValueError: If a schema column is missing, a key or identity value is null, or two rows
-            share a key.
+        ValueError: If a schema column is missing, a key or identity value is null or (for text)
+            empty, or two rows share a key.
         polars.exceptions.InvalidOperationError: If a value does not convert to its column type.
 
     """
@@ -89,10 +92,16 @@ def _conformed(
         raise ValueError(msg)
     rows = frame.select(pl.col(name).cast(dtype, strict=True) for name, dtype in schema.items())
     for column in dict.fromkeys((*_REQUIRED_VALUES, *key)):
-        nulls = rows.get_column(column).null_count()
+        values = rows.get_column(column)
+        nulls = values.null_count()
         if nulls:
             msg = f"{kind} rows have {nulls} null {column} values"
             raise ValueError(msg)
+        if values.dtype == pl.String:
+            blank = int((values.str.strip_chars() == "").sum())
+            if blank:
+                msg = f"{kind} rows have {blank} empty {column} values"
+                raise ValueError(msg)
     duplicated = rows.select(key).is_duplicated()
     if duplicated.any():
         examples = rows.filter(duplicated).select(key).unique(maintain_order=True).head(3).rows()
@@ -108,7 +117,7 @@ def team_game_rows(frame: pl.DataFrame) -> pl.DataFrame:
 
     Raises:
         ValueError: If a column is missing, ``game_id``, ``week``, ``team``, or
-            ``opponent_team`` is null, or a team has two rows for one game.
+            ``opponent_team`` is null, an id or team is empty, or a team has two rows for one game.
 
     """
     return _conformed(frame, TEAM_GAME_SCHEMA, _TEAM_GAME_KEY, "team-game")
@@ -121,7 +130,7 @@ def qb_game_rows(frame: pl.DataFrame) -> pl.DataFrame:
 
     Raises:
         ValueError: If a column is missing, ``game_id``, ``week``, ``team``, ``opponent_team``, or
-            ``qb_id`` is null, or a passer has two rows for one game.
+            ``qb_id`` is null, an id or team is empty, or a passer has two rows for one game.
 
     """
     return _conformed(frame, QB_GAME_SCHEMA, _QB_GAME_KEY, "quarterback-game")

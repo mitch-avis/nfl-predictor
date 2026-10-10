@@ -138,3 +138,37 @@ def test_qb_game_rows_allow_a_missing_home_flag_for_a_neutral_site() -> None:
 
     # Assert
     assert rows.get_column("is_home").null_count() == 2
+
+
+@pytest.mark.parametrize("column", ["game_id", "team", "opponent_team"])
+def test_team_game_rows_empty_identity_values_raise(column: str) -> None:
+    # Arrange
+    games = _team_games().with_columns(
+        pl.when(pl.col("team") == "AAA").then(pl.lit("")).otherwise(pl.col(column)).alias(column)
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=f"1 empty {column} value"):
+        team_game_rows(games)
+
+
+def test_team_game_rows_blank_team_raises() -> None:
+    # Arrange
+    games = _team_games().with_columns(
+        pl.when(pl.col("team") == "AAA").then(pl.lit("  ")).otherwise(pl.col("team")).alias("team")
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="empty team"):
+        team_game_rows(games)
+
+
+def test_qb_game_rows_empty_passer_id_raises() -> None:
+    # Arrange
+    games = _qb_games().with_columns(
+        pl.when(pl.col("team") == "AAA").then(pl.lit("")).otherwise(pl.col("qb_id")).alias("qb_id")
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="1 empty qb_id value"):
+        qb_game_rows(games)

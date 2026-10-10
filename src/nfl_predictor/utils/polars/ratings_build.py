@@ -657,7 +657,7 @@ def _has_qualified_passer(quarterbacks: pl.DataFrame, team_games: pl.DataFrame) 
     if rated.is_empty():
         return False
     qualified = qb_season_summary(quarterbacks, team_games).filter(pl.col("qb_is_eligible"))
-    rated_ids = rated.get_column(QB_ID_COLUMN).unique().to_list()
+    rated_ids = rated.get_column(QB_ID_COLUMN).unique(maintain_order=True).to_list()
     return bool(qualified.get_column(QB_ID_COLUMN).is_in(rated_ids).any())
 
 

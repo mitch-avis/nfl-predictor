@@ -155,6 +155,20 @@ small and local.
   (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
   source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
   browser (signing in needs a typed password); the user should look at the pages once.
+- Question: should a market-free run leave out the market-informed Elo groups automatically? Today
+  `--exclude-market` (and the weekly run's market-free mode) drops only line columns, per the
+  step-5 design the user accepted; the `qb_elos.csv` Elo and, after a rebuild, the own Elo's
+  win-total preset still enter unless `--disable-feature-groups elo,own_elo_wt` (or the weekly
+  run's `disable_feature_groups`) is set. The integration adds a warning, not an automatic drop.
+  The reviewer recommends automatic (high confidence); the cost is that market-free results stop
+  being comparable with earlier market-free runs that kept the `elo` group.
+- Pre-existing defect found in review (outside step 6's changes): an upcoming game's
+  `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` differ from the same game's completed
+  row (all 16 games of 2025 week 18 when made upcoming, up to 15.75 points), so the model trains
+  on one version of the trends and predicts with another. To investigate and fix with a failing
+  test on the integration branch; the fix changes weekly output, so it is held for approval.
+- A fresh machine with no network and no cached win-total file stops the whole ETL (the own Elo's
+  win-total preset fails loudly by design); the ETL did not depend on nfelosrs before.
 - nflverse lists the 2026 Melbourne, Munich and Paris venues as domes (none has a roof over the
   field) and leaves Madrid blank; this feeds `stadium_type`. Recommendation: no override now,
   because the current season's schedule is downloaded again on every ETL run; recheck before the

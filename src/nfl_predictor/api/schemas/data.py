@@ -94,10 +94,15 @@ class FeatureImportanceOut(BaseModel):
     split, for runs written before SHAP was recorded; ``summed_average_gain`` is the average
     gain per split summed over encoded columns and heads, the only measure the oldest runs
     recorded. ``None`` means the run recorded no usable importance.
+
+    ``rows`` ranks the features by the measure added over the margin and total heads (the
+    default view); ``margin_rows`` ranks every feature by the margin head alone (the
+    margin-only view), and is empty when the run recorded no per-head numbers.
     """
 
     measure: Literal["mean_abs_shap", "total_gain", "summed_average_gain"] | None
     rows: list[dict[str, Any]]
+    margin_rows: list[dict[str, Any]]
 
 
 class ModelOut(BaseModel):

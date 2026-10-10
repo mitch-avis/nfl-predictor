@@ -150,10 +150,19 @@ export interface FeatureImportanceRow {
   splits: number | null
 }
 
+/**
+ * `rows` ranks the features over both heads (the default view); `margin_rows` ranks every feature
+ * by the margin head alone, with `value` and `splits` for that head, and is empty when the run
+ * recorded no per-head numbers.
+ */
 export interface FeatureImportance {
   measure: FeatureImportanceMeasure | null
   rows: FeatureImportanceRow[]
+  margin_rows: FeatureImportanceRow[]
 }
+
+/** Which ranking the feature importance chart plots: both heads added, or the margin head alone. */
+export type ImportanceHead = 'combined' | 'margin'
 
 export interface MetricStrategyEntry {
   metric: string

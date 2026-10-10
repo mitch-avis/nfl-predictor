@@ -384,7 +384,7 @@ def test_model_payload_for_a_walk_forward_run(tmp_path: Path) -> None:
     # Assert
     assert wf_payload["metrics"]["overall"]["brier"] == pytest.approx(0.2277)
     assert wf_payload["calibration"]["bin_count"] == 2
-    assert wf_payload["feature_importance"] == {"measure": None, "rows": []}
+    assert wf_payload["feature_importance"] == {"measure": None, "rows": [], "margin_rows": []}
     assert wf_payload["wf_compare"] is None
 
 
@@ -441,7 +441,7 @@ def test_feature_importance_of_an_odd_shape_is_empty(
     importance = model.feature_importance(path)
 
     # Assert
-    assert importance == {"measure": None, "rows": []}
+    assert importance == {"measure": None, "rows": [], "margin_rows": []}
 
 
 def test_wf_compare_without_a_rank_sorts_by_brier(tmp_path: Path) -> None:
@@ -553,6 +553,76 @@ def test_feature_importance_prefers_total_gain_when_both_measures_exist(tmp_path
     # Assert
     assert importance["measure"] == "total_gain"
     assert [row["feature"] for row in importance["rows"]] == ["away_elo_pre"]
+
+
+def test_feature_importance_ranks_the_margin_head_over_every_feature(tmp_path: Path) -> None:
+    """The margin-only ranking reaches past the combined top list to the margin head's leaders."""
+    # Arrange
+    payload = factories.feature_importance_payload("heads")
+    base = payload["base_features"]
+    base["margin"]["mean_abs_shap"] = [1.0, 2.0, 0.5]
+    base["total"]["mean_abs_shap"] = [2.0, 0.0, 2.0]
+    base["combined"]["mean_abs_shap"] = [3.0, 2.0, 2.5]
+    path = tmp_path / "feature_importance.json"
+    path.write_text(json.dumps(payload), "utf-8")
+
+    # Act
+    importance = model.feature_importance(path, top=2)
+
+    # Assert
+    assert [row["feature"] for row in importance["rows"]] == ["away_rest", "away_elo_pre"]
+    assert [row["feature"] for row in importance["margin_rows"]] == ["home_rest", "away_rest"]
+    assert importance["margin_rows"][0] == {
+        "feature": "home_rest",
+        "value": 2.0,
+        "margin_value": 2.0,
+        "total_value": 0.0,
+        "splits": 2.0,
+    }
+
+
+def test_feature_importance_margin_rows_use_the_fallback_measure(tmp_path: Path) -> None:
+    """A run without SHAP ranks the margin head by its total gain and its own split count."""
+    # Arrange
+    path = tmp_path / "feature_importance.json"
+    path.write_text(json.dumps(factories.gain_feature_importance_payload("gain")), "utf-8")
+
+    # Act
+    importance = model.feature_importance(path)
+
+    # Assert
+    assert [row["feature"] for row in importance["margin_rows"]] == [
+        "away_elo_pre",
+        "home_rest",
+        "away_rest",
+    ]
+    assert importance["margin_rows"][0] == {
+        "feature": "away_elo_pre",
+        "value": 30.0,
+        "margin_value": 30.0,
+        "total_value": 5.0,
+        "splits": 3.0,
+    }
+
+
+def test_feature_importance_without_a_margin_block_has_no_margin_rows(tmp_path: Path) -> None:
+    """A file that records only the combined heads still ranks them, with no margin view."""
+    # Arrange
+    payload = factories.gain_feature_importance_payload("combined-only")
+    del payload["base_features"]["margin"]
+    path = tmp_path / "feature_importance.json"
+    path.write_text(json.dumps(payload), "utf-8")
+
+    # Act
+    importance = model.feature_importance(path)
+
+    # Assert
+    assert [row["feature"] for row in importance["rows"]] == [
+        "away_elo_pre",
+        "home_rest",
+        "away_rest",
+    ]
+    assert importance["margin_rows"] == []
 
 
 def test_wf_compare_prefers_deterministic_ranking(tmp_path: Path) -> None:

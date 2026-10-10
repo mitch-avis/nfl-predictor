@@ -1,33 +1,33 @@
+import { useId, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
-import type { FeatureImportance, FeatureImportanceMeasure } from '@/api/types'
-import { humanize } from '@/utils/format'
+import type { FeatureImportance, ImportanceHead } from '@/api/types'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 
-const MEASURES: Record<FeatureImportanceMeasure, { name: string; caption: string }> = {
-  mean_abs_shap: {
-    name: 'Mean |SHAP| (points)',
-    caption:
-      'Mean |SHAP|: how far the feature moves the model’s adjustment to the market line (or the prediction itself when not anchored), in points, averaged over the model’s training games and added across the margin and total heads.',
-  },
-  total_gain: {
-    name: 'Total gain',
-    caption:
-      'Total gain: loss reduction summed over every split on the feature, across the margin and total heads (a run that did not record SHAP).',
-  },
-  summed_average_gain: {
-    name: 'Summed average gain',
-    caption:
-      'Average gain per split, summed over the feature’s encoded columns and both heads (an older run that did not record total gain). This favors features with many categories.',
-  },
-}
+import { MEASURE_NAMES, importanceCaption, importanceRows } from './importanceView'
 
-/** Horizontal bars of the top features, captioned with the measure they show. */
+/**
+ * Horizontal bars of the top features, captioned with the measure they show. Both heads are added
+ * by default; a switch shows the margin head's own ranking when the run recorded one.
+ */
 export function FeatureImportanceChart({ importance, limit = 25 }: { importance: FeatureImportance; limit?: number }) {
-  const data = importance.rows.slice(0, limit).map((row) => ({ name: humanize(row.feature), value: row.value }))
+  const [head, setHead] = useState<ImportanceHead>('combined')
+  const switchId = useId()
+  const hasMargin = importance.margin_rows.length > 0
+  const view: ImportanceHead = hasMargin ? head : 'combined'
+  const data = importanceRows(importance, view, limit)
   if (data.length === 0 || importance.measure === null) return <div className="text-sm text-muted-foreground">No feature importance recorded.</div>
-  const measure = MEASURES[importance.measure]
   return (
     <div className="space-y-2">
+      {hasMargin ? (
+        <div className="flex justify-end">
+          <Label htmlFor={switchId} className="cursor-pointer text-xs font-normal text-muted-foreground">
+            <Switch id={switchId} size="sm" checked={view === 'margin'} onCheckedChange={(checked) => setHead(checked ? 'margin' : 'combined')} />
+            Margin head only
+          </Label>
+        </div>
+      ) : null}
       <div style={{ height: Math.max(240, data.length * 22 + 40) }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
@@ -39,11 +39,11 @@ export function FeatureImportanceChart({ importance, limit = 25 }: { importance:
               contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--popover-foreground)', fontSize: 12 }}
               formatter={(value) => (typeof value === 'number' ? value.toFixed(2) : String(value))}
             />
-            <Bar dataKey="value" name={measure.name} fill="var(--chart-1)" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="value" name={MEASURE_NAMES[importance.measure]} fill="var(--chart-1)" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-xs text-muted-foreground">{measure.caption}</p>
+      <p className="text-xs text-muted-foreground">{importanceCaption(importance.measure, view)}</p>
     </div>
   )
 }

@@ -1088,7 +1088,9 @@ Training/backtests can write a run directory containing reproducible artifacts.
   margin and total heads. Its `measures` block describes each key. The web Model page
   ranks base features by combined mean |SHAP|; runs without SHAP fall back to combined total
   gain, and runs written before `schema_version` 2 to the per-split average summed over columns
-  (which favors features with many categories), each labelled as such. `nfl-predictor explain`
+  (which favors features with many categories), each labelled as such. A "Margin head only"
+  switch ranks every feature by the same measure for the margin head alone, the head that sets
+  the win probabilities and picks. `nfl-predictor explain`
   uses the same TreeSHAP values for one head, per encoded column, on a sample of any dataset.
 - Metadata includes timestamp, dataset fingerprint/hash, key package versions, training config/CLI
   args, the resolved XGBoost device, the floor's recorded sigma (`floor_sigma`), feature list, and

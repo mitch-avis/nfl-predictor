@@ -111,6 +111,15 @@ small and local.
   the published files); a pre-registered test of the team rating's penalty-wiped plays (its
   scrimmage EPA keeps 8,848 penalty-wiped runs at -5,660 EPA and no penalty-wiped pass, +11,142
   EPA, 1999-2025), scored like the kneel-and-spike test on next-game margins.
+- **Adoption chunk (after measurement)**: today the model reads every column between `away_rest`
+  and `home_moneyline` (`ml/feature_spec.py`), and only backtests can disable a feature group. So
+  once the decision rules pick the arms, production must be made to match the adopted arm exactly
+  (rule 11): either the weekly run gains the same `disable_feature_groups` setting the backtest
+  uses (one shared source), or the ETL stops building the groups the decision drops. Until that
+  lands and the user approves, the weekly run's `data/` is not replaced.
+- **Follow-up**: the ratings add about 7.5 minutes to a full ETL rebuild (about 31 s to an
+  incremental run); refitting through numpy masks would remove most of it, as a
+  behavior-preserving change checked against the bit-exact parity reports.
 - **Carries (corrected 2026-10-10)**: the play-by-play corrections base carries on the source's
   designed-carry rule (`rush_attempt & ~two_point & ~qb_scramble & ~qb_kneel`), not the `rush`
   flag; acceptance check: equal to the source's `designed_carries` and `rush_success_count` in

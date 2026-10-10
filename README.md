@@ -1041,12 +1041,13 @@ predictions into pool entries and never changes a probability, pick or rank:
   for them. The teams already used are kept in the browser, per season.
 
 The team and quarterback pages (`src/nfl_predictor/api/ratings/`, routes under `/api/ratings`)
-read the season tables the ETL writes to `data/ratings/{season}_{kind}.parquet`, with the kinds
-and columns of the `nfl-sos-ratings` files that `src/nfl_predictor/ratings/` and
-`src/nfl_predictor/season_stats/` were ported from. Every column's label, description and shading
-direction comes from the metric registry; green shades better or worse, slate shades context such
-as schedule strength, deeper for tougher. They only read, and a season built without a table hides
-that section.
+read each season's tables from `data/ratings/{season}_{kind}.parquet`, with the kinds and columns
+of the `nfl-sos-ratings` files that `src/nfl_predictor/ratings/` and
+`src/nfl_predictor/season_stats/` were ported from. No job in this app writes those tables yet, so
+until one does the pages show where they look for them. Every column's label, description and
+shading direction comes from the metric registry; green shades better or worse, slate shades
+context such as schedule strength, deeper for tougher. They only read, and a season built without
+a table hides that section.
 
 - **Teams** and **Quarterbacks**: a season's table by view (ratings, per game, per play, season
   totals, and the opponents faced per game and per play) and registry category, with a search, the

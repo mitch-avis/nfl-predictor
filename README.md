@@ -428,6 +428,9 @@ Primary sources:
 - nfelo's market-lines file (`greerreNFL/nfelomarket_data`) for the default
   `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.
+- `data/qb_elos.csv` (copied from `../nfeloqb`) for the Elo columns. A week the copy does not list
+  yet takes each team's latest listed rating, a team Elo trend of 0.0 and no quarterback trends;
+  the ETL warns when that week is the one being predicted, so refresh the copy before a weekly run.
 - `data/meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
   missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a
   quarterback still unmatched gets null quarterback features, and the ETL logs the unmatched rate.

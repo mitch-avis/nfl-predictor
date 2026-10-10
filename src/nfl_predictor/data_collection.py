@@ -69,7 +69,11 @@ from nfl_predictor.utils.polars.strength_table import (
     combine_strength_snapshots,
     stamp_strength_snapshot,
 )
-from nfl_predictor.utils.polars.week_rows import build_prior_season_stats, process_week
+from nfl_predictor.utils.polars.week_rows import (
+    build_prior_season_stats,
+    process_week,
+    warn_if_elo_lacks_week,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -872,6 +876,7 @@ def _load_sources(seasons: list[int], config: DataCollectionConfig) -> _EtlSourc
         stats_seasons, stats_schedule_df, config, current_season
     )
     elo_df, raw_elo_df = _load_elo(seasons, config)
+    warn_if_elo_lacks_week(elo_df, schedule_df, season=current_season, week=current_week)
     with _timed_step("load_ratings_sources", enabled=config.enable_timing):
         loaded = ratings_build.load_ratings_sources(
             max(seasons),

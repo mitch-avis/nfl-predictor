@@ -64,6 +64,10 @@ GAMES: dict[int, tuple[str, ...]] = {
     2024: ("2024_01_WAS_TB", "2024_01_LA_DET"),
 }
 SEASON_TABLE_SEASONS = (1999, 2024)
+# The season whose fixture game needs the roster repair (Jacksonville's 2001 home game).
+ROSTER_REPAIR_SEASON = 2001
+# The provenance lists a fixture's columns unless it keeps more than this many.
+MAX_LISTED_COLUMNS = 40
 # The published team-log columns the season-table fixtures keep: the game's identity and score,
 # counts and maxima, rates whose parts the published logs determine, and the defensive context
 # the quarterback opponent profiles average.
@@ -164,7 +168,7 @@ class Writer:
                 "fixture": name,
                 "source": origin,
                 "source_sha256": origin_sha256,
-                "columns": "every column" if frame.width > 40 else frame.columns,  # noqa: PLR2004
+                "columns": "every column" if frame.width > MAX_LISTED_COLUMNS else frame.columns,
                 "rows": rows,
                 "row_count": frame.height,
                 "sha256": sha256_file(path),
@@ -262,7 +266,7 @@ def write_game_fixtures(writer: Writer, snapshot: SnapshotDownloads) -> None:
             writer.write(
                 weekly, f"{season}_games_weekly_rosters.parquet", *origin, "players in those games"
             )
-        if season == 2001:  # noqa: PLR2004 - the season whose game needs the roster repair
+        if season == ROSTER_REPAIR_SEASON:
             rosters = nfl.load_rosters(seasons=[season]).filter(
                 pl.col("gsis_id").is_in(sorted(ids))
             )

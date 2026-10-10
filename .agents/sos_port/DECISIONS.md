@@ -135,3 +135,28 @@ type or aggregation changed.
   Mile High Stadium gets its measured 5,210 ft while Empower Field keeps its nominal 5,280 ft.
 - **2026 roofs**: nflverse lists three 2026 international venues as domes; no override now (the
   current season's schedule re-downloads every run); recheck before the Paris game on Oct 25.
+
+### Phase 1: the inventory and the play-by-play parity check
+
+Full records: [decisions/phase1_parity.md](decisions/phase1_parity.md) (18 entries), the generated
+[INVENTORY.md](INVENTORY.md) and [PARITY.md](PARITY.md), and the summary
+[FINDINGS.md](FINDINGS.md). Review: two independent rounds; the final round's fixes were checked
+by re-running both scripts on the integration branch.
+
+- **Adopted**: pre-2006 scrambles as dropbacks; situational flags read on every play; a down
+  flagged both ways counted once; the Jacksonville 2001-2002 player-team repair; the play-by-play
+  cache extension; carries on the source's designed-carry rule.
+- **Corrected by the session**: carries were first kept on this repository's `rush` flag, on the
+  premise that penalty-wiped passes stay dropbacks. The data showed none does (of 65,122
+  penalty-wiped plays, 8,848 keep the run flag at -5,660 EPA, 27,906 the pass flag at +11,142 EPA,
+  0 the dropback flag), so the old rule put penalty-wiped runs' EPA into rushing while
+  penalty-wiped passes counted nowhere. Carries now follow the source (`rush_attempt` and not a
+  two-point try, scramble or kneel-down).
+- **Kept** (definitional): two-point tries out of dropbacks, first downs as passing plus rushing,
+  fumbles on plays that are not special teams, play-by-play ahead of nflverse team stats,
+  both-sides special-teams counts, the explosive and stuffed definitions, Washington as `WSH`.
+- **Inventory**: 1,736 output columns, each resolved to one rule (matched 30, different 526,
+  missing 1,180 here), with guards that fail on an unclassified column, a same-name counterpart
+  filed as missing, or a column missing in one file kind but classified in another.
+- **Parity**: every mismatching team-game explained by a named cause (40,694 values); the
+  snapshot of the play-by-play the source read equals this repository's cache row by row.

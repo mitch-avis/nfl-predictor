@@ -13,7 +13,16 @@ repository root with this repository's virtual environment.
 `decisions/phase1_parity.md` logs each difference the reports found, with the options, the
 implementer's recommended decision and its data. `DECISIONS.md` records the decision taken on each
 (it is on the step-6 integration branch until that branch merges), and `FINDINGS.md` the short
-list of proposed changes; the delegating session writes both.
+list of changes; the delegating session writes both.
+
+The checked-in reports compare `nfl-sos-ratings` with this repository's code as it was on `main`
+at `ad07198` (`0.45.0`), and reproduce byte for byte there. The step-6 branch has since changed
+this repository's side (the extended play-by-play cache, new sources, the ratings package), so on
+that branch both scripts stop until their judgments are refreshed for the ported code: the
+inventory's same-name guard finds new counterparts (for example `series`), the parity check's
+evidence patterns point at changed code, and the cache now carries `play_id` itself. The refresh
+is scheduled after the step-6 integration lands (`.agents/step6_plan.md`); the refreshed
+inventory is how the port's progress is measured.
 
 ## Commands
 

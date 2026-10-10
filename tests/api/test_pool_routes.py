@@ -266,20 +266,30 @@ def test_survivor_stops_at_the_end_of_the_regular_season(
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize(
-    "body",
-    [{"horizon_weeks": 0}, {"horizon_weeks": 11}, {"beam_width": 0}, {"beam_width": 257}],
-    ids=["horizon-too-short", "horizon-too-long", "beam-too-narrow", "beam-too-wide"],
-)
-def test_survivor_bounds_the_search(
-    project_root: Path, viewer_client: TestClient, app: FastAPI, body: dict[str, int]
+def test_survivor_needs_at_least_one_planned_week(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
-    """The planned weeks and the beam width stay within bounds that answer in a few seconds."""
+    """The week to pick now is always planned, so zero planned weeks is a request error."""
     # Arrange
     _seed(project_root, app)
 
     # Act
-    response = _survivor(viewer_client, **body)
+    response = _survivor(viewer_client, horizon_weeks=0)
 
     # Assert
     assert response.status_code == 422
+
+
+def test_survivor_shows_every_week_as_planned_with_a_long_horizon(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """The planned weeks are only a display split, so any number of them is accepted."""
+    # Arrange
+    _seed(project_root, app, 6, 7)
+
+    # Act
+    payload = _survivor(viewer_client, horizon_weeks=18).json()
+
+    # Assert
+    assert (payload["planned_weeks"], payload["later_weeks"]) == ([5, 6, 7], [])
+    assert all(not pick["later"] for pick in payload["plans"][0]["picks"])

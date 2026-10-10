@@ -6,9 +6,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-MAX_PLANNED_WEEKS = 10
-MAX_BEAM_WIDTH = 256
-
 
 class SheetRowOut(BaseModel):
     """One game on the confidence sheet.
@@ -106,13 +103,16 @@ class TiebreakersOut(BaseModel):
 
 
 class SurvivorRequest(BaseModel):
-    """What the survivor planner needs: the week to pick now and the teams already used."""
+    """What the survivor planner needs: the week to pick now and the teams already used.
+
+    ``horizon_weeks`` only sets how many weeks from the start week the plans show as near-term
+    ("planned") picks; every week with predictions is solved exactly either way.
+    """
 
     season: int
     start_week: int = Field(ge=1)
     used_teams: list[str] = Field(default_factory=list)
-    horizon_weeks: int = Field(default=4, ge=1, le=MAX_PLANNED_WEEKS)
-    beam_width: int = Field(default=64, ge=1, le=MAX_BEAM_WIDTH)
+    horizon_weeks: int = Field(default=4, ge=1)
 
 
 class SurvivorPickOut(BaseModel):

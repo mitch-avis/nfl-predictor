@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import itertools
 import math
+from statistics import NormalDist
 
 import numpy as np
 import polars as pl
 import pytest
+from scipy.optimize import linear_sum_assignment
 
 from nfl_predictor.api.pool.survivor import Option, plan_survivor, week_options
 
@@ -41,6 +43,42 @@ def _brute_force(weeks: list[list[Option]], used: set[str], first: str | None = 
     return best
 
 
+def _simulated_season(seed: int) -> list[list[Option]]:
+    """Return a 32-team, 14-week season with persistent ratings, as the review simulated it.
+
+    Ratings are drawn from ``Normal(0, 6)``, four teams rest in each of weeks 3 to 12 and the home
+    win probability is ``Phi((r_home - r_away + 1.5) / 13.5)``.
+    """
+    rng = np.random.default_rng(1000 + seed)
+    names = [f"T{index:02d}" for index in range(32)]
+    ratings = rng.normal(0.0, 6.0, 32)
+    weeks: list[list[Option]] = []
+    for week in range(1, 15):
+        order = rng.permutation(32)
+        playing = [int(team) for team in (order[4:] if 3 <= week <= 12 else order)]
+        games: list[tuple[str, str, float]] = []
+        for home, away in itertools.batched(playing, 2, strict=True):
+            edge = float(ratings[home] - ratings[away]) + 1.5
+            games.append((names[home], names[away], NormalDist().cdf(edge / 13.5)))
+        weeks.append(_week(week, *games))
+    return weeks
+
+
+def _exact_optimum(weeks: list[list[Option]]) -> tuple[float, str]:
+    """Return the best chance to survive every week with distinct teams, and its first pick.
+
+    One assignment of every week to a team at cost ``-log p``, solved directly, as the oracle.
+    """
+    teams = sorted({option.team for week in weeks for option in week})
+    cost = np.full((len(weeks), len(teams)), 1e6)
+    for row, week in enumerate(weeks):
+        for option in week:
+            cost[row, teams.index(option.team)] = -math.log(option.win_prob)
+    rows, columns = linear_sum_assignment(cost)
+    first = teams[columns[list(rows).index(0)]]
+    return math.exp(-float(cost[rows, columns].sum())), first
+
+
 def _random_weeks(seed: int, weeks: int, teams: int) -> list[list[Option]]:
     """Return ``weeks`` weeks in which ``teams`` teams pair off into games at random chances."""
     rng = np.random.default_rng(seed)
@@ -62,7 +100,7 @@ def test_single_week_ranks_one_plan_per_pick() -> None:
     planned = [_week(1, ("A", "X", 0.8), ("B", "Y", 0.7), ("C", "Z", 0.6))]
 
     # Act
-    result = plan_survivor(planned, [], set(), beam_width=8)
+    result = plan_survivor(planned, [], set())
 
     # Assert
     assert [plan.picks[0].option.team for plan in result.plans] == ["A", "B", "C", "Z", "Y", "X"]
@@ -80,7 +118,7 @@ def test_used_teams_are_never_picked() -> None:
     ]
 
     # Act
-    result = plan_survivor(planned, [], {"A"}, beam_width=8)
+    result = plan_survivor(planned, [], {"A"})
 
     # Assert
     teams = {pick.option.team for plan in result.plans for pick in plan.picks}
@@ -96,7 +134,7 @@ def test_a_team_is_picked_at_most_once_per_plan() -> None:
     ]
 
     # Act
-    result = plan_survivor(planned, [], set(), beam_width=8)
+    result = plan_survivor(planned, [], set())
 
     # Assert
     for plan in result.plans:
@@ -113,7 +151,7 @@ def test_lookahead_saves_a_team_for_a_later_week() -> None:
     later = [_week(2, ("A", "Z", 0.95), ("B", "W", 0.55), ("C", "V", 0.60))]
 
     # Act
-    result = plan_survivor(planned, later, set(), beam_width=8)
+    result = plan_survivor(planned, later, set())
 
     # Assert
     best = result.plans[0]
@@ -135,7 +173,7 @@ def test_cumulative_survival_multiplies_the_picks_in_week_order() -> None:
     later = [_week(3, ("C", "Z", 0.9))]
 
     # Act
-    result = plan_survivor(planned, later, set(), beam_width=8)
+    result = plan_survivor(planned, later, set())
 
     # Assert
     cumulative = [pick.cumulative_survival for pick in result.plans[0].picks]
@@ -150,7 +188,7 @@ def test_plans_match_an_exhaustive_search(seed: int) -> None:
     planned, later = weeks[:3], weeks[3:]
 
     # Act
-    result = plan_survivor(planned, later, set(), beam_width=64, max_plans=12)
+    result = plan_survivor(planned, later, set(), max_plans=12)
 
     # Assert
     assert result.plans[0].total_survival == pytest.approx(_brute_force(weeks, set()))
@@ -165,7 +203,7 @@ def test_plans_respect_byes() -> None:
     planned = [_week(1, ("A", "X", 0.9)), _week(2, ("B", "Y", 0.8))]
 
     # Act
-    result = plan_survivor(planned, [], set(), beam_width=8)
+    result = plan_survivor(planned, [], set())
 
     # Assert
     for plan in result.plans:
@@ -179,7 +217,7 @@ def test_max_plans_caps_the_list() -> None:
     planned = [_week(1, ("A", "X", 0.8), ("B", "Y", 0.7), ("C", "Z", 0.6))]
 
     # Act
-    result = plan_survivor(planned, [], set(), beam_width=8, max_plans=2)
+    result = plan_survivor(planned, [], set(), max_plans=2)
 
     # Assert
     assert [plan.picks[0].option.team for plan in result.plans] == ["A", "B"]
@@ -192,7 +230,7 @@ def test_later_weeks_that_cannot_be_covered_leave_no_later_chance() -> None:
     later = [_week(2, ("B", "Y", 0.6))]
 
     # Act
-    result = plan_survivor(planned, later, {"B", "Y"}, beam_width=8)
+    result = plan_survivor(planned, later, {"B", "Y"})
 
     # Assert
     assert [plan.later_survival for plan in result.plans] == [0.0, 0.0]
@@ -206,36 +244,73 @@ def test_a_team_needed_to_cover_a_later_week_is_worth_all_of_it() -> None:
     later = [_week(2, ("A", "Y", 0.6))]
 
     # Act
-    result = plan_survivor(planned, later, {"Y"}, beam_width=8)
+    result = plan_survivor(planned, later, {"Y"})
 
     # Assert
     assert result.future_values["A"] == pytest.approx(1.0)
     assert [plan.picks[0].option.team for plan in result.plans] == ["X", "A"]
 
 
-def test_a_first_pick_that_strands_a_planned_week_has_no_plan() -> None:
-    """A first pick that leaves no open team for a later planned week cannot finish a plan."""
+def test_a_first_pick_that_strands_a_planned_week_has_no_chance() -> None:
+    """A first pick that leaves no open team for a later planned week ranks last, at zero."""
     # Arrange
     planned = [_week(1, ("A", "X", 0.8)), [*_game(2, "A", "Y", 0.7)[:1]]]
 
     # Act
-    result = plan_survivor(planned, [], set(), beam_width=8)
+    result = plan_survivor(planned, [], set())
 
     # Assert
-    assert [plan.picks[0].option.team for plan in result.plans] == ["X"]
+    assert [plan.picks[0].option.team for plan in result.plans] == ["X", "A"]
+    stranded = result.plans[1]
+    assert (stranded.survival, stranded.total_survival) == (0.0, 0.0)
+    assert [pick.option.team for pick in stranded.picks] == ["A"]
 
 
-def test_beam_width_must_be_positive() -> None:
-    """A beam of zero states cannot search."""
-    # Act & Assert
-    with pytest.raises(ValueError, match="beam_width"):
-        plan_survivor([_week(1, ("A", "X", 0.8))], [], set(), beam_width=0)
+@pytest.mark.parametrize("seed", [0, 6, 8, 13, 25])
+def test_plans_reach_the_exact_optimum_on_a_full_season(seed: int) -> None:
+    """On a simulated 32-team, 14-week season the best plan is the exact optimum.
+
+    Seasons 6, 8 and 13 are ones the first design (a beam of 64 over 10 planned weeks) planned
+    below the optimum; in seasons 0 and 25 a beam of 16 recommended the wrong first pick
+    (``.agents/sos_port/survivor_beam_vs_exact.py``).
+    """
+    # Arrange
+    weeks = _simulated_season(seed)
+    optimum, optimum_first = _exact_optimum(weeks)
+
+    # Act
+    result = plan_survivor(weeks[:10], weeks[10:], set())
+
+    # Assert
+    best = result.plans[0]
+    assert best.total_survival == pytest.approx(optimum, rel=1e-9)
+    assert best.picks[0].option.team == optimum_first
+
+
+def test_every_first_pick_gets_its_own_best_plan_on_a_full_season() -> None:
+    """Each plan covers every week with distinct teams and is the best its first pick allows."""
+    # Arrange
+    weeks = _simulated_season(6)
+
+    # Act
+    result = plan_survivor(weeks[:4], weeks[4:], set(), max_plans=32)
+
+    # Assert
+    assert len(result.plans) == 32
+    for plan in result.plans:
+        teams = [pick.option.team for pick in plan.picks]
+        assert [pick.option.week for pick in plan.picks] == list(range(1, 15))
+        assert len(set(teams)) == 14
+        first = plan.picks[0].option
+        rest = [[o for o in week if o.team != first.team] for week in weeks[1:]]
+        rest_optimum, _first = _exact_optimum(rest)
+        assert plan.total_survival == pytest.approx(first.win_prob * rest_optimum, rel=1e-9)
 
 
 def test_no_planned_week_gives_no_plan() -> None:
     """Without a week to plan there is nothing to rank."""
     # Act
-    result = plan_survivor([], [], set(), beam_width=8)
+    result = plan_survivor([], [], set())
 
     # Assert
     assert result.plans == []

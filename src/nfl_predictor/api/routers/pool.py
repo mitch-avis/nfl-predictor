@@ -158,7 +158,6 @@ def survivor(
         [weeks[week] for week in planned_weeks],
         [weeks[week] for week in later_weeks],
         used,
-        beam_width=body.beam_width,
     )
     values = sorted(result.future_values.items(), key=lambda item: (-item[1], item[0]))
     return SurvivorOut(

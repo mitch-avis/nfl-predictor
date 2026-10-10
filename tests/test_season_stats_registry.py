@@ -1,10 +1,13 @@
 """Contract tests for the metric registry, the single source of truth for published columns."""
 
 import json
+import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
+from nfl_predictor.ratings import rating_ranges
 from nfl_predictor.season_stats.metrics import (
     CategoryDef,
     MetricDef,
@@ -658,3 +661,40 @@ def test_rank_range_settings_match_the_published_rank_ranges() -> None:
     # Assert
     assert BOOTSTRAP_RESAMPLES == 1000
     assert suffixes == ["_q025", "_q100", "_q250", "_q500", "_q750", "_q900", "_q975"]
+
+
+def test_rank_range_settings_equal_the_ratings_packages() -> None:
+    """The registry restates the ratings' three settings rather than importing them (numpy)."""
+    # Arrange
+    ratings_settings = (
+        rating_ranges.BOOTSTRAP_RESAMPLES,
+        rating_ranges.RANGE_QUANTILES,
+        [rating_ranges.quantile_suffix(level) for level in rating_ranges.RANGE_QUANTILES],
+    )
+
+    # Act
+    restated = (
+        BOOTSTRAP_RESAMPLES,
+        RANGE_QUANTILES,
+        [quantile_suffix(level) for level in RANGE_QUANTILES],
+    )
+
+    # Assert
+    assert restated == ratings_settings
+
+
+def test_the_registry_imports_without_numpy() -> None:
+    """The web API reads the registry, which loads neither numpy nor the ratings code."""
+    # Arrange
+    code = (
+        "import sys; import nfl_predictor.season_stats.metrics; "
+        "print(sorted({'numpy', 'nfl_predictor.ratings'} & set(sys.modules)))"
+    )
+
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", code], check=True, capture_output=True, text=True
+    )
+
+    # Assert
+    assert result.stdout.strip() == "[]"

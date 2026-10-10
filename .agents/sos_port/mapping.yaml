@@ -188,7 +188,7 @@ columns:
     here: qb_game:qb_id
     note: >-
       Both GSIS player ids; there a quarterback without one falls back to his snap-count id or his
-      name, here to the play's passer id.
+      name, here a dropback without a passer id goes to the team-game's main passer.
   - id: key-qb-name
     kinds: "*"
     columns: [qb_name]

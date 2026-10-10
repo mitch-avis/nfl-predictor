@@ -2363,7 +2363,7 @@ kinds no other rule matches, and must take exactly the number it expects.
 | `key-game-id` | matched | 4 | - | - | The same nflverse game id. |
 | `key-week` | matched | 8 | - | - |  |
 | `key-team` | different | 22 | - | - | The same team codes except Washington, WAS there and WSH here. |
-| `key-qb` | different | 11 | - | - | Both GSIS player ids; there a quarterback without one falls back to his snap-count id or his name, here to the play's passer id. |
+| `key-qb` | different | 11 | - | - | Both GSIS player ids; there a quarterback without one falls back to his snap-count id or his name, here a dropback without a passer id goes to the team-game's main passer. |
 | `key-qb-name` | different | 6 | - | - | There the players file's display name; here the play-by-play passer name. |
 | `gl-games` | missing | 1 | - | none planned (a row count) |  |
 | `gl-home` | matched | 1 | - | - |  |

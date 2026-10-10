@@ -220,3 +220,34 @@ checked by the session. Not yet checked in a browser: look at the pages once.
   `NFLP_SOS_DATA_DIR` setting is gone.
 - **Waiting on**: no job writes the season-statistics tables yet, so the pages show where they
   read from until the season-statistics ETL step lands.
+
+### The ratings in the ETL, the play-by-play corrections and the own Elo in the datasets (`0.54.0`)
+
+Full records: [decisions/integration_ratings.md](decisions/integration_ratings.md) (19 entries),
+[decisions/integration_pbp_elo.md](decisions/integration_pbp_elo.md) (entries 1.1-4.2), the
+generated [ADAPTER_PARITY.md](ADAPTER_PARITY.md), and the measured feature changes in
+`decisions/integration_feature_diffs/`. Review: two independent reviews, each in two rounds
+(final fixes checked); the reviewers reproduced every quoted number from their own rebuilds.
+
+- **The ratings in the ETL**: the adapter from this repository's play-by-play reproduces the
+  source's game logs in all 305,830 input cells and its published ratings tables (741,295 cells
+  bit-identical, the rest within 1.1e-16). The ETL writes the tables to `data/ratings/` and adds a
+  `ratings` feature group (21 columns); the strength snapshot stays beside it until the
+  measurement decides. A full rebuild takes about 7.5 minutes longer; an incremental run about 30
+  seconds (about a minute late in the season).
+- **Leakage**: every pre-week rating uses games before the week and roster weeks before the week;
+  the reviewers' perturbations of every later input moved nothing; a starter's name is matched only
+  against earlier passers (a later rookie can no longer change an earlier season's feature).
+- **Play-by-play corrections adopted** (each measured, see the diffs): scrambles filed as runs are
+  dropbacks (3,744 more dropbacks in 1999-2005); carries follow the source's designed-carry rule
+  (348,419 instead of 357,227; penalty-wiped runs leave the rush sums but stay snaps), checked
+  equal to the source in all 13,928 team-games; flags read on every play; a down flagged both ways
+  counted once; the Jacksonville repair.
+- **One starter**: a completed game's starter comes from its play-by-play (the source's rule),
+  agreeing with the old name chain in all but 12 of 13,922 team-games (net better: the reviewer's
+  hand-check found the chain wrong in 8 of the 12); upcoming games use the projected starter.
+- **Own Elo in the datasets**: both presets in every build; designed quarterback runs now in
+  VALUE; the evaluation rerun under its unchanged rule kept the same components (Brier 0.21701
+  market-free, 0.21594 with win totals).
+- **Market-free runs** keep the step-5 design (line columns only, groups left out by flag) and now
+  warn when a market-informed group stays; making it automatic is on your list.

@@ -11,19 +11,28 @@ repository root with this repository's virtual environment.
 | `parity.py` | `PARITY.md`, `parity.json`, `parity_attributions.parquet` | `parity.yaml` |
 
 `decisions/phase1_parity.md` logs each difference the reports found, with the options, the
-implementer's recommended decision and its data; `DECISIONS.md` records the decision taken on
-each, and `FINDINGS.md` the short list of proposed changes (both written by the delegating
-session).
+implementer's recommended decision and its data. `DECISIONS.md` records the decision taken on each
+(it is on the step-6 integration branch until that branch merges), and `FINDINGS.md` the short
+list of proposed changes; the delegating session writes both.
 
 ## Commands
 
 ```bash
-.venv/bin/python .agents/sos_port/inventory.py
-.venv/bin/python .agents/sos_port/parity.py
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/inventory.py
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py
 ```
 
-The inventory takes about a minute; the parity check re-aggregates every season once per cause
+`PYTHONDONTWRITEBYTECODE=1` keeps the runs from leaving `__pycache__` beside the scripts. The
+inventory takes a few seconds; the parity check re-aggregates every season once per cause
 combination it tries and takes about six minutes. Both exit `0` only when every check holds.
+
+## Report sizes
+
+The repository's `check-added-large-files` hook rejects a file over 500 KB. A text table of every
+mismatching team-game would exceed it, so the parity check writes that table as
+`parity_attributions.parquet`, which `.gitignore` re-includes past its `*.parquet` rule.
+`inventory.json` is close to the limit (about 490 KiB), although it already stores each column as
+a row of fields and the constants catalog as a count.
 
 ## Inputs and provenance
 
@@ -73,12 +82,18 @@ combination it tries and takes about six minutes. Both exit `0` only when every 
 
 Rules match columns on file kind, name, registry base metric and affixes. A `rest` rule takes the
 columns of its kinds that no other rule matches and states how many (`expect`); any rule may pin
-its count the same way. A guard then checks every column left `missing` against this repository's
-catalogs (its aggregates' columns, the cached team stats, the quarterback games, the game dataset,
-the strength snapshot and every list of names in `constants.py`): one with a same-name
-counterpart, or a season total or per-game value whose base metric has one, fails the run.
-Opponents-faced profile columns are exempt, because a same-name column here describes the team
-itself.
+its count the same way. A mirror rule (`mirror_kind`) gives each of its columns the counterparts
+the same column has in another file kind (with `mirror_base`, its base metric's column there), so
+a season value names what its game-log column names.
+
+Two guards then check every column left `missing`. The same-name guard fails one with a same-name
+counterpart in this repository's catalogs (its aggregates' columns, the cached team stats, the
+quarterback games, the game dataset, the strength snapshot and every list of names in
+`constants.py`), or a season total or per-game value whose base metric has one. The cross-kind
+guard fails one whose name, or a total's or per-game value's base metric, is `matched` or
+`different` in another file kind, unless `cross_kind_exceptions` in `mapping.yaml` says why.
+Opponents-faced profile columns are exempt from both, because a same-name column here describes
+the team itself.
 
 ## The parity check
 
@@ -90,11 +105,14 @@ play-by-play can be judged; the report lists every other column with its source.
 keyed in canonical team codes, so a team-game one side writes with the Rams as `LA` is compared
 like any other.
 
-This repository's cache leaves out `qb_scramble` and `play_id`. For each season the check prepares
-the snapshot's file with this repository's own `_prepare_pbp` and requires it to equal the cache
-row by row on every cached column; only then are the two columns attached row by row. That
-comparison is also the play-by-play test of a difference between nflverse releases: with the
-snapshot equal to the cache, no team-game can owe a difference to the release.
+This repository's cache leaves out `qb_scramble`, `play_id` and the play text `desc`. For each
+season the check prepares the snapshot's file with this repository's own `_prepare_pbp`, which
+keeps the rows in order, and requires it to equal the cache row by row on every cached column;
+only then are the three columns attached by row position. Rows equal on every cached column cannot
+be told apart that way, so the run also requires each group of such rows to carry one
+`qb_scramble` value, and each `play_id` to appear once within its game. That comparison is also
+the play-by-play test of a difference between nflverse releases: with the snapshot equal to the
+cache, no team-game can owe a difference to the release.
 
 A mismatching team-game is attributed to a named cause only when that cause's adjustment
 (`parity_rules.py`), alone or with the fewest other causes the pair allows, makes it match exactly.
@@ -102,7 +120,11 @@ An adjustment changes one rule in this repository's play-by-play before re-runni
 aggregates (for example its rule that a run play flagged `qb_scramble` is a dropback), or undoes
 one repair on its side (Jacksonville's 2001-2002 player teams). For each cause the report gives both
 what it explains and its own effect: its adjustment applied alone to every team-game. Every
-mismatching team-game, with its values and causes, is in `parity_attributions.parquet`.
+mismatching team-game, with its values and causes, is in `parity_attributions.parquet`. For the
+carry decision, the report also counts the plays nflverse records as `no_play` by the flags they
+keep (and, for those without the penalty flag, by what their play text says), this repository's
+carries without the `rush_attempt` flag by play type, and how carries built from `rush_attempt`,
+with and without its `~qb_scramble` term, differ from this repository's carries.
 
 ## What makes a run fail
 
@@ -116,12 +138,14 @@ Both scripts exit non-zero, with every reason listed under Failures in their rep
 `inventory.py` also fails when a column, source or web item matches no rule or more than one,
 when a rule matches nothing, when a rule takes a different number of columns than it expects,
 when a rule's class lacks its counterpart or phase, when a counterpart named for this repository
-does not exist, when a column left `missing` has a same-name counterpart here, or when a column
-does not resolve in its registry.
+does not exist, when a mirror rule mirrors a column that has no counterpart or is a mirror itself,
+when either guard finds a column left `missing` that has a counterpart, when a cross-kind
+exception is not needed, or when a column does not resolve in its registry.
 
 `parity.py` also fails when a mismatching team-game is unexplained, when a team-game exists on
 one side only, when a played game lacks rows or a listed game without play-by-play has them, when
 a season's snapshot file is missing, ambiguous, not in its manifest or not equal to the cache row
-by row, when an evidence pattern in `parity.yaml` no longer holds, when a pair names a column that
-does not exist or a game-log column that does not come from play-by-play, or when a cause is
-described without an implementation or implemented without a description.
+by row, when a `play_id` repeats within a game or rows equal on every cached column differ in
+`qb_scramble`, when an evidence pattern in `parity.yaml` no longer holds, when a pair names a
+column that does not exist or a game-log column that does not come from play-by-play, or when a
+cause is described without an implementation or implemented without a description.

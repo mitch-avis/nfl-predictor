@@ -194,6 +194,10 @@ class RatingsHistory:
             ValueError: As :meth:`pre_week` does for the team rows.
 
         """
+        return self._team_rows(season, week, teams).sort("team")
+
+    def _team_rows(self, season: int, week: int, teams: Collection[str]) -> pl.DataFrame:
+        """Return one row per team with the ratings fit on the season's games before ``week``."""
         snapshot = self._team.game_logs(season).filter(pl.col("week") < week)
         universe = sorted(
             set(teams)

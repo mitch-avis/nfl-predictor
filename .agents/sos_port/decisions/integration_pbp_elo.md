@@ -28,8 +28,8 @@ output is kept as `<script>_output.txt` where the docs quote it.
   `integration_feature_diff.py` compares two runs column by column, by season. A commit before
   the current one runs from a `git archive` export with `PYTHONPATH`. Every comparison the
   entries quote is kept in `integration_feature_diffs/<before>_<after>.txt`, named by the two
-  commits, from `f601835` (the branch before the first correction) through `2c5d028` (the last
-  code change); each run used `POLARS_MAX_THREADS=8`.
+  commits, from `f601835` (the branch before the first correction) through `06e9863`, after which
+  no change touches the columns these runs build; each run used `POLARS_MAX_THREADS=8`.
 - `integration_carry_parity.py` and `integration_starters.py` compare with `nfl-sos-ratings`'
   published files (`/home/mitch/workspace/nfl-sos-ratings/data/`, read-only).
 
@@ -96,10 +96,13 @@ Reproduce from the repository root (the cache once, then any script):
   and Tim Boyle (`2024_07_MIA_IND`), Drake Maye and Joe Milton III (`2024_18_BUF_NE`), C.J.
   Stroud and Davis Mills and Will Levis and Mason Rudolph (`2024_18_HOU_TEN`), Jayden Daniels
   and Marcus Mariota (`2025_14_WAS_MIN`). In each the rule's quarterback has his team's first
-  first-quarter quarterback snap and the source's rule names him too; which of the two started
-  each game is not checked against another record here. Where the rule's quarterback did not
-  start (a second quarterback with a dropback in the game whose play came before the starter's
-  first), it is the rule's blind spot, which the source accepts.
+  first-quarter quarterback snap and the source's rule names him too. The independent review
+  checked the 12 by hand: in about 4 the rule names a package or gadget quarterback who took
+  that first snap (Stewart 1 dropback against Graham's 30, Wallace 4 against Hasselbeck's 29,
+  Hill 1 against Dalton's 30, Driskel 5 against Mills's 27), and in the other 8 the identity
+  chain is wrong (in `2006_02_OAK_BAL` and `2015_01_IND_BUF` the chain's quarterback has no
+  dropback at all). The switch is net positive, and the package cases are the rule's blind spot
+  (a second quarterback whose play came before the starter's first), which the source accepts.
 - **Feature-value impact**: measured with the switch, entry 1.3.
 - **How to reverse it**: `qb_starters.play_by_play_starters`; pass `starters=None` to
   `qb_stats.attach_qb_features` to key every game on its named starter again.
@@ -217,6 +220,41 @@ Reproduce from the repository root (the cache once, then any script):
 - **Feature-value impact**: none.
 - **How to reverse it**: ask for every season `_with_earlier_seasons` finds without rows.
 
+### 1.9 The passer-name fallback reads only earlier games
+
+- **What differs**: a named starter the identity file lacks falls back to the play-by-play
+  passer name (`F.Last`) when one passer has it, and that map was built from every season's
+  quarterback games, so a later passer could decide a row's id. A 2026 rookie sharing an
+  abbreviation (`J.Daniels`) would leave an earlier starter of that name unidentified, and a
+  debutant's own debut could name him in training rows while the same name stays unknown before
+  kickoff (the independent review's finding).
+- **Decision**: the fallback reads only the games strictly before the row's season and week
+  (`06e9863`, inside `qb_stats.expected_starter_ids`, so every quarterback feature follows it).
+- **Data**: `test_a_later_season_passer_with_the_same_abbreviation_leaves_the_name_resolved` and
+  `test_a_passer_first_seen_in_the_rows_week_or_later_does_not_name_it`; the measurement run at
+  `06e9863` against `2c5d028` (`2c5d028_06e9863.txt`, which also spans the step-6 merge `dea8417`
+  and the warning of `8fcbb8a`) leaves every published column identical.
+- **Remaining**: a completed game's starter comes from its play-by-play, by id, so a debutant
+  the identity file lacks is still identified in his training rows while before kickoff his
+  name has no earlier passer to match; that is the play-by-play starter convention of entries
+  1.1 and 1.3, the same one the `qb_elos.csv` columns follow.
+- **How to reverse it**: build the fallback from every game again (`qb_stats._resolve_ids`).
+
+### 1.10 The players file and the weekly rosters load once
+
+- **What differs**: a current-season run downloaded the players file and the current weekly
+  roster twice, once for the ratings' sources and again for every season's quarterback identity,
+  which loaded both per season (the independent review's finding).
+- **Decision**: the ETL keeps the frames the ratings loaded
+  (`nflverse_sources.QbIdentitySources`) and reads each season's identity from them (`d9a2c6b`);
+  without them it still loads the identity per season.
+- **Data**: on the cached 1999-2025 sources every season's identity read this way equals the
+  per-season load's (a one-off check, 27 seasons, 0 differences);
+  `test_shared_identity_sources_give_each_season_the_loaders_identity`,
+  `test_quarterback_history_reads_the_shared_identity_sources_without_loading_them`.
+- **Feature-value impact**: none.
+- **How to reverse it**: drop `identity_sources` from `_quarterback_history`.
+
 ## 2. Play-by-play corrections
 
 The plan adopted these from phase 1's differences (`.agents/step6_plan.md`, "Integration
@@ -243,8 +281,9 @@ weeks through the week-1 prior and the in-season blend.
   flag, all in 1999-2005 (821, 440, 311, 270, 659, 711 and 532 a season), none from 2006 on. A
   scramble a penalty wiped out (`no_play`) is not one, as before.
 - **Feature-value impact** (`f601835_6ed756d.txt`): dropbacks rise by those counts and offensive
-  snaps by 818, 440, 311, 270, 658, 711 and 532; four of the scrambles carried the `rush` flag and
-  were snaps and carries already (3 in 1999, 1 in 2003), and leave carries. Published: the
+  snaps by 818, 440, 311, 270, 658, 711 and 532. Five scrambles leave carries: four carried the
+  `rush` flag without the dropback flag and were snaps and carries already (3 in 1999, 1 in
+  2003), and the fifth, `2004_05_BUF_NYJ` play 2555, carried both flags (entry 2.2). Published: the
   per-snap, per-dropback, early-down and strength columns move in 2,092-2,097 games of 1999-2006
   (the 2006 rows read the 2005 prior; `epa_per_dropback` by at most 0.170, mean per season
   0.006-0.030), the carry rates in 830 games of 1999-2005, and the quarterback family in all
@@ -369,6 +408,43 @@ quarterback games, the starter rule and VALUE's rushing) takes its plays from
 `pbp.regular_season_plays`, which drops a play whose `posteam` or `defteam` is empty, the
 source's treatment of an empty team code (entry 14). None reads a field entry 15 blanks.
 
+### 2.8 Red-zone trips: investigated, not changed
+
+- **What differs**: `red_zone_trips` differs from the source's published game logs in 8,238 of
+  13,928 team-games, and the plan named it neither a correction nor a kept difference.
+- **Cause**: this repository counts a team's drives (`fixed_drive`) with any of its plays at
+  `yardline_100 <= 20` (`pbp._red_zone_drive_aggregations`). The source counts the drives
+  nflverse flags inside the 20 (`drive_inside20`, its `team_stats_expanded`
+  `_aggregate_drive_stats`, read from its working tree; the phase-1 mapping at `9081bce`,
+  `mapping.yaml` `gl-red-zone`, records the same definition).
+- **Data**: `integration_red_zone.py` (output `integration_red_zone_output.txt`, read-only on the
+  measurement cache and the source's published logs). Counting `drive_inside20` on this
+  repository's plays reproduces the source's `red_zone_trips` in all 13,928 team-games (0
+  differences). Over 1999-2025 this repository counts 56,127 trips against the source's 43,771.
+  The drives the two disagree on: 10,234 touchdown drives whose only plays inside the 20 belong
+  to the try after the touchdown (the extra point is snapped from the 15 since 2015 and the 2
+  before, the two-point try from the 2, plus penalties on the try); 2,132 whose only other plays
+  inside are at exactly the 20 (nflverse's flag means inside it); 82 whose only other plays
+  inside were wiped out by a penalty; 132 with a live play inside the 20 that nflverse does not
+  flag; and 224 that nflverse flags without a play of the drive inside the 20.
+- **Assessment**: the 10,234 try-only drives are a bug against this repository's own definition
+  (the docstring and the README say "drives that reached the red zone", and the try is snapped
+  there by rule after the drive has scored). They make every long touchdown drive a converted
+  red-zone trip: the league-wide touchdown rate per trip is 0.5709 by this repository's count
+  against 0.5385 by nflverse's flag. The other cases are definitional (a snap at the 20 or closer
+  against nflverse's inside-the-20 flag).
+- **Options**: (a) keep the count; (b) leave the try (the extra point, the two-point try and the
+  penalties on them) out of the snap test, keeping this repository's definition, which still
+  differs from the source in about 2,600 drives; (c) count nflverse's `drive_inside20`, the
+  source's definition, which matches its logs in every team-game.
+- **Decision**: kept unchanged in this integration. Either fix moves the published
+  `red_zone_td_pct` and `opponent_red_zone_td_pct` (read by default, `--tr-stats-source pbp`) in
+  most games and there are two plausible fixes, so the choice goes to the user, with (c)
+  recommended: exact parity with the source and with nflverse's own drive flag, the try out by
+  construction, and one rebuild with the other step-6 changes. Its cost is that both rates move
+  in most games (not measured here).
+- **How to reverse it**: not applicable.
+
 ## 3. The own Elo in the ETL
 
 The own Elo's own decisions are in `elo.md`; these entries cover how the integration feeds and
@@ -431,8 +507,13 @@ publishes it.
 - **Feature-value impact** (`aa520c0_ec315e6.txt`): the eight columns are added; the other 461
   published numeric columns are identical. They sit inside the feature range the model reads,
   so a backtest or weekly run on a rebuilt dataset trains on both presets unless
-  `--disable-feature-groups own_elo,own_elo_wt` leaves them out; a run without market information
-  disables `own_elo_wt` with `elo` (`.agents/modeling_spec.md`).
+  `--disable-feature-groups own_elo,own_elo_wt` leaves them out. Leaving the market columns out
+  (`--exclude-market`, the weekly run's `--wf-market-mode none`) does not leave out the
+  market-informed `own_elo_wt` (or `elo`): a run with no market information at all disables them
+  itself (`--disable-feature-groups elo,own_elo_wt`, `disable_feature_groups` in the weekly
+  config), and since `8fcbb8a` a run that leaves the market columns out but keeps either logs a
+  warning naming it (`.agents/modeling_spec.md`). Whether the exclusion should be automatic is
+  a question for the user.
 - **How to reverse it**: drop the `_attach_own_elo` step from `_finish_games` and the own Elo's
   entries from `finalize.build_final_column_order`.
 

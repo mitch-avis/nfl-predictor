@@ -739,9 +739,15 @@ whole season, which is later information; the attached rating uses the previous 
 season-to-date rating (case 1) is read from the attached `ratings_qb`, keyed by season, week and
 starter; the by-week table is read only for its latest rows (earlier seasons, the replacement
 level, `D(s)` and playoff games), all from regular seasons wholly before the game. The
-penalties themselves are not on disk, so the last step of that explanation is not checked. 4 of
-the 9,886 window game sides have no attached rating (no play-by-play starter for VALUE to share)
-and read cases 2 and 3. Two smaller choices: 1999's published ratings are read as null, as the
+penalties are on disk: `.agents/sos_port/RATINGS_PARITY.md` records the two as equal in exactly
+the 7 seasons after 1999 that match here, and the independent review refit 2010 and 2013 with
+both penalties, with 2011 as the control, and confirmed the cause. 4 of the 9,886 window game
+sides (`2008_17_NE_BUF` home, `2015_12_MIN_ATL` home, `2016_05_TB_CAR` home and
+`2017_14_IND_BUF` away) read cases 2 and 3 although the dataset attaches a rating to them:
+VALUE's starter there is not the game's play-by-play starter, so `check_sides`, which keys the
+attached ratings, leaves them out. With them read from the attached rating, the review measured
+Brier difference `+0.00525`, interval `[+0.00319, +0.00727]`, so the outcome does not hang on
+them. Two smaller choices: 1999's published ratings are read as null, as the
 ETL treats 1999 and as entry 17 assumed; a team whose first game has no known starter starts at
 the season's replacement level, where VALUE starts it at its debut rating.
 
@@ -767,9 +773,9 @@ resamples, seed 42):
 | scale times 1.5 | 0.22795 | +0.01094 | [+0.00794, +0.01392] | 0.64914 | +0.02671 | [+0.01952, +0.03383] |
 
 Brier by week window (no intervals): VALUE `0.22041`, `0.22664` and `0.21610` in weeks 1, 2
-and 3-18; the ported rating `0.22322`, `0.24982` and `0.22025`. Generated at commit `3cb8618`
-from the candidate build `/home/mitch/scratch/step6/data`; reproduce from the repository root
-with:
+and 3-18; the ported rating `0.22322`, `0.24982` and `0.22025`. First generated at commit
+`3cb8618` and regenerated, with corrected wording and the same numbers, at `076cb0a`, from the
+candidate build `/home/mitch/scratch/step6/data`; reproduce from the repository root with:
 
 ```bash
 VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/elo_qb_alt.py \
@@ -781,4 +787,9 @@ VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/elo_qb_alt
 **How to reverse it**: nothing changed. To measure again (another build, rating or scale), rerun
 the script under a rule written first.
 
-**Review**: not yet reviewed.
+**Review**: one independent round, verdict "merge after small fixes" (since made). Every number
+was reproduced by an independent implementation and bootstrap, which matched these adjustments
+on all 7,276 games to 1e-13. The premise of the source change was confirmed by refitting 2010
+and 2013 with both penalties, with 2011 as the control. Robustness: entry 17's original source,
+the published by-week table, gives Brier difference `+0.00537`, interval
+`[+0.00329, +0.00746]`, and VALUE still stays.

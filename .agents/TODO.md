@@ -176,32 +176,10 @@ Steps:
    already require a new reference) and once each off-season before week 1, so the floor's sigma
    pool describes the current model; point `floor_sigma_reference_runs` at the new runs.
    Closed by the user on 2026-10-01 (record: `ARCHIVE.md`, "Roadmap step 3").
-4. **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
-   First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
-   a schema version in the play-by-play cache key), because this step compares dataset builds.
-   Then every change to feature values: `K` for the early-season prior blend (55.3), the
-   defense-adjusted quarterback rate (53.7), the pick-time market line (56.6, plan agreed
-   2026-10-01), and the follow-ups marked "(step 4)". Each ETL rebuild
-   is must-ask; each adoption decision uses two seeds. This is the largest step.
-   Finishing it (approved by the user 2026-10-08, after the measurement arms in
-   `models/step4/`): one code chunk applies the decisions of 2026-10-02 (the defense-adjusted
-   quarterback columns and the next-opponent identity pair leave the model, pick-time lines
-   become the default line source, `nfl-predictor lines` follows the line source) and adds a
-   `market` feature group so a model can train without any market column; then the
-   adopted-settings reference build (cold, full history, scratch tree) and its two GPU
-   walk-forwards (seeds `42` and `7`), an independent review, the weekly run pointed at the new
-   reference for the floor's sigma, and the merge into `main`. The strength-blend `K` question
-   is superseded by the preseason prior of `nfl-sos-ratings` (step 6); the season-to-date stat
-   blend keeps `K = 4` (no arm separated `2`, `4` and `8`).
-   Narrowed (`0.44.0`): the market-free option landed as flags (`backtest --exclude-market
-   --no-market-anchor --no-market-transform`, weekly `--wf-market-mode none`) instead of a
-   `market` feature group, because a disabled group's columns are dropped before the market
-   yardstick and the anchor read them, so a group would also remove the yardstick. Every
-   line-derived column still leaves the model (generated inventory in `.agents/market_free/`).
-   On the user's question list 2026-10-09. The user also chose (2026-10-09) to measure two
-   market-free variants: without betting-line columns, and without them and the Elo columns
-   (whose preseason values `../nfeloqb` pulls toward betting win totals), via a new `elo`
-   feature group.
+4. **Reproducibility, then the feature values.** Closed by the user on 2026-10-10 (record:
+   `ARCHIVE.md`, "Roadmap step 4"). Its leftovers moved to step 6: 53.7's ridge form, the
+   early-season strength-snapshot item and the feature follow-up group to phases 3-4, and the
+   betting-report edges to phase 5.
 5. **Market-free baseline.** Closed by the user on 2026-10-10 (record: `ARCHIVE.md`, "Roadmap
    step 5"). The test bench for step 6 is the run without betting-line or Elo columns.
 6. **Absorb `nfl-sos-ratings` into this repo** (approved 2026-10-08: absorb fully; that repo
@@ -223,6 +201,21 @@ Steps:
    4. the ported ratings as model features, measured anchored against the adopted-settings
       reference and market-free on the test bench the user chose 2026-10-10 (no betting-line and
       no Elo columns, `models/step4_reference/marketfree_all_seed*`);
+      a candidate in the same phase (approved by the user 2026-10-10): this repo's own Elo,
+      computed in the ETL, replacing the `qb_elos.csv` columns if it measures at least as well
+      on the test bench and anchored. Build it in this order, each with tests: 538's public
+      framework first, pinned by a test that reproduces `elo_prob1` in `fivethirtyeight/
+      nfl-elo-game` `data/nfl_games.csv` (K 20, home field 65, a one-third offseason pull to
+      1505, the margin-of-victory multiplier); then the 2019 additions (rest and bye, travel,
+      playoff boost, rolling home field); then the QB adjustment, 538's published VALUE formula
+      first and the ported `nfl-sos-ratings` quarterback rating as the alternative; then the
+      preseason pull toward betting win totals as a measured option, read and cached from the
+      free `greerreNFL/nfelosrs` `wt_ratings.csv` (2003 on; plain regression before), its weight
+      fitted on earlier seasons only. The market-free test bench never gets the win totals.
+      After this Elo replaces the `qb_elos.csv` columns (and only then, to keep a production
+      input stable mid-season), fix the user's `../nfeloqb` fork to read the upstream win-total
+      file instead of its stale local `Manual Data/wt_ratings.csv` (2003-2023), with the user's
+      go-ahead at that time. Research: `~/scratch/elo_research/`.
    5. power rankings and projected standings on the ported ratings combined with the trained
       model (the user's direction 2026-10-08; how to combine them is decided by measurement:
       each candidate ranking predicts next week's margins, scored like the `nfl-sos-ratings`
@@ -273,7 +266,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
 | 4, first | Done, apart from the low-priority schedule fallback (step-3 merge test group). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run), the split-review follow-ups and the schedule cache were resolved in `0.37.2`-`0.38.2` |
-| 4 (feature values) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
+| 6, phases 3-4 (from step 4) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
 
 Rules for every feature milestone:
 
@@ -316,7 +309,7 @@ follow-ups below.
       schema 2026-09-17 (`0.10.0`) by the user's decision. Record and reasoning in `ARCHIVE.md`,
       Milestone 53, "53.6". Do not reintroduce them as standalone columns; the idea's next form
       is 53.7.
-- [ ] 53.7 (step 4, with 55.3; two seeds per adoption decision) Opponent-adjusted quarterback
+- [ ] 53.7 (step 6, phase 3; two seeds per adoption decision) Opponent-adjusted quarterback
       EPA, in two steps. First (cheap) a defense-adjusted
       rate: per quarterback game, `qb_epa_sum - dropbacks * expected_epa_allowed` where the
       expectation is the faced defense's pre-game `adj_def_pass_epa_snap` (or its one-hop
@@ -367,15 +360,6 @@ invalidate it.
 
 Tasks:
 
-- [ ] 55.3 (step 4) Choose `PRIOR_BLEND_GAMES` (`K`) instead of inheriting it from the strength
-      blend (see the Milestone 49 follow-ups). With the sweep runner retired, this is a small
-      ladder with its hypothesis and rule written first: candidate values (for example `2`, `4`,
-      `8`), one ETL build each (must-ask; back up `data/*.csv` first), six seasons from week 1 on
-      two seeds, weeks 1, 2 and 3-18 reported separately (the value changes early-season features
-      most). Runs after the rebuild-reproducibility follow-ups and shares its rebuild cycle with
-      53.7. Context from task 55.8: each two-seed weighting contrast (half-lives `4`, `16`, `32`)
-      improved week-2 total MAE by `0.2`-`0.3` points beyond its interval (96 games), the only
-      consistent early-season signal that ladder found; report week-2 total MAE for each `K`.
 - [x] 55.7 Choose `n_estimators` time-aware: closed 2026-09-21 (`0.13.0`-`0.13.1`). A four-rung
       ladder (`200`/`400`/`598`, then a `100` plateau check), each rung a six-season arm with its
       own hypothesis and an independent reviewer rescore, found the aggregate order monotone
@@ -391,10 +375,11 @@ Tasks:
       final fit alike. Half-life `4` (shipped since `83ba2a7` and never measured before) lost on
       two seeds; `16` and `32` tied. Record: `ARCHIVE.md`, Milestone 55, "55.8", and
       `.agents/benchmarks.md` under "Season weighting and the six-season fit-noise floor".
-- [ ] 55.9 (step 5, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
+- [ ] 55.9 (step 7, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
       **after Milestone 54 lands** (tuning before the feature set changes would have to be redone).
-      Scheduled 2026-09-24 as roadmap step 5, after every feature-value change (step 4) and on the
-      final device (step 3), so the tune is fitted to the feature set that ships. It occupies the
+      Scheduled 2026-09-24 as roadmap step 5 (step 7 since 2026-10-08), after every feature-value
+      change and on the final device (step 3), so the tune is fitted to the feature set that
+      ships. It occupies the
       machine for hours, so it runs overnight. Prerequisites, each its own tested chunk before any
       trial runs: (1) trials must fit exactly the way production fits. `0.12.3` removed in-season
       early stopping from production and walk-forward, but `_score_margin_total_fold` in
@@ -441,55 +426,9 @@ Formerly Milestone 41.
       defaults. `postseason_weight` stays in the config but inert. The playoff-week design itself
       (a playoff-specific model or weighting) stays deferred, wanted in time for the 2026
       playoffs. Full record: `ARCHIVE.md`, Milestone 56, "56.2".
-- [ ] 56.3 (step 5, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
+- [ ] 56.3 (step 7, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
       and the benchmark from one shared source (today `weekly_run` takes explicit `wf_*` params and
       never reads a best-params file); confirm resume behavior.
-- [ ] 56.6 (step 4) Anchor and feed the model the line known at pick time, not the stored
-      near-closing line. Parts (a)-(c) and (e) closed with roadmap step 3 (`ARCHIVE.md`,
-      "Roadmap step 3", 56.6): the nflverse lines are one late snapshot; openers are measurably
-      worse than the stored lines (`.agents/benchmarks.md`, "Opening lines, part A3"). Plan agreed
-      with the user on 2026-10-01:
-      - Source. An ETL getter for `greerreNFL/nfelomarket_data` `Data/lines.csv` (approved
-        2026-10-01), on the nflreadpy pattern: download, cache under `data/cache/`, fall back to the
-        cached copy without failing the run. The file is rewritten several times a day, so each ETL
-        run keeps the snapshot it used and records its hash in the run metadata. Normalize team and
-        game ids first (a first join matched 6,462 of 7,324 schedule games). `data/historic_odds.csv`
-        is dropped, and nfelo's own pre-game probability is not used.
-      - Line per game, in order: the nfelo opening spread (real for 2007-2021 and 2023 on); a
-        missing opening moneyline is derived from the opening spread with the fitted map below; a
-        missing opening total (before 2024) falls back to the stored total; a game with no real
-        opener (1999-2006, 2022, about 5% of 2024) uses the stored line and is counted as a fallback
-        row per season. For upcoming games: the latest nfelo line at run time (the current week,
-        sometimes the next), then nflverse, then SurvivorGrid for every later week (it stays: no
-        other source covers future weeks). A game with no line at all cannot be anchored, and the
-        run stops rather than guessing, as today.
-      - The pick-time line anchors both heads and is the market feature, in training and in
-        production alike. The closing line is a yardstick only: never a feature, and neither is the
-        open-to-close move.
-      - The fitted map. Replace the fixed spread-to-moneyline conversion (`spread_to_moneyline`:
-        a normal curve at `SCORE_DIFF_STD_DEV` with a flat 5% vig) with a map fitted to the
-        2007-2025 games that have both a real spread and a real moneyline (prices, not results, so
-        no outcome leakage), including the key numbers 3 and 7. Apply it to open and close alike.
-        The measurement also shows whether the moneyline features add anything beyond the spread
-        once the model is anchored to it.
-      - Measurement: a feature-value change, so two dataset builds and two seeds, with the
-        hypothesis and decision rule written first. Reported accuracy is expected to get honestly
-        worse; the question is whether picks at pick time improve. Adopting it is a default change
-        (must-ask); a training start in 2007 is tested only if the fallback seasons look harmful.
-      Narrowed (`0.42.0`, the code half; the measurement is Phase B of `.agents/step4_plan.md`):
-      the map is fitted per season on strictly earlier seasons' prices instead of once on
-      2007-2025 (no later market conventions in earlier features; prices move by at most 0.022
-      probability, mostly under 0.01; seasons up to 2006 keep the fixed conversion), and it
-      applies only under `pick_time`, because `stored` must stay byte-identical. The user
-      accepted both on 2026-10-02 (production is identical either way; the expanding fit keeps
-      the backtest to information available before each season). The closing-line yardstick for
-      a pick-time run is `nfl-predictor compare --market-from` (`0.42.1`).
-      - Done in `0.44.0`: `nfl-predictor lines` (`lines_refresh.py`, also a web job) follows the
-        line source the data was built with (`market_lines_metadata.json`); before, on a
-        pick-time `data/` it silently reverted upcoming games to stored lines (found by the 56.6
-        review, 2026-10-01). Phase B builds run from scratch tree copies,
-        because the nfelo cache follows `DATA_PATH`, not `--data-dir`.
-
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
 archived under "Milestone 56 (partial)" in `ARCHIVE.md`.
 
@@ -594,7 +533,7 @@ Each group names the archived milestone it came from; the milestone's full recor
       the identity pair (on/off, two seeds) with the other feature-value changes. Measured in the
       next-opponent identity test (a tie, `models/step4/REVIEW.md`); dropped from the model by
       the user (2026-10-02) and pruned by default in `0.44.0`. The ETL still writes the pair.
-- [ ] (step 4, with task 55.3) The early-season strength snapshot, which drives the default power
+- [ ] (step 6, phase 3) The early-season strength snapshot, which drives the default power
       rankings and the `adj_*` model features, is dominated by last season. At 2026 snapshot week
       3 (two games per team) the published composite correlates far more with the regressed 2025
       full-season solve than with the 2026 in-season solve, and for the four EPA components the
@@ -640,7 +579,7 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       `ml/ml_model_training.py` import 17 private names from each other. Cosmetic: rename them
       with the next change that already retrains every checkpoint (`AGENTS.md` rule 14), not on
       their own.
-- [ ] (step 4, with 56.6) **Betting report edges.** The largest moneyline "edges" in Week 3
+- [ ] (step 6, phase 5) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig
       moneyline). Keep the report diagnostic; revisit with task 56.6 (the pick-time line).

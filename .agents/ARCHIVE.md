@@ -83,7 +83,113 @@ phase 4).
 
 ---
 
-## Roadmap step 4 (in progress) - Resolved follow-ups
+## Roadmap step 4 - Reproducibility and feature values (closed 2026-10-10)
+
+Closed by the user on 2026-10-10. Branch `feat/step4-feature-values`, versions `0.37.2`-`0.45.0`,
+merged into `main` on 2026-10-09 and 2026-10-10 (`9bb237a`, pushed). Plan:
+`.agents/step4_plan.md`; measurement arms `models/step4/` (`REVIEW.md`); adopted-settings
+reference and market-free baselines `models/step4_reference/` (`REVIEW.md`); numbers in
+`.agents/benchmarks.md`. Decisions: the defense-adjusted quarterback rate dropped and removed,
+the next-opponent identity pair pruned, pick-time lines adopted as the default, the stat blend
+kept at `K = 4`, the adopted-settings reference made production's floor-sigma pool. Leftovers
+moved to roadmap step 6 (53.7's ridge form, the early-season strength-snapshot item, the feature
+follow-up group, the betting-report edges). The resolved follow-ups are below.
+
+The roadmap entry as it stood at the close:
+
+> Step 4: **Reproducibility first, then tasks 55.3 + 53.7 + the feature follow-ups** (new branch).
+> First the follow-ups that make rebuilds trustworthy (bit-reproducible schedule-strength columns,
+> a schema version in the play-by-play cache key), because this step compares dataset builds.
+> Then every change to feature values: `K` for the early-season prior blend (55.3), the
+> defense-adjusted quarterback rate (53.7), the pick-time market line (56.6, plan agreed
+> 2026-10-01), and the follow-ups marked "(step 4)". Each ETL rebuild
+> is must-ask; each adoption decision uses two seeds. This is the largest step.
+> Finishing it (approved by the user 2026-10-08, after the measurement arms in
+> `models/step4/`): one code chunk applies the decisions of 2026-10-02 (the defense-adjusted
+> quarterback columns and the next-opponent identity pair leave the model, pick-time lines
+> become the default line source, `nfl-predictor lines` follows the line source) and adds a
+> `market` feature group so a model can train without any market column; then the
+> adopted-settings reference build (cold, full history, scratch tree) and its two GPU
+> walk-forwards (seeds `42` and `7`), an independent review, the weekly run pointed at the new
+> reference for the floor's sigma, and the merge into `main`. The strength-blend `K` question
+> is superseded by the preseason prior of `nfl-sos-ratings` (step 6); the season-to-date stat
+> blend keeps `K = 4` (no arm separated `2`, `4` and `8`).
+> Narrowed (`0.44.0`): the market-free option landed as flags (`backtest --exclude-market
+> --no-market-anchor --no-market-transform`, weekly `--wf-market-mode none`) instead of a
+> `market` feature group, because a disabled group's columns are dropped before the market
+> yardstick and the anchor read them, so a group would also remove the yardstick. Every
+> line-derived column still leaves the model (generated inventory in `.agents/market_free/`).
+> On the user's question list 2026-10-09. The user also chose (2026-10-09) to measure two
+> market-free variants: without betting-line columns, and without them and the Elo columns
+> (whose preseason values `../nfeloqb` pulls toward betting win totals), via a new `elo`
+> feature group.
+
+Tasks closed with the step:
+
+- [x] 55.3 Choose `PRIOR_BLEND_GAMES` (`K`) instead of inheriting it from the strength
+      blend (see the Milestone 49 follow-ups). With the sweep runner retired, this is a small
+      ladder with its hypothesis and rule written first: candidate values (for example `2`, `4`,
+      `8`), one ETL build each (must-ask; back up `data/*.csv` first), six seasons from week 1 on
+      two seeds, weeks 1, 2 and 3-18 reported separately (the value changes early-season features
+      most). Runs after the rebuild-reproducibility follow-ups and shares its rebuild cycle with
+      53.7. Context from task 55.8: each two-seed weighting contrast (half-lives `4`, `16`, `32`)
+      improved week-2 total MAE by `0.2`-`0.3` points beyond its interval (96 games), the only
+      consistent early-season signal that ladder found; report week-2 total MAE for each `K`.
+      Done 2026-10-02/10-10: measured as the stat-blend tests (`K = 2`, `K = 8`) and the
+      strength-blend test (`K = 2`) on two seeds (`models/step4/REVIEW.md`), all ties; the user
+      kept the stat blend at `K = 4` (2026-10-08) and the strength blend's `K` is superseded by
+      the preseason prior inside the `nfl-sos-ratings` fit (roadmap step 6).
+- [x] 56.6 Anchor and feed the model the line known at pick time, not the stored
+      near-closing line. Parts (a)-(c) and (e) closed with roadmap step 3 (`ARCHIVE.md`,
+      "Roadmap step 3", 56.6): the nflverse lines are one late snapshot; openers are measurably
+      worse than the stored lines (`.agents/benchmarks.md`, "Opening lines, part A3"). Plan agreed
+      with the user on 2026-10-01:
+      - Source. An ETL getter for `greerreNFL/nfelomarket_data` `Data/lines.csv` (approved
+        2026-10-01), on the nflreadpy pattern: download, cache under `data/cache/`, fall back to the
+        cached copy without failing the run. The file is rewritten several times a day, so each ETL
+        run keeps the snapshot it used and records its hash in the run metadata. Normalize team and
+        game ids first (a first join matched 6,462 of 7,324 schedule games). `data/historic_odds.csv`
+        is dropped, and nfelo's own pre-game probability is not used.
+      - Line per game, in order: the nfelo opening spread (real for 2007-2021 and 2023 on); a
+        missing opening moneyline is derived from the opening spread with the fitted map below; a
+        missing opening total (before 2024) falls back to the stored total; a game with no real
+        opener (1999-2006, 2022, about 5% of 2024) uses the stored line and is counted as a fallback
+        row per season. For upcoming games: the latest nfelo line at run time (the current week,
+        sometimes the next), then nflverse, then SurvivorGrid for every later week (it stays: no
+        other source covers future weeks). A game with no line at all cannot be anchored, and the
+        run stops rather than guessing, as today.
+      - The pick-time line anchors both heads and is the market feature, in training and in
+        production alike. The closing line is a yardstick only: never a feature, and neither is the
+        open-to-close move.
+      - The fitted map. Replace the fixed spread-to-moneyline conversion (`spread_to_moneyline`:
+        a normal curve at `SCORE_DIFF_STD_DEV` with a flat 5% vig) with a map fitted to the
+        2007-2025 games that have both a real spread and a real moneyline (prices, not results, so
+        no outcome leakage), including the key numbers 3 and 7. Apply it to open and close alike.
+        The measurement also shows whether the moneyline features add anything beyond the spread
+        once the model is anchored to it.
+      - Measurement: a feature-value change, so two dataset builds and two seeds, with the
+        hypothesis and decision rule written first. Reported accuracy is expected to get honestly
+        worse; the question is whether picks at pick time improve. Adopting it is a default change
+        (must-ask); a training start in 2007 is tested only if the fallback seasons look harmful.
+      Narrowed (`0.42.0`, the code half; the measurement is Phase B of `.agents/step4_plan.md`):
+      the map is fitted per season on strictly earlier seasons' prices instead of once on
+      2007-2025 (no later market conventions in earlier features; prices move by at most 0.022
+      probability, mostly under 0.01; seasons up to 2006 keep the fixed conversion), and it
+      applies only under `pick_time`, because `stored` must stay byte-identical. The user
+      accepted both on 2026-10-02 (production is identical either way; the expanding fit keeps
+      the backtest to information available before each season). The closing-line yardstick for
+      a pick-time run is `nfl-predictor compare --market-from` (`0.42.1`).
+      - Done in `0.44.0`: `nfl-predictor lines` (`lines_refresh.py`, also a web job) follows the
+        line source the data was built with (`market_lines_metadata.json`); before, on a
+        pick-time `data/` it silently reverted upcoming games to stored lines (found by the 56.6
+        review, 2026-10-01). Phase B builds run from scratch tree copies,
+        because the nfelo cache follows `DATA_PATH`, not `--data-dir`.
+      Done: code in `0.42.0`-`0.44.0`, measured as the pick-time lines test (worse than the
+      stored-line baseline, not worse than its own market), adopted by the user (2026-10-02) as
+      the default in `0.44.0`; production's floor-sigma pool is the pick-time adopted-settings
+      reference since `0.45.0`.
+
+## Roadmap step 4 - Resolved follow-ups
 
 Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as they land.
 

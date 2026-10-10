@@ -406,11 +406,25 @@ def test_weekly_warns_only_when_the_market_free_mode_overrides_a_requested_trans
     assert len(overrides) == (1 if warned else 0)
 
 
+def _recorded_infos(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the project logger's info messages."""
+    infos: list[str] = []
+    monkeypatch.setattr(
+        log, "info", lambda message, *args: infos.append(message % args if args else message)
+    )
+    return infos
+
+
 def _spec_warnings(
     monkeypatch: pytest.MonkeyPatch, frame: pd.DataFrame, *, include_market: bool, builds: int = 1
 ) -> list[str]:
-    """Build the feature spec ``builds`` times and return the market-informed warnings."""
+    """Build the feature spec ``builds`` times and return its "No game lines" notes.
+
+    The notes are info messages; a warning mentioning the win-total priors is returned too, so a
+    test can tell the levels apart.
+    """
     warnings = _recorded_warnings(monkeypatch)
+    infos = _recorded_infos(monkeypatch)
     monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
     selection = FeatureSelection(
         include_market=include_market,
@@ -418,26 +432,48 @@ def _spec_warnings(
     )
     for _ in range(builds):
         build_feature_spec(frame, selection)
-    return [message for message in warnings if "market-informed" in message]
+    return [message for message in [*infos, *warnings] if "win-total" in message]
 
 
-def test_a_run_without_market_columns_names_the_market_informed_groups_it_keeps(
+def test_a_run_without_game_lines_notes_the_win_total_groups_it_keeps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
     frame = _schema_frame(derived_in_range=False)
 
     # Act
-    warnings = _spec_warnings(monkeypatch, frame, include_market=False)
+    notes = _spec_warnings(monkeypatch, frame, include_market=False)
 
     # Assert
-    assert len(warnings) == 1
-    assert "['elo', 'own_elo_wt']" in warnings[0]
-    assert "--disable-feature-groups elo,own_elo_wt" in warnings[0]
-    assert "disable_feature_groups" in warnings[0].replace("--disable-feature-groups", "")
+    expected = (
+        "No game lines: the model trains without betting-line columns but keeps the preseason "
+        "win-total priors in the feature group(s) ['elo', 'own_elo_wt']; for a run with no "
+        "market information at all, also pass `--disable-feature-groups elo,own_elo_wt` "
+        "(backtest, train) or `disable_feature_groups` in the weekly config."
+    )
+    assert notes == [expected]
 
 
-def test_a_run_without_market_columns_warns_once_for_every_fold(
+def test_a_run_without_game_lines_logs_its_note_at_info_level(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    warnings = _recorded_warnings(monkeypatch)
+    _recorded_infos(monkeypatch)
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
+    selection = FeatureSelection(
+        include_market=False,
+        max_cardinality_ratio=walk_forward.WalkForwardConfig().max_cardinality_ratio,
+    )
+
+    # Act
+    build_feature_spec(_schema_frame(derived_in_range=False), selection)
+
+    # Assert
+    assert not [message for message in warnings if "own_elo_wt" in message]
+
+
+def test_a_run_without_game_lines_notes_once_for_every_fold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange
@@ -486,7 +522,7 @@ def test_a_market_informed_group_the_spec_drops_as_empty_goes_unnamed(
 
     # Assert
     assert len(warnings) == (1 if kept else 0)
-    assert all(f"feature group(s) {kept} stay" in message for message in warnings)
+    assert all(f"feature group(s) {kept};" in message for message in warnings)
 
 
 @pytest.mark.parametrize(

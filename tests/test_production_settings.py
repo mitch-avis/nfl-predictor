@@ -265,7 +265,7 @@ def test_each_ablation_alone_is_a_difference_in_both_halves(
     extra_argv: list[str],
     difference: dict[str, object],
 ) -> None:
-    """Production never drops pruning, feature groups or trend features, in either half."""
+    """Production's defaults keep pruning and drop no feature group or trend feature."""
     # Act
     section = _run_backtest(tmp_path, monkeypatch, extra_argv)[SECTION]
 
@@ -276,6 +276,46 @@ def test_each_ablation_alone_is_a_difference_in_both_halves(
         assert section[stage]["production_only"] == {}
     lines = production_settings.format_section(section)
     assert not any(production_settings.NO_DIFFERENCES in line for line in lines)
+
+
+def test_production_without_feature_groups_differs_from_a_run_with_them_in_both_halves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The weekly config's groups are what stage 1 and the final fit both leave out."""
+    # Act
+    section = _run_backtest(
+        tmp_path, monkeypatch, [], production_config={"disable_feature_groups": ["elo"]}
+    )[SECTION]
+
+    # Assert
+    expected = [{"setting": "disabled_feature_groups", "run": [], "production": ["elo"]}]
+    assert section["stage1"]["differences"] == expected
+    assert section["final_fit"]["differences"] == expected
+
+
+@pytest.mark.parametrize(
+    "run_groups", ["elo,own_elo_wt", "own_elo_wt,elo,elo"], ids=["same-order", "any-order"]
+)
+def test_a_run_leaving_out_production_groups_matches_both_halves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run_groups: str
+) -> None:
+    """The same groups, in any order or repeated, remove the same columns: no difference."""
+    # Act
+    section = _run_backtest(
+        tmp_path,
+        monkeypatch,
+        ["--disable-feature-groups", run_groups],
+        production_config={"disable_feature_groups": ["elo", "own_elo_wt"]},
+    )[SECTION]
+
+    # Assert
+    for stage in ("stage1", "final_fit"):
+        assert section[stage] == {
+            "differences": [],
+            "run_only": {},
+            "production_only": {},
+            "not_recorded": [],
+        }
 
 
 def test_postseason_games_differ_with_their_weight_in_the_final_fit(

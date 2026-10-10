@@ -389,17 +389,18 @@ class SeasonRun:
     compare_seconds: float
     comparisons: list[TableComparison]
     published_log_comparisons: list[TableComparison]
-    unrecovered_team_rates: list[str]
-    unrecovered_qb_rates: list[str]
+    team_rates_not_rebuilt: list[str]
+    qb_rates_not_rebuilt: list[str]
 
 
 def _unchecked_columns(
     kind: str, columns: list[str], team_rates: set[str], qb_rates: set[str]
 ) -> frozenset[str]:
-    """Return the columns of a table built from published logs that need unrecovered parts.
+    """Return the columns of a table built from published logs that need parts not rebuilt.
 
-    A team rate without its parts, a formula rate built from one, or either as an opponent
-    profile's ``opp_`` column; a quarterback rate without its parts, or its ``qopp_`` column.
+    A team rate whose parts the adapter does not rebuild, a formula rate built from one, or
+    either as an opponent profile's ``opp_`` column; a quarterback rate whose parts it does
+    not rebuild, or its ``qopp_`` column.
     """
     team = set(team_rates) | {
         rate
@@ -422,12 +423,12 @@ def compare_from_published_logs(
     games: season_tables.SeasonGames,
     ratings: tuple[pl.DataFrame, pl.DataFrame],
 ) -> tuple[list[TableComparison], list[str], list[str]]:
-    """Build the season tables from the published game logs and compare what they determine.
+    """Build the season tables from the published game logs; compare what the adapter rebuilds.
 
     The schedule is the loaders' played schedule, as the source's build read it (the logs lack the
     three games without play-by-play, whose teams still count as opponents). ``games`` (the
-    play-by-play build) says which rates carry hidden parts; the ones the adapter cannot rebuild
-    from the published columns are reported, and their columns are not compared.
+    play-by-play build) says which rates carry hidden parts; the ones the adapter does not
+    rebuild from the published columns are reported, and their columns are not compared.
     """
     team_logs, _ = relabel_washington(published["team_game_logs"])
     qb_logs, _ = relabel_washington(published["qb_game_logs"])
@@ -502,8 +503,8 @@ def run_season(season: int, source: Path, cache_dir: Path, hashes: dict[str, str
         compare_seconds=compared - built,
         comparisons=comparisons,
         published_log_comparisons=from_logs,
-        unrecovered_team_rates=team_rates,
-        unrecovered_qb_rates=qb_rates,
+        team_rates_not_rebuilt=team_rates,
+        qb_rates_not_rebuilt=qb_rates,
     )
 
 
@@ -662,21 +663,21 @@ def _markdown(report: dict[str, Any]) -> str:
         "",
         "The same season tables built a second way, from the published team and quarterback game",
         "logs (`season_stats.published_logs`), independent of the play-by-play build. The logs",
-        "leave out each rate's hidden numerator and denominator; the adapter rebuilds those the",
-        "published columns determine, and a column that needs any other is counted, not",
-        "compared (its rates are listed below).",
+        "leave out each rate's hidden numerator and denominator; the adapter rebuilds those it",
+        "can read off the published columns, and a column that needs any other is counted as",
+        "not rebuilt, not compared (its rates are listed below).",
         "",
         f"- Tables compared: {logs['tables']}",
         (
             f"- Cells compared: {logs['cells']:,}; bit-identical {logs['identical']:,}; within"
             f" tolerance {logs['within_tolerance']:,}; outside {logs['outside']:,}"
         ),
-        f"- Cells not determined by the published logs (not compared): {logs['unchecked_cells']:,}",
+        f"- Cells not rebuilt by the adapter (not compared): {logs['unchecked_cells']:,}",
         f"- Tables with column or row differences: {logs['tables_with_structure_differences']}",
         "",
         (
             "| table | seasons | cells compared | bit-identical | within tolerance | outside |"
-            " not compared |"
+            " not rebuilt |"
         ),
         "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
@@ -687,13 +688,13 @@ def _markdown(report: dict[str, Any]) -> str:
         )
     lines += [
         "",
-        "Team rates whose parts the published logs do not determine, in every season:",
+        "Team rates whose parts the adapter does not rebuild, in any season:",
         "",
-        _code_list(report["unrecovered_rates"]["team"]),
+        _code_list(report["rates_not_rebuilt"]["team"]),
         "",
-        "Quarterback rates whose parts the published logs do not determine:",
+        "Quarterback rates whose parts the adapter does not rebuild, in any season:",
         "",
-        _code_list(report["unrecovered_rates"]["qb"]),
+        _code_list(report["rates_not_rebuilt"]["qb"]),
     ]
     lines += [
         "",
@@ -831,9 +832,9 @@ def main(argv: list[str] | None = None) -> int:
         "published_files": dict(sorted(hashes.items())),
         "summary": summary,
         "published_log_summary": log_summary,
-        "unrecovered_rates": {
-            "team": sorted({rate for run in runs for rate in run.unrecovered_team_rates}),
-            "qb": sorted({rate for run in runs for rate in run.unrecovered_qb_rates}),
+        "rates_not_rebuilt": {
+            "team": sorted({rate for run in runs for rate in run.team_rates_not_rebuilt}),
+            "qb": sorted({rate for run in runs for rate in run.qb_rates_not_rebuilt}),
         },
         "passed": all(
             part["outside"] == 0 and part["tables_with_structure_differences"] == 0
@@ -847,8 +848,8 @@ def main(argv: list[str] | None = None) -> int:
                 "compare_seconds": r.compare_seconds,
                 "comparisons": [asdict(c) for c in r.comparisons],
                 "published_log_comparisons": [asdict(c) for c in r.published_log_comparisons],
-                "unrecovered_team_rates": r.unrecovered_team_rates,
-                "unrecovered_qb_rates": r.unrecovered_qb_rates,
+                "team_rates_not_rebuilt": r.team_rates_not_rebuilt,
+                "qb_rates_not_rebuilt": r.qb_rates_not_rebuilt,
             }
             for r in runs
         ],
@@ -862,7 +863,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(
             f"{label}: {part['cells']:,} cells: {part['identical']:,} identical,"
             f" {part['within_tolerance']:,} within tolerance, {part['outside']:,} outside,"
-            f" {part['unchecked_cells']:,} not compared;"
+            f" {part['unchecked_cells']:,} not rebuilt (not compared);"
             f" {part['tables_with_structure_differences']} tables with structure differences\n"
         )
     return 0 if report["passed"] else 1

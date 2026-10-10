@@ -54,12 +54,38 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   After each run: a check-in with its numbers; after both seeds of an arm: `nfl-predictor compare`
   against its reference and an independent reviewer's rescore (rule 3) before any number enters a
   doc.
-- Still running at 12:20 (subagents, each in its own worktree under `.claude/worktrees/`): the
-  source's open rating tests (report only); the own Elo's alternative quarterback adjustment
-  (report only, third attempt); the phase-1 inventory and parity refresh on the candidate build;
-  the betting report's edge decomposition (the "(step 6, phase 5)" follow-up in `TODO.md`). Still
-  to start: the adoption chunk, once the decision rules have read the runs. The stream table, the
-  integration design and the user's list are in `.agents/step6_plan.md`.
+- **Stopped at about 14:10 on 2026-10-10: the account's weekly usage limit (resets 1:00 AM
+  MDT).** Subagents died mid-task; resume from this list. `feat/step6-sos-port` is at `0.57.1`
+  (`d88e1c1` or later), gate green (3259 passed). The user's decisions at the 13:20 check-in are in
+  `.agents/step6_plan.md`, "User decisions during the run" (blend rankings default, the stats-only
+  model keeps the win-total prior and means "no game lines", a pre-registered betting-label test,
+  feature ideas to a later session).
+  - Walk-forwards: the driver keeps running without the API. Done and reviewed for decision 1
+    (`models/step6/REVIEW.md`, rule 1's first branch: replace the strength snapshot; comparison 1
+    a win, comparison 2 a tie with week-1 losses flagged; arm 5 not triggered): both ported-ratings
+    arms on both seeds. Then the new-build reference diagnostic (`newref_anchored_seed*`, review it
+    before acting on rule 1, the reviewer's P2), and the own-Elo arms (`elo_anchored_seed*`,
+    `elo_marketfree_seed*`), last ending about 16:45. Check `models/step6/driver.log`; score each
+    pair with `nfl-predictor compare` into `models/step6/checkins/`, then a reviewer appends
+    decision 2 and the diagnostic to `models/step6/REVIEW.md`.
+  - Branch `worktree-agent-aa56c16b91074022f` (betting-report edge split, `00f2d02`): round one
+    "merge after fixes", fixes in; the round-two review died on the limit. Redo round two, then
+    merge (its `tests/sos_port_scripts.py` equals the branch's) and release `0.57.2`. Then the
+    user's betting-label test (pre-registered, governed by the 815 real-moneyline games of 2022,
+    2024 and 2025; a tie keeps today's labels).
+  - Branch `worktree-agent-ab92fdaea474da115` (phase-1 inventory and parity refresh, `74641b8`):
+    implementer done (columns 30/526/1180 to 1236/500/0; parity 40,694 to 25,564 mismatches, all
+    explained); its review died at the start. Review, then merge.
+  - Branch `worktree-agent-a5c5909054257aa73` (the source's open rating tests, report only) and
+    branch `worktree-agent-a2071e4c492dbbdda` (the blend rankings default with the weekly run's own
+    prediction sources, and the "no game lines" log and help wording): implementers probably died
+    on the limit; check each worktree's commits and uncommitted state with `git -C`, then resume.
+  - Still to do after those: the adoption chunk (`config/weekly_run.yaml`'s
+    `disable_feature_groups` to the adopted arms' groups, `floor_sigma_reference_runs` to the
+    adopted arms' runs; the reviewer's P3: production must not train on groups no arm measured),
+    the docs close-out, the approvals list, and the user's final report (self-contained HTML with
+    generated charts, diagrams and tables, every number read by script from reviewed artifacts).
+  The stream table, the integration design and the user's list are in `.agents/step6_plan.md`.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed

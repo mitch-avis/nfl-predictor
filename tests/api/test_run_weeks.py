@@ -122,6 +122,58 @@ def test_an_unmarked_runs_newest_file_does_not_outrank_the_pinned_runs_file(
     assert (payload["source"], payload["run_id"], payload["week"]) == ("active", "weekly_w5", 6)
 
 
+def _marked_run(models: Path, run_id: str, week: int, created_at: str, *, marker: bool) -> None:
+    """Create a weekly run for ``week``, with or without its predictions stage marker."""
+    run_dir = factories.make_run_dir(
+        models, run_id, factories.RunSpec(season=2026, week=week, created_at=created_at)
+    )
+    if marker:
+        own = f"/elsewhere/models/{run_id}/season_2026_week_{week:02d}_predictions.csv"
+        (run_dir / "predictions_state.json").write_text(
+            json.dumps({"stage": "predictions", "outputs": [own]}), encoding="utf-8"
+        )
+
+
+def _marked_and_unmarked_week_six(models: Path, app: FastAPI, db: Database) -> None:
+    """Pin a week-5 run beside an older marked week-6 run and a newer unmarked one."""
+    _marked_run(models, "weekly_w5", OWN_WEEK, "2026-10-07T00:00:00+00:00", marker=True)
+    _marked_run(models, "weekly_w6", LATER_WEEK, "2026-10-14T00:00:00+00:00", marker=True)
+    _marked_run(models, "copy_w6", LATER_WEEK, "2026-10-15T00:00:00+00:00", marker=False)
+    app.state.run_index.invalidate()
+    active.set_active_run(db, app.state.run_index, "weekly_w5")
+
+
+def test_weeks_list_the_marked_runs_week_over_a_newer_unmarked_copy(
+    project_root: Path, viewer_client: TestClient, app: FastAPI, db: Database
+) -> None:
+    """The selector offers the week the routes resolve to: the run whose stage wrote it."""
+    # Arrange
+    _marked_and_unmarked_week_six(project_root / "models", app, db)
+
+    # Act
+    weeks = viewer_client.get("/api/predictions/weeks").json()
+
+    # Assert
+    assert [(w["week"], w["source"], w["run_id"]) for w in weeks] == [
+        (OWN_WEEK, "active", "weekly_w5"),
+        (LATER_WEEK, "run", "weekly_w6"),
+    ]
+
+
+def test_predictions_resolve_the_marked_runs_week_over_a_newer_unmarked_copy(
+    project_root: Path, viewer_client: TestClient, app: FastAPI, db: Database
+) -> None:
+    """A season-and-week query takes the run whose predictions stage wrote the week."""
+    # Arrange
+    _marked_and_unmarked_week_six(project_root / "models", app, db)
+
+    # Act
+    payload = viewer_client.get("/api/predictions", params={"season": 2026, "week": 6}).json()
+
+    # Assert
+    assert (payload["source"], payload["run_id"]) == ("run", "weekly_w6")
+
+
 def test_run_files_keep_the_week_the_run_predicted(tmp_path: Path) -> None:
     """The predictions stage marker names the run's own week, whatever was predicted later."""
     # Arrange

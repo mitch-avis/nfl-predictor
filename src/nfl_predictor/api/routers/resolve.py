@@ -51,32 +51,36 @@ def get_index(request: Request) -> RunIndex:
     return index
 
 
-def _stage_weeks(index: RunIndex, active_run: RunSummary) -> set[tuple[int | None, int | None]]:
+def _stage_weeks(
+    index: RunIndex, active_run: RunSummary | None
+) -> set[tuple[int | None, int | None]]:
     """Return the weeks other runs predicted as their own week, by their predictions stage."""
     return {
         (run.season, run.week)
         for run in index.runs()
-        if run.run_id != active_run.run_id and run.run_files.predictions_marked
+        if (active_run is None or run.run_id != active_run.run_id)
+        and run.run_files.predictions_marked
     }
 
 
 def available_weeks(
     settings: Settings, index: RunIndex, active_run: RunSummary | None
 ) -> list[WeekRef]:
-    """List the weeks a client can select.
+    """List the weeks a client can select, each with the file the routes resolve it to.
 
     Weeks that already have predictions come first: the active run's own week, the other weeks
-    predicted into it (unless another run predicted that week as its own, which then stands for
-    it), other runs, and then unattached ``data/predict`` files. Weeks of the current season that
-    are still unplayed and have no predictions follow with source ``available``, so the selector
-    can offer to generate them.
+    predicted into it (unless another run's predictions stage wrote that week, which then stands
+    for it), other runs (a run whose predictions stage wrote a week before one whose newest file
+    merely is for it), and then unattached ``data/predict`` files. Weeks of the current season
+    that are still unplayed and have no predictions follow with source ``available``, so the
+    selector can offer to generate them.
     """
     refs: list[WeekRef] = []
     seen: set[tuple[str, int | None, int | None]] = set()
     predicted: set[tuple[int | None, int | None]] = set()
+    stage_weeks = _stage_weeks(index, active_run)
     if active_run and active_run.run_files.predictions is not None:
         own = (active_run.season, active_run.week)
-        stage_weeks = _stage_weeks(index, active_run)
         others = [
             key
             for key in active_run.run_files.week_predictions
@@ -96,6 +100,8 @@ def available_weeks(
             predicted.add((season, week))
     for run in index.runs():
         if run.run_files.predictions is None or run is active_run:
+            continue
+        if not run.run_files.predictions_marked and (run.season, run.week) in stage_weeks:
             continue
         key = ("run", run.season, run.week)
         if key in seen:

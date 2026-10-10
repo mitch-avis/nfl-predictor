@@ -1,0 +1,150 @@
+Output of stadium_venues.py, two runs on 2026-10-10 against the main checkout's schedule cache
+(read only), seasons 1999-2026. The schedule files of 1995-1998 in that cache hold no games
+(the same command with --first-season 1995 reports the same 7548 games and 14 missing ids).
+
+Command, from the worktree root (run 2 also rewrote tests/fixtures/schedule_venue_ids.json, with
+the same venues as run 1 wrote):
+.venv/bin/python -I .agents/sos_port/decisions/stadium_venues.py \
+    --cache-dir /home/mitch/workspace/nfl-predictor/data/cache/nflreadpy \
+    --first-season 1999 --last-season 2026 --fixture tests/fixtures/schedule_venue_ids.json
+
+=== Run 1: the table before the change (commit 670af92), exit status 1 ===
+
+Schedules 1999-2026: 7548 games, 0 without a venue id, 67 venue ids, 14 without a constants.STADIUMS entry, 163 games at them
+
+## Every venue id
+
+shape: (67, 9)
+┌────────────┬──────────────┬─────────────┬───────┬─────────────────────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────┬────────────────────┬───────────────────────────────────┬──────────┐
+│ stadium_id ┆ first_season ┆ last_season ┆ games ┆ names                                                                               ┆ home_teams                                 ┆ roof               ┆ surface                           ┆ in_table │
+│ ---        ┆ ---          ┆ ---         ┆ ---   ┆ ---                                                                                 ┆ ---                                        ┆ ---                ┆ ---                               ┆ ---      │
+│ str        ┆ i32          ┆ i32         ┆ u32   ┆ str                                                                                 ┆ str                                        ┆ str                ┆ str                               ┆ bool     │
+╞════════════╪══════════════╪═════════════╪═══════╪═════════════════════════════════════════════════════════════════════════════════════╪════════════════════════════════════════════╪════════════════════╪═══════════════════════════════════╪══════════╡
+│ ATL00      ┆ 1999         ┆ 2016        ┆ 150   ┆ Georgia Dome                                                                        ┆ ATL TEN                                    ┆ dome               ┆ astroturf fieldturf               ┆ true     │
+│ ATL97      ┆ 2017         ┆ 2026        ┆ 82    ┆ Mercedes-Benz Stadium                                                               ┆ ATL LAR                                    ┆ <null> closed open ┆  fieldturf                        ┆ true     │
+│ BAL00      ┆ 1999         ┆ 2026        ┆ 237   ┆ M&T Bank Stadium | PSINet Stadium | Ravens Stadium                                  ┆ BAL                                        ┆ outdoors           ┆  fieldturf grass sportturf        ┆ true     │
+│ BOS00      ┆ 2002         ┆ 2026        ┆ 227   ┆ Gillette Stadium                                                                    ┆ NE                                         ┆ outdoors           ┆  fieldturf grass                  ┆ true     │
+│ BOS99      ┆ 1999         ┆ 2001        ┆ 25    ┆ Foxboro Stadium                                                                     ┆ NE                                         ┆ outdoors           ┆ grass                             ┆ false    │
+│ BRG00      ┆ 2005         ┆ 2005        ┆ 4     ┆ Tiger Stadium (LSU)                                                                 ┆ NO                                         ┆ outdoors           ┆ grass                             ┆ true     │
+│ BUF00      ┆ 1999         ┆ 2026        ┆ 227   ┆ Highmark Stadium | New Era Field | Ralph Wilson Stadium                             ┆ BUF                                        ┆ outdoors           ┆  a_turf astroplay astroturf grass ┆ true     │
+│ BUF01      ┆ 2008         ┆ 2013        ┆ 6     ┆ Rogers Centre                                                                       ┆ BUF                                        ┆ dome               ┆ a_turf astroplay fieldturf        ┆ true     │
+│ CAR00      ┆ 1999         ┆ 2026        ┆ 233   ┆ Bank of America Stadium | Ericsson Stadium                                          ┆ CAR                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+│ CHI98      ┆ 1999         ┆ 2026        ┆ 227   ┆ Soldier Field                                                                       ┆ CHI                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+│ CHI99      ┆ 2002         ┆ 2002        ┆ 8     ┆ Memorial Stadium (Champaign)                                                        ┆ CHI                                        ┆ outdoors           ┆ astroplay                         ┆ false    │
+│ CIN00      ┆ 2000         ┆ 2026        ┆ 223   ┆ Paul Brown Stadium | Paycor Stadium                                                 ┆ CIN                                        ┆ outdoors           ┆  fieldturf grass                  ┆ true     │
+│ CIN99      ┆ 1999         ┆ 1999        ┆ 8     ┆ Cinergy Field                                                                       ┆ CIN                                        ┆ outdoors           ┆ astroturf                         ┆ false    │
+│ CLE00      ┆ 1999         ┆ 2026        ┆ 226   ┆ Cleveland Browns Stadium | FirstEnergy Stadium | Huntington Bank Field              ┆ CLE                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+│ DAL00      ┆ 2009         ┆ 2026        ┆ 153   ┆ AT&T Stadium | Cowboys Stadium                                                      ┆ DAL GB                                     ┆ <null> closed open ┆  fieldturf grass matrixturf       ┆ true     │
+│ DAL99      ┆ 1999         ┆ 2008        ┆ 81    ┆ Texas Stadium                                                                       ┆ DAL                                        ┆ outdoors           ┆ astroturf fieldturf               ┆ true     │
+│ DEN00      ┆ 2001         ┆ 2026        ┆ 222   ┆ Empower Field at Mile High | Invesco Field at Mile High | Sports Authority Field at ┆ DEN                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+│            ┆              ┆             ┆       ┆ Mile High                                                                           ┆                                            ┆                    ┆                                   ┆          │
+│ DEN99      ┆ 1999         ┆ 2000        ┆ 16    ┆ Mile High Stadium                                                                   ┆ DEN                                        ┆ outdoors           ┆ grass                             ┆ false    │
+│ DET00      ┆ 2002         ┆ 2026        ┆ 209   ┆ Ford Field                                                                          ┆ BUF DET MIN PIT                            ┆ dome               ┆  fieldturf                        ┆ true     │
+│ DET99      ┆ 1999         ┆ 2001        ┆ 24    ┆ Pontiac Silverdome                                                                  ┆ DET                                        ┆ dome               ┆ astroturf                         ┆ false    │
+│ FRA00      ┆ 2023         ┆ 2023        ┆ 2     ┆ Deutsche Bank Park                                                                  ┆ KC NE                                      ┆ outdoors           ┆ grass                             ┆ true     │
+│ GER00      ┆ 2022         ┆ 2024        ┆ 2     ┆ Allianz Arena                                                                       ┆ CAR TB                                     ┆ outdoors           ┆                                   ┆ true     │
+│ GNB00      ┆ 1999         ┆ 2026        ┆ 241   ┆ Lambeau Field                                                                       ┆ GB                                         ┆ outdoors           ┆ grass grass                       ┆ true     │
+│ HOU00      ┆ 2002         ┆ 2026        ┆ 213   ┆ NRG Stadium | Reliant Stadium                                                       ┆ ATL HOU NE                                 ┆ <null> closed open ┆  astroturf fieldturf grass        ┆ true     │
+│ IND00      ┆ 2008         ┆ 2026        ┆ 161   ┆ Lucas Oil Stadium                                                                   ┆ IND NE                                     ┆ <null> closed open ┆  fieldturf grass                  ┆ true     │
+│ IND99      ┆ 1999         ┆ 2007        ┆ 79    ┆ RCA Dome                                                                            ┆ IND                                        ┆ dome               ┆ astroturf fieldturf               ┆ true     │
+│ JAX00      ┆ 1999         ┆ 2026        ┆ 222   ┆ Alltel Stadium | EverBank Field | EverBank Stadium | Jacksonville Municipal Stadium ┆ JAX NO PHI                                 ┆ outdoors           ┆  grass grass                      ┆ true     │
+│            ┆              ┆             ┆       ┆ | TIAA Bank Stadium | Tottenham Hots…                                               ┆                                            ┆                    ┆                                   ┆          │
+│ KAN00      ┆ 1999         ┆ 2026        ┆ 243   ┆ Arrowhead Stadium | GEHA Field at Arrowhead Stadium                                 ┆ KC                                         ┆ outdoors           ┆  astroturf grass grass            ┆ true     │
+│ LAX01      ┆ 2020         ┆ 2026        ┆ 120   ┆ SoFi Stadium                                                                        ┆ CIN LAC LAR                                ┆ dome               ┆  matrixturf                       ┆ true     │
+│ LAX97      ┆ 2017         ┆ 2019        ┆ 22    ┆ StubHub Center                                                                      ┆ LAC                                        ┆ outdoors           ┆ grass                             ┆ true     │
+│ LAX99      ┆ 2016         ┆ 2019        ┆ 31    ┆ Los Angeles Memorial Coliseum                                                       ┆ LAR                                        ┆ outdoors           ┆ grass                             ┆ true     │
+│ LON00      ┆ 2007         ┆ 2026        ┆ 27    ┆ Wembley Stadium                                                                     ┆ ATL CIN JAX KC LAC LAR LV MIA MIN NO SF TB ┆ outdoors           ┆  astroplay fieldturf grass        ┆ true     │
+│ LON01      ┆ 2016         ┆ 2017        ┆ 3     ┆ Twickenham Stadium                                                                  ┆ CLE LAR                                    ┆ outdoors           ┆ grass                             ┆ true     │
+│ LON02      ┆ 2019         ┆ 2026        ┆ 11    ┆ Tottenham Hotspur Stadium | Tottenham Stadium                                       ┆ ATL BUF CHI GB JAX LV MIN NO TB TEN WSH    ┆ outdoors           ┆  grass                            ┆ true     │
+│ MAD01      ┆ 2026         ┆ 2026        ┆ 1     ┆ Bernabeu                                                                            ┆ ATL                                        ┆ <null>             ┆ fieldturf                         ┆ false    │
+│ MEL00      ┆ 2026         ┆ 2026        ┆ 1     ┆ Melbourne Cricket Ground                                                            ┆ LAR                                        ┆ dome               ┆ grass                             ┆ false    │
+│ MEX00      ┆ 2005         ┆ 2026        ┆ 6     ┆ Azteca Stadium | Estadio Banorte                                                    ┆ ARI LAC LV SF                              ┆ outdoors           ┆  grass                            ┆ true     │
+│ MIA00      ┆ 1999         ┆ 2026        ┆ 230   ┆ Dolphin Stadium | Hard Rock Stadium | Pro Player Stadium | Sun Life Stadium         ┆ CHI IND KC MIA                             ┆ outdoors           ┆ grass grass                       ┆ true     │
+│ MIN00      ┆ 1999         ┆ 2013        ┆ 121   ┆ Hubert H. Humphrey Metrodome | Mall of America Field                                ┆ MIN                                        ┆ dome               ┆ astroturf fieldturf sportturf     ┆ true     │
+│ MIN01      ┆ 2016         ┆ 2026        ┆ 93    ┆ U.S. Bank Stadium                                                                   ┆ MIN NE                                     ┆ dome               ┆  sportturf                        ┆ true     │
+│ MIN98      ┆ 2010         ┆ 2015        ┆ 18    ┆ TCF Bank Stadium                                                                    ┆ MIN                                        ┆ outdoors           ┆ fieldturf                         ┆ true     │
+│ MUN01      ┆ 2026         ┆ 2026        ┆ 1     ┆ FC Bayern Munich Stadium                                                            ┆ DET                                        ┆ dome               ┆ fieldturf                         ┆ false    │
+│ NAS00      ┆ 1999         ┆ 2026        ┆ 232   ┆ Adelphia Coliseum | LP Field | Nissan Stadium | The Coliseum                        ┆ TEN                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+│ NOR00      ┆ 1999         ┆ 2026        ┆ 229   ┆ Caesars Superdome | Louisiana Superdome | Mercedes-Benz Superdome                   ┆ NE NO PHI SF                               ┆ dome               ┆  astroturf fieldturf sportturf    ┆ true     │
+│ NYC00      ┆ 1999         ┆ 2009        ┆ 182   ┆ Giants Stadium                                                                      ┆ NO NYG NYJ                                 ┆ outdoors           ┆ astroturf fieldturf grass         ┆ true     │
+│ NYC01      ┆ 2010         ┆ 2026        ┆ 280   ┆ MetLife Stadium | New Meadowlands Stadium                                           ┆ DEN NYG NYJ                                ┆ outdoors           ┆  fieldturf grass                  ┆ true     │
+│ OAK00      ┆ 1999         ┆ 2019        ┆ 168   ┆ McAfee Coliseum | Network Associates Coliseum | O.co Coliseum | Oakland-Alameda     ┆ LV                                         ┆ outdoors           ┆ grass                             ┆ true     │
+│            ┆              ┆             ┆       ┆ County Coliseum | Ring Central Coliseum                                             ┆                                            ┆                    ┆                                   ┆          │
+│ PAR00      ┆ 2026         ┆ 2026        ┆ 1     ┆ Stade de France                                                                     ┆ NO                                         ┆ dome               ┆ sportturf                         ┆ false    │
+│ PHI00      ┆ 2003         ┆ 2026        ┆ 210   ┆ Lincoln Financial Field                                                             ┆ PHI                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+│ PHI99      ┆ 1999         ┆ 2002        ┆ 36    ┆ Veterans Stadium                                                                    ┆ PHI                                        ┆ outdoors           ┆ astroturf fieldturf               ┆ false    │
+│ PHO00      ┆ 2006         ┆ 2026        ┆ 181   ┆ State Farm Stadium | University of Phoenix Stadium                                  ┆ ARI LAR NE PHI SEA SF                      ┆ <null> closed open ┆  grass grass                      ┆ true     │
+│ PHO99      ┆ 1999         ┆ 2005        ┆ 56    ┆ Sun Devil Stadium                                                                   ┆ ARI LAC                                    ┆ outdoors           ┆ grass                             ┆ true     │
+│ PIT00      ┆ 2001         ┆ 2026        ┆ 226   ┆ Acrisure Stadium | Heinz Field                                                      ┆ PIT                                        ┆ outdoors           ┆  dessograss grass grass           ┆ true     │
+│ PIT99      ┆ 1999         ┆ 2000        ┆ 16    ┆ Three Rivers Stadium                                                                ┆ PIT                                        ┆ outdoors           ┆ astroturf                         ┆ false    │
+│ RIO00      ┆ 2026         ┆ 2026        ┆ 1     ┆ Maracana Stadium                                                                    ┆ DAL                                        ┆ open               ┆ grass                             ┆ false    │
+│ SAN00      ┆ 2005         ┆ 2005        ┆ 3     ┆ Alamo Dome                                                                          ┆ NO                                         ┆ dome               ┆ fieldturf                         ┆ true     │
+│ SAO00      ┆ 2024         ┆ 2024        ┆ 1     ┆ Arena Corinthians                                                                   ┆ PHI                                        ┆ outdoors           ┆                                   ┆ true     │
+│ SDG00      ┆ 1999         ┆ 2016        ┆ 149   ┆ Qualcomm Stadium                                                                    ┆ LAC TB                                     ┆ outdoors           ┆ grass                             ┆ true     │
+│ SEA00      ┆ 2002         ┆ 2026        ┆ 217   ┆ CenturyLink Field | Lumen Field | Qwest Field | Seahawks Stadium                    ┆ SEA                                        ┆ outdoors           ┆  fieldturf                        ┆ true     │
+│ SEA98      ┆ 1999         ┆ 1999        ┆ 9     ┆ Seattle Kingdome                                                                    ┆ SEA                                        ┆ dome               ┆ astroturf                         ┆ false    │
+│ SEA99      ┆ 2000         ┆ 2001        ┆ 16    ┆ Husky Stadium                                                                       ┆ SEA                                        ┆ outdoors           ┆ fieldturf                         ┆ false    │
+│ SFO00      ┆ 1999         ┆ 2013        ┆ 123   ┆ 3Com Park | Candlestick Park | Monster Park                                         ┆ SF                                         ┆ outdoors           ┆ grass                             ┆ true     │
+│ SFO01      ┆ 2014         ┆ 2026        ┆ 111   ┆ Levi's Stadium                                                                      ┆ DEN NE SF                                  ┆ outdoors           ┆  grass                            ┆ true     │
+│ STL00      ┆ 1999         ┆ 2015        ┆ 140   ┆ Dome at America's Center | Edward Jones Dome | TWA Dome                             ┆ LAR                                        ┆ dome               ┆ astroplay astroturf fieldturf     ┆ true     │
+│ TAM00      ┆ 1999         ┆ 2026        ┆ 235   ┆ Raymond James Stadium                                                               ┆ ARI NYG TB                                 ┆ outdoors           ┆  grass grass                      ┆ true     │
+│ VEG00      ┆ 2020         ┆ 2026        ┆ 60    ┆ Allegiant Stadium                                                                   ┆ KC LV                                      ┆ dome               ┆ grass                             ┆ true     │
+│ WAS00      ┆ 1999         ┆ 2026        ┆ 230   ┆ FedExField | Jack Kent Cooke Stadium | Northwest Stadium                            ┆ WSH                                        ┆ outdoors           ┆  grass grass                      ┆ true     │
+└────────────┴──────────────┴─────────────┴───────┴─────────────────────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────┴────────────────────┴───────────────────────────────────┴──────────┘
+
+## Venue ids without an entry
+
+shape: (14, 9)
+┌────────────┬──────────────┬─────────────┬───────┬──────────────────────────────┬────────────┬──────────┬─────────────────────┬──────────┐
+│ stadium_id ┆ first_season ┆ last_season ┆ games ┆ names                        ┆ home_teams ┆ roof     ┆ surface             ┆ in_table │
+│ ---        ┆ ---          ┆ ---         ┆ ---   ┆ ---                          ┆ ---        ┆ ---      ┆ ---                 ┆ ---      │
+│ str        ┆ i32          ┆ i32         ┆ u32   ┆ str                          ┆ str        ┆ str      ┆ str                 ┆ bool     │
+╞════════════╪══════════════╪═════════════╪═══════╪══════════════════════════════╪════════════╪══════════╪═════════════════════╪══════════╡
+│ BOS99      ┆ 1999         ┆ 2001        ┆ 25    ┆ Foxboro Stadium              ┆ NE         ┆ outdoors ┆ grass               ┆ false    │
+│ CHI99      ┆ 2002         ┆ 2002        ┆ 8     ┆ Memorial Stadium (Champaign) ┆ CHI        ┆ outdoors ┆ astroplay           ┆ false    │
+│ CIN99      ┆ 1999         ┆ 1999        ┆ 8     ┆ Cinergy Field                ┆ CIN        ┆ outdoors ┆ astroturf           ┆ false    │
+│ DEN99      ┆ 1999         ┆ 2000        ┆ 16    ┆ Mile High Stadium            ┆ DEN        ┆ outdoors ┆ grass               ┆ false    │
+│ DET99      ┆ 1999         ┆ 2001        ┆ 24    ┆ Pontiac Silverdome           ┆ DET        ┆ dome     ┆ astroturf           ┆ false    │
+│ MAD01      ┆ 2026         ┆ 2026        ┆ 1     ┆ Bernabeu                     ┆ ATL        ┆ <null>   ┆ fieldturf           ┆ false    │
+│ MEL00      ┆ 2026         ┆ 2026        ┆ 1     ┆ Melbourne Cricket Ground     ┆ LAR        ┆ dome     ┆ grass               ┆ false    │
+│ MUN01      ┆ 2026         ┆ 2026        ┆ 1     ┆ FC Bayern Munich Stadium     ┆ DET        ┆ dome     ┆ fieldturf           ┆ false    │
+│ PAR00      ┆ 2026         ┆ 2026        ┆ 1     ┆ Stade de France              ┆ NO         ┆ dome     ┆ sportturf           ┆ false    │
+│ PHI99      ┆ 1999         ┆ 2002        ┆ 36    ┆ Veterans Stadium             ┆ PHI        ┆ outdoors ┆ astroturf fieldturf ┆ false    │
+│ PIT99      ┆ 1999         ┆ 2000        ┆ 16    ┆ Three Rivers Stadium         ┆ PIT        ┆ outdoors ┆ astroturf           ┆ false    │
+│ RIO00      ┆ 2026         ┆ 2026        ┆ 1     ┆ Maracana Stadium             ┆ DAL        ┆ open     ┆ grass               ┆ false    │
+│ SEA98      ┆ 1999         ┆ 1999        ┆ 9     ┆ Seattle Kingdome             ┆ SEA        ┆ dome     ┆ astroturf           ┆ false    │
+│ SEA99      ┆ 2000         ┆ 2001        ┆ 16    ┆ Husky Stadium                ┆ SEA        ┆ outdoors ┆ fieldturf           ┆ false    │
+└────────────┴──────────────┴─────────────┴───────┴──────────────────────────────┴────────────┴──────────┴─────────────────────┴──────────┘
+
+## Games at those venues, per season
+
+1999 BOS99 (8 games): 1999_02_IND_NE 1999_03_NYG_NE 1999_06_MIA_NE 1999_07_DEN_NE 1999_10_NYJ_NE 1999_13_DAL_NE 1999_16_BUF_NE 1999_17_BAL_NE
+1999 CIN99 (8 games): 1999_02_SD_CIN 1999_04_STL_CIN 1999_06_PIT_CIN 1999_08_JAX_CIN 1999_10_TEN_CIN 1999_11_BAL_CIN 1999_13_SF_CIN 1999_14_CLE_CIN
+1999 DEN99 (8 games): 1999_01_MIA_DEN 1999_04_NYJ_DEN 1999_06_GB_DEN 1999_08_MIN_DEN 1999_11_OAK_DEN 1999_13_KC_DEN 1999_15_SEA_DEN 1999_17_SD_DEN
+1999 DET99 (8 games): 1999_02_GB_DET 1999_05_SD_DET 1999_06_MIN_DET 1999_08_TB_DET 1999_09_STL_DET 1999_12_CHI_DET 1999_13_WAS_DET 1999_16_DEN_DET
+1999 PHI99 (8 games): 1999_01_ARI_PHI 1999_02_TB_PHI 1999_05_DAL_PHI 1999_08_NYG_PHI 1999_10_WAS_PHI 1999_11_IND_PHI 1999_15_NE_PHI 1999_17_STL_PHI
+1999 PIT99 (8 games): 1999_03_SEA_PIT 1999_04_JAX_PIT 1999_07_ATL_PIT 1999_10_CLE_PIT 1999_12_CIN_PIT 1999_14_BAL_PIT 1999_16_CAR_PIT 1999_17_TEN_PIT
+1999 SEA98 (9 games): 1999_01_DET_SEA 1999_04_OAK_SEA 1999_07_BUF_SEA 1999_09_CIN_SEA 1999_10_DEN_SEA 1999_12_TB_SEA 1999_14_SD_SEA 1999_16_KC_SEA 1999_18_MIA_SEA
+2000 BOS99 (8 games): 2000_01_TB_NE 2000_03_MIN_NE 2000_06_IND_NE 2000_07_NYJ_NE 2000_10_BUF_NE 2000_12_CIN_NE 2000_14_KC_NE 2000_17_MIA_NE
+2000 DEN99 (8 games): 2000_02_ATL_DEN 2000_04_KC_DEN 2000_05_NE_DEN 2000_07_CLE_DEN 2000_11_OAK_DEN 2000_12_SD_DEN 2000_15_SEA_DEN 2000_17_SF_DEN
+2000 DET99 (8 games): 2000_02_WAS_DET 2000_03_TB_DET 2000_05_MIN_DET 2000_06_GB_DET 2000_10_MIA_DET 2000_11_ATL_DET 2000_13_NE_DET 2000_17_CHI_DET
+2000 PHI99 (9 games): 2000_02_NYG_PHI 2000_05_ATL_PHI 2000_06_WAS_PHI 2000_08_CHI_PHI 2000_10_DAL_PHI 2000_12_ARI_PHI 2000_14_TEN_PHI 2000_17_CIN_PHI 2000_18_TB_PHI
+2000 PIT99 (8 games): 2000_01_BAL_PIT 2000_04_TEN_PIT 2000_07_CIN_PIT 2000_08_CLE_PIT 2000_11_PHI_PIT 2000_12_JAX_PIT 2000_14_OAK_PIT 2000_16_WAS_PIT
+2000 SEA99 (8 games): 2000_02_STL_SEA 2000_03_NO_SEA 2000_07_IND_SEA 2000_09_KC_SEA 2000_10_SD_SEA 2000_13_DEN_SEA 2000_16_OAK_SEA 2000_17_BUF_SEA
+2001 BOS99 (9 games): 2001_02_NYJ_NE 2001_03_IND_NE 2001_05_SD_NE 2001_09_BUF_NE 2001_10_STL_NE 2001_11_NO_NE 2001_13_CLE_NE 2001_15_MIA_NE 2001_19_OAK_NE
+2001 DET99 (8 games): 2001_04_STL_DET 2001_06_TEN_DET 2001_07_CIN_DET 2001_09_TB_DET 2001_11_GB_DET 2001_14_MIN_DET 2001_16_CHI_DET 2001_17_DAL_DET
+2001 PHI99 (9 games): 2001_01_STL_PHI 2001_03_DAL_PHI 2001_04_ARI_PHI 2001_07_OAK_PHI 2001_09_MIN_PHI 2001_11_WAS_PHI 2001_13_SD_PHI 2001_16_NYG_PHI 2001_18_TB_PHI
+2001 SEA99 (8 games): 2001_02_PHI_SEA 2001_04_JAX_SEA 2001_05_DEN_SEA 2001_07_MIA_SEA 2001_09_OAK_SEA 2001_12_SD_SEA 2001_14_DAL_SEA 2001_17_KC_SEA
+2002 CHI99 (8 games): 2002_01_MIN_CHI 2002_03_NO_CHI 2002_05_GB_CHI 2002_09_PHI_CHI 2002_10_NE_CHI 2002_12_DET_CHI 2002_15_NYJ_CHI 2002_17_TB_CHI
+2002 PHI99 (10 games): 2002_03_DAL_PHI 2002_04_HOU_PHI 2002_07_TB_PHI 2002_08_NYG_PHI 2002_10_IND_PHI 2002_11_ARI_PHI 2002_13_STL_PHI 2002_15_WAS_PHI 2002_19_ATL_PHI 2002_20_TB_PHI
+2026 MAD01 (1 games): 2026_09_CIN_ATL
+2026 MEL00 (1 games): 2026_01_SF_LA
+2026 MUN01 (1 games): 2026_10_NE_DET
+2026 PAR00 (1 games): 2026_07_PIT_NO
+2026 RIO00 (1 games): 2026_03_BAL_DAL
+
+Games per season: 1999 57, 2000 49, 2001 34, 2002 18, 2026 5
+
+=== Run 2: the table after the change, exit status 0 (summary line) ===
+
+Schedules 1999-2026: 7548 games, 0 without a venue id, 67 venue ids, 0 without a constants.STADIUMS entry, 0 games at them

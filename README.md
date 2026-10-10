@@ -975,12 +975,24 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   and the model's forecasts for future games kept out of the fit (`--ratings-include-future` is
   off). `--legacy-franchise-fit` restores the older all-seasons, equal-weight **franchise** ranking,
   which describes a club's history more than its current team, and implies this method.
-- Projected standings are the same under both methods: current record plus the model's win
+- `--method ported`, `model` and `blend` rank on a rating in points known before the week after
+  `--through-week` (`src/nfl_predictor/reporting/rating_sources.py`). `ported` is the ported team
+  rating the ETL publishes: each team's pre-week value from the game rows of `--data-ml`, and the
+  weekly history under `--ratings-dir` (`data/ratings`) for a team on a bye. `model` is a ridge fit
+  of team strengths and a home term to a walk-forward's pre-game predicted margins for the
+  season's earlier games (`--model-predictions`: run or fold checkpoint directories that cover
+  every completed regular-season game before the week; in week 1, the previous season's last fit
+  carried forward by the factor the ported prior applies to a team rating). `blend` is
+  `--blend-weight` times the ported rating plus the rest times the model rating. Each is mapped
+  onto the scales like the composite and published with `team_rating`, `points_vs_average`,
+  `rating_week` and `rating_source`. The default stays the composite.
+- Projected standings are the same under every method: current record plus the model's win
   probabilities for the remaining games.
 - `nfl-predictor weekly` accepts the same options (`--power-rankings-method`,
-  `--power-rankings-strength-snapshots`, `--ratings-*`, `--legacy-franchise-fit`) and writes the
-  same files. It skips the rankings with a warning when the snapshot for the requested week is
-  missing.
+  `--power-rankings-strength-snapshots`, `--power-rankings-ratings-dir`,
+  `--power-rankings-model-predictions`, `--power-rankings-blend-weight`, `--ratings-*`,
+  `--legacy-franchise-fit`) and writes the same files. It skips the rankings with a warning when
+  the snapshot or rating source for the requested week is missing.
 
 Model selection hierarchy (default):
 

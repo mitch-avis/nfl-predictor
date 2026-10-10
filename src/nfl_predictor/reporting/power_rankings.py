@@ -30,6 +30,11 @@ mean of within-week z-scores, not a win probability, so it is first expressed in
 through that week's own SRS and then mapped onto the same scales; see
 `rank_teams_on_composite`.
 
+Or on a rating already in points (`rating_sources`): the ported team rating, a ridge fit to a
+walk-forward's pre-game predicted margins (the model rating), or a blend of the two. Each is
+centered on the rated teams and mapped onto the scales the composite's way; see
+`load_team_ratings`.
+
 The second half of the module runs a ranking end to end for one season through one week:
 it loads current records from the schedule, predicts the remaining games with a trained
 model, reads the strength snapshot or builds the Bradley-Terry fit inputs, and writes the

@@ -11,7 +11,8 @@ to `data/ratings/`, and adds pre-week rating features to the game dataset as the
 feature group (see "In the ETL" below). The schedule-adjusted strength snapshot
 (`utils/polars/strength_snapshot.py`) stays in the dataset beside them. The web app's team and
 quarterback pages (`src/nfl_predictor/api/ratings/`) read the tables, with the rank-range and
-pair column names of `rating_ranges.py`.
+pair column names of `rating_ranges.py`, and `nfl-predictor rankings --method ported` ranks on
+the pre-week team ratings (`src/nfl_predictor/reporting/rating_sources.py`).
 
 ## What it computes
 

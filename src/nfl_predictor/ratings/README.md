@@ -52,8 +52,11 @@ consume two kinds of regular-season rows, documented column by column in `inputs
 
 `team_game_rows` and `qb_game_rows` check a frame against these and keep its row order. The fits
 sum over rows in the order given, so an adapter should emit a fixed order (team, week, and game;
-for passers also the name) to make rebuilds byte-identical. `published_logs.py` adapts the game
-logs `nfl-sos-ratings` published, in the order its fits read them.
+for passers also the name) to make rebuilds byte-identical. The BLAS thread count matters the
+same way: with one thread, as the tests and the parity audit run and as `nfl-sos-ratings` built
+its files, the port reproduces those files bit for bit; with more, the quarterback fits can differ
+in their last bits. `published_logs.py` adapts the game logs `nfl-sos-ratings` published, in the
+order its fits read them.
 
 ## Outputs
 

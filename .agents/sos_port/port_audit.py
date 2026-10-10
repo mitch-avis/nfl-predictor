@@ -46,6 +46,11 @@ FIRST_SEASON = 1999
 LAST_SEASON = 2025
 SEASONS = tuple(range(FIRST_SEASON, LAST_SEASON + 1))
 SCRATCH = Path.home() / "scratch"
+# nfl-sos-ratings reads play-by-play through nflreadpy's on-disk cache. This read-only snapshot of
+# that cache (written 2026-10-08, the day before its data build) is the play-by-play it read; the
+# sha256 manifest was made when the snapshot was taken.
+NFLREADPY_SNAPSHOT = SCRATCH / "nflreadpy_cache_snapshot_20261008"
+NFLREADPY_SNAPSHOT_MANIFEST = SCRATCH / "nflreadpy_cache_snapshot_20261008.sha256"
 
 
 def _git(*args: str, cwd: Path | None = None) -> str:
@@ -175,7 +180,7 @@ class SosCode:
             SCRATCH.mkdir(parents=True, exist_ok=True)
             target = Path(tempfile.mkdtemp(prefix="sos_port_", dir=SCRATCH))
             archive = subprocess.run(  # noqa: S603 - fixed git argv built in this file
-                ["git", "archive", SOS_COMMIT, *prefixes],  # noqa: S607 - git from PATH
+                ["git", "--no-optional-locks", "archive", SOS_COMMIT, *prefixes],  # noqa: S607 - git from PATH
                 cwd=SOS_REPO,
                 check=True,
                 capture_output=True,

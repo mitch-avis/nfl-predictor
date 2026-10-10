@@ -263,6 +263,13 @@ Scripts and their reports, run from the repository root with the worktree's envi
   page that reads `data/ratings/` during a web-launched ETL sees the old file or the new one,
   never half of one; a failed write leaves the old file and no temporary file
   (`test_a_failed_table_write_leaves_the_published_file_whole`).
+- **After the second review**: the temporary file's name ends in a random hex string. With one
+  fixed name, a command-line ETL overlapping a web-launched one could move the other's
+  half-written file into place (the review read it back as a `ComputeError`), or fail to find its
+  own; now each writer moves only its own file
+  (`test_overlapping_table_writers_each_publish_a_whole_file`). The file is not made with
+  `tempfile.mkstemp`, which creates it readable by its owner only, a mode the move would carry
+  onto the published table.
 
 ## 12. A season without a qualified passer gets no quarterback tables
 
@@ -284,6 +291,11 @@ Scripts and their reports, run from the repository root with the worktree's envi
   passed the old guard and then stopped the ETL with `ColumnNotFoundError` in the rank summary,
   for the same reason as the season without a qualified passer
   (`test_quarterback_tables_need_a_qualified_passer_the_fit_rates`).
+- **After the second review**: a build-level test runs the guard too: a season whose box scores
+  qualify every starter but whose play-by-play names no passer builds its team tables and no
+  quarterback table
+  (`test_build_of_a_season_of_unrated_qualified_passers_publishes_only_team_tables`; with the
+  qualified-only guard the build fails in the quarterback fit).
 
 ## 13. The weeks that get pre-week ratings
 
@@ -407,9 +419,13 @@ Scripts and their reports, run from the repository root with the worktree's envi
   weekly rank ranges) 21.4 s (an incremental run), the season cache's extra input and output
   0.6 s, attaching the features 0.2 s, writing the 254 tables 0.2 s. The incremental step grows
   through the season, since the season in progress refits its weekly rank ranges for every week
-  played: the independent review timed 2025 built as the season in progress at 51.5 s against
-  19.5 s for the same season finished, so late in a season an incremental run spends about 60 s
-  on the ratings.
+  played. Run 4 (`ratings_etl_timing.py --seasons 1999 2025`, the default threads, one-minute
+  load average 4.6 before and 11.3 after, beside other agents' test runs) builds 2025 as the
+  season in progress in 50.9 s in its incremental step and 50.3 s in its full rebuild, against
+  17.7 s for 2024, a finished season with as many weeks of pre-week ratings (22); with the 6.8 s
+  of loading the other sources, an incremental run late in a season spends about 60 s on the
+  ratings. The independent review had timed 2025 in progress at 51.5 s against 19.5 s for the
+  season finished.
 - **Feature-value impact**: none.
 - **How to reverse it**: not applicable.
 - **Review**: not yet reviewed.

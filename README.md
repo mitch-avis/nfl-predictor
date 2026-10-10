@@ -1068,6 +1068,17 @@ A launcher changes to the repository two levels above itself, so it runs inside 
 writes its outputs there. Check that the dataset fingerprint in the new run's metadata matches the
 old one. Remove the worktree with `git worktree remove ../nfl-predictor-old` when done.
 
+**Moneyline edges, split at the spread.** The betting report's moneyline edge (`edge_home_prob`) is
+the model's home win probability minus the market's no-vig moneyline probability. The weekly run
+passes the report its floor sigma, and the report splits that edge in two:
+`market_home_prob_spread` is the floor's curve at the market's margin, `Phi(-home_spread / sigma)`;
+`edge_beyond_spread_home_prob` (the model's probability minus that) is what the model adds beyond
+the spread; and `spread_moneyline_gap_home_prob` (that minus the moneyline probability) is the gap
+between the spread and the moneyline, which carries no model information. The two parts sum to the
+edge. The confidence score and the action label still read the whole edge. The three columns are
+empty for a game without a spread, or when the report is built without a sigma. Like the rest of
+the report, they are diagnostics, not a profitability claim.
+
 **Totals are diagnostic-only.** The total (over/under) columns of the betting report
 (`total_value_side`, `total_edge_points`) come from the model's total head. Since version `0.6.2`
 that head learns again (before, it stopped after one tree and predicted about 44 points for every

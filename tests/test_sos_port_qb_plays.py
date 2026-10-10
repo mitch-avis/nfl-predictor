@@ -872,3 +872,29 @@ def test_evaluate_and_build_report_run_end_to_end_on_a_synthetic_league() -> Non
     assert results.decision.recommended in qb.CANDIDATES
     assert any(line.startswith("## Headline") for line in lines)
     assert all(len(line) <= 100 for line in lines if not line.startswith("|"))
+
+
+def _error_rows(count: int = 400) -> pl.DataFrame:
+    """Return scored rows over several seasons and weeks, in no particular order."""
+    return pl.DataFrame(
+        {
+            "season": [2007 + (index % 7) for index in range(count)][::-1],
+            "week": [5 + (index % 11) for index in range(count)],
+            "game_id": [f"g{index}" for index in range(count)],
+            "team": ["AAA"] * count,
+            "error": [float(index % 13) - 6.0 for index in range(count)],
+        }
+    )
+
+
+def test_paired_errors_do_not_depend_on_the_row_order_of_either_side() -> None:
+    # Arrange
+    rows = _error_rows()
+    first = qb.paired_errors(rows, rows.sample(fraction=1.0, shuffle=True, seed=1))
+
+    # Act
+    second = qb.paired_errors(rows.sample(fraction=1.0, shuffle=True, seed=3), rows.reverse())
+
+    # Assert
+    assert first.equals(second)
+    assert first.select("season", "week").rows() == sorted(first.select("season", "week").rows())

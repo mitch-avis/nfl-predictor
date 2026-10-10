@@ -1416,22 +1416,25 @@ def band_rows(rows: pl.DataFrame, band: str) -> pl.DataFrame:
 
 
 def paired_errors(first: pl.DataFrame, second: pl.DataFrame) -> pl.DataFrame:
-    """Return each team-game's ``|error first| - |error second|``.
+    """Return each team-game's ``|error first| - |error second|``, sorted by team-game.
+
+    The sort fixes the order the season sums add in, so two runs write the same bits.
 
     Raises:
         IntegrityError: If the two do not score the same team-games (check 9).
 
     """
     joined = first.select(*_KEYS, pl.col("error").abs().alias("_first")).join(
-        second.select(*_KEYS, pl.col("error").abs().alias("_second")), on=_KEYS, how="full"
+        second.select(*_KEYS, pl.col("error").abs().alias("_second")),
+        on=_KEYS,
+        how="full",
+        coalesce=True,
     )
     if joined.select(pl.any_horizontal(pl.col("_first", "_second").is_null()).any()).item():
         msg = "check 9: two candidates do not score the same team-games"
         raise IntegrityError(msg)
-    return joined.select(
-        pl.coalesce("season", "season_right").alias("season"),
-        pl.coalesce("week", "week_right").alias("week"),
-        (pl.col("_first") - pl.col("_second")).alias("difference"),
+    return joined.select(*_KEYS, (pl.col("_first") - pl.col("_second")).alias("difference")).sort(
+        _KEYS
     )
 
 

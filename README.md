@@ -217,7 +217,9 @@ Typical outputs:
   `qb_game_logs`, `team_per_game_stats`, `qb_per_game_stats`, `opponent_profiles`,
   `qb_opponent_profiles`, `combined` and `qb_combined` (the season rows with the opponent profiles
   and the season's ratings), `team_wp_bins` and `qb_wp_bins`; a season gets them once its first
-  game is played. [The ratings README](src/nfl_predictor/ratings/README.md) and
+  game is played, and each has the same columns and types in every season, null where what fills
+  them is missing (a source nflverse has not published yet, an opponent profile too early in the
+  season). [The ratings README](src/nfl_predictor/ratings/README.md) and
   [the season statistics README](src/nfl_predictor/season_stats/README.md) describe every table.
 
 Note: the `data/` directory is gitignored by default; generate it via the data collection step

@@ -205,43 +205,15 @@ def _cause_details(entry: dict[str, Any], w: Any) -> None:
     """Write the extra facts some causes carry."""
     if "listed" in entry:
         w(f"- Games: {', '.join(entry['listed']) or 'none'}.")
-    if "flagged_plays_left_out_here" in entry:
-        parts = [
-            f"{play_type} {stats['plays']} ({season_ranges(stats['seasons'])})"
-            for play_type, stats in entry["flagged_plays_left_out_here"].items()
-        ]
-        w(f"- Flagged plays the play-type filter leaves out, by play type: {'; '.join(parts)}.")
     if "wiped_out_plays" in entry:
         wiped = entry["wiped_out_plays"]
         runs = f"{number(wiped['rush'])} ({number(wiped['rush_epa'])} EPA)"
         passes = f"{number(wiped['pass'])} ({number(wiped['pass_epa'])} EPA)"
-        texts = ", ".join(
-            f"{name.replace('_', ' ')} {number(count)}"
-            for name, count in entry.get("unflagged_no_plays", {}).items()
-        )
         w(
             f"- Plays recorded as `no_play`: {number(wiped['plays'])}, of them "
-            f"{number(wiped['without_penalty_flag'])} without the penalty flag (by their play "
-            f"text: {texts or '-'}); with the rush flag still set: {runs}; with the pass flag: "
-            f"{passes}; with the dropback flag: {number(wiped['qb_dropback'])}."
-        )
-    if "carries_without_rush_attempt" in entry:
-        kinds = ", ".join(
-            f"{kind} {number(count)}"
-            for kind, count in entry["carries_without_rush_attempt"].items()
-        )
-        w(f"- Carries here without the `rush_attempt` flag, by play type: {kinds or 'none'}.")
-    if "carries_from_rush_attempts" in entry:
-        carries = {key: number(value) for key, value in entry["carries_from_rush_attempts"].items()}
-        w(
-            f"- Carries here today: {carries['today']}. Its designed-run rule (`rush_attempt` and "
-            "not `two_point_attempt`, `qb_scramble` or `qb_kneel`) would add "
-            f"{carries['with_flag_added']} and remove {carries['with_flag_removed']}. Without "
-            f"`~qb_scramble` it would add {carries['without_flag_added']} (scrambles: "
-            f"{carries['without_flag_added_scrambles']}; dropbacks here: "
-            f"{carries['without_flag_added_dropbacks']}, of them scrambles: "
-            f"{carries['without_flag_added_scramble_dropbacks']}) and remove "
-            f"{carries['without_flag_removed']}."
+            f"{number(wiped['without_penalty_flag'])} without the penalty flag; with the rush "
+            f"flag still set: {runs}; with the pass flag: {passes}; with the dropback flag: "
+            f"{number(wiped['qb_dropback'])}."
         )
     if "cached_la_values" in entry:
         left = entry["cached_la_values"]

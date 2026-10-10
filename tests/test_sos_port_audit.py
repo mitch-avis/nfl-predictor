@@ -15,7 +15,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants
-from nfl_predictor.utils.polars import loaders
+from nfl_predictor.utils.polars import loaders, pbp
 from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
 
 if TYPE_CHECKING:
@@ -82,6 +82,41 @@ def _snapshot_and_cache(tmp_path: Path, *, cache_epa: float = 0.25, stale: bool 
     path = loaders._pbp_cache_path(cache_dir, 2025, regular_season_only=True)
     loaders._write_cached_frame(prepared, path, requested)
     return cache_dir
+
+
+@pytest.fixture
+def parity_rules(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Return the parity check's cause adjustments, imported from their directory."""
+    monkeypatch.syspath_prepend(str(AUDIT_DIR))
+    return importlib.import_module("parity_rules")
+
+
+def _plays(**flags: list[float]) -> pl.DataFrame:
+    """Return Buffalo's plays at Miami, one per list entry, with ``flags`` set and 0 elsewhere."""
+    count = len(next(iter(flags.values())))
+    names = ("rush", "rush_attempt", "qb_dropback", "qb_kneel", "qb_spike", "qb_scramble")
+    columns: dict[str, list[Any]] = {
+        "season": [2025] * count,
+        "season_type": ["REG"] * count,
+        "week": [1] * count,
+        "game_id": ["2025_01_BUF_MIA"] * count,
+        "posteam": ["BUF"] * count,
+        "defteam": ["MIA"] * count,
+        "home_team": ["MIA"] * count,
+        "away_team": ["BUF"] * count,
+        "play_type": ["run"] * count,
+        "two_point_attempt": [0.0] * count,
+        "down": [1.0] * count,
+        "epa": [float(n + 1) for n in range(count)],
+    }
+    columns |= {name: flags.get(name, [0.0] * count) for name in names}
+    return pl.DataFrame(columns)
+
+
+def _rush_epa(plays: pl.DataFrame) -> float:
+    """Return Buffalo's ``rush_epa_sum`` from this repository's team-game aggregate."""
+    games = pbp.aggregate_pbp_team_game_stats(plays)
+    return float(games.filter(pl.col("team_abbr") == "BUF")["rush_epa_sum"][0])
 
 
 def _column(inventory: ModuleType, kind: str, column: str, **fields: str) -> Any:
@@ -371,6 +406,77 @@ def test_season_pbp_cache_that_predates_the_code_fails(parity: ModuleType, tmp_p
     # Assert
     assert found is None
     assert [failure.what for failure in audit.failures] == ["cache"]
+
+
+def test_wiped_out_run_epa_puts_a_penalty_wiped_run_into_rush_epa(
+    parity_rules: ModuleType,
+) -> None:
+    # Arrange: a designed run (EPA 1) and a run a penalty wiped out (EPA 2).
+    plays = _plays(rush=[1.0, 1.0], rush_attempt=[1.0, 0.0]).with_columns(
+        play_type=pl.Series(["run", "no_play"])
+    )
+
+    # Act
+    adjusted = parity_rules.CAUSES["wiped_out_run_epa"].ours(plays)
+
+    # Assert
+    assert (_rush_epa(plays), _rush_epa(adjusted)) == (1.0, 3.0)
+
+
+def test_unflagged_rush_attempt_epa_takes_an_unflagged_carry_out_of_rush_epa(
+    parity_rules: ModuleType,
+) -> None:
+    # Arrange: a designed run (EPA 1), a rush attempt without the run flag (EPA 2), a kneel (3).
+    plays = _plays(rush=[1.0, 0.0, 0.0], rush_attempt=[1.0, 1.0, 1.0], qb_kneel=[0.0, 0.0, 1.0])
+
+    # Act
+    adjusted = parity_rules.CAUSES["unflagged_rush_attempt_epa"].ours(plays)
+
+    # Assert
+    assert (_rush_epa(plays), _rush_epa(adjusted)) == (3.0, 1.0)
+
+
+def test_unflagged_rush_attempt_epa_keeps_a_spike_filed_as_a_rush_attempt(
+    parity_rules: ModuleType,
+) -> None:
+    # Arrange: a designed run (EPA 1) and a spike filed as a rush attempt (EPA 2), a scrimmage
+    # snap there.
+    plays = _plays(rush=[1.0, 0.0], rush_attempt=[1.0, 1.0], qb_spike=[0.0, 1.0])
+
+    # Act
+    adjusted = parity_rules.CAUSES["unflagged_rush_attempt_epa"].ours(plays)
+
+    # Assert
+    assert _rush_epa(adjusted) == _rush_epa(plays) == 3.0
+
+
+def test_adjust_takes_an_unflagged_two_point_run_out_after_two_point_tries(
+    parity_rules: ModuleType,
+) -> None:
+    # Arrange: a designed run (EPA 1) and a two-point try nflverse files as a rush attempt without
+    # the run flag (EPA 2), no scrimmage snap there.
+    plays = _plays(rush=[1.0, 0.0], rush_attempt=[1.0, 1.0]).with_columns(
+        two_point_attempt=pl.Series([0.0, 1.0])
+    )
+    causes = frozenset({"two_point_tries", "unflagged_rush_attempt_epa"})
+
+    # Act
+    adjusted = parity_rules.adjust(plays, causes)
+
+    # Assert
+    assert _rush_epa(adjusted) == 1.0
+
+
+def test_kneels_and_spikes_puts_every_kneel_down_into_rush_epa(parity_rules: ModuleType) -> None:
+    # Arrange: a designed run (EPA 1), a kneel-down filed as a rush attempt (EPA 2) and one that
+    # is not (EPA 3).
+    plays = _plays(rush_attempt=[1.0, 1.0, 0.0], rush=[1.0, 0.0, 0.0], qb_kneel=[0.0, 1.0, 1.0])
+
+    # Act
+    adjusted = parity_rules.CAUSES["kneels_and_spikes"].ours(plays)
+
+    # Assert
+    assert (_rush_epa(plays), _rush_epa(adjusted)) == (1.0, 6.0)
 
 
 def test_season_pbp_missing_cache_fails(parity: ModuleType, tmp_path: Path) -> None:

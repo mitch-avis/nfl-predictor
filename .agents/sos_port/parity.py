@@ -43,14 +43,9 @@ from parity_rules import (
     CAUSES,
     KEYS,
     Pair,
-    carries_from_rush_attempts,
-    carries_without_rush_attempt,
+    adjust,
     check_evidence,
     expression,
-    one_team_games,
-    uncounted_situational_plays,
-    unflagged_no_plays,
-    unrepair_penalties,
     wiped_out_plays,
 )
 from port_audit import (
@@ -285,28 +280,22 @@ class SeasonFrames:
     season: int
     pbp: pl.DataFrame
     theirs_base: pl.DataFrame
-    broken_games: dict[str, str]
     _ours: dict[frozenset[str], pl.DataFrame] = field(default_factory=dict)
-    _theirs: dict[frozenset[str], pl.DataFrame] = field(default_factory=dict)
 
     def ours(self, causes: frozenset[str]) -> pl.DataFrame:
         """Return this repository's aggregates, canonically keyed, after ``causes``' adjustments."""
         if causes not in self._ours:
-            pbp = self.pbp
-            for cause in CAUSES.values():
-                if cause.id in causes and cause.ours is not None:
-                    pbp = cause.ours(pbp)
-            self._ours[causes] = canonical(ours_frame(pbp))
+            self._ours[causes] = canonical(ours_frame(adjust(self.pbp, causes)))
         return self._ours[causes]
 
     def theirs(self, causes: frozenset[str]) -> pl.DataFrame:
-        """Return its game logs after the ``causes`` adjustments on its side."""
-        if causes not in self._theirs:
-            frame = self.theirs_base
-            if "jacksonville_player_teams" in causes:
-                frame = unrepair_penalties(frame, self.broken_games)
-            self._theirs[causes] = frame
-        return self._theirs[causes]
+        """Return its game logs after the ``causes`` adjustments on its side.
+
+        No cause adjusts its side today (the one that undid its Jacksonville repair explains no
+        team-game since this repository repairs those games too), so this is its game logs.
+        """
+        del causes
+        return self.theirs_base
 
 
 def _split(combo: tuple[str, ...]) -> tuple[frozenset[str], frozenset[str]]:
@@ -523,7 +512,6 @@ def _run(code: SosCode, data_dir: Path) -> int:
     per_pair: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     seasons_report: dict[int, dict[str, Any]] = {}
     effects: dict[str, dict[str, list[Any]]] = defaultdict(dict)
-    broken_all: dict[str, str] = {}
     for season in SEASONS:
         if season not in snapshots:
             continue
@@ -535,9 +523,7 @@ def _run(code: SosCode, data_dir: Path) -> int:
         theirs = theirs_frame(season, audit, code_map)
         if list(theirs.columns[: len(log_columns)]) != log_columns:
             audit.fail("game-log columns", f"{season} columns differ from {SEASONS[0]}'s")
-        broken = one_team_games(pbp)
-        broken_all.update(broken)
-        frames = SeasonFrames(season, pbp, theirs, broken)
+        frames = SeasonFrames(season, pbp, theirs)
         base_ours = frames.ours(frozenset())
         if season == SEASONS[0]:
             before = len(audit.failures)
@@ -580,12 +566,7 @@ def _run(code: SosCode, data_dir: Path) -> int:
             "keys": keys,
             "coverage": coverage,
             "repaired_games": snapshot_report.pop("repaired_games"),
-            "one_team_games": broken,
-            "uncounted_situational_plays": uncounted_situational_plays(pbp),
             "wiped_out_plays": wiped_out_plays(pbp),
-            "unflagged_no_plays": unflagged_no_plays(pbp),
-            "carries_without_rush_attempt": carries_without_rush_attempt(pbp),
-            "carries_from_rush_attempts": carries_from_rush_attempts(pbp),
             "pairs": season_pairs,
         }
 
@@ -611,7 +592,6 @@ def _run(code: SosCode, data_dir: Path) -> int:
         "repaired_games": sorted(
             game for report in seasons_report.values() for game in report["repaired_games"]
         ),
-        "one_team_games": dict(sorted(broken_all.items())),
         "game_log_sources": {
             column: {"source": sources[column].source, "via": sources[column].via}
             for column in log_columns
@@ -649,13 +629,8 @@ def _describe(record: dict[str, Any]) -> str:
     )
 
 
-# Per-season counts summed into the ``wiped_out_runs`` cause for the carry decision.
-CARRY_DIAGNOSTICS = (
-    "wiped_out_plays",
-    "unflagged_no_plays",
-    "carries_without_rush_attempt",
-    "carries_from_rush_attempts",
-)
+# Per-season counts summed into the ``wiped_out_run_epa`` cause: the plays a penalty wiped out.
+WIPED_OUT_DIAGNOSTICS = ("wiped_out_plays",)
 
 
 def _season_sums(seasons: dict[int, dict[str, Any]], name: str) -> dict[str, float]:
@@ -705,16 +680,8 @@ def summarize_causes(
             ]
             entry.update(games=len(games), team_games=2 * len(games), listed=sorted(games))
             entry["seasons"] = sorted({int(g[:4]) for g in games})
-        if cause_id == "every_play_type":
-            by_type: dict[str, dict[str, Any]] = {}
-            for season, report in sorted(seasons.items()):
-                for play_type, plays in report["uncounted_situational_plays"].items():
-                    entry_type = by_type.setdefault(play_type, {"plays": 0, "seasons": []})
-                    entry_type["plays"] += plays
-                    entry_type["seasons"].append(season)
-            entry["flagged_plays_left_out_here"] = dict(sorted(by_type.items()))
-        if cause_id == "wiped_out_runs":
-            entry.update((name, _season_sums(seasons, name)) for name in CARRY_DIAGNOSTICS)
+        if cause_id == "wiped_out_run_epa":
+            entry.update((name, _season_sums(seasons, name)) for name in WIPED_OUT_DIAGNOSTICS)
         if cause_id == "rams_written_la":
             rekeyed = [k for s in seasons.values() for k in s["keys"]["rekeyed_rams"]]
             entry.update(

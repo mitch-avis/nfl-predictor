@@ -9,11 +9,13 @@
 # `git show`); `expect: absent` means no line may match.
 #
 # Pair fields: `ours` is arithmetic over columns of this repository's two play-by-play aggregates
-# (aggregate_pbp_team_game_stats and aggregate_pbp_team_box_score_stats, joined per team-game);
-# `theirs` is arithmetic over columns of its {season}_team_game_logs.parquet. `kind` decides the
-# comparison: `count` must be equal, `sum` and `rate` within the tolerance, and `count_from_rate`
-# (a count rebuilt from a rate it publishes times the rate's own published denominator) within
-# the tolerance. `null_as_zero` reads a null rebuilt count as zero (a rate over no plays is null).
+# (aggregate_pbp_team_game_stats and aggregate_pbp_team_box_score_stats, joined per team-game, on
+# the play-by-play as the ETL reads and repairs it); `theirs` is arithmetic over columns of its
+# {season}_team_game_logs.parquet. `kind` decides the comparison: `count` must be equal, `sum` and
+# `rate` within the tolerance, and `count_from_rate` (a count rebuilt from a rate it publishes
+# times the rate's own published denominator) within the tolerance. `null_as_zero` reads a null
+# rebuilt count as zero (a rate over no plays is null). A pair that names no cause must match in
+# every team-game.
 #
 # A cause's `effects` names more columns (this repository's for a play-by-play adjustment, its own
 # for an undone repair) on which parity.py reports the adjustment's own effect, beside its pairs.
@@ -29,50 +31,50 @@ pairs:
     ours: offensive_snaps
     theirs: offensive_snaps
     kind: count
-    causes: [scramble_dropbacks]
+    causes: []
   - id: defensive_snaps
     ours: defensive_snaps
     theirs: defensive_snaps
     kind: count
-    causes: [scramble_dropbacks]
+    causes: []
   - id: dropbacks
     ours: dropbacks
     theirs: dropbacks
     kind: count
-    causes: [scramble_dropbacks, two_point_tries]
+    causes: [two_point_tries]
   - id: pass_epa_sum
     ours: pass_epa_sum
     theirs: epa_per_dropback * dropbacks
     kind: sum
     null_as_zero: true
-    causes: [scramble_dropbacks, two_point_tries]
+    causes: [two_point_tries]
   - id: pass_success_count
     ours: pass_success_count
     theirs: pass_success_rate * dropbacks
     kind: count_from_rate
     null_as_zero: true
-    causes: [scramble_dropbacks, two_point_tries]
+    causes: [two_point_tries]
   - id: scrimmage_epa_sum
     ours: pass_epa_sum + rush_epa_sum
     theirs: offensive_epa
     kind: sum
-    causes: [scramble_dropbacks, scrambles_coded_as_runs, dropback_and_carry, two_point_tries, kneels_and_spikes]
+    causes: [unflagged_rush_attempt_epa, two_point_tries, kneels_and_spikes, wiped_out_run_epa]
   - id: designed_carries
     ours: carries
     theirs: designed_carries
     kind: count
-    causes: [wiped_out_runs, unflagged_rush_attempts, scrambles_coded_as_runs, spike_rush_attempts]
+    causes: []
   - id: rush_success_count
     ours: rush_success_count
     theirs: rush_success_rate * designed_carries
     kind: count_from_rate
     null_as_zero: true
-    causes: [wiped_out_runs, unflagged_rush_attempts, scrambles_coded_as_runs, spike_rush_attempts]
+    causes: []
   - id: early_down_pass_rate
     ours: early_down_passes / early_down_plays
     theirs: early_down_pass_rate
     kind: rate
-    causes: [scramble_dropbacks, two_point_tries, null_downs]
+    causes: [two_point_tries, null_downs]
   - id: st_epa
     ours: st_epa_for
     theirs: st_epa
@@ -120,32 +122,32 @@ pairs:
     ours: third_down_conversions
     theirs: third_down_conversions
     kind: count
-    causes: [every_play_type]
+    causes: []
   - id: third_down_attempts
     ours: third_down_attempts
     theirs: third_down_attempts
     kind: count
-    causes: [every_play_type, both_conversion_flags]
+    causes: []
   - id: fourth_down_conversions
     ours: fourth_down_conversions
     theirs: fourth_down_conversions
     kind: count
-    causes: [every_play_type]
+    causes: []
   - id: fourth_down_attempts
     ours: fourth_down_attempts
     theirs: fourth_down_attempts
     kind: count
-    causes: [every_play_type, both_conversion_flags]
+    causes: []
   - id: two_point_attempts
     ours: two_point_attempts
     theirs: two_pt_attempts
     kind: count
-    causes: [every_play_type]
+    causes: []
   - id: two_point_successes
     ours: two_point_successes
     theirs: two_pt_conversions
     kind: count
-    causes: [every_play_type]
+    causes: []
   - id: two_point_conversions_box_score
     ours: 2pt_conversions
     theirs: two_pt_conversions
@@ -165,81 +167,44 @@ pairs:
     ours: penalties
     theirs: penalties
     kind: count
-    causes: [jacksonville_player_teams]
+    causes: []
   - id: penalty_yards
     ours: penalty_yards
     theirs: penalty_yards
     kind: sum
-    causes: [jacksonville_player_teams]
+    causes: []
 
+# Every cause below explains team-games or is a check the report runs (team codes, coverage, the
+# snapshot). The causes the step-6 integration left without a team-game are gone; the run that
+# showed it is logged in decisions/phase1_refresh.md.
 causes:
-  scramble_dropbacks:
-    name: Pre-2006 scrambles counted as dropbacks
+  unflagged_rush_attempt_epa:
+    name: Rush attempts nflverse files without the run flag, in scrimmage EPA
     there: >-
-      dropback_expr counts a run play flagged qb_scramble as a dropback, so it is also a scrimmage
-      snap; nflverse leaves qb_dropback at 0 on most scrambles before 2006.
+      A rush attempt without the run flag is a designed run (designed_carries) but no scrimmage
+      snap (scrimmage_snap_expr needs the run flag), so its EPA is not in offensive_epa.
     here: >-
-      A dropback and a scrimmage snap need qb_dropback, rush, qb_kneel or qb_spike; a pre-2006
-      scramble coded with none of them is in no team-game count here.
+      It is a carry, as there, so its EPA is in rush_epa_sum; like there, it is no offensive snap
+      (pbp.py, "a rush attempt nflverse files without rush is a carry but not an offensive snap").
     adjustment: >-
-      Set qb_dropback to 1 on run plays flagged qb_scramble, then re-aggregate. This repository's
-      cache leaves qb_scramble out, so the flag comes from the snapshot of the play-by-play the
-      other repository read, attached row by row after the snapshot is checked equal to the cache.
-    evidence:
-      - {repo: sos, path: nfl_sos_ratings/pbp_expressions.py, pattern: '_flag_expr\(columns, "qb_scramble"\) & \(pl\.col\("play_type"\) == "run"\)'}
-      - {repo: sos, path: nfl_sos_ratings/pbp_expressions.py, pattern: 'return _flag_expr\(columns, "qb_dropback"\) \| scramble'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'flag_expr\(columns, "qb_dropback"\)$'}
-      - {repo: here, path: src/nfl_predictor/constants.py, pattern: '"qb_scramble"', expect: absent}
-  scrambles_coded_as_runs:
-    name: Scrambles nflverse codes as runs
-    there: >-
-      A run play flagged qb_scramble is a dropback (dropback_expr) and a scramble, so not a
-      designed run, even when nflverse also sets its rush flag.
-    here: A play with the rush flag is a carry, its EPA in rush_epa_sum, whatever qb_scramble says.
-    adjustment: >-
-      Clear the rush flag on plays flagged both qb_scramble and rush, then re-aggregate (with the
-      scramble rule they become dropbacks).
+      Clear rush_attempt on this repository's carries that lack the run flag, so they leave the
+      carries, then re-aggregate (applied before the other adjustments add plays to the carries).
     effects: [rush_epa_sum]
-    evidence:
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: 'is_designed_run = is_carry & ~is_scramble & ~is_kneel'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'rush = scrimmage & \(flag_expr\(columns, "rush"\) > 0\) & ~is_kneel_or_spike & ~is_two_point'}
-  dropback_and_carry:
-    name: A play flagged both a dropback and a run
-    there: >-
-      Scrimmage EPA counts every snap once. Its designed-run rule does not exclude dropbacks, so
-      the cause is judged on scrimmage EPA only; the one such play in the cache (2004_05_BUF_NYJ)
-      is not a designed run there because it is also a flagged scramble.
-    here: >-
-      The dropback and carry conditions are independent, so a play with qb_dropback and rush both
-      set is a dropback and a carry, its EPA in both pass_epa_sum and rush_epa_sum.
-    adjustment: >-
-      Clear the rush flag on plays the cache flags both qb_dropback and rush, then re-aggregate
-      (applied before the scramble rule sets qb_dropback).
-    effects: [rush_epa_sum]
-    evidence:
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'rush = scrimmage & \(flag_expr\(columns, "rush"\) > 0\) & ~is_kneel_or_spike & ~is_two_point'}
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '\.filter\(scrimmage\)$'}
-  spike_rush_attempts:
-    name: A spike also recorded as a rush attempt
-    there: >-
-      A rush attempt that is neither a scramble nor a kneel-down is a designed run; qb_spike does
-      not take it out.
-    here: A spike is never a carry (is_kneel_or_spike), whatever its rush-attempt flag.
-    adjustment: >-
-      On plays flagged both qb_spike and rush_attempt, clear qb_spike and set the rush flag, then
-      re-aggregate.
     evidence:
       - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: 'is_carry = is_rush_attempt & ~is_two_point'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'is_kneel_or_spike = \(flag_expr\(columns, "qb_kneel"\) \+ flag_expr\(columns, "qb_spike"\)\) > 0'}
+      - {repo: sos, path: nfl_sos_ratings/pbp_expressions.py, pattern: '\| _flag_expr\(columns, "rush"\)'}
+      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '^        \(flag_expr\(columns, "rush_attempt"\) > 0\)$'}
   two_point_tries:
     name: Two-point tries in dropbacks and their EPA
-    there: dropback_expr has no two-point exclusion, so a two-point pass is a dropback.
+    there: >-
+      dropback_expr has no two-point exclusion, so a two-point pass is a dropback and every
+      two-point try a scrimmage snap.
     here: >-
       _play_conditions leaves two-point tries out of dropbacks and carries ("untimed conversion
-      attempts rather than scrimmage downs").
+      attempts rather than scrimmage downs"), kept on purpose in phase 1 (DECISIONS.md).
     adjustment: Set two_point_attempt to 0, then re-aggregate.
     evidence:
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'scrimmage & \(flag_expr\(columns, "qb_dropback"\) > 0\) & ~is_kneel_or_spike & ~is_two_point'}
+      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'dropback = scrimmage & dropback_flag & ~is_kneel_or_spike & ~is_two_point'}
       - {repo: sos, path: nfl_sos_ratings/pbp_expressions.py, pattern: 'two_point', expect: absent}
   kneels_and_spikes:
     name: Kneel-downs and spikes in scrimmage EPA
@@ -247,43 +212,34 @@ causes:
       offensive_epa sums EPA over every scrimmage snap, kneel-downs and spikes included (its open
       question whether they should leave the team ratings).
     here: >-
-      pass_epa_sum and rush_epa_sum leave kneels and spikes out, so their sum is scrimmage EPA
-      without them.
+      pass_epa_sum and rush_epa_sum leave kneel-downs out, and spikes unless nflverse files one as
+      a rush attempt, so their sum is scrimmage EPA without them.
     adjustment: >-
-      Count a kneel as a carry and a spike as a dropback (clearing the kneel and spike flags), then
-      re-aggregate.
+      Count a kneel-down as a designed run (run and rush-attempt flags set) and a spike as a
+      dropback, clearing both flags, then re-aggregate.
     effects: [pass_epa_sum, rush_epa_sum]
     evidence:
       - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '\.filter\(scrimmage\)$'}
       - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '\.alias\("offensive_epa"\),'}
       - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'is_kneel_or_spike = \(flag_expr\(columns, "qb_kneel"\) \+ flag_expr\(columns, "qb_spike"\)\) > 0'}
-  wiped_out_runs:
-    name: Runs a penalty wiped out
+      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '& ~\(flag_expr\(columns, "qb_kneel"\) > 0\)'}
+  wiped_out_run_epa:
+    name: Runs a penalty wiped out, in scrimmage EPA
     there: >-
-      designed_carries start from rush attempts (rush_attempt, which a penalty-wiped run does not
-      carry): "nflverse keeps the scramble and run flags on plays a penalty wiped out, so the split
-      starts from rush attempts".
+      A run a penalty wiped out keeps the run flag (rush 1, rush_attempt 0), so it is a scrimmage
+      snap and its EPA is in offensive_epa; it is no designed run.
     here: >-
-      carries use the rush flag, which nflverse leaves set on a run a penalty wiped out (rush 1,
-      rush_attempt 0), so they and their EPA and successes include those plays.
-    adjustment: Clear the rush flag on plays with rush 1 and rush_attempt 0, then re-aggregate.
+      It stays an offensive snap but is no carry, since carries start from rush attempts, so its
+      EPA is in neither pass_epa_sum nor rush_epa_sum; kept on purpose when carries took the
+      source's designed-run rule ("penalty-wiped runs leave the rush sums but stay snaps",
+      DECISIONS.md, 0.54.0).
+    adjustment: Set rush_attempt to 1 on plays with rush 1 and rush_attempt 0, then re-aggregate.
     effects: [rush_epa_sum]
     evidence:
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: 'is_designed_run = is_carry & ~is_scramble & ~is_kneel'}
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: 'nflverse keeps the scramble and run flags on plays a penalty wiped out'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'rush = scrimmage & \(flag_expr\(columns, "rush"\) > 0\) & ~is_kneel_or_spike & ~is_two_point'}
-  unflagged_rush_attempts:
-    name: Rush attempts nflverse does not flag as runs
-    there: >-
-      A rush attempt that is neither a scramble (qb_scramble) nor a kneel-down is a designed run,
-      whatever its rush flag.
-    here: A carry needs the rush flag, so a rush attempt with rush 0 that is not a scramble is left out.
-    adjustment: >-
-      Set the rush flag on rush attempts with rush 0 that are neither flagged qb_scramble nor
-      kneel-downs, then re-aggregate.
-    evidence:
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: 'is_scramble = is_carry & \(value_expr\(columns, "qb_scramble"\) > 0\)'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'rush = scrimmage & \(flag_expr\(columns, "rush"\) > 0\) & ~is_kneel_or_spike & ~is_two_point'}
+      - {repo: sos, path: nfl_sos_ratings/pbp_expressions.py, pattern: '\| _flag_expr\(columns, "rush"\)'}
+      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '\.alias\("offensive_epa"\),'}
+      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '\| \(flag_expr\(columns, "rush"\) > 0\)'}
+      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '^        \(flag_expr\(columns, "rush_attempt"\) > 0\)$'}
   null_downs:
     name: Plays without a down counted as early downs
     there: >-
@@ -294,33 +250,12 @@ causes:
     evidence:
       - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: 'down = value_expr\(columns, "down", 0\)'}
       - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '"early_down": \(down <= EARLY_DOWN_MAX\)\.fill_null\(value=False\)'}
-  every_play_type:
-    name: Third-down, fourth-down and two-point outcomes on plays of every type
-    there: The conversion, failure and two-point counts read their flags on every play.
-    here: >-
-      _situational_aggregations counts them only on run, pass, kneel and spike plays, so a play
-      with another or no play type is left out.
-    adjustment: Give every play outside those four types the type "run", then re-aggregate.
-    evidence:
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '^SITUATIONAL_PLAY_TYPES = \("run", "pass", "qb_kneel", "qb_spike"\)'}
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '_count\(value_expr\(columns, "third_down_converted"\) > 0, "third_down_conversions"\)'}
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '_count\(is_two_point, "two_pt_attempts"\)'}
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '_count\(value_expr\(columns, "fourth_down_failed"\) > 0, "turnovers_on_downs"\)'}
-  both_conversion_flags:
-    name: Downs flagged both converted and failed
-    there: A third- or fourth-down attempt is a play with either flag set, counted once.
-    here: >-
-      Attempts are conversions plus failures, so a play nflverse flags both converted and failed
-      counts twice.
-    adjustment: Clear the failed flag on plays flagged both ways, then re-aggregate.
-    evidence:
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '"third_down_attempts",$'}
-      - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '\+ value_expr\(columns, "third_down_failed"\)$'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: '\(pl\.col\("third_down_conversions"\) \+ pl\.col\("third_down_fails"\)\)\.alias\($'}
   penalty_first_downs:
     name: First downs by penalty
     there: first_downs counts every play with first_down set, first downs by penalty included.
-    here: The box score's first_downs is first_down_pass plus first_down_rush.
+    here: >-
+      The box score's first_downs is first_down_pass plus first_down_rush, kept on purpose in
+      phase 1 (DECISIONS.md).
     adjustment: Count first_down on every play (first_down_pass := first_down, first_down_rush := 0).
     evidence:
       - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '_count\(value_expr\(columns, "first_down"\) > 0, "first_downs"\)'}
@@ -331,32 +266,19 @@ causes:
     here: >-
       The box score's fumbles counts every play with fumble set that is not a special-teams play,
       so a fumble on a play that is neither (no play type, an aborted snap) counts, and a fumble on
-      a fake kick does not.
+      a fake kick does not; kept on purpose in phase 1 (DECISIONS.md).
     adjustment: >-
       Treat every play that is not a scrimmage snap by its definition (run plays flagged
       qb_scramble included) as a special-teams play, then re-aggregate.
     evidence:
       - {repo: sos, path: nfl_sos_ratings/team_stats_expanded.py, pattern: '_count\(\(value_expr\(columns, "fumble"\) > 0\) & scrimmage, "fumbles"\)'}
       - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'aggs\.append\(count_where\(m\.flagged\("fumble"\) & ~m\.is_special, "fumbles"\)\)'}
-  jacksonville_player_teams:
-    name: Jacksonville's 2001-2002 home games, player teams repaired there
-    there: >-
-      player_team_repair rebuilds every player team column (penalty_team, td_team and others) of a
-      game whose player team values name one team, from the season roster and the play text.
-    here: >-
-      The cached penalty_team names the team nflverse wrote, the visitor for every penalty in those
-      games.
-    adjustment: >-
-      Undo the repair on its side: in a game whose cached penalty_team and td_team values all name
-      one team, credit both teams' penalties and penalty yards to that team and none to the other.
-    evidence:
-      - {repo: sos, path: nfl_sos_ratings/player_team_repair.py, pattern: '"penalty_team": "penalty_player_id",'}
-      - {repo: sos, path: nfl_sos_ratings/data_loader.py, pattern: 'return repair_pbp_player_teams\(df, games, game_player_teams\(games, _load_roster_teams\(season\)\)\)'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/pbp.py, pattern: 'pl\.col\("penalty_team"\)\.cast\(pl\.String\)\.alias\("team_abbr"\)'}
   rams_written_la:
     name: The Rams written LA
     there: _normalize_pbp_teams maps LA to LAR in every play-by-play team column and yard line.
-    here: The play-by-play cache maps LA to LAR in posteam, defteam, home_team, away_team, td_team and penalty_team.
+    here: >-
+      The play-by-play cache maps LA to LAR in every team-code column of constants.PBP_TEAM_COLUMNS
+      (yard-line text stays as nflverse writes it).
     adjustment: >-
       Every comparison joins on canonical team codes, so a team-game one side writes LA is compared
       like any other; a raw key present on one side only that lines up in canonical codes is
@@ -364,7 +286,7 @@ causes:
     evidence:
       - {repo: sos, path: nfl_sos_ratings/config.py, pattern: '"LA": "LAR",'}
       - {repo: here, path: src/nfl_predictor/constants.py, pattern: '"aliases": \["LAR", "LA", "ram", "RAM", "STL"\],'}
-      - {repo: here, path: src/nfl_predictor/utils/polars/loaders.py, pattern: 'for col in \("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team"\):'}
+      - {repo: here, path: src/nfl_predictor/utils/polars/loaders.py, pattern: 'for col in constants\.PBP_TEAM_COLUMNS:'}
   games_without_play_by_play:
     name: Regular-season games without play-by-play
     there: missing_pbp_games.py lists the games nflverse has no play-by-play rows for; no game-log rows exist for them.
@@ -382,10 +304,8 @@ causes:
     adjustment: >-
       Shown play by play: each season's snapshot file (the play-by-play it read), prepared as this
       repository prepares its cache (which keeps the rows in order), must equal the cache row by
-      row on all of its cached columns. Any difference fails the run; with none, no team-game can
-      owe a difference to the release. qb_scramble, play_id and the play text (desc) are then
-      attached by row position, which that equality makes sound; the run also fails when a play_id
-      repeats within a game, or when rows equal on every cached column (which the equality cannot
-      tell apart) differ in qb_scramble.
+      row on every cached column, play_id, qb_scramble and the play text (desc) included. Any
+      difference fails the run; with none, no team-game can owe a difference to the release.
     evidence:
-      - {repo: here, path: src/nfl_predictor/constants.py, pattern: '"play_id"', expect: absent}
+      - {repo: here, path: src/nfl_predictor/constants.py, pattern: '^    "play_id",$'}
+      - {repo: here, path: src/nfl_predictor/constants.py, pattern: '^    "qb_scramble",$'}

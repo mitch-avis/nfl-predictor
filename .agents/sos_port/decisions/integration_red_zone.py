@@ -38,6 +38,8 @@ from nfl_predictor.utils.polars import pbp
 FIRST_SEASON = 1999
 LAST_SEASON = 2025
 RED_ZONE = 20
+# The causes in the order the docstring lists them, which fixes the by-season table's columns.
+CAUSES = ("try_only", "at_the_20", "wiped_only", "other", "flag_without_snap")
 
 
 def _drives(plays: pl.DataFrame) -> pl.DataFrame:
@@ -145,7 +147,7 @@ def main() -> None:
         drives.filter(pl.col("cause").is_not_null())
         .group_by("cause")
         .agg(pl.len().alias("drives"))
-        .sort("drives", descending=True)
+        .sort(["drives", "cause"], descending=[True, False])
     )
     by_season = (
         drives.filter(pl.col("cause").is_not_null())
@@ -154,6 +156,13 @@ def main() -> None:
         .pivot(on="cause", index="season", values="drives")
         .sort("season")
         .fill_null(0)
+    )
+    by_season = by_season.select(
+        "season",
+        *(
+            pl.col(cause) if cause in by_season.columns else pl.lit(0, dtype=pl.UInt32).alias(cause)
+            for cause in CAUSES
+        ),
     )
     with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=200):
         sys.stdout.write(f"\n## Drives the definitions disagree on, by cause\n{causes}\n")

@@ -56,9 +56,9 @@ function numbers(rows: Row[], column: string): number[] {
   return rows.map((row) => row[column]).filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
 }
 
-/** Tougher for a top-10 team, Softer for a bottom-10 team, Middle otherwise. */
-function tier(rank: Row[string], leagueSize: number): string | null {
-  if (typeof rank !== 'number') return null
+/** Tougher for a top-10 team, Softer for a bottom-10 team, Middle otherwise, an opponent without a rank included. */
+function tier(rank: Row[string], leagueSize: number): string {
+  if (typeof rank !== 'number') return 'Middle'
   if (rank <= TIER_SIZE) return 'Tougher'
   if (rank > leagueSize - TIER_SIZE) return 'Softer'
   return 'Middle'

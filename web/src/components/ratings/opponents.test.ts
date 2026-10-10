@@ -73,6 +73,17 @@ describe('opponentLedger', () => {
     expect(ledger.column_metadata.opp_tier.description).toContain('top 10')
   })
 
+  it('puts an opponent without a rank in the middle tier', () => {
+    // Arrange
+    const logs: MetricTable = { ...RANKED, rows: [...RANKED.rows, { week: 5, opponent_team: 'LV', win_value: 1, opp_team_rank: null }] }
+
+    // Act
+    const ledger = opponentLedger(logs, 32)
+
+    // Assert
+    expect(ledger.rows.find((row) => row.opponent_team === 'LV')?.opp_tier).toBe('Middle')
+  })
+
   it('leaves the tier out when the league size is not known', () => {
     // Act
     const ledger = opponentLedger(RANKED, null)

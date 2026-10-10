@@ -151,6 +151,21 @@ def _drop_high_cardinality_columns(
     return df.drop(columns=dropped), dropped
 
 
+def validate_feature_groups(groups: Sequence[str]) -> None:
+    """Check that every name in ``groups`` is a feature group, before any data is read.
+
+    Raises:
+        ValueError: if any name is not a key in ``constants.FEATURE_GROUP_COLUMN_MARKERS``; the
+            message lists the unknown names and the valid ones.
+
+    """
+    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
+    unknown = sorted({group for group in groups if group not in valid_groups})
+    if unknown:
+        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
+        raise ValueError(msg)
+
+
 def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str]) -> list[str]:
     """Resolve which columns belong to the given feature groups: what disabling them removes.
 
@@ -166,18 +181,13 @@ def resolve_feature_group_columns(columns: Sequence[str], groups: Sequence[str])
 
     Raises:
         ValueError: if any requested group name is not a key in
-            ``constants.FEATURE_GROUP_COLUMN_MARKERS``.
+            ``constants.FEATURE_GROUP_COLUMN_MARKERS`` (``validate_feature_groups``).
 
     """
-    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
-    unknown = sorted({group for group in groups if group not in valid_groups})
-    if unknown:
-        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
-        raise ValueError(msg)
-
+    validate_feature_groups(groups)
     matched: set[str] = set()
     for group in groups:
-        markers = valid_groups[group]
+        markers = constants.FEATURE_GROUP_COLUMN_MARKERS[group]
         if not markers:
             continue
         for column in columns:

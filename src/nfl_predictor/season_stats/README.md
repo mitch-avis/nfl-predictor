@@ -66,7 +66,9 @@ registry and in its fixed row order (`row_order.py`): `team_game_logs`, `qb_game
 `team_per_game_stats`, `qb_per_game_stats`, `qb_opponent_profiles`, `opponent_profiles`,
 `combined`, `qb_combined`, `team_wp_bins`, and `qb_wp_bins`. The combined tables take their
 rating columns from the caller (`TEAM_RATING_INPUT_COLUMNS`, `QB_RATING_INPUT_COLUMNS`), as the
-ratings package (`nfl_predictor.ratings`) builds them.
+ratings package (`nfl_predictor.ratings`) builds them. Before kickoff the current season has a
+schedule and no game rows: `SeasonGames.played` is false, and `build_season_tables` refuses it
+rather than tabulate nothing.
 
 `published_logs.py` turns the game logs that project published back into the rows the season
 tables read. The published logs leave out each rate's hidden parts; the adapter rebuilds those the

@@ -291,8 +291,13 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
-    """Add optional stadium features to a schedule DataFrame."""
-    if "stadium_id" in df.columns and "stadium_city" not in df.columns:
+    """Add optional stadium features to a schedule DataFrame.
+
+    The columns `constants.STADIUMS` supplies (city, state, a missing name, the elevation) are
+    derived again on every load, cached frames included, so a cache written before the table
+    gained or corrected a venue gives the same values as a fresh download.
+    """
+    if "stadium_id" in df.columns:
         df = _add_stadium_location(df)
     return _add_stadium_features(df)
 

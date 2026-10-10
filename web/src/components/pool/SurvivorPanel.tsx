@@ -9,8 +9,8 @@ import { useLocalStorage } from '@/hooks/useLocalStorage'
 import { SurvivorPlans } from './SurvivorPlans'
 import { TeamPicker } from './TeamPicker'
 
-const PLANNED_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-const BEAM_WIDTHS = [16, 32, 64, 128, 256]
+/** How many weeks a plan can show as near-term picks: up to a full regular season. */
+const NEAR_TERM_WEEKS = Array.from({ length: 18 }, (_, index) => index + 1)
 
 function NumberChoice({ label, value, choices, onChange }: { label: string; value: number; choices: number[]; onChange: (value: number) => void }) {
   const id = useId()
@@ -39,8 +39,7 @@ function NumberChoice({ label, value, choices, onChange }: { label: string; valu
 export function SurvivorPanel({ season, week }: { season: number | null; week: number | null }) {
   const [used, setUsed] = useLocalStorage<string[]>(`nflp.survivor.used.${season ?? 'none'}`, [])
   const [horizon, setHorizon] = useState(4)
-  const [beam, setBeam] = useState(64)
-  const request = season !== null && week !== null ? { season, start_week: week, used_teams: used, horizon_weeks: horizon, beam_width: beam } : null
+  const request = season !== null && week !== null ? { season, start_week: week, used_teams: used, horizon_weeks: horizon } : null
   const query = useSurvivor(request)
   return (
     <div className="space-y-4">
@@ -48,14 +47,14 @@ export function SurvivorPanel({ season, week }: { season: number | null; week: n
         <CardHeader>
           <CardTitle className="text-base">Survivor plan from week {week ?? '?'}</CardTitle>
           <CardDescription>
-            One team a week, each team once; a loss or a tie ends the entry. Plans multiply the model’s win probabilities and treat the games as independent.
+            One team a week, each team once; a loss or a tie ends the entry. Each plan is the best one for its pick this week over every week with predictions,
+            multiplying the model’s win probabilities as independent games.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {query.data ? <TeamPicker teams={query.data.teams} selected={used} onChange={setUsed} /> : null}
           <div className="flex flex-wrap items-center gap-4">
-            <NumberChoice label="Weeks planned pick by pick" value={horizon} choices={PLANNED_WEEKS} onChange={setHorizon} />
-            <NumberChoice label="Search width" value={beam} choices={BEAM_WIDTHS} onChange={setBeam} />
+            <NumberChoice label="Near-term weeks" value={horizon} choices={NEAR_TERM_WEEKS} onChange={setHorizon} />
             {query.isFetching && query.isPlaceholderData ? (
               <span role="status" className="text-xs text-muted-foreground">
                 Updating…

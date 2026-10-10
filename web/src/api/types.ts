@@ -214,8 +214,8 @@ export interface SurvivorRequest {
   season: number
   start_week: number
   used_teams: string[]
+  /** How many weeks from the start week the plans show as near-term picks; every week is solved. */
   horizon_weeks: number
-  beam_width: number
 }
 
 /** One week's pick in a survivor plan; `later` marks a lookahead pick. */

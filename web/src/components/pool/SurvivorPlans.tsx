@@ -13,7 +13,7 @@ const MIN_VALUE = 0.005
 function PickChip({ pick }: { pick: SurvivorPick }) {
   return (
     <span
-      title={pick.later ? `Week ${pick.week}: a later week the lookahead filled in` : `Week ${pick.week}`}
+      title={pick.later ? `Week ${pick.week}: a later pick in the plan` : `Week ${pick.week}: a near-term pick`}
       className={cn(
         'inline-flex items-baseline gap-1 rounded-md border px-1.5 py-0.5 text-xs',
         pick.later ? 'border-dashed text-muted-foreground' : 'bg-card font-medium',
@@ -58,8 +58,8 @@ export function SurvivorPlans({ result }: { result: SurvivorOut }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Planned pick by pick: weeks {weekRanges(result.planned_weeks)}. Later weeks with predictions ({weekRanges(result.later_weeks)}) are filled in with the best use of
-        the teams left, which decides which teams to save.
+        Each plan is the best one for its pick this week over every week with predictions: near term, weeks {weekRanges(result.planned_weeks)}; later, weeks{' '}
+        {weekRanges(result.later_weeks)}, shown dashed. Saving a team for a later week is part of the same calculation.
         {result.missing_weeks.length > 0 ? (
           <>
             {' '}

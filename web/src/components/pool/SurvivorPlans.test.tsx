@@ -39,13 +39,13 @@ describe('SurvivorPlans', () => {
     expect(within(plans[0]).getByText('30.0%')).toBeInTheDocument()
   })
 
-  it('marks the picks the lookahead chose for later weeks', () => {
+  it('marks the picks for later weeks', () => {
     // Act
     renderWithProviders(<SurvivorPlans result={result} />)
 
     // Assert
     const plans = within(screen.getByRole('list', { name: 'Survivor plans' })).getAllByRole('listitem')
-    const later = within(plans[0]).getByTitle('Week 7: a later week the lookahead filled in')
+    const later = within(plans[0]).getByTitle('Week 7: a later pick in the plan')
     expect(later).toHaveTextContent('GB')
   })
 

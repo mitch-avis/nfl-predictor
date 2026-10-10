@@ -275,9 +275,8 @@ the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<se
 The list also holds every play-by-play column the ratings ported from `nfl-sos-ratings` read
 (play ids, scramble and botched-snap flags, rusher, receiver, fumble and tackle credits, game
 state, drive and series results, and the play text); the ratings' rows read the ones they need.
-Every column
-that holds a team code (`constants.PBP_TEAM_COLUMNS`) is normalized; yard-line text such as
-`LA 25` is kept as nflverse writes it. Each column keeps one type across seasons (nflverse
+Every column that holds a team code (`constants.PBP_TEAM_COLUMNS`) is normalized; yard-line text
+such as `LA 25` is kept as nflverse writes it. Each column keeps one type across seasons (nflverse
 publishes `goal_to_go` as a whole number in some seasons and a float in others; the cache stores
 floats). Before kickoff the current season has no play-by-play published at all; that is
 non-fatal, and the ETL falls back to cache or continues without it.

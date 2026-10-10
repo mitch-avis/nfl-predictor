@@ -97,9 +97,14 @@ def _loaded(tmp_path: Path, name: str, predictions: pd.DataFrame) -> run_compari
 
 def test_per_game_scores_follow_the_documented_definitions() -> None:
     """Brier, pick correctness (ties incorrect) and pool ranks match a hand calculation."""
-    games = run_comparison.per_game_scores(_predictions())
-    by_id = games.set_index("game_id")
+    # Arrange
+    predictions = _predictions()
 
+    # Act
+    games = run_comparison.per_game_scores(predictions)
+
+    # Assert
+    by_id = games.set_index("game_id")
     assert by_id.loc["g1", "brier"] == pytest.approx(0.04)
     assert by_id.loc["g2", "brier"] == pytest.approx(0.09)
     assert by_id.loc["g3", "brier"] == pytest.approx(0.36)
@@ -119,11 +124,14 @@ def test_per_game_scores_follow_the_documented_definitions() -> None:
 
 def test_identical_runs_compare_to_zero(tmp_path: Path) -> None:
     """A run against itself differs by exactly zero in every window and column."""
+    # Arrange
     candidate = _loaded(tmp_path, "a", _predictions())
     reference = _loaded(tmp_path, "b", _predictions())
 
+    # Act
     report = run_comparison.compare_runs([candidate], [reference], resamples=50)
 
+    # Assert
     for window in report["windows"].values():
         for values in window["contrast"].values():
             assert values == (0.0, 0.0, 0.0)
@@ -134,20 +142,27 @@ def test_windows_split_the_weeks_and_leave_out_the_postseason_from_weeks_3_18(
     tmp_path: Path,
 ) -> None:
     """Week 1, week 2, weeks 3-18 and all weeks count the fixture's games correctly."""
+    # Arrange
     run = _loaded(tmp_path, "a", _predictions())
+
+    # Act
     report = run_comparison.compare_runs([run], [run], resamples=10)
 
+    # Assert
     games = {label: window["games"] for label, window in report["windows"].items()}
     assert games == {"week 1": 3, "week 2": 1, "weeks 3-18": 1, "all weeks": 6}
 
 
 def test_a_better_candidate_shows_the_hand_computed_difference(tmp_path: Path) -> None:
     """Moving g3 from 0.6 to 0.4 lowers its Brier by 0.2 and makes it the only change."""
+    # Arrange
     candidate = _loaded(tmp_path, "a", _predictions({"g3": 0.4}))
     reference = _loaded(tmp_path, "b", _predictions())
 
+    # Act
     report = run_comparison.compare_runs([candidate], [reference], resamples=100)
 
+    # Assert
     week1 = report["windows"]["week 1"]["contrast"]
     assert week1["brier"][0] == pytest.approx((0.16 - 0.36) / 3)
     assert week1["correct"][0] == 0.0
@@ -156,50 +171,68 @@ def test_a_better_candidate_shows_the_hand_computed_difference(tmp_path: Path) -
 
 def test_two_seed_pairs_average_the_per_game_differences(tmp_path: Path) -> None:
     """With two pairs, the estimate is the mean of the two single-pair estimates."""
+    # Arrange
     reference = _loaded(tmp_path, "ref", _predictions())
     seed_a = _loaded(tmp_path, "a", _predictions(margin_shift=1.0))
     seed_b = _loaded(tmp_path, "b", _predictions(margin_shift=-3.0))
-
-    both = run_comparison.compare_runs([seed_a, seed_b], [reference, reference], resamples=20)
     one_a = run_comparison.compare_runs([seed_a], [reference], resamples=20)
     one_b = run_comparison.compare_runs([seed_b], [reference], resamples=20)
-
-    estimate = both["windows"]["all weeks"]["contrast"]["margin_ae"][0]
     expected = (
         one_a["windows"]["all weeks"]["contrast"]["margin_ae"][0]
         + one_b["windows"]["all weeks"]["contrast"]["margin_ae"][0]
     ) / 2
+
+    # Act
+    both = run_comparison.compare_runs([seed_a, seed_b], [reference, reference], resamples=20)
+
+    # Assert
+    estimate = both["windows"]["all weeks"]["contrast"]["margin_ae"][0]
     assert estimate == pytest.approx(expected)
 
 
 def test_runs_over_different_games_are_rejected(tmp_path: Path) -> None:
     """A paired comparison needs the same games on both sides."""
+    # Arrange
     candidate = _loaded(tmp_path, "a", _predictions())
     reference = _loaded(tmp_path, "b", _predictions().iloc[:-1])
 
+    # Act & Assert
     with pytest.raises(ValueError, match="different games"):
         run_comparison.compare_runs([candidate], [reference])
+
+
+def test_a_candidate_without_its_reference_is_rejected(tmp_path: Path) -> None:
+    """A paired comparison needs one reference run per candidate run."""
+    # Arrange
+    candidate = _loaded(tmp_path, "a", _predictions())
+    reference = _loaded(tmp_path, "b", _predictions().iloc[:-1])
+
+    # Act & Assert
     with pytest.raises(ValueError, match="one reference run per candidate"):
         run_comparison.compare_runs([candidate, candidate], [reference])
 
 
 def test_checkpoints_without_the_probability_views_are_rejected(tmp_path: Path) -> None:
     """Old checkpoints that predate the market view cannot be compared, and say why."""
+    # Arrange
     predictions = _predictions().drop(columns=["market_home_win_prob"])
-    directory = _write_checkpoints(tmp_path / "old", predictions)
+    run = run_comparison.resolve_run(_write_checkpoints(tmp_path / "old", predictions))
 
+    # Act & Assert
     with pytest.raises(ValueError, match="market_home_win_prob"):
-        run_comparison.load_run(run_comparison.resolve_run(directory))
+        run_comparison.load_run(run)
 
 
 def test_a_path_that_is_not_a_run_is_rejected(tmp_path: Path) -> None:
     """Neither a run directory nor a checkpoint directory is an error, not an empty run."""
+    # Act & Assert
     with pytest.raises(ValueError, match="neither"):
         run_comparison.resolve_run(tmp_path)
 
 
 def test_run_directories_bring_provenance_and_config_differences(tmp_path: Path) -> None:
     """A run directory resolves to its checkpoints and reports the settings that differ."""
+    # Arrange
     candidate = run_comparison.load_run(
         run_comparison.resolve_run(_write_run(tmp_path, "cand", _predictions(), seed=7))
     )
@@ -207,8 +240,10 @@ def test_run_directories_bring_provenance_and_config_differences(tmp_path: Path)
         run_comparison.resolve_run(_write_run(tmp_path, "ref", _predictions(), seed=42))
     )
 
+    # Act
     report = run_comparison.compare_runs([candidate], [reference], resamples=10)
 
+    # Assert
     assert report["config_differences"] == {"cand vs ref": {"random_seed": [7, 42]}}
     provenance = report["provenance"]["cand"]
     assert provenance["folds"] == 4
@@ -219,11 +254,13 @@ def test_run_directories_bring_provenance_and_config_differences(tmp_path: Path)
 
 def test_the_command_writes_its_reports_and_exits_zero(tmp_path: Path) -> None:
     """``nfl-predictor compare`` prints the tables and writes JSON and Markdown copies."""
+    # Arrange
     candidate = _write_run(tmp_path, "cand", _predictions({"g3": 0.4}), seed=42)
     reference = _write_run(tmp_path, "ref", _predictions(), seed=42)
     out_json = tmp_path / "out" / "compare.json"
     out_md = tmp_path / "out" / "compare.md"
 
+    # Act
     code = front_door.main(
         [
             "compare",
@@ -240,6 +277,7 @@ def test_the_command_writes_its_reports_and_exits_zero(tmp_path: Path) -> None:
         ]
     )
 
+    # Assert
     assert code == 0
     report = json.loads(out_json.read_text(encoding="utf-8"))
     assert report["resamples"] == 25
@@ -251,9 +289,14 @@ def test_the_command_writes_its_reports_and_exits_zero(tmp_path: Path) -> None:
 
 def test_the_command_exits_two_when_the_runs_cannot_be_compared(tmp_path: Path) -> None:
     """An unusable input is reported and the exit code is 2."""
+    # Arrange
     reference = _write_run(tmp_path, "ref", _predictions(), seed=42)
 
-    assert command.main(["--candidate", str(tmp_path), "--reference", str(reference)]) == 2
+    # Act
+    code = command.main(["--candidate", str(tmp_path), "--reference", str(reference)])
+
+    # Assert
+    assert code == 2
 
 
 # Two seasons with several games per week, so every season and week bucket has games and the
@@ -333,8 +376,13 @@ def test_the_existing_comparison_report_is_unchanged(tmp_path: Path) -> None:
     may add sections after it and keys beside it, but every existing line and value is kept
     byte for byte, so the command still reproduces earlier reviewed rescores.
     """
+    # Arrange
     report = _season_comparison(tmp_path)
+
+    # Act
     lines = [_without_tmp(line, tmp_path) for line in run_comparison.format_report(report)]
+
+    # Assert
     payload = json.loads(_without_tmp(json.dumps(report, indent=1, default=str), tmp_path))
     markdown_snapshot = SNAPSHOT_DIR / "compare_report.txt"
     json_snapshot = SNAPSHOT_DIR / "compare_report.json"
@@ -343,7 +391,6 @@ def test_the_existing_comparison_report_is_unchanged(tmp_path: Path) -> None:
         markdown_snapshot.write_text("\n".join(lines) + "\n", encoding="utf-8")
         json_snapshot.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
         return
-
     expected_lines = markdown_snapshot.read_text(encoding="utf-8").splitlines()
     assert lines[: len(expected_lines)] == expected_lines
     _assert_contains("report", payload, json.loads(json_snapshot.read_text(encoding="utf-8")))
@@ -351,8 +398,13 @@ def test_the_existing_comparison_report_is_unchanged(tmp_path: Path) -> None:
 
 def test_the_stability_view_splits_every_window_by_season() -> None:
     """Each window has an all-seasons row and one row per season with games in it."""
-    stability = run_comparison.stability_report(_season_predictions(), resamples=50)
+    # Arrange
+    predictions = _season_predictions()
 
+    # Act
+    stability = run_comparison.stability_report(predictions, resamples=50)
+
+    # Assert
     games = {
         label: {season: row["games"] for season, row in rows.items()}
         for label, rows in stability["windows"].items()
@@ -369,8 +421,13 @@ def test_the_stability_view_splits_every_window_by_season() -> None:
 
 def test_a_season_row_matches_a_hand_calculation() -> None:
     """Season 2023, week 1: Brier, pick accuracy, pool points and the market contrast."""
-    stability = run_comparison.stability_report(_season_predictions(), resamples=50)
+    # Arrange
+    predictions = _season_predictions()
 
+    # Act
+    stability = run_comparison.stability_report(predictions, resamples=50)
+
+    # Assert
     row = stability["windows"]["week 1"]["2023"]
     # p 0.70/0.40/0.55 against home results 1/1/0.
     assert row["brier"] == pytest.approx((0.09 + 0.36 + 0.3025) / 3)
@@ -389,10 +446,14 @@ def test_a_season_row_matches_a_hand_calculation() -> None:
 
 def test_the_all_seasons_row_is_the_comparison_window_row(tmp_path: Path) -> None:
     """One definition: a run's stability rows equal what ``compare`` reports for that run."""
+    # Arrange
     predictions = _season_predictions(market=0.55)
-    stability = run_comparison.stability_report(predictions, resamples=200)
     report = _season_comparison(tmp_path)
 
+    # Act
+    stability = run_comparison.stability_report(predictions, resamples=200)
+
+    # Assert
     for label, window in report["windows"].items():
         all_seasons = dict(stability["windows"][label]["all seasons"])
         assert all_seasons.pop("games") == window["games"]
@@ -405,8 +466,10 @@ def test_the_all_seasons_row_is_the_comparison_window_row(tmp_path: Path) -> Non
 
 def test_the_comparison_adds_per_season_rows_for_runs_and_the_contrast(tmp_path: Path) -> None:
     """Every window gets per-season run rows and a per-season paired contrast."""
+    # Act
     report = _season_comparison(tmp_path)
 
+    # Assert
     week1 = report["windows"]["week 1"]["seasons"]
     assert sorted(week1) == ["2023", "2024"]
     assert week1["2023"]["games"] == 3
@@ -421,8 +484,10 @@ def test_the_comparison_adds_per_season_rows_for_runs_and_the_contrast(tmp_path:
 
 def test_a_single_week_has_no_pool_interval(tmp_path: Path) -> None:
     """Pool points resample weeks, so one week alone gets an estimate and no interval."""
+    # Act
     report = _season_comparison(tmp_path)
 
+    # Assert
     season = report["windows"]["week 1"]["seasons"]["2023"]
     estimate, low, high = season["contrast"]["pool"]
     assert (low, high) == (None, None)
@@ -438,10 +503,13 @@ def _one_game_season(predictions: pd.DataFrame) -> pd.DataFrame:
 
 def test_a_single_game_row_has_no_market_interval() -> None:
     """A run's season row with one game gets the det - market estimate and no interval."""
-    stability = run_comparison.stability_report(
-        _one_game_season(_season_predictions()), resamples=50
-    )
+    # Arrange
+    predictions = _one_game_season(_season_predictions())
 
+    # Act
+    stability = run_comparison.stability_report(predictions, resamples=50)
+
+    # Assert
     row = stability["windows"]["week 1"]["2024"]
     assert row["games"] == 1
     estimate, low, high = row["det_minus_market_brier"]
@@ -450,31 +518,50 @@ def test_a_single_game_row_has_no_market_interval() -> None:
     assert None not in stability["windows"]["week 1"]["2023"]["det_minus_market_brier"]
 
 
-def test_a_single_game_contrast_has_no_intervals(tmp_path: Path) -> None:
-    """A paired season row with one game keeps each estimate and prints ``[n/a]``."""
+def _one_game_season_comparison(tmp_path: Path) -> dict[str, Any]:
+    """Compare the shifted candidate with the reference with 2024's week 1 down to one game."""
     candidate = _loaded(
         tmp_path, "cand", _one_game_season(_season_predictions(shift=0.05, market=0.55))
     )
     reference = _loaded(tmp_path, "ref", _one_game_season(_season_predictions(market=0.55)))
-    report = run_comparison.compare_runs([candidate], [reference], resamples=50)
+    return run_comparison.compare_runs([candidate], [reference], resamples=50)
 
+
+def test_a_single_game_contrast_has_no_intervals(tmp_path: Path) -> None:
+    """A paired season row with one game keeps each estimate and has no interval."""
+    # Act
+    report = _one_game_season_comparison(tmp_path)
+
+    # Assert
     contrast = report["windows"]["week 1"]["seasons"]["2024"]["contrast"]
     for column in run_comparison.LOSS_COLUMNS:
         assert contrast[column][1:] == (None, None), column
     assert contrast["brier"][0] == pytest.approx(0.33**2 - 0.38**2)
-    row = next(
-        line
-        for line in run_comparison.format_report(report)
-        if line.startswith("| candidate - reference | 2024 | 1 | ")
-    )
+
+
+def test_a_single_game_contrast_prints_its_estimate_with_no_interval(tmp_path: Path) -> None:
+    """A paired season row with one game prints ``[n/a]`` for its interval."""
+    # Arrange
+    report = _one_game_season_comparison(tmp_path)
+
+    # Act
+    lines = run_comparison.format_report(report)
+
+    # Assert
+    row = next(line for line in lines if line.startswith("| candidate - reference | 2024 | 1 | "))
     brier_cell = row.split(" | ")[3]
     assert brier_cell == f"{0.33**2 - 0.38**2:+.5f} [n/a]"
 
 
 def test_the_comparison_report_ends_with_the_season_tables(tmp_path: Path) -> None:
     """The Markdown gains a stability section with run rows and contrast rows per season."""
-    lines = run_comparison.format_report(_season_comparison(tmp_path))
+    # Arrange
+    report = _season_comparison(tmp_path)
 
+    # Act
+    lines = run_comparison.format_report(report)
+
+    # Assert
     start = lines.index("## Stability by season")
     section = lines[start:]
     assert "### week 1" in section
@@ -486,10 +573,13 @@ def test_the_comparison_report_ends_with_the_season_tables(tmp_path: Path) -> No
 
 def test_the_stability_table_formats_one_row_per_season() -> None:
     """A single run's view prints an all-seasons row, then each season, per window."""
+    # Arrange
     stability = run_comparison.stability_report(_season_predictions(), resamples=50)
 
+    # Act
     lines = run_comparison.format_stability(stability)
 
+    # Assert
     assert lines[0] == "## Stability by season"
     week1 = lines.index("### week 1")
     assert lines[week1 + 2].startswith("| season | games | det Brier |")
@@ -537,14 +627,16 @@ def test_the_command_output_without_a_market_run_is_unchanged(tmp_path: Path) ->
     Markdown line byte for byte, and the JSON with exactly the same keys (floats to the
     snapshot tolerance), so no key is added when each run's own market rows are used.
     """
+    # Act
     code, lines, payload = _command_outputs(tmp_path)
+
+    # Assert
     markdown_snapshot = SNAPSHOT_DIR / "compare_command.txt"
     json_snapshot = SNAPSHOT_DIR / "compare_command.json"
     if snapshots.updating():
         markdown_snapshot.write_text("\n".join(lines) + "\n", encoding="utf-8")
         json_snapshot.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
         return
-
     assert code == 0
     assert lines == markdown_snapshot.read_text(encoding="utf-8").splitlines()
     snapshots.assert_json_match(
@@ -595,8 +687,7 @@ def test_a_market_run_supplies_every_runs_market_by_game_id(tmp_path: Path) -> N
     The market is scored on each run's own result: the market run's revised result for one
     week-1 game would change the week-1 market Brier.
     """
-    report = _market_comparison(tmp_path)
-
+    # Arrange
     outcome = _season_predictions().set_index("game_id")["actual_home_win"]
     market_brier = {
         game_id: (MARKET_FROM[game_id] - outcome[game_id]) ** 2 for game_id in outcome.index
@@ -604,6 +695,11 @@ def test_a_market_run_supplies_every_runs_market_by_game_id(tmp_path: Path) -> N
     week1 = [game_id for game_id, _, week, *_ in SEASON_GAMES if week == 1]
     games_2024 = [game_id for game_id, season, *_ in SEASON_GAMES if season == 2024]
     expected = float(np.mean([market_brier[game_id] for game_id in week1]))
+
+    # Act
+    report = _market_comparison(tmp_path)
+
+    # Assert
     for label in ("cand", "ref"):
         row = report["windows"]["week 1"]["runs"][label]
         assert row["market_brier"] == pytest.approx(expected)
@@ -617,11 +713,15 @@ def test_a_market_run_supplies_every_runs_market_by_game_id(tmp_path: Path) -> N
 
 def test_a_market_run_leaves_the_model_columns_alone(tmp_path: Path) -> None:
     """Only the market view changes: the run metrics and paired contrasts stay as they were."""
-    with_market = _market_comparison(tmp_path / "with")
+    # Arrange
     candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.60))
     reference = _loaded(tmp_path, "ref", _season_predictions(market=0.55))
     own = run_comparison.compare_runs([candidate], [reference], resamples=50)
 
+    # Act
+    with_market = _market_comparison(tmp_path / "with")
+
+    # Assert
     assert own["market_view_identical"] is False
     for label, window in own["windows"].items():
         assert with_market["windows"][label]["contrast"] == window["contrast"]
@@ -632,45 +732,89 @@ def test_a_market_run_leaves_the_model_columns_alone(tmp_path: Path) -> None:
 
 
 def test_a_market_run_is_recorded_as_the_market_source(tmp_path: Path) -> None:
-    """The report names the market run and its provenance, and the Markdown says so."""
+    """The report names the market run and its provenance."""
+    # Act
     report = _market_comparison(tmp_path)
 
+    # Assert
     source = report["market_source"]
     assert source["run"] == "close"
     assert source["provenance"]["games"] == len(SEASON_GAMES) + 1
+
+
+def test_the_markdown_names_the_market_run(tmp_path: Path) -> None:
+    """The Markdown names the market run, the game_id match and its provenance."""
+    # Arrange
+    report = _market_comparison(tmp_path)
+
+    # Act
     lines = run_comparison.format_report(report)
+
+    # Assert
     market_line = next(line for line in lines if line.startswith("- market:"))
     assert "close" in market_line
     assert "game_id" in market_line
-    assert market_line.endswith(json.dumps(source["provenance"], default=str))
+    assert market_line.endswith(json.dumps(report["market_source"]["provenance"], default=str))
 
 
-def test_a_market_run_with_revised_results_is_counted_and_flagged(tmp_path: Path) -> None:
-    """A compared game whose result differs in the market run is counted and warned about."""
+def test_a_market_run_with_revised_results_is_counted(tmp_path: Path) -> None:
+    """A compared game whose result differs in the market run is counted."""
+    # Act
     report = _market_comparison(tmp_path)
 
+    # Assert
     assert report["market_source"]["outcome_mismatches"] == 1
+
+
+def test_a_market_run_with_revised_results_is_flagged(tmp_path: Path) -> None:
+    """A compared game whose result differs in the market run is warned about."""
+    # Arrange
+    report = _market_comparison(tmp_path)
+
+    # Act
     lines = run_comparison.format_report(report)
+
+    # Assert
     warning = [line for line in lines if line.startswith("- warning:")]
     assert len(warning) == 1
     assert "result differs on 1 compared game" in warning[0]
 
 
-def test_a_market_run_with_the_same_results_has_no_outcome_warning(tmp_path: Path) -> None:
-    """With every result the same, the count is zero and no warning is printed."""
+def _market_with_the_same_results() -> pd.DataFrame:
+    """Return the market run's rows with the revised result put back."""
     market = _market_predictions()
     revised = market["game_id"] == REVISED_GAME
     market.loc[revised, "actual_home_win"] = 1 - market.loc[revised, "actual_home_win"]
+    return market
 
+
+def test_a_market_run_with_the_same_results_counts_no_mismatch(tmp_path: Path) -> None:
+    """With every result the same, the count is zero."""
+    # Arrange
+    market = _market_with_the_same_results()
+
+    # Act
     report = _market_comparison(tmp_path, market)
 
+    # Assert
     assert report["market_source"]["outcome_mismatches"] == 0
+
+
+def test_a_market_run_with_the_same_results_has_no_outcome_warning(tmp_path: Path) -> None:
+    """With every result the same, no warning is printed."""
+    # Arrange
+    report = _market_comparison(tmp_path, _market_with_the_same_results())
+
+    # Act
     lines = run_comparison.format_report(report)
+
+    # Assert
     assert not [line for line in lines if line.startswith("- warning:")]
 
 
 def test_a_market_run_replaces_the_market_of_every_seed_pair(tmp_path: Path) -> None:
     """With two seed pairs, both candidates and both references use the market run's value."""
+    # Arrange
     candidates = [
         _loaded(tmp_path, "cand", _season_predictions(shift=0.05, market=0.60)),
         _loaded(tmp_path, "cand_seed7", _season_predictions(shift=0.04, market=0.65)),
@@ -680,11 +824,13 @@ def test_a_market_run_replaces_the_market_of_every_seed_pair(tmp_path: Path) -> 
         _loaded(tmp_path, "ref_seed7", _season_predictions(shift=0.01, market=0.45)),
     ]
     market_run = _loaded(tmp_path, "close", _market_predictions())
-
-    report = run_comparison.compare_runs(candidates, references, resamples=20, market=market_run)
-
     outcome = _season_predictions().set_index("game_id")["actual_home_win"]
     expected = float(np.mean([(MARKET_FROM[g] - outcome[g]) ** 2 for g in outcome.index]))
+
+    # Act
+    report = run_comparison.compare_runs(candidates, references, resamples=20, market=market_run)
+
+    # Assert
     runs = report["windows"]["all weeks"]["runs"]
     assert set(runs) == {"cand", "cand_seed7", "ref", "ref_seed7"}
     for label, row in runs.items():
@@ -694,24 +840,29 @@ def test_a_market_run_replaces_the_market_of_every_seed_pair(tmp_path: Path) -> 
 
 def test_a_market_run_missing_a_compared_game_is_rejected(tmp_path: Path) -> None:
     """Every compared game needs the market run's value."""
+    # Arrange
     market = _market_predictions()
     market = market[market["game_id"] != "2024_02_b"]
 
+    # Act & Assert
     with pytest.raises(ValueError, match="2024_02_b"):
         _market_comparison(tmp_path, market)
 
 
 def test_a_market_run_with_a_null_market_is_rejected(tmp_path: Path) -> None:
     """A compared game whose market value is missing in the market run is an error."""
+    # Arrange
     market = _market_predictions()
     market.loc[market["game_id"] == "2023_03_a", "market_home_win_prob"] = np.nan
 
+    # Act & Assert
     with pytest.raises(ValueError, match="2023_03_a"):
         _market_comparison(tmp_path, market)
 
 
 def test_a_market_run_with_repeated_games_is_rejected(tmp_path: Path) -> None:
     """A market run that repeats a game cannot say which market value to use."""
+    # Arrange
     candidate = _loaded(tmp_path, "cand", _season_predictions(shift=0.05))
     reference = _loaded(tmp_path, "ref", _season_predictions())
     loaded = _loaded(tmp_path, "close", _market_predictions())
@@ -719,16 +870,20 @@ def test_a_market_run_with_repeated_games_is_rejected(tmp_path: Path) -> None:
         loaded.run, pd.concat([loaded.games, loaded.games.iloc[[2]]], ignore_index=True)
     )
 
+    # Act & Assert
     with pytest.raises(ValueError, match="repeat"):
         run_comparison.compare_runs([candidate], [reference], resamples=10, market=repeated)
 
 
 def test_the_command_scores_against_the_market_run(tmp_path: Path) -> None:
     """``--market-from`` records the source; the market run gets no production section."""
+    # Arrange
     market = _write_run(tmp_path, "close", _market_predictions(), 42)
 
+    # Act
     code, lines, payload = _command_outputs(tmp_path, "--market-from", str(market))
 
+    # Assert
     assert code == 0
     assert payload["market_source"]["run"] == "close"
     assert payload["market_source"]["provenance"]["dataset_hash"] == "abc"
@@ -741,21 +896,25 @@ def test_the_command_scores_against_the_market_run(tmp_path: Path) -> None:
 
 def test_the_command_exits_two_when_the_market_run_lacks_a_game(tmp_path: Path) -> None:
     """A market run that misses a compared game is reported and the exit code is 2."""
+    # Arrange
     market = _market_predictions()
     market = market[market["game_id"] != "2023_01_a"]
     market_dir = _write_run(tmp_path, "close", market, 42)
 
+    # Act
     code, _, _ = _command_outputs(tmp_path, "--market-from", str(market_dir))
 
+    # Assert
     assert code == 2
 
 
 def test_the_command_rejects_a_repeated_market_run(tmp_path: Path) -> None:
     """The market comes from one run: a second ``--market-from`` is a usage error."""
+    # Arrange
     first = _write_run(tmp_path / "a", "close", _market_predictions(), 42)
     second = _write_run(tmp_path / "b", "close7", _market_predictions(), 7)
 
+    # Act & Assert
     with pytest.raises(SystemExit) as raised:
         _command_outputs(tmp_path, "--market-from", str(first), "--market-from", str(second))
-
     assert raised.value.code == 2

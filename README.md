@@ -259,6 +259,22 @@ the regular season, team-normalized, and cached as `data/cache/nflreadpy/pbp_<se
 Before kickoff the current season has no play-by-play published at all; that is non-fatal, and the
 ETL falls back to cache or continues without it.
 
+The nflverse player sources (`src/nfl_predictor/utils/polars/nflverse_sources.py`: weekly player
+stats, snap counts, the players file, and season and weekly rosters) load under the same cache
+contract. Each season is kept to its column list in `constants.py`, filtered to the regular season
+where the source has a season type, given canonical team codes (the 2002-2015 rosters' league codes
+`ARZ`, `BLT`, `CLV`, `HST` and `SL` included), and cached as
+`data/cache/nflreadpy/<source>_<season>[_reg|_all].parquet`; the players file, which covers every
+season, is one `players.parquet`. Weekly player stats leave null the stats nflverse never charted
+in a season (tackles for loss in 2003-2011, quarterback hits in 2003-2005), and in Jacksonville's
+2001-2002 home games, which nflverse credits wholly to the visitors (nflverse-pbp issue 92), each
+player's team comes back from that season's roster (`utils/polars/player_team_repair.py`). A
+player is a quarterback in a season when the players file or any regular-season week of that
+season's weekly roster lists him there, matched by GSIS id and never by name
+(`utils/polars/player_identity.py`). ESPN QBR (`utils/polars/espn_qbr.py`) is cached the same way
+as a validation reference only: nothing that builds the dataset or the model imports it. The ETL
+reads none of these sources yet, so `nfl-predictor data` downloads nothing new.
+
 The quarterback family needs `data/meta_data.csv`, a read-only copy of
 `../nfeloqb/Other Data/meta_data.csv` made the same way as `data/qb_elos.csv`. It maps the Elo
 quarterback names to GSIS ids, which are also the play-by-play passer ids. Without the file the
@@ -363,6 +379,9 @@ are missing historically.
 Primary sources:
 
 - `nflreadpy` (NFLverse): schedules, results, team-level stats, and play-by-play.
+- nflverse player sources (weekly player stats, snap counts, the players file, rosters) and ESPN
+  QBR as a validation reference: cached loaders the ETL does not read yet (see "Data collection"
+  above).
 - nfelo's market-lines file (`greerreNFL/nfelomarket_data`) for the default
   `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.

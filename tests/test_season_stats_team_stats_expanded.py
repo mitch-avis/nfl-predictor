@@ -1,5 +1,7 @@
 """Tests for the expanded team metrics derived from play-by-play."""
 
+from pathlib import Path
+
 import polars as pl
 
 from nfl_predictor.season_stats import team_stats
@@ -1111,3 +1113,19 @@ def _matches_parts(value: object, numerator: object, denominator: object) -> boo
     assert isinstance(numerator, int | float), numerator
     assert isinstance(value, int | float), value
     return abs(value - numerator / denominator) <= 1e-12
+
+
+def test_the_rate_guard_builds_every_rate_the_published_game_logs_carry() -> None:
+    """The fixture holds the published team game logs of five games, every column."""
+    # Arrange
+    published = Path(__file__).parent / "fixtures" / "sos_season_stats_parity"
+    built = set(_rate_columns(_game_rows().columns))
+
+    # Act
+    carried = _rate_columns(
+        list(pl.read_parquet_schema(published / "games_team_game_logs.parquet"))
+    )
+
+    # Assert
+    assert carried
+    assert sorted(set(carried) - built) == []

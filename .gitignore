@@ -249,3 +249,7 @@ data/web/
 
 # Claude Code subagent worktrees (each is a full checkout; ruff would lint them twice)
 .claude/worktrees/
+
+# The season statistics parity fixtures the tests read (see PROVENANCE.md there), excepted from
+# the *.parquet rule above.
+!tests/fixtures/sos_season_stats_parity/*.parquet

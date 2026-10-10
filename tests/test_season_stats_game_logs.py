@@ -1,5 +1,7 @@
 """Tests for the team and quarterback game logs built from play-by-play and official stats."""
 
+from pathlib import Path
+
 import polars as pl
 import pytest
 
@@ -729,3 +731,21 @@ def test_build_qb_game_stats_breaks_a_name_tie_by_passer_id() -> None:
         ("J.Smith", "00-0000001"),
         ("J.Smith", "00-0000002"),
     ]
+
+
+def test_the_qb_rate_guard_builds_every_rate_the_published_game_logs_carry() -> None:
+    """The fixture holds the published QB game logs of five games, every column."""
+    # Arrange
+    published = Path(__file__).parent / "fixtures" / "sos_season_stats_parity"
+    built = set(_qb_rate_columns(_qb_game_rows().columns))
+    # The game result joined onto QB game logs; a season row takes its share of games.
+    from_team_rows = {"win_value"}
+
+    # Act
+    carried = _qb_rate_columns(
+        list(pl.read_parquet_schema(published / "games_qb_game_logs.parquet"))
+    )
+
+    # Assert
+    assert carried
+    assert sorted(set(carried) - built - from_team_rows) == []

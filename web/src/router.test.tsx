@@ -12,6 +12,12 @@ import { routes } from './router'
 
 const SESSION = { user: { id: 1, username: 'viewer', role: 'viewer', created_at: '' } }
 
+/**
+ * How long a test waits for its page. Each test renders the whole app and a lazily loaded page; in
+ * a full run on a busy machine the team page has taken more than Testing Library's default second.
+ */
+const PAGE_LOAD = { timeout: 3000 }
+
 function renderAt(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const router = createMemoryRouter(routes, { initialEntries: [path] })
@@ -44,7 +50,7 @@ describe('router', () => {
     renderAt('/teams/WSH?season=2025')
 
     // Assert
-    expect(await screen.findByRole('heading', { name: 'Washington Commanders' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Washington Commanders' }, PAGE_LOAD)).toBeInTheDocument()
   })
 
   it('opens the quarterback index from its path', async () => {
@@ -60,7 +66,7 @@ describe('router', () => {
     renderAt('/qbs')
 
     // Assert
-    expect(await screen.findByRole('heading', { name: 'Quarterbacks · 2025' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Quarterbacks · 2025' }, PAGE_LOAD)).toBeInTheDocument()
   })
 
   it.each([
@@ -79,6 +85,6 @@ describe('router', () => {
     renderAt(path)
 
     // Assert
-    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: heading }, PAGE_LOAD)).toBeInTheDocument()
   })
 })

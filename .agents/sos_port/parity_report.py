@@ -150,6 +150,12 @@ def _causes(payload: dict[str, Any], rules: dict[str, Any], w: Any) -> None:
         )
         if "listed" in entry:
             w(f"- Games: {', '.join(entry['listed']) or 'none'}.")
+        if "flagged_plays_left_out_here" in entry:
+            parts = [
+                f"{play_type} {stats['plays']} ({season_ranges(stats['seasons'])})"
+                for play_type, stats in entry["flagged_plays_left_out_here"].items()
+            ]
+            w(f"- Flagged plays the play-type filter leaves out, by play type: {'; '.join(parts)}.")
         if "cached_la_values" in entry:
             left = entry["cached_la_values"]
             w(f"- `LA` values left in the cached play-by-play team columns: {left}.")
@@ -219,7 +225,7 @@ def _coverage(payload: dict[str, Any], w: Any) -> None:
         "here only",
         "there only",
         "games without play-by-play",
-        "one-team games (cached team columns)",
+        "games whose cached penalty and touchdown teams name one team",
         "scramble flag",
     ]
     for line in table(header, rows):

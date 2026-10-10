@@ -4,11 +4,19 @@ Judgment calls made on 2026-10-10 while folding the `nfl-sos-ratings` web pages 
 its `ui_api.py` and `ui_data.py` at `9081bce`) into this app as Milestone 58 task 58.2, on the
 implementer branch that fast-forwarded to `feat/step6-sos-port` and merged the season statistics
 branch. Each entry gives what differs, the options, the decision, the reasoning, any data, and how
-to reverse it. Commit hashes are on that branch.
+to reverse it. Commit hashes are on that branch. The delegating session reviewed the branch the
+same day: entries 17 to 21 and the corrections marked "Corrected in review" come from that round,
+after which the branch merged the reviewed step-6 branch (`25ca44a`).
 
 Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` files of 1999-2026
 (534 files) copied read-only into a scratch folder with this repository's team codes (`WAS` to
 `WSH`; its other codes were already canonical), served from the worktree's code on a spare port.
+
+**Status.** No job in this repository writes `data/ratings/` yet: the season-statistics ETL step
+that is to write those tables is planned separately. Until it lands, the pages show an empty state
+naming the folder and the files they read, and the phase's done-criterion in
+`.agents/web_ui_plan.md` (the current-season team page shows rating heatmaps and a team detail with
+game logs) waits on that step; so far the pages have been checked only against the copied tables.
 
 ## 1. The pages read `data/ratings/` under the configured data directory
 
@@ -18,11 +26,12 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
   the folder from the data directory (`Settings.ratings_path = data_path / "ratings"`) and drop
   the separate setting; (c) a new `NFLP_RATINGS_DIR` setting.
 - **Decision:** (b).
-- **Reasoning:** the ETL writes the tables into this repository's data directory (the step's data
-  contract), so the folder follows `NFLP_DATA_DIR` like every other dataset, and a scratch tree
-  needs one variable. A second knob would only let the two drift apart. The sibling repository is
-  read-only and no longer a source for the app. An `NFLP_SOS_DATA_DIR` left in an environment is
-  ignored (the settings ignore unknown variables), so nothing breaks.
+- **Reasoning:** the step's data contract puts the tables in this repository's data directory,
+  where the season-statistics ETL step is to write them, so the folder follows `NFLP_DATA_DIR` like
+  every other dataset, and a scratch tree needs one variable. A second knob would only let the two
+  drift apart. The sibling repository is read-only and no longer a source for the app. An
+  `NFLP_SOS_DATA_DIR` left in an environment is ignored (the settings ignore unknown variables),
+  so nothing breaks.
 - **How to reverse it:** revert `f164a3f` (with the routes that read `ratings_path`).
 
 ## 2. One route family, `/api/ratings/{season}/{kind}/...`
@@ -69,7 +78,8 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
   becomes a percentage, then the Parquet type (whole numbers or decimals); graded and contextual
   numbers carry a gradient whose direction is the registry's polarity; the team code and the
   quarterback's name are pinned. A column the registry cannot resolve is left out, as the
-  existing registry projection does. Decimals are left null and chosen on the page from the values
+  existing registry projection does, with a warning in the server log naming it (added in review,
+  `743846a`). Decimals are left null and chosen on the page from the values
   shown (the source's `columnDecimals` rule), because the season-totals view changes the values.
 - **Reasoning:** one table component keeps the app's look, sorting and tooltips, and the
   registry stays the single source of every label and description.
@@ -101,11 +111,13 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
 - **Decision:** (b), with each column's text rewritten: the registry's `opp_` rule describes an
   average over every opponent faced, but here the value is one opponent's whole season. A season
   without a ratings table still serves its game log. The rank-range chip beside each opponent is
-  not ported; the opponent links to its own page instead, which has its rank range.
-- **Reasoning:** a quarterback page would otherwise download the 0.9 MB team table only for five
+  not ported; the opponent links to its own page instead, which has its rank range. Since review
+  the join also carries `opp_team_rank`, the opponent's league rank on Team Rating (1 is best),
+  and the payload the league's size, for the tiers in entry 11.
+- **Reasoning:** a quarterback page would otherwise download the 0.9 MB team table only for six
   numbers per game, and the description must not claim an average that the column is not.
 - **How to reverse it:** `sections.with_opponent_ratings` and `_opponent_overrides`
-  (`3301099`).
+  (`3301099`, the rank `f541e36`).
 
 ## 7. The season under way comes from the calendar
 
@@ -127,9 +139,11 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
 - **Options:** (a) copy the map into the frontend; (b) send the names of the table's teams with
   each entity table.
 - **Decision:** (b), `team_names` in the entity table payload; an unknown code names itself.
+  Since review the rank-range payload carries them too, so the Rank ranges page no longer
+  downloads the team table only for the names.
 - **Reasoning:** `constants.py` is the canonical team mapping (`AGENTS.md`), so a second list
   could drift from it.
-- **How to reverse it:** revert `53344e6`.
+- **How to reverse it:** revert `53344e6` (the rank-range names `b28683c`).
 
 ## 9. The glossary leaves out the garbage-time filter
 
@@ -140,14 +154,17 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
 - **Decision:** (c). The filter view and its `wp-ratings` routes are not ported: no page here
   depends on them (the source's detail page showed one filter line, which is left out too).
 - **Reasoning:** the task puts the filter out of scope unless a page depends on it, and none
-  does; glossary entries for columns no page shows would only confuse. The registry itself is
-  unchanged (it belongs to the season statistics port).
+  does; glossary entries for columns no page shows would only confuse. The registry's metrics are
+  unchanged (they belong to the season statistics port).
 - **Data:** the registry has 319 metrics; the glossary shows 311. The 8 left out are `wp_unit`,
   `wp_bin`, `wp_bin_plays`, `wp_bin_epa`, `wp_kept_play_share`, `wp_kept_dropback_share`,
-  `qb_wp_bin_epa` and `qb_wp_bin_dropbacks`. One registry category description (Overall) still
-  mentions the filter's data; that text is the registry's.
+  `qb_wp_bin_epa` and `qb_wp_bin_dropbacks`. Corrected in review: two registry category
+  descriptions mentioned the filter's data, not one (the team Overall and the quarterback Passing
+  Volume categories). On the delegating session's decision both now describe only what the pages
+  show (`22fcdfd`, on top of the reviewed registry), and a test keeps the glossary's categories
+  free of the filter.
 - **How to reverse it:** drop the filter in `api/ratings/glossary.py` (`3301099`) and port the
-  source's `wp_filter.py` view and routes.
+  source's `wp_filter.py` view and routes; restore the two category texts from `22fcdfd`.
 
 ## 10. Categories come from the registry with each table
 
@@ -173,14 +190,20 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
   the opponent's season ratings and the average score of those games, plus the opponents'
   head-to-head-excluded profiles through the "Opponents per game" and "per play" views; (c) no
   ledger.
-- **Decision:** (b).
+- **Decision:** (b). Accepted in review as a simplification of the source's ledger. Since review
+  each opponent also carries the source's tier, by its league rank on Team Rating: Tougher for the
+  top 10, Softer for the bottom 10, Middle for the rest (the source's rule). The source picked the
+  ranking metric by stat group (the opponent's defense rating for offense stats and a
+  quarterback's passing stats, its offense rating for defense stats, Team Rating otherwise); here
+  it is always Team Rating, the one rank the game log carries, and the tier is plain text rather
+  than shaded.
 - **Reasoning:** averaging per-game rates over one or two games mixes rates without their
   denominators, which the season statistics port takes care to avoid; scores and the opponent's
   own season ratings say how the games went and how strong the opponent was. The opponent
   profiles (what the opponents did against everyone else) are the views the stats card already
   offers.
-- **How to reverse it:** `opponents.ts` (`10077c9`) and the detail page's "Opponents faced" card
-  (`b4144de`).
+- **How to reverse it:** `opponents.ts` (`10077c9`, the tiers `68b381a`) and the detail page's
+  "Opponents faced" card (`b4144de`).
 
 ## 12. A missing team or quarterback is a message on its page
 
@@ -198,10 +221,10 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
   data), team color palettes and team chips, CSV export buttons, a link to its methodology on
   GitHub, and game ids linked to an outside site (nflsavant.com).
 - **Options:** port each, or leave it out.
-- **Decision:** leave them out. Data refreshes run as this app's ETL job; the app keeps one
-  palette; the glossary carries the method's ideas in plain words instead of linking to the
-  read-only repository; game ids are not shown (the week and the opponent identify a game, home
-  `vs` or away `@`).
+- **Decision:** leave them out. Data refreshes belong to this app's ETL jobs (the season-statistics
+  ETL step, planned separately, is to write these tables); the app keeps one palette; the glossary
+  carries the method's ideas in plain words instead of linking to the read-only repository; game
+  ids are not shown (the week and the opponent identify a game, home `vs` or away `@`).
 - **Reasoning:** the task excludes anything that writes data; the other items are presentation
   the app does not have elsewhere, and an outside link would send readers to a third-party site.
 - **How to reverse it:** each is additive; nothing here prevents it.
@@ -233,15 +256,97 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
 - **How to reverse it:** the links in `PowerRankings.tsx` and `Ratings.tsx` (`d8eb61f`,
   `b4144de`).
 
-## 16. Whole season tables, uncompressed
+## 16. Whole season tables, not sliced by view
 
 - **What differs:** nothing; the source also sent whole tables. Recorded because of the size.
 - **Options:** (a) as is; (b) page or slice the table by view on the server; (c) compress
   responses app-wide.
-- **Decision:** (a).
+- **Decision:** (a) for the payload's shape. The first pass also left responses uncompressed;
+  review added (c), entry 17.
 - **Reasoning:** the view filters, totals and search run in the browser over one payload, so a
-  view switch costs nothing. Compression would apply to every route, the job log stream included,
-  and is a separate change.
+  view switch costs nothing.
+- **Corrected in review:** the first pass argued against compression that it would apply to the
+  job log stream too. It does not: Starlette's `GZipMiddleware` (1.7.0) leaves
+  `text/event-stream` alone by default. Its sizes were also those of the 2026 season in progress,
+  which understate a completed season's.
 - **Data:** published tables: the team table is 0.90 MB (2026) and 0.96 MB (2025) of JSON,
-  served in about 0.12 s; the quarterback table 0.33 MB; one team's game log 0.16 MB.
-- **How to reverse it:** add slicing to `api/ratings/tables.py` or a compression middleware.
+  served in about 0.12 s. Corrected in review: a completed season's quarterback table is 0.49 MB
+  (0.33 MB for 2026), and a game log runs up to 0.27 MB (one team's 0.16 MB for 2026).
+- **How to reverse it:** add slicing to `api/ratings/tables.py`.
+
+## 17. Responses are gzipped app-wide
+
+- **What differs:** the source app sent its JSON uncompressed, as this app did.
+- **Options:** (a) leave responses uncompressed; (b) Starlette's `GZipMiddleware` on the whole
+  app; (c) compress only the ratings routes.
+- **Decision:** (b), the delegating session's decision in review. `create_app` adds the middleware
+  with its defaults: responses of 500 bytes or more, compression level 9, for clients that send
+  `Accept-Encoding: gzip`.
+- **Reasoning:** the season tables are the app's largest payloads and repetitive JSON, so they
+  shrink five- to seven-fold, and one middleware covers every route. Starlette skips
+  `text/event-stream` by default, so the job log stream is sent uncompressed as before;
+  `tests/api/test_compression.py` pins both.
+- **Data:** measured in review on the published tables, plain JSON to gzipped, in bytes: the 2025
+  team table 960,538 to 179,773, the quarterback table 490,907 to 82,421, the Chiefs' game log
+  264,451 to 38,200, and the metric list 145,645 to 20,479.
+- **How to reverse it:** remove the middleware from `create_app` (`c4362e8`).
+
+## 18. A table that cannot be read answers 503; one that vanishes mid-scan is skipped
+
+- **What differs:** review found two paths to a 500: a file Polars cannot read (empty, cut short,
+  not Parquet), and a table removed between the schedule leaderboard's folder scan and its read.
+- **Options:** for an unreadable file, (a) the 500, (b) a 404 as if missing, or (c) a 503 naming
+  the file; for a vanished table, (a) the 500 or (b) leave that season out.
+- **Decision:** (c) and (b), from review. Every ratings route that reads a table answers an
+  unreadable one with a 503, code `ratings_table_unreadable`, whose message names the file and
+  says it may be cut short or still being written; the leaderboard leaves a vanished season out.
+- **Reasoning:** a 503 says the data is there but cannot be used yet (a table being rewritten),
+  which a 404 would hide, and the page shows that message instead of a bare server error. A season
+  that vanished would have been left out by a scan a moment later.
+- **How to reverse it:** `files.read_table` and the router's `_unreadable` (`b7b1f1a`);
+  `schedules._ratings_by_season` (`63b6b0f`).
+
+## 19. The index table and the comparison show no rank ranges
+
+- **What differs:** the source's index table had a "Rank range" column whenever the view showed
+  the headline rating (each row's middle 50% of ranks across the redraws, with a small interval
+  track; `RANK_RANGE_COLUMN` in its `EntityTable.tsx`), and its comparison panel showed each
+  compared row's published rank, middle 50% and track under its name (`ComparisonPanel.tsx`).
+  Neither is ported; the ranges are on the Rank ranges page and on each detail page.
+- **Options:** (a) port both, fetching the season's rank ranges on the index page and joining
+  them by id; (b) leave them out.
+- **Decision:** (b), as delivered. Not a choice made in the first pass: it was missed there and
+  found in review, so it is logged here as a difference.
+- **Reasoning:** (a) costs the index page a second request (the rank-range payload) and a
+  column built from another payload; both features are additive and can follow.
+- **How to reverse it:** call `useRankRanges` in `Ratings.tsx`, add the column through a renderer,
+  and add a range line to `ComparisonPanel.tsx`, reusing `RankInterval`.
+
+## 20. No selection bar for the compared rows
+
+- **What differs:** once a row was ticked, the source's toolbar showed "n selected" with "View
+  comparison" (a jump to the panel) and "Clear selection". Here the comparison panel appears under
+  the table as soon as a row is ticked, each compared row has its own remove button, and a note
+  under the table says up to four rows can be compared.
+- **Options:** (a) port the bar; (b) leave it out.
+- **Decision:** (b), as delivered; like entry 19, missed in the first pass and logged after review.
+- **Reasoning:** without the bar, reaching the panel below a 32-row table takes a scroll, and
+  clearing four compared rows takes four clicks; the bar is small and additive.
+- **How to reverse it:** add the bar to `Ratings.tsx` above the table; clearing sets `compare` to
+  empty in the URL.
+
+## 21. Search, sort and the qualifier switch reset when the reader leaves the index
+
+- **What differs:** the source kept every index control (view, categories, compared rows, search,
+  sort, the qualifier switch) in an app-wide store, so all of them survived a visit to a detail
+  page and back. Here the season, view, category, hidden subcategories and compared rows are in
+  the URL, so they survive the round trip and can be shared, but the search text, the sort and
+  the "Show QBs below the qualifier" switch are the page's own state and reset.
+- **Options:** (a) put search, sort and the switch in the URL as well; (b) an app-wide store like
+  the source's; (c) leave them as they are.
+- **Decision:** (c), as delivered; missed in the first pass and logged after review.
+- **Reasoning:** (a) would keep the index's whole state in one place, the URL, and make a sorted,
+  searched view shareable; it needs `DataTable` to take its sort from its caller (today it holds
+  the sort itself and takes only a default).
+- **How to reverse it:** add search, sort and switch parameters through `useRatingsParams`, with a
+  controlled sort in `DataTable`.

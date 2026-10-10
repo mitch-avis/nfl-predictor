@@ -6,23 +6,27 @@ nflverse's (every season in one file) or fails the way ``requests`` fails.
 
 from __future__ import annotations
 
+import ast
 import io
 import subprocess
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
 import polars as pl
 import pytest
 import requests
 
+import nfl_predictor
 from nfl_predictor import constants
+from nfl_predictor.cli import main as front_door
 from nfl_predictor.utils.polars import espn_qbr
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
 CURRENT = 2024
+PACKAGE_DIR = Path(nfl_predictor.__file__).parent
 # The first HTTP status ``requests`` treats as an error.
 HTTP_ERROR_STATUS = 400
 
@@ -256,16 +260,103 @@ def test_a_season_before_espn_qbr_exists_needs_no_download(
     assert qbr.is_empty()
 
 
-def test_the_dataset_the_model_and_the_weekly_run_never_import_espn_qbr() -> None:
-    """ESPN QBR is a validation reference: no module that builds or fits the model reads it."""
+# The package's modules allowed to import the QBR loader: validation code only. A module added
+# here must never feed the game dataset or the model.
+QBR_IMPORTERS_ALLOWED = frozenset({espn_qbr.__name__})
+# Entry points beside the command table: the web app, which builds every router at import.
+EXTRA_ENTRY_MODULES = frozenset({"nfl_predictor.api"})
+
+
+def _module_name(path: Path) -> str:
+    """Return the dotted name of a source file of the package."""
+    parts = list(path.relative_to(PACKAGE_DIR.parent).with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts)
+
+
+def _imported_modules(source: str, package: str) -> set[str]:
+    """Return every module ``source`` imports anywhere, function bodies included.
+
+    ``package`` resolves relative imports. A ``from`` import adds its module and each name it
+    imports from it, since the name may be a submodule. A string constant is added as it is, so
+    a module named for ``importlib.import_module`` counts too.
+    """
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if node.level:
+                parts = package.split(".")
+                base = ".".join(parts[: len(parts) - node.level + 1])
+                module = f"{base}.{module}" if module else base
+            found.add(module)
+            found.update(f"{module}.{alias.name}" for alias in node.names)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            found.add(node.value)
+    return found
+
+
+def _package_of(path: Path) -> str:
+    """Return the package a source file's relative imports start from."""
+    name = _module_name(path)
+    return name if path.name == "__init__.py" else name.rpartition(".")[0]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import nfl_predictor.utils.polars.espn_qbr\n",
+        "from nfl_predictor.utils.polars import espn_qbr\n",
+        "from nfl_predictor.utils.polars.espn_qbr import load_espn_qbr\n",
+        "def load():\n    from . import espn_qbr\n",
+        "def load():\n    from .espn_qbr import load_espn_qbr\n",
+        "import importlib\n\nimportlib.import_module('nfl_predictor.utils.polars.espn_qbr')\n",
+    ],
+    ids=[
+        "import",
+        "from-package",
+        "from-module",
+        "relative-in-function",
+        "relative-module",
+        "importlib",
+    ],
+)
+def test_the_import_scan_finds_every_way_to_import_espn_qbr(source: str) -> None:
+    # Act
+    imported = _imported_modules(source, "nfl_predictor.utils.polars")
+
+    # Assert
+    assert espn_qbr.__name__ in imported
+
+
+def test_no_module_outside_the_allow_list_imports_espn_qbr() -> None:
+    """ESPN QBR is a validation reference: no other module of the package imports it anywhere."""
     # Arrange
+    sources = sorted(PACKAGE_DIR.rglob("*.py"))
+
+    # Act
+    importers = sorted(
+        _module_name(path)
+        for path in sources
+        if espn_qbr.__name__
+        in _imported_modules(path.read_text(encoding="utf-8"), _package_of(path))
+    )
+
+    # Assert
+    assert len(sources) > len(QBR_IMPORTERS_ALLOWED)
+    assert set(importers) <= QBR_IMPORTERS_ALLOWED
+
+
+def test_no_command_the_weekly_run_or_the_web_app_loads_espn_qbr() -> None:
+    """Importing every command module and the web app leaves the QBR loader unloaded."""
+    # Arrange
+    modules = sorted({command.module for command in front_door.COMMANDS} | EXTRA_ENTRY_MODULES)
     script = (
-        "import sys\n"
-        "import nfl_predictor.cli.main\n"
-        "import nfl_predictor.data_collection\n"
-        "import nfl_predictor.ml_model\n"
-        "import nfl_predictor.week_builder\n"
-        "import nfl_predictor.weekly_run.pipeline\n"
+        "import importlib\nimport sys\n"
+        f"for module in {modules!r}:\n    importlib.import_module(module)\n"
         f"print({espn_qbr.__name__!r} in sys.modules)\n"
     )
 
@@ -275,4 +366,6 @@ def test_the_dataset_the_model_and_the_weekly_run_never_import_espn_qbr() -> Non
     )
 
     # Assert
+    assert "nfl_predictor.lines_refresh" in modules
+    assert "nfl_predictor.weekly_run.pipeline" in modules
     assert result.stdout.strip() == "False"

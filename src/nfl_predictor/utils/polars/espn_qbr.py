@@ -1,8 +1,10 @@
 """ESPN's quarterback rating (QBR) from nflverse, for validation only.
 
-ESPN QBR is a reference to check this repository's quarterback ratings against. It never feeds
-the game dataset or the model: nothing the ETL, training, the weekly run or the command line
-imports reads this module (``tests/test_espn_qbr.py`` checks).
+ESPN QBR is a reference to check this repository's quarterback ratings against; it must never
+feed the game dataset or the model. ``tests/test_espn_qbr.py`` checks two things: no other module
+of the package imports this one anywhere, inside functions included, unless the test's
+allow-list names it (none does); and importing every module the command line's commands run, and
+the web app, in a fresh interpreter leaves this module unloaded.
 
 nflreadpy has no loader for it, so ``load_espn_qbr`` downloads the season-level or week-level
 Parquet asset nflverse publishes, which holds every season from 2006, and caches each season like

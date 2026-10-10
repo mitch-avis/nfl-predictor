@@ -817,7 +817,7 @@ wheels = [
 
 [[package]]
 name = "nfl-predictor"
-version = "0.55.1"
+version = "0.56.0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },

@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.56.0] - 2026-10-10
+
+### Changed
+
+- The season cache's code fingerprint covers `src/nfl_predictor/season_stats/`, so the first
+  incremental ETL after this release rebuilds every season once and downloads each finished
+  season's official team-stats file once.
+- The team, quarterback, rank-range, head-to-head and Schedules pages' empty states say the ETL
+  writes their tables and to run it.
+
+### Added
+
+- `nfl-predictor data` writes the season statistics ported from `nfl-sos-ratings` to
+  `data/ratings/{season}_{kind}.parquet` beside the ratings tables: the team and quarterback game
+  logs, per-game and season rows, opponent profiles, `combined` and `qb_combined` (with the
+  season's fitted ratings), and the win-probability bins. Every table has the same columns and
+  types in every season, null where a source nflverse has not published yet is missing; nflverse's
+  official weekly team stats are a new cached source. `--incremental` keeps a finished season's
+  tables in its cache entry.
+- `.agents/sos_port/season_stats_etl_parity.py`: all 280 season tables of 1999-2026, built and
+  written through the ETL, match the published files of `nfl-sos-ratings`, and a cache round trip
+  rewrites them byte for byte.
+
+### Fixed
+
+- An incremental ETL run no longer keeps the season-statistics game rows built for a reused
+  season's cache key.
+
 ## [0.55.1] - 2026-10-10
 
 ### Added

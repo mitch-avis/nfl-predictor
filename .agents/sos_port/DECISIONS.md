@@ -218,8 +218,8 @@ checked by the session. Not yet checked in a browser: look at the pages once.
 - **Robustness**: a table a page needs that cannot be read answers 503 naming the file; one it can
   do without is left out with a warning; the API reads `data/ratings/` and the old
   `NFLP_SOS_DATA_DIR` setting is gone.
-- **Waiting on**: no job writes the season-statistics tables yet, so the pages show where they
-  read from until the season-statistics ETL step lands.
+- **Waiting on**: the ETL writes every table the pages read since `0.56.0`; the pages fill once
+  `data/` is rebuilt, which is held for your approval.
 
 ### The ratings in the ETL, the play-by-play corrections and the own Elo in the datasets (`0.54.0`)
 
@@ -293,3 +293,23 @@ scheduled team-week by brute force.
   in training from week 6 on; refresh the file before each weekly run, as you do).
 - **Known leftover, unchanged**: 11 turnover-margin sides in 2000-2002 publish 0.0 after a game
   nflverse has no team stats for; changing it would change completed training rows.
+
+### The season statistics in the ETL (`0.56.0`)
+
+Full record: [decisions/season_stats_etl.md](decisions/season_stats_etl.md) (11 entries) and the
+generated [SEASON_STATS_ETL_PARITY.md](SEASON_STATS_ETL_PARITY.md). Review: two independent rounds
+(verdict "merge as is"); the reviewer reproduced parity and a real-data cache round trip.
+
+- **Parity through the ETL path**: built and written by the ETL with the ratings fitted in the
+  same run, all 280 season tables of 1999-2026 match `nfl-sos-ratings`' published files bit for
+  bit, the rating columns included; reloading every season from the cache rewrites all 534 tables
+  byte for byte.
+- **One schema in every season** (the repository's missing-data rule): a season built without a
+  source nflverse has not published yet keeps every column as typed nulls, conformed to a
+  reference schema generated from full builds; the two opponent-profile tables appear from week
+  2, when a profile exists, as the source's own build does.
+- **Sources**: the frames the run already holds are reused; nflverse's official weekly team stats
+  are the one new cached source, loaded once a run, with the current season's download falling
+  back to the cache.
+- **Cost**: about a minute more on a full rebuild and about half a minute on an incremental run
+  (measured under the walk-forwards' load, so high).

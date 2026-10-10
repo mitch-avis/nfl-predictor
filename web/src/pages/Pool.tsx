@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { WeekSelector } from '@/components/common/WeekSelector'
 import { weekKey } from '@/components/common/weekKey'
 import { ConfidenceSheetView } from '@/components/pool/ConfidenceSheetView'
+import { writtenLabel } from '@/components/pool/poolFormat'
 import { SurvivorPanel } from '@/components/pool/SurvivorPanel'
 import { TiebreakerPanel } from '@/components/pool/TiebreakerPanel'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useQueryParam } from '@/hooks/useQueryParam'
 import { useWeekParams } from '@/hooks/useWeekParams'
-import { formatRelative } from '@/utils/format'
 
 const TABS = ['confidence', 'tiebreakers', 'survivor'] as const
 type PoolTab = (typeof TABS)[number]
@@ -80,7 +80,7 @@ export function PoolPage() {
             {data.season} · Week {data.week}
           </Badge>
           <span>
-            {data.source === 'unattached' ? 'Unattached file in data/predict' : `Run ${data.run_id}`} · predictions written {formatRelative(data.generated_at)}
+            {data.source === 'unattached' ? 'Unattached file in data/predict' : `Run ${data.run_id}`} · {writtenLabel(data)}
           </span>
         </div>
       ) : null}

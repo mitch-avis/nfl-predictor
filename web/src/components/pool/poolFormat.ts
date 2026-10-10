@@ -1,5 +1,5 @@
-import type { SheetRow } from '@/api/types'
-import { formatPercent } from '@/utils/format'
+import type { ConfidenceSheet, SheetRow } from '@/api/types'
+import { formatPercent, formatRelative } from '@/utils/format'
 
 export type SheetOrder = 'points' | 'kickoff'
 
@@ -27,6 +27,15 @@ export function sheetText(rows: SheetRow[]): string {
 export function matchupLabel(row: SheetRow): string {
   if (row.pick === null || row.opponent === null) return `${row.away_abbr} @ ${row.home_abbr}`
   return row.pick_is_home ? `vs ${row.opponent}` : `at ${row.opponent}`
+}
+
+/**
+ * When the sheet's file was written, named by what that file is: the picks file entered before the
+ * lock (a sheet whose predictions were rewritten after it), else the week's predictions.
+ */
+export function writtenLabel(sheet: Pick<ConfidenceSheet, 'picks_file' | 'generated_at'>, now?: Date): string {
+  const when = formatRelative(sheet.generated_at, now)
+  return sheet.picks_file ? `picks file written ${when}` : `predictions written ${when}`
 }
 
 /** A kickoff in the viewer's time zone with its weekday: `Thu, Oct 8, 8:15 PM`. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SheetRow } from '@/api/types'
 
-import { matchupLabel, sheetText, sortSheetRows, weekRanges } from './poolFormat'
+import { matchupLabel, sheetText, sortSheetRows, weekRanges, writtenLabel } from './poolFormat'
 
 function row(overrides: Partial<SheetRow>): SheetRow {
   return {
@@ -78,6 +78,26 @@ describe('matchupLabel', () => {
 
     // Assert
     expect(label).toBe('at DAL')
+  })
+})
+
+describe('writtenLabel', () => {
+  const now = new Date('2026-10-10T12:00:00Z')
+
+  it('dates a sheet read from the predictions by the predictions', () => {
+    // Act
+    const label = writtenLabel({ picks_file: null, generated_at: '2026-10-07T12:00:00+00:00' }, now)
+
+    // Assert
+    expect(label).toBe('predictions written 3 days ago')
+  })
+
+  it('dates a sheet of the picks entered before the lock by the picks file', () => {
+    // Act
+    const label = writtenLabel({ picks_file: 'season_2026_week_05_confidence_picks.csv', generated_at: '2026-10-07T12:00:00+00:00' }, now)
+
+    // Assert
+    expect(label).toBe('picks file written 3 days ago')
   })
 })
 

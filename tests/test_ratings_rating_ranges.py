@@ -199,7 +199,7 @@ def test_team_rating_intervals_cover_the_true_ratings_near_the_nominal_rate() ->
             trials += 1
 
     # Assert
-    # Tolerance fixed before the first run (.agents/roadmap.md, rank ranges).
+    # Tolerances fixed in nfl-sos-ratings before this test first ran there.
     assert 0.85 <= covered[0.95] / trials <= 1.0
     assert 0.65 <= covered[0.80] / trials <= 0.95
 

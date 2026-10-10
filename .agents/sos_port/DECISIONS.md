@@ -251,3 +251,25 @@ generated [ADAPTER_PARITY.md](ADAPTER_PARITY.md), and the measured feature chang
   market-free, 0.21594 with win totals).
 - **Market-free runs** keep the step-5 design (line columns only, groups left out by flag) and now
   warn when a market-informed group stays; making it automatic is on your list.
+
+### Red-zone trips (`0.55.0`)
+
+Full record: [decisions/integration_pbp_elo.md](decisions/integration_pbp_elo.md), entries 2.8 and
+2.9, with `integration_red_zone_parity.py`, `integration_red_zone_movement.py` and their outputs.
+Review: two independent rounds (verdict "merge as is"; every figure reproduced byte for byte).
+
+- **The bug**: this repository counted a red-zone trip for any drive with a play at or inside the
+  20, so 7,952 touchdown drives became converted trips through their extra point or two-point try
+  alone, and 2,282 one-play "drives" holding only a try after a defensive or return touchdown
+  became trips; the league red-zone touchdown rate read 0.5709.
+- **The fix**: a trip is a drive nflverse flags inside the 20 (`drive_inside20`, the definition
+  `nfl-sos-ratings` uses) in which the team ran an offensive snap, a two-point try not counting.
+  The snap condition is a departure from the source: it removes 202 phantom trips the source keeps
+  (128 kickoffs the kicking team recovered, 75 of them counted as the receiving team's red-zone
+  touchdowns; extra points and tries after return touchdowns) and 9 double counts, at the cost of
+  about 16 genuine field-goal-only possessions (0.04% of trips, all non-touchdowns). Every
+  remaining difference from the source is attributed (222 team-games, 0 unexplained). The league
+  rate now reads 0.5395; only the two red-zone rate columns move.
+- **Known leftover**: 44 trips without a recorded drive result, mostly the first half of a
+  1999-2000 drive nflverse split at a timeout, stay in the rate's denominator; joining split
+  pieces is a later fix (0.1% of trips).

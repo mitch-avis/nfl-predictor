@@ -732,3 +732,14 @@ def test_history_first_season_defaults_to_the_first_play_by_play_season() -> Non
     # Assert
     assert first is history.cross_validated_fit(1999)
     assert second is history.cross_validated_fit(1999)
+
+
+def test_history_reports_its_first_season() -> None:
+    # Arrange
+    league, _ = _carryover_league(2, 0.7, noise=0.3, seed=1)
+
+    # Act
+    history = _history(league)
+
+    # Assert
+    assert history.first_season == 2000

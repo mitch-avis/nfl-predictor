@@ -14,6 +14,7 @@ commit ``9081bce`` so that this package reproduces that project's published rati
   qualifier.
 - :mod:`.rating_ranges`: game-bootstrap rank ranges and head-to-head chances.
 - :mod:`.published_logs`: the adapter from the game logs ``nfl-sos-ratings`` published.
+- :mod:`.season`: every rating table of one season, as that project writes them.
 
 Nothing here reads files or the network: every function takes Polars frames and returns them.
 """

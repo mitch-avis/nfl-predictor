@@ -360,6 +360,11 @@ class PriorHistory:
         self._unpenalized: dict[int, UnitFit] = {}
         self._without: dict[tuple[int, str], SeasonPrior | None] = {}
 
+    @property
+    def first_season(self) -> int:
+        """Return the first season the history holds, which cross-validates its own penalties."""
+        return self._first_season
+
     def game_logs(self, season: int) -> pl.DataFrame:
         """Return one season's team game logs."""
         if season not in self._logs:

@@ -233,6 +233,33 @@ def test_a_current_season_the_asset_cannot_serve_without_a_cache_is_skipped(
     assert qbr.columns == constants.ESPN_QBR_SEASON_COLUMNS
 
 
+def test_a_current_season_the_asset_lacks_is_skipped_without_a_cache_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    asset = _season_level([{"season": 2020}])
+    monkeypatch.setattr(espn_qbr.requests, "get", _serve(_parquet(asset), []))
+
+    # Act
+    qbr = espn_qbr.load_espn_qbr([CURRENT], cache_dir=tmp_path, current_season=CURRENT)
+
+    # Assert
+    assert qbr.is_empty()
+    assert not (tmp_path / f"espn_qbr_season_{CURRENT}_reg.parquet").exists()
+
+
+def test_a_historical_season_the_asset_lacks_is_an_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Arrange
+    asset = _season_level([{"season": 2019}])
+    monkeypatch.setattr(espn_qbr.requests, "get", _serve(_parquet(asset), []))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="no rows for season 2020"):
+        espn_qbr.load_espn_qbr([2020], cache_dir=tmp_path, current_season=CURRENT)
+
+
 def test_an_asset_without_seasons_is_an_unreadable_download(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

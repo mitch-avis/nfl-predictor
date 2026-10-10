@@ -10,7 +10,9 @@ nflreadpy has no loader for it, so ``load_espn_qbr`` downloads the season-level 
 Parquet asset nflverse publishes, which holds every season from 2006, and caches each season like
 the other nflverse sources (``nflverse_sources.SeasonSource``): a historical season reads its
 cached file, the current season is downloaded again, and a failure for the current season falls
-back to the cache. Only regular-season rows are kept, and the team codes are canonical (ESPN
+back to the cache or skips the season. A season the asset holds no row for is such a failure, so
+no empty season is ever cached; for a historical season it stops the load. Only regular-season
+rows are kept, and the team codes are canonical (ESPN
 writes the Raiders, Chargers and Rams under their former cities' codes in earlier seasons). ESPN's
 ``player_id`` is the players file's ``espn_id``.
 """
@@ -70,10 +72,21 @@ class _ReleaseAsset:
         self._frame: pl.DataFrame | None = None
 
     def season(self, season: int) -> pl.DataFrame:
-        """Return the asset's rows for ``season``, downloading the asset on first use."""
+        """Return the asset's rows for ``season``, downloading the asset on first use.
+
+        Raises:
+            ValueError: If the asset holds no row for ``season``, as nflreadpy reports a season
+                it does not serve: the current season then falls back to its cache or is skipped,
+                instead of caching an empty season.
+
+        """
         if self._frame is None:
             self._frame = _download_parquet(self._url)
-        return self._frame.filter(pl.col("season") == season)
+        rows = self._frame.filter(pl.col("season") == season)
+        if rows.is_empty():
+            msg = f"{self._url} holds no rows for season {season}"
+            raise ValueError(msg)
+        return rows
 
 
 def _qbr_source(

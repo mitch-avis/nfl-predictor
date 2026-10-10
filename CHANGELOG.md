@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.49.0] - 2026-10-10
+
+### Added
+
+- `nfl_predictor.ratings`: the team and quarterback ratings of `nfl-sos-ratings` (frozen at
+  `9081bce`), ported: points per game against an average team for offense, defense and special
+  teams from a play-weighted ridge fit with the previous season's cross-validated penalty, the
+  preseason prior inside the fit (fading out by a team's ninth game), schedule strength from
+  refits without the evaluated team's games, quarterback EPA per dropback adjusted for the
+  defenses faced, weekly histories, and bootstrap rank ranges and head-to-head chances (1000
+  resamples). Rebuilt over 1999-2026, it reproduces every ratings file that repository published,
+  rank ranges included (`.agents/sos_port/RATINGS_PARITY.md`).
+- A leakage-safe pre-week entry point (`RatingsHistory.pre_week`): ratings for a week fitted only
+  on earlier games, with penalties chosen before the week. Nothing in the ETL or the model uses the
+  package yet.
+- Parity tests on fixtures cut from the published files (floats to 1e-12, so they hold on any
+  CPU's math kernel) and `.agents/sos_port/ratings_parity.py`, which rebuilds every season and
+  compares every cell.
+
 ## [0.48.0] - 2026-10-10
 
 ### Added

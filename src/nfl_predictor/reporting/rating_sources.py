@@ -21,6 +21,7 @@ Rating frames are long: one row per ``season``, ``week`` and ``team`` with the `
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pickle import UnpicklingError
 from typing import TYPE_CHECKING, Any
 
 import joblib
@@ -55,6 +56,21 @@ MODEL_RATING_RIDGE_LAMBDA = 1e-6
 FIRST_FITTED_WEEK = 2
 
 _GAME_COLUMNS = ("away_abbr", "home_abbr", "predicted_margin")
+
+# What reading walk-forward fold checkpoints can raise for a missing, foreign, half-written or
+# damaged source: the set the walk-forward's own checkpoint loader treats as unreadable, plus the
+# ValueError and TypeError this module's reader raises for a source it refuses.
+UNREADABLE_PREDICTION_ERRORS: tuple[type[Exception], ...] = (
+    OSError,
+    EOFError,
+    ValueError,
+    TypeError,
+    AttributeError,
+    ImportError,
+    KeyError,
+    IndexError,
+    UnpicklingError,
+)
 
 # What the model rating reads from a walk-forward's fold predictions.
 PREDICTION_COLUMNS = (
@@ -710,6 +726,7 @@ __all__ = [
     "PORTED_RATING_COLUMN",
     "PREDICTION_COLUMNS",
     "RATING_SCHEMA",
+    "UNREADABLE_PREDICTION_ERRORS",
     "FoldPredictions",
     "ModelRatingFit",
     "PortedRatings",

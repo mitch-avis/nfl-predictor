@@ -1386,15 +1386,17 @@ def _model_week_ratings(
 
     Raises:
         rating_sources.RatingSourceUnavailableError: If the predictions cannot be read (a missing
-            or foreign directory, a fold file without predictions, a game in two sources), miss
-            a game the fit reads, or week 1 has no carryover factor; the message names the paths.
+            or foreign directory, a half-written or damaged fold file, one without predictions,
+            a game in two sources: `rating_sources.UNREADABLE_PREDICTION_ERRORS`), miss a game
+            the fit reads, or week 1 has no carryover factor; the message names the paths.
 
     """
     sources = ", ".join(str(path) for path in options.model_predictions)
     try:
         predictions = rating_sources.read_predictions(list(options.model_predictions))
-    except (ValueError, TypeError, OSError) as error:
-        msg = f"cannot read the walk-forward predictions in {sources}: {error}"
+    except rating_sources.UNREADABLE_PREDICTION_ERRORS as error:
+        detail = str(error) or type(error).__name__
+        msg = f"cannot read the walk-forward predictions in {sources}: {detail}"
         raise rating_sources.RatingSourceUnavailableError(msg) from error
     fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
     _check_prediction_coverage(

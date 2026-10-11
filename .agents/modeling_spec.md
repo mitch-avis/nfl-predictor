@@ -256,3 +256,29 @@ Rules for stat-style features:
   with two dataset builds behind an ETL flag, back up `data/*.csv` before each rebuild, and keep
   both walk-forward reports under `models/`. Measure early-season changes with `--wf-start-week 1`
   and report weeks 1, 2, and 3-18 separately.
+
+## Season and week conventions
+
+- Use `constants.get_regular_season_weeks(season)` to determine regular-season length.
+- Week 1 and early-season rows with missing history use the previous regular season regressed by
+  `constants.WEEK1_REGRESSION_FACTOR`. From week 2 on, season-to-date stats blend toward that
+  same prior with in-season weight `games / (games + constants.PRIOR_BLEND_GAMES)`, and rates are
+  recomputed from the blended sums (`polars_utils.blend_with_prior_stats`). The adjusted-strength
+  family blends its own previous-season snapshot the same way, with its own `K` option
+  (`--strength-prior-blend-games`, same default). New season-to-date families inherit the stat
+  blend automatically if they flow through `team_stats_df`.
+- Future games have missing outcomes; the pipeline still outputs a structurally complete row
+  suitable for prediction. Postseason rows may exist; training and evaluation defaults are
+  explicit about whether postseason is included and, if included, how it is weighted.
+
+## Operational behaviors that must not regress
+
+Each of these is pinned by a test; a change that breaks one is a defect, not a design choice.
+
+- Pre-kickoff current-week detection resolves to the new season's Week 1, not the prior season's
+  final playoff week.
+- Current-season nflreadpy team-stat 404s are non-fatal, so ETL still runs when the schedule
+  exists before weekly stats are published. Every nflreadpy source (play-by-play included)
+  follows the same cache-then-degrade pattern.
+- Default weekly prediction-file resolution uses the CSV `season` and `week` values, not the
+  filename week, so a stale `week_22` file never wins over a new `week_01` file.

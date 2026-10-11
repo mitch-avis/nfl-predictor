@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.45.1] - 2026-10-11
+
+### Changed
+
+- `AGENTS.md` is a third of its former length (177 lines): the delegation guardrails are one-line
+  rules there and their definitions moved to `.agents/guardrails.md`; the season and week
+  conventions and the three readiness behaviors moved to `.agents/modeling_spec.md`; the
+  `launch.sh` lessons moved to `.agents/walk_forward_runbook.md`; and the `constants.py`, ETL
+  and model-code rules became path-scoped rules under `.claude/rules/` that load only when those
+  files are touched.
+- The handoff file is injected at session start and after every compaction by a `SessionStart`
+  hook in `.claude/settings.json`, and the `implementer` and `reviewer` subagents run at medium
+  effort with turn caps (200 and 100).
+
 ## [0.45.0] - 2026-10-09
 
 ### Changed

@@ -6,6 +6,8 @@ description: >-
   checkpoints, check provenance, write REVIEW.md). Give it the task ID, the branch and worktree path,
   or the run directories and the decision rule written before the run. Never use it to review work
   the same agent produced.
+effort: medium
+maxTurns: 100
 skills:
   - code-review
 disallowedTools:

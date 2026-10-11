@@ -5,6 +5,8 @@ description: >-
   test first, the change, living docs, scripts/gate.sh green, commits on its worktree branch. Give it
   the task ID and text, the version number to use (or none), and anything already decided with the
   user. Not for walk-forward runs, ETL rebuilds, or anything else AGENTS.md rule 5 makes must-ask.
+effort: medium
+maxTurns: 200
 skills:
   - test-driven-development
   - systematic-debugging

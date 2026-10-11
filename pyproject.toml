@@ -147,12 +147,11 @@ extend-allowed-calls = ["polars.lit"]
     "D",       # test names document themselves
     "ANN",     # fixtures/params don't need annotations everywhere
     "SLF001",  # tests may poke private helpers
-    "INP001",
-    "ARG001",
-    "ARG002",
-    "ARG005",
-    "DTZ001",  # EXIF timestamps are naive by definition
-    "PLC0415",
+    "INP001",  # tests/ sits on pytest's pythonpath as a plain directory, not a package
+    "ARG001",  # fixtures requested for their side effects; stubs keep the replaced signature
+    "ARG005",  # monkeypatched lambdas keep the signature of the function they replace
+    "DTZ001",  # test data uses naive datetimes, like the schedule dates it stands in for
+    "PLC0415", # an import used by a single test stays local to that test
 ]
 # Genuine false positives, each reviewed; the reason sits beside the rule.
 "src/nfl_predictor/api/registry/*.py" = [

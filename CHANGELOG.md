@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.45.2] - 2026-10-11
+
+### Changed
+
+- `AGENTS.md` forbids inline lint and type-checker suppressions (`noqa`, `type: ignore`,
+  `pyright: ignore`, `pragma: no cover`) instead of allowing them when narrowly justified: a
+  genuine false positive goes in `[tool.ruff.lint.per-file-ignores]` with a one-line reason. The
+  code has no inline suppressions today.
+
 ## [0.45.1] - 2026-10-11
 
 ### Changed

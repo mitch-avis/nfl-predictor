@@ -6,7 +6,23 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
 `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-10, roadmap steps 4 and 5 closed, step 6 not started)
+## State (written 2026-10-11, instruction files restructured; step 6 in progress on its own branch)
+
+- Branch `docs/agents-md-trim` off `main` holds `0.45.1`: `AGENTS.md` cut from 533 to 177 lines
+  with the guardrails' long form in `.agents/guardrails.md`, path-scoped rules under
+  `.claude/rules/`, the season and week conventions in `.agents/modeling_spec.md`, the launch
+  lessons in `.agents/walk_forward_runbook.md`, and a `SessionStart` hook that injects this file
+  at startup and after compaction. Merging it into `main` is must-ask (rule 5).
+- Step 6 work from 2026-10-10 lives on `feat/step6-sos-port` (worktree `~/scratch/step6`, 520
+  commits ahead of `main`) and `feat/sos-port-inventory`. Four `worktree-agent-*` branches hold
+  commits that never reached the step-6 branch and await the user's triage: `a2071e4c` (9: the
+  even-blend ranking default, a breaking weekly-run change), `a5c59090` (19: rating-definition
+  tests and their records), `aa56c16b` (23: betting-edge review scripts and sos-port tests),
+  `ab92fdae` (6: the refreshed port audit). Their worktrees were removed; the other 17 agent
+  branches were contained in the step-6 branch and were deleted.
+- The user's main model is Opus 5.5 at the default medium effort (`/effort high` for debugging
+  and verification work); subagents run Opus 5.5 at medium with turn caps. Fable 5.1 is used
+  only when the week's credits are exhausted.
 
 - The main checkout is on `main` at `0.45.0` (`f139c20`), pushed and clean. The only other branch
   is `feat/web-ui`: leave it alone. No agent worktrees remain. `scripts/gate.sh --web` exits `0`

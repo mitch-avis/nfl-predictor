@@ -6,18 +6,16 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
 `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-11, lint-suppression rule on its own branch; step 6 in progress)
+## State (written 2026-10-11, instruction files and lint rule merged; step 6 in progress)
 
-- `main` holds `0.45.1` (merge `1cf08d1`, five commits ahead of `origin/main`, not pushed): the
-  instruction-file restructure, with `AGENTS.md` at 177 lines, the guardrails' long form in
-  `.agents/guardrails.md`, path-scoped rules under `.claude/rules/`, the season and week
-  conventions in `.agents/modeling_spec.md`, the launch lessons in
-  `.agents/walk_forward_runbook.md`, and a `SessionStart` hook that injects this file at startup
-  and after compaction. `docs/agents-md-trim` is merged.
-- Branch `docs/lint-suppression-rule` off `main` holds `0.45.2`: `AGENTS.md` forbids inline lint
-  and type-checker suppressions, and a genuine false positive goes in Ruff's per-file ignores with
-  a one-line reason (the user's global `~/.agents/AGENTS.md` now says the same). Merging it into
-  `main` is must-ask (rule 5).
+- `main` holds `0.45.2`, ahead of `origin/main` and not pushed. `0.45.1` is the instruction-file
+  restructure: `AGENTS.md` at 177 lines, the guardrails' long form in `.agents/guardrails.md`,
+  path-scoped rules under `.claude/rules/`, the season and week conventions in
+  `.agents/modeling_spec.md`, the launch lessons in `.agents/walk_forward_runbook.md`, and a
+  `SessionStart` hook that injects this file at startup and after compaction. `0.45.2` forbids
+  inline lint and type-checker suppressions: a genuine false positive goes in Ruff's per-file
+  ignores with a one-line reason, and every existing one has its reason. The user's global
+  `~/.agents/AGENTS.md` and skills say the same. Both docs branches are merged and deleted.
 - Step 6 work from 2026-10-10 lives on `feat/step6-sos-port` (worktree `~/scratch/step6`, 520
   commits ahead of `main`) and `feat/sos-port-inventory`. Four `worktree-agent-*` branches hold
   commits that never reached the step-6 branch and await the user's triage: `a2071e4c` (9: the
@@ -29,10 +27,9 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   and verification work); subagents run Opus 5.5 at medium with turn caps. Fable 5.1 is used
   only when the week's credits are exhausted.
 
-- The main checkout is on `docs/lint-suppression-rule`. Other branches: `feat/web-ui` (leave it
-  alone), the step-6 branches and the four agent branches above, and the merged
-  `docs/agents-md-trim`. Worktrees: `~/scratch/step6` (`feat/step6-sos-port`) and
-  `~/scratch/step6_runs` (detached). `scripts/gate.sh` exits `0` on this branch, and the
+- The main checkout is on `main`. Other branches: `feat/web-ui` (leave it alone), and the step-6
+  branches and four agent branches above. Worktrees: `~/scratch/step6` (`feat/step6-sos-port`)
+  and `~/scratch/step6_runs` (detached). `scripts/gate.sh` exits `0` on `main`, and the
   environment is synced with the LightGBM CUDA flags.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.

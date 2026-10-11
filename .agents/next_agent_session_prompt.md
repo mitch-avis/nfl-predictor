@@ -6,13 +6,16 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
 `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-11, instruction files restructured; step 6 in progress on its own branch)
+## State (written 2026-10-11, instruction files and lint rule merged; step 6 in progress)
 
-- Branch `docs/agents-md-trim` off `main` holds `0.45.1`: `AGENTS.md` cut from 533 to 177 lines
-  with the guardrails' long form in `.agents/guardrails.md`, path-scoped rules under
-  `.claude/rules/`, the season and week conventions in `.agents/modeling_spec.md`, the launch
-  lessons in `.agents/walk_forward_runbook.md`, and a `SessionStart` hook that injects this file
-  at startup and after compaction. Merging it into `main` is must-ask (rule 5).
+- `main` holds `0.45.2`, ahead of `origin/main` and not pushed. `0.45.1` is the instruction-file
+  restructure: `AGENTS.md` at 177 lines, the guardrails' long form in `.agents/guardrails.md`,
+  path-scoped rules under `.claude/rules/`, the season and week conventions in
+  `.agents/modeling_spec.md`, the launch lessons in `.agents/walk_forward_runbook.md`, and a
+  `SessionStart` hook that injects this file at startup and after compaction. `0.45.2` forbids
+  inline lint and type-checker suppressions: a genuine false positive goes in Ruff's per-file
+  ignores with a one-line reason, and every existing one has its reason. The user's global
+  `~/.agents/AGENTS.md` and skills say the same. Both docs branches are merged and deleted.
 - Step 6 work from 2026-10-10 lives on `feat/step6-sos-port` (worktree `~/scratch/step6`, 520
   commits ahead of `main`) and `feat/sos-port-inventory`. Four `worktree-agent-*` branches hold
   commits that never reached the step-6 branch and await the user's triage: `a2071e4c` (9: the
@@ -24,10 +27,10 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   and verification work); subagents run Opus 5.5 at medium with turn caps. Fable 5.1 is used
   only when the week's credits are exhausted.
 
-- The main checkout is on `main` at `0.45.0` (`f139c20`), pushed and clean. The only other branch
-  is `feat/web-ui`: leave it alone. No agent worktrees remain. `scripts/gate.sh --web` exits `0`
-  on this tree (1580 passed, coverage 93.29%), and the environment is synced with the LightGBM
-  CUDA flags.
+- The main checkout is on `main`. Other branches: `feat/web-ui` (leave it alone), and the step-6
+  branches and four agent branches above. Worktrees: `~/scratch/step6` (`feat/step6-sos-port`)
+  and `~/scratch/step6_runs` (detached). `scripts/gate.sh` exits `0` on `main`, and the
+  environment is synced with the LightGBM CUDA flags.
 - The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
   or restart it yourself (rule 5); it loads new code only when the user restarts it.
 - Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed

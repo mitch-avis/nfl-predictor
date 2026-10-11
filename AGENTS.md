@@ -136,10 +136,13 @@ Binding in every session; definitions, limits and examples are in `.agents/guard
   commit in `.agents/sos_port_source.md`: read it there, read-only, never import it; the
   repo-root symlink to it exists only for reading. Leave untracked files in neighbors alone.
 - Style: logging through `from nfl_predictor.utils.logger import log`, no `print`; Polars
-  expressions over Python loops in ETL; type hints on all new or modified code; no new `noqa`,
-  `type: ignore` or `pragma: no cover` unless narrowly justified; a file past about 2,000 lines
-  gets a split proposal; no roadmap labels, milestone or task numbers in code, comments,
-  docstrings or tests.
+  expressions over Python loops in ETL; type hints on all new or modified code; a file past about
+  2,000 lines gets a split proposal; no roadmap labels, milestone or task numbers in code,
+  comments, docstrings or tests.
+- Lint and type findings get fixed, never silenced inline: no `noqa`, `type: ignore`,
+  `pyright: ignore` or `pragma: no cover`. A genuine false positive, checked against Ruff's own
+  settings first, goes in `[tool.ruff.lint.per-file-ignores]` in `pyproject.toml` with a one-line
+  reason beside the rule.
 - Keep `README.md`, nested READMEs, `.agents/TODO.md`, `.agents/ARCHIVE.md`,
   `.agents/feature_crosswalk.md` and `CHANGELOG.md` in step with the repo after meaningful
   progress. No unrelated features, scrapers or external services, and no betting-profitability

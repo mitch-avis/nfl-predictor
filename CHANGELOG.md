@@ -8,6 +8,9 @@
   `pyright: ignore`, `pragma: no cover`) instead of allowing them when narrowly justified: a
   genuine false positive goes in `[tool.ruff.lint.per-file-ignores]` with a one-line reason. The
   code has no inline suppressions today.
+- Every `tests/**` per-file ignore in `pyproject.toml` states its reason: the `DTZ001` reason
+  describes this repo's naive test dates instead of EXIF timestamps, and the `ARG002` ignore,
+  which matched nothing, is gone.
 
 ## [0.45.1] - 2026-10-11
 

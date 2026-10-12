@@ -8,6 +8,8 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
 
 ## State (written 2026-10-11, prompt-audit fixes merged; step 6 in progress)
 
+- `0.45.4` (branch `docs/tdd-roles`): the three-role testing standard (planner contract,
+  implementer, reviewer with adversarial tests) is in `AGENTS.md` and both custom agents.
 - `main` holds `0.45.3`, ahead of `origin/main` and not pushed. `0.45.1` is the instruction-file
   restructure: `AGENTS.md` at 177 lines, the guardrails' long form in `.agents/guardrails.md`,
   path-scoped rules under `.claude/rules/`, the season and week conventions in

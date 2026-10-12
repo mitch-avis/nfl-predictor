@@ -11,8 +11,9 @@ that branch.
 
 ## State (written 2026-10-12, after the review session)
 
-- `main` holds `0.45.4`, ahead of `origin/main` and not pushed. `scripts/gate.sh` exited `0` on
-  it at `0.45.4`. The main checkout stays on `main`.
+- `main` holds `0.45.4` plus this handoff (merged with the user's approval), ahead of
+  `origin/main` and not pushed. `scripts/gate.sh` exited `0` on the handoff branch before the
+  merge. The main checkout stays on `main`.
 - Step 6 (absorbing `nfl-sos-ratings`) lives on `feat/step6-sos-port` (`0.57.1`, tip `644760d`,
   worktree `~/scratch/step6`), 521 commits ahead of `main` and 30 behind it.
 - The review session (2026-10-12) ran six independent reviewers, each in a fresh context; every
@@ -78,17 +79,41 @@ that branch.
   holdout are accepted departures; the betting report's three columns and sigma check are
   approved, labels unchanged; the three-session plan is accepted.
 
-## Open questions for the user (asked 2026-10-12)
+- 2026-10-12, on the review session's questions:
+  - Replace the strength snapshot with the ported ratings in production (rule 1): yes.
+  - Keep the play-by-play corrections, which measure as a tie: yes, as correctness fixes.
+  - Keep the `qb_elos.csv` columns, the own Elo optional and off (rule 2): yes, tentatively; the
+    user may revisit it soon.
+  - The own Elo joins the configuration without game lines, in whichever variant measures
+    stronger there, with or without the preseason win-total pull; only the variant without win
+    totals has been measured in the model. The configuration may need a new name, since with win
+    totals it is no longer free of market information.
+  - The kickoff-starter point is a shared convention, not a caveat on adoption: `qb_elos.csv`
+    also rates past games for the actual starter, and the user sets each week's projected
+    starters by hand before running `../nfeloqb`. Record it once in `.agents/benchmarks.md`.
+  - The blend default's failure handling: read the reference runs only in week 1; on a skip, log
+    an error, keep the projected standings, do not mark the stage done; no fallback to
+    `composite`.
+  - Merge this handoff into `main` (done).
 
-1. Act on rule 1: replace the strength snapshot with the ported ratings in production.
-   Recommended: the diagnostic shows the ratings carry the whole gain.
-2. Keep the play-by-play corrections, which measure as a tie. Recommended, as correctness fixes.
-3. Accept rule 2: keep the `qb_elos.csv` columns, the own Elo optional and off. Recommended; it
-   makes the `../nfeloqb` stale-win-total fix decision live.
-4. Add the own Elo's market-free variant to the market-free configuration, with the
-   kickoff-starter caveat recorded. Recommended, medium confidence.
-5. The blend default's failure handling: read the reference runs only in week 1; on a skip, log
-   an error, keep the projected standings, do not mark the stage done. Recommended.
+## Open for the user
+
+1. Approve two walk-forwards (seeds 42 and 7, about 70 minutes on the GPU) that pit the own
+   Elo's win-total variant against the variant without win totals in the configuration without
+   game lines, on the step-6 candidate build from `~/scratch/step6_runs`. Proposed rule, written
+   into a new `models/step6/HYPOTHESIS_*.md` before launch: all weeks, two seeds; a Brier win
+   with no log-loss loss adopts the win-total variant, anything else keeps the variant without
+   win totals.
+2. The configuration's name. Proposed: "no game lines", the user's own definition of 2026-10-10,
+   already used by the blend branch's help text; "market-free test bench" stays the name of the
+   strict reference without game lines or Elo.
+3. The `../nfeloqb` fix, for the approval session. The fork's `handle_regression`
+   (`nfeloqb/Resources/elo.py:120-142`) pulls each preseason Elo toward the Vegas win-total
+   rating only when its local `Manual Data/wt_ratings.csv` has that season, and that file ends
+   at 2023. So 2024-2026 get plain regression only, unlike every earlier season. The upstream
+   `greerreNFL/nfelosrs` `wt_ratings.csv` covers 2003-2026. Pointing the fork at it changes the
+   `qb_elos.csv` values for 2024-2026, so it needs a new build and a walk-forward before it
+   reaches production.
 
 ## Next
 
@@ -96,9 +121,12 @@ that branch.
    `main` into the branch first; merge the four reviewed branches in order (audit refresh, rating
    tests, betting edges, blend default), each after one fix round on its findings and a
    reviewer re-check, each with its version, `CHANGELOG.md` entry and committed review report;
-   the adoption chunk per the answers to questions 1-4, grouped with the blend branch's
-   fingerprint change; the pre-registered betting-label test; the docs close-out, the approvals
-   list and the final HTML report; `scripts/gate.sh --web` on the final tree.
+   the adoption chunk per the 2026-10-12 decisions (production disables `strength`, `own_elo`
+   and `own_elo_wt`; `floor_sigma_reference_runs` points at
+   `models/step6/ratings_anchored_seed{42,7}`), grouped with the blend branch's fingerprint
+   change; the own-Elo variant for the configuration without game lines once item 1 under "Open
+   for the user" is settled; the pre-registered betting-label test; the docs close-out, the
+   approvals list and the final HTML report; `scripts/gate.sh --web` on the final tree.
 2. **Approval and merge session with the user, between game weeks** (after Monday night, before
    Thursday): the approvals list and HTML report; the merge to `main` in a temporary worktree;
    the `data/` rebuild with a backup; `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`;
@@ -106,9 +134,8 @@ that branch.
    then the `../nfeloqb` fix decision.
 
 Not scheduled yet: projected standings on the ported ratings, the source's prior and wp-filter
-reruns and data notes, the "no game lines" measurement with the win-total Elo, a week-1
-quarterback carryover, a pick-time-starter diagnostic for the own Elo, and the ratings refit
-speed-up. Weekly runs and picks are the user's.
+reruns and data notes, a week-1 quarterback carryover, and the ratings refit speed-up. Weekly
+runs and picks are the user's.
 
 ## How the last sessions worked (keep doing this)
 

@@ -29,7 +29,7 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
     to the market-free configuration. Caveat (the reviewer's P2): the own Elo rates past games
     for the starter known only at kickoff; the previous starter costs it +0.00101 Brier, about
     the size of that win.
-  - None of these outcomes is adopted yet: each waits for the user (questions below).
+  - The user decided on these on 2026-10-12 (below); nothing is adopted on the branch yet.
 - Four agent branches, each reviewed on 2026-10-12 in a detached scratch worktree with the gate
   re-run (all exit `0`). Each verdict is "approve with findings", no P0 or P1. Full reports, gate
   logs and the reviewers' uncommitted adversarial tests are in `~/scratch/step6_review/`
@@ -97,20 +97,37 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
   holdout are accepted departures; the betting report's three columns and sigma check are
   approved, labels unchanged; `feat/sos-port-inventory` deleted.
 
-## Open questions for the user (asked 2026-10-12, unanswered when this was written)
+- 2026-10-12, on the review session's questions:
+  - Replace the strength snapshot with the ported ratings in production (rule 1): yes. Production
+    gets `disable_feature_groups: [strength, own_elo, own_elo_wt]`.
+  - Keep the play-by-play corrections, which measure as a tie: yes, as correctness fixes; record
+    the tie in `.agents/benchmarks.md`.
+  - Keep the `qb_elos.csv` columns, the own Elo optional and off (rule 2): yes, tentatively; the
+    user may revisit it soon.
+  - The own Elo joins the configuration without game lines, in whichever variant measures
+    stronger there, with or without the win-total pull; only the variant without win totals has
+    been measured in the model. The configuration may need a new name.
+  - The kickoff-starter point is a shared convention, not a caveat on adoption: `qb_elos.csv`
+    also rates past games for the actual starter, and the user sets each week's projected
+    starters by hand before running `../nfeloqb`. Record it once in `.agents/benchmarks.md`.
+  - The blend default's failure handling: read the reference runs only in week 1; on a skip, log
+    an error, keep the standings, do not mark the stage done; no fallback to `composite`.
+  - `main`'s handoff merged into `main`.
 
-1. Act on rule 1: replace the strength snapshot with the ported ratings in production
-   (`disable_feature_groups: [strength, own_elo, own_elo_wt]`). Recommended (diagnostic: the
-   ratings carry the whole gain).
-2. Keep the play-by-play corrections, which measure as a tie. Recommended, as correctness fixes;
-   record the tie in `.agents/benchmarks.md`.
-3. Accept rule 2: keep the `qb_elos.csv` columns, own Elo optional and off. Recommended. This
-   makes the `../nfeloqb` stale-win-total fix decision live.
-4. Add the own Elo's market-free variant to the market-free configuration, with the
-   kickoff-starter caveat recorded. Recommended, medium confidence.
-5. The blend default's failure handling: read the reference runs only in week 1; on a skip, log
-   an error, keep the standings, do not mark the stage done; never fall back to `composite`.
-   Recommended.
+## Open for the user
+
+1. Two walk-forwards (seeds 42 and 7, about 70 minutes on the GPU) pitting the own Elo's
+   win-total variant against the variant without win totals in the configuration without game
+   lines, on this build from `~/scratch/step6_runs`. Proposed rule, written into a new
+   `models/step6/HYPOTHESIS_*.md` before launch: all weeks, two seeds; a Brier win with no
+   log-loss loss adopts the win-total variant, anything else keeps the variant without.
+2. The configuration's name; proposed "no game lines" (the user's definition of 2026-10-10),
+   with "market-free test bench" kept for the strict reference.
+3. The `../nfeloqb` fix, for the approval session: the fork's `handle_regression`
+   (`nfeloqb/Resources/elo.py:120-142`) applies the win-total pull only for seasons in its local
+   `Manual Data/wt_ratings.csv`, which ends at 2023, so 2024-2026 get plain regression. The
+   upstream `nfelosrs` file covers 2003-2026; switching changes `qb_elos.csv` for 2024-2026 and
+   needs a build and a walk-forward.
 
 ## Next: the integration session on this branch
 
@@ -122,12 +139,13 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
    its review report committed under `.agents/sos_port/review/` (lint the report first; two of
    the four fail markdownlint as written): the audit refresh (patch; add the missing parity
    pairs, regenerate the reports on the merged tip), the rating tests (patch; with a
-   `DECISIONS.md` index entry), the betting edges (patch), the blend default (minor). Delete
-   each agent branch once merged. The P2 blend fixes wait for the user's answer to question 5.
+   `DECISIONS.md` index entry), the betting edges (patch), the blend default (minor; its fix
+   round includes the failure handling the user approved). Delete each agent branch once merged.
 3. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
-   user's answers to questions 1-4: `disable_feature_groups` and `floor_sigma_reference_runs`
-   (`models/step6/ratings_anchored_seed{42,7}` if question 1 is yes) in `config/weekly_run.yaml`;
-   the market-free configuration and the reference arms in `.agents/benchmarks.md`.
+   2026-10-12 decisions: `disable_feature_groups: [strength, own_elo, own_elo_wt]` and
+   `floor_sigma_reference_runs: models/step6/ratings_anchored_seed{42,7}` in
+   `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant from
+   item 1 above, once settled) and the reference arms in `.agents/benchmarks.md`.
 4. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
    today's labels).
 5. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, refresh the stale "Review:"

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.45.3] - 2026-10-11
+
+### Changed
+
+- Coverage no longer excludes `pragma: no cover` lines: inline suppressions are forbidden and
+  the code has none.
+- The pre-push hook runs the full `scripts/gate.sh`, pytest included, instead of `--quick`, so
+  nothing is pushed with a failing or untested suite.
+
+### Fixed
+
+- The run check in `AGENTS.md` and `.agents/guardrails.md` is
+  `pgrep -af "nfl-predictor (backtest|weekly)"`: runs launch through the CLI, so the old
+  `pgrep -af walk_forward` matched nothing.
+- `src/nfl_predictor/ml/AGENTS.md` states that the preprocessor in `feature_spec.py`
+  median-imputes missing numeric values for every model, XGBoost included, and drops a sparse
+  matrix note that no code path needed; `src/nfl_predictor/api/AGENTS.md` names the `lines` and
+  `build-week` commands that `lines_refresh.py` and `week_builder.py` back; the `implementer`
+  agent and the comments in `.pre-commit-config.yaml` point at the current `AGENTS.md` section
+  names.
+
 ## [0.45.2] - 2026-10-11
 
 ### Changed

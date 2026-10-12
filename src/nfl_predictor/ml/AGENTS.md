@@ -5,9 +5,9 @@ Scoped instructions for the model code; project-wide rules are in the root `AGEN
 Preprocessing:
 
 - Use `ColumnTransformer` for categorical one-hot + numeric passthrough/impute.
-- Avoid densifying large sparse matrices unintentionally.
 - Tree-based models (XGBoost): do not use `StandardScaler` unless a non-tree model requires it.
-- Missing values: XGBoost can handle them; impute only if required for consistency.
+- Missing numeric values are median-imputed by the preprocessor in `feature_spec.py` for every
+  model, XGBoost included.
 
 Training:
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.45.4] - 2026-10-11
+
+### Changed
+
+- Delegated work follows the three-role testing standard from the global instructions: the task
+  text carries the contract (interface and test cases), the `implementer` derives and records it
+  when missing and never weakens a contracted case, and the `reviewer` writes adversarial tests
+  against the diff in its own worktree and reports which fail without committing them.
+
 ## [0.45.3] - 2026-10-11
 
 ### Changed

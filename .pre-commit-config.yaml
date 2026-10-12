@@ -11,7 +11,7 @@
 #
 # That installs every hook type listed in `default_install_hook_types` below: fast
 # formatting/lint feedback on `git commit`, a commit-message format check, and the
-# quick gate on `git push`.
+# full gate on `git push`.
 
 minimum_pre_commit_version: "3.2.0"
 default_install_hook_types: [pre-commit, pre-push, commit-msg]
@@ -86,12 +86,12 @@ repos:
         stages: [pre-commit]
 
       # ty, pyright, markdownlint, pytest, and the lock/sync checks all need whole-project
-      # context (or are too slow for every commit); `--quick` runs everything except pytest
-      # and the frontend gate. Run `scripts/gate.sh` (add `--web` if `web/` changed) by hand
-      # before trusting a push further.
-      - id: gate-quick
-        name: scripts/gate.sh --quick
-        entry: scripts/gate.sh --quick
+      # context (or are too slow for every commit), so they run once per push: nothing
+      # leaves the machine with a failing or untested suite. The frontend gate is not
+      # included; run `scripts/gate.sh --web` by hand when `web/` or the API changed.
+      - id: gate
+        name: scripts/gate.sh
+        entry: scripts/gate.sh
         language: system
         pass_filenames: false
         stages: [pre-push]

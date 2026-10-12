@@ -167,10 +167,10 @@ Binding in every session; definitions, limits and examples are in `.agents/guard
 
 ## Runs and the running server
 
-- One walk-forward at a time: check `uptime` and `pgrep -af walk_forward` first. Launch every
-  run through a `launch.sh` in its own run directory with `nohup setsid`, never from a
-  harness-bound shell (10-minute limit); accepted rungs run back to back through one driver
-  script. The runbook has the timings and the launch lessons.
+- One walk-forward at a time: check `uptime` and `pgrep -af "nfl-predictor (backtest|weekly)"`
+  first. Launch every run through a `launch.sh` in its own run directory with `nohup setsid`,
+  never from a harness-bound shell (10-minute limit); accepted rungs run back to back through
+  one driver script. The runbook has the timings and the launch lessons.
 - Runs checkpoint every finished week under `models/wf_checkpoints/<fingerprint>/`, and
   rerunning the identical command resumes. Never delete `models/<run_id>/wf_compare/` during a
   run, and keep comparison artifacts under `models/`.

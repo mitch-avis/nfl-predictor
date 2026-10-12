@@ -1,125 +1,158 @@
 # Next Agent Session Prompt
 
 You are resuming work in the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`).
-Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as binding, then
-`.agents/TODO.md` ("Roadmap Status", above all step 6, and "Open follow-ups from completed
-milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
-`.agents/benchmarks.md` before any walk-forward, and this file.
+Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as binding. Then read
+`.agents/ultracode_session_audit_2026-10-10.md` (the audit of the unattended step-6 session: what
+landed, what is half done, the four unmerged branches, the breaches), `.agents/benchmarks.md`
+before any walk-forward, and this file. The step-6 plan and decision log live only on the step-6
+branch: `~/scratch/step6/.agents/step6_plan.md` and `~/scratch/step6/.agents/sos_port/DECISIONS.md`.
 
-## State (written 2026-10-11, prompt-audit fixes merged; step 6 in progress)
+## State (written 2026-10-11, after the step-6 session audit)
 
-- `main` holds `0.45.3`, ahead of `origin/main` and not pushed. `0.45.1` is the instruction-file
-  restructure: `AGENTS.md` at 177 lines, the guardrails' long form in `.agents/guardrails.md`,
-  path-scoped rules under `.claude/rules/`, the season and week conventions in
-  `.agents/modeling_spec.md`, the launch lessons in `.agents/walk_forward_runbook.md`, and a
-  `SessionStart` hook that injects this file at startup and after compaction. `0.45.2` forbids
-  inline lint and type-checker suppressions: a genuine false positive goes in Ruff's per-file
-  ignores with a one-line reason, and every existing one has its reason. `0.45.3` holds the
-  prompt-audit fixes (the run check is `pgrep -af "nfl-predictor (backtest|weekly)"`, current
-  section names, accurate nested `AGENTS.md` files), drops the `pragma: no cover` coverage
-  exclusion, and makes the pre-push hook run the full `scripts/gate.sh` instead of `--quick`.
-  The same audit changed the user's global `~/.agents/AGENTS.md` and skills: every change in
-  every language is covered by a test before it is committed, small fixes included (test-first
-  stays optional only for small fixes). All three docs branches are merged and deleted.
-- Step 6 work from 2026-10-10 lives on `feat/step6-sos-port` (worktree `~/scratch/step6`, 520
-  commits ahead of `main`) and `feat/sos-port-inventory`. Four `worktree-agent-*` branches hold
-  commits that never reached the step-6 branch and await the user's triage: `a2071e4c` (9: the
-  even-blend ranking default, a breaking weekly-run change), `a5c59090` (19: rating-definition
-  tests and their records), `aa56c16b` (23: betting-edge review scripts and sos-port tests),
-  `ab92fdae` (6: the refreshed port audit). Their worktrees were removed; the other 17 agent
-  branches were contained in the step-6 branch and were deleted.
-- The user's main model is Opus 5.5 at the default medium effort (`/effort high` for debugging
-  and verification work); subagents run Opus 5.5 at medium with turn caps. Fable 5.1 is used
-  only when the week's credits are exhausted.
-
-- The main checkout is on `main`. Other branches: `feat/web-ui` (leave it alone), and the step-6
-  branches and four agent branches above. Worktrees: `~/scratch/step6` (`feat/step6-sos-port`)
-  and `~/scratch/step6_runs` (detached). `scripts/gate.sh` exits `0` on `main`, and the
-  environment is synced with the LightGBM CUDA flags.
-- The user runs `nfl-predictor web --port 8001` from the main checkout (no `--reload`). Never stop
-  or restart it yourself (rule 5); it loads new code only when the user restarts it.
-- Roadmap step 4 (feature values, `0.37.2`-`0.45.0`) and step 5 (market-free baseline) are closed
-  and archived (`ARCHIVE.md`). Production since `0.44.0`-`0.45.0`: pick-time market lines by
-  default, the defense-adjusted quarterback rate removed, the next-opponent identity pair pruned,
-  market-free backtests available (`--exclude-market --no-market-anchor --no-market-transform`,
-  plus `--disable-feature-groups elo` for no market information at all), tests isolated from
-  `data/` and the network, and production's floor-sigma pool is the adopted-settings reference.
-- `data/` was rebuilt 2026-10-09 with these defaults (backup in
-  `data/backup_pre_step4_adopted_20261009/`). The current GPU reference is
-  `models/step4_reference/adopted_seed42` and `adopted_seed7`; the step-6 test bench is
-  `models/step4_reference/marketfree_all_seed42` and `marketfree_all_seed7`. Both are reviewed
-  (`models/step4_reference/REVIEW.md`; numbers in `.agents/benchmarks.md`, "Adopted-settings
-  reference and market-free baselines").
-- `nfl-sos-ratings` is frozen at `9081bce` and its session is archived; everything still open
-  there is this repo's work, recorded in `.agents/sos_port_source.md`. Read it at that commit,
-  read-only (`git -C ../nfl-sos-ratings show 9081bce:<path>`).
-- Names (guardrail 16, and the user's global rule): the current-settings baseline (`R0`), the
-  pick-time lines test (`PT`), the adopted-settings reference (`adopted_*`), the market-free run
-  without betting-line columns (`marketfree_lines_*`), the market-free run without betting-line or
-  Elo columns, which is the test bench (`marketfree_all_*`). Never use a code alone with the
-  user; say what a task or step is, not just its number.
+- `main` holds `0.45.3`, ahead of `origin/main` and not pushed: the instruction-file restructure
+  (`0.45.1`), no inline lint suppressions (`0.45.2`) and the prompt-audit fixes (`0.45.3`), plus
+  the step-6 session audit and this handoff (docs only, merged from `docs/step6-audit`).
+  `scripts/gate.sh` last exited `0` on `main` at `0.45.3`.
+- Step 6 (absorbing `nfl-sos-ratings`) lives on `feat/step6-sos-port`, tip `2efbd3e` (`0.57.1`),
+  520 commits ahead of `main`, worktree `~/scratch/step6`. Fifteen versions landed there on
+  2026-10-10, each after an independent review. That branch's own handoff is stale on two points:
+  the blend-default branch did not die (all 9 commits are there), and the betting-edge branch's
+  tip is `e9c7a09`, not `00f2d02`.
+- Four branches hold finished, unmerged work (worktrees removed; the audit has their contents):
+  - `worktree-agent-ab92fdaea474da115` (6 commits, tip `74641b8`): the refreshed phase-1
+    inventory and parity audit. Unreviewed.
+  - `worktree-agent-a5c5909054257aa73` (19, tip `a668e7f`): the open rating-definition tests.
+    Unreviewed; it skipped the pre-registered ESPN QBR extras and the passer holdout.
+  - `worktree-agent-aa56c16b91074022f` (23, tip `e9c7a09`): the betting-edge split, including
+    three new columns in `reporting/betting_report.py`. Reviewed in two rounds; the last fixes
+    `07bd2ca..e9c7a09` were never re-checked.
+  - `worktree-agent-a2071e4c492dbbdda` (9, tip `5aa5c74`): the blend ranking default
+    (`6c0c285`, breaking) and the "no game lines" wording (`5284db2` edits `ml/feature_spec.py`,
+    which changes every checkpoint fingerprint). Review stopped at its start.
+- `feat/sos-port-inventory` was fully contained in the step-6 branch and was deleted 2026-10-11.
+- Phase 4 walk-forwards: all ten runs under `models/step6/` exited `0` (`driver.log`), built
+  from `d6064eb` (`0.55.0`) into `~/scratch/step6/data`. `models/step6/REVIEW.md` covers
+  decision 1 only (ported ratings replace the strength snapshot: rule 1's first branch). The
+  new-build reference diagnostic (`newref_anchored_seed{42,7}`) and decision 2, the own Elo
+  (`elo_anchored_seed{42,7}`, `elo_marketfree_seed{42,7}`), are unreviewed; the session's own
+  check-ins in `models/step6/checkins/` are not a second key. Rules and the diagnostic's
+  amendment are in `models/step6/HYPOTHESIS.md`.
+- Worktrees: `~/scratch/step6` (`feat/step6-sos-port`) and `~/scratch/step6_runs` (detached at
+  `d6064eb`; the runs' code). Other branch: `feat/web-ui` (leave it alone).
+- The user runs `nfl-predictor web` from the main checkout only when they want it (last seen on
+  port 8001 without `--reload`); none was running on 2026-10-11. Check `ss -ltnp | grep ':80'`
+  before a merge or checkout there. Never stop or restart a running server yourself (rule 5).
+  Never switch the main checkout off `main`.
+- `data/` was rebuilt 2026-10-09 (backup in `data/backup_pre_step4_adopted_20261009/`) and was
+  not touched by step 6. The GPU reference is `models/step4_reference/adopted_seed{42,7}`; the
+  step-6 test bench is `models/step4_reference/marketfree_all_seed{42,7}`; both are reviewed
+  (`models/step4_reference/REVIEW.md`).
+- `nfl-sos-ratings` is frozen at `9081bce`; read it only as
+  `git -C ../nfl-sos-ratings show 9081bce:<path>`. Its open items are in
+  `.agents/sos_port_source.md`.
+- The user's main model is Opus 5.5 at medium effort; subagents run Opus 5.5 at medium with turn
+  caps.
+- Names: the adopted-settings reference (`adopted_*`), the market-free run without betting-line
+  or Elo columns, which is the test bench (`marketfree_all_*`), the ported-ratings arms
+  (`ratings_anchored_*`, `ratings_marketfree_*`), the new-build reference (`newref_anchored_*`)
+  and the own-Elo arms (`elo_anchored_*`, `elo_marketfree_*`). Never use a code alone with the
+  user.
 
 ## Decisions on record
 
-- 2026-10-02: drop the defense-adjusted quarterback rate; drop the next-opponent identity pair
-  from the model; adopt pick-time lines.
-- 2026-10-08: the season-to-date stat blend keeps `K = 4`; the strength-blend `K` is superseded
-  by the preseason prior `nfl-sos-ratings` fits inside its ridge. Roadmap: step 5 the market-free
-  baseline, step 6 absorbing `nfl-sos-ratings` fully, step 7 the Optuna re-tune. Power rankings
-  combine the ported ratings with the trained model, the combination chosen by measurement in
-  step 6, phase 5. Feature ideas (referee, weather, attendance, team health) are listed under
-  step 6 and not yet approved.
-- 2026-10-09: measure both market-free variants; back up and rebuild `data/`; the market-free
-  option as flags instead of a feature group (accepted). Reported by the `nfl-sos-ratings` session
-  as the user's (treated as standing): the quarterback all-plays test's tie-break order (every
-  quarterback play, then plus scrambles, then passes and sacks), the botched-snap charge rule, and
-  a pre-registered test before kneel-downs and spikes leave the team ratings.
-- 2026-10-10: the step-6 test bench is the market-free run without betting-line or Elo columns;
-  steps 4 and 5 closed, step 4's leftovers moved to step 6; this repo builds its own 538-style
-  Elo as a step 6, phase 4 candidate (plan in `TODO.md`); the user's `../nfeloqb` fork reads a
-  stale local win-total file (2003-2023) and gets its fix only after that Elo replaces the
-  `qb_elos.csv` columns, with the user's go-ahead then.
+- 2026-10-02: drop the defense-adjusted quarterback rate; drop the next-opponent identity pair;
+  adopt pick-time lines.
+- 2026-10-08: the season-to-date stat blend keeps `K = 4`; roadmap step 5 the market-free
+  baseline, step 6 absorbing `nfl-sos-ratings`, step 7 the Optuna re-tune; power rankings combine
+  the ported ratings with the model, chosen by measurement.
+- 2026-10-09: measure both market-free variants; the market-free option as flags. Standing from
+  the `nfl-sos-ratings` session: the quarterback all-plays tie-break order, the botched-snap rule,
+  and a pre-registered test before kneel-downs and spikes leave the team ratings.
+- 2026-10-10 (recorded in `~/scratch/step6/.agents/step6_plan.md`): the weekly run publishes the
+  blend at weight 0.5; the stats-only mode may keep the win-total prior and means "no game
+  lines"; a pre-registered betting-label test, a tie keeping today's labels; feature ideas
+  (referee, weather, attendance, team health) move to a later session; the `../nfeloqb` fix waits
+  for decision 2 and the user's go-ahead.
+- 2026-10-11, on the audit's recommendations:
+  - The blend default: review `worktree-agent-a2071e4c492dbbdda`, then merge it whole into the
+    step-6 branch, last of the four, as a minor version. It reaches `main` only with the user's
+    final approval.
+  - Rule 1 of decision 1 waits for the reviewed new-build diagnostic before anything acts on it.
+  - The session's ten-run ladder is ratified, and the live-betting design (58.3) and the
+    margin-only switch (58.6) stay archived at the merge.
+  - None of the rating-definition outcomes (every wiped snap, every quarterback play, the
+    botched-snap removal) is adopted before the merge; log them as a post-merge measured change
+    (each needs a new build and walk-forward).
+  - `feat/sos-port-inventory` deleted (done).
+  - The rating tests' skipped ESPN QBR extras and passer holdout are accepted as logged
+    departures.
+  - The betting report's three new columns (`market_home_prob_spread`,
+    `edge_beyond_spread_home_prob`, `spread_moneyline_gap_home_prob`) and its sigma check are
+    approved, labels unchanged.
+  - The audit's three-session plan (below) is accepted.
 
 ## Next
 
-1. Roadmap step 6, phase 1, on a new branch off `main` (for example `feat/sos-port-inventory`;
-   creating it needs no ask): a scripted inventory (rule 10) of `nfl-sos-ratings` at `9081bce`
-   against this repo (data sources, metric registry columns, ratings, outputs, web pages), and a
-   check that this repo's play-by-play aggregates match its game logs for the same seasons, with
-   its pre-2006 scramble rule and the nflverse quirks listed in `.agents/sos_port_source.md`.
-   Plan the phase with the user before code (what the inventory covers, how parity is judged).
-2. Batch with step 6's first edit to `constants.py` (it changes every checkpoint fingerprint):
-   a `constants.MODELS_PATH` read at call time by the five places that build `ROOT_DIR /
-   "models"` (`walk_forward.DEFAULT_CHECKPOINT_DIR`, `cli/backtest.py`, `ml/artifacts.py`,
-   `weekly_run/pipeline.py`, `cli/checkpoints.py`) and the API settings, so the test guard can
-   cover `models/` too.
-3. Small follow-ups from the 2026-10-09 review (`models/step4_reference/REVIEW.md`): `compare`
-   scores an exact 0.5 probability as a wrong pick while `ml/metrics.picks_home` picks home (only
-   market lines are affected); name the resampling unit wherever pool-point intervals are quoted.
-4. Weekly runs and picks are the user's. Production-changing work lands between game weeks
-   (after Monday night, before Thursday).
+1. **Review session, no implementers** (this session). `reviewer` subagents with turn caps, at
+   most four at once, each in a fresh context:
+   - Rescore the new-build diagnostic from the fold checkpoints against the amendment in
+     `models/step6/HYPOTHESIS.md`, and append it to `models/step6/REVIEW.md`.
+   - Rescore decision 2 (own-Elo arms against the ported-ratings arms, anchored and
+     market-free) under rule 2 of the same file, and append it to `REVIEW.md`. No new runs.
+   - Review `worktree-agent-ab92fdaea474da115` and `worktree-agent-a5c5909054257aa73` in full,
+     `worktree-agent-a2071e4c492dbbdda` in full, and `07bd2ca..e9c7a09` on
+     `worktree-agent-aa56c16b91074022f`. Each reviewer re-runs the gate in a scratch worktree of
+     its branch and writes adversarial tests without committing them.
+   - The main session rewrites the step-6 branch's handoff with the true branch states and the
+     verdicts, then rewrites this file. Merges wait for the next session. Check in after each
+     rescore with the governing-window numbers (rule 7).
+2. **Integration session on `feat/step6-sos-port`.**
+   - Merge the reviewed branches in order: the audit refresh, the rating tests, the betting edges,
+     then the blend default. Each gets its own incremented version and `CHANGELOG.md` entry; the
+     blend default is the minor bump. Delete each agent branch once merged.
+   - The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14): set
+     `disable_feature_groups` and `floor_sigma_reference_runs` in `config/weekly_run.yaml` to the
+     adopted arms per the outcomes of rules 1 and 2.
+   - Pre-register and run the betting-label test on the 815 real-moneyline games.
+   - Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (it exists only in `/tmp`),
+     refresh the stale "Review:" fields in `.agents/sos_port/decisions/*.md`, commit the
+     hypothesis checksums into git, record the 2026-10-11 decisions in `step6_plan.md` and
+     `TODO.md`, and build the approvals list and the user's final HTML report.
+   - `scripts/gate.sh --web` on the final tree.
+3. **Approval and merge session with the user, between game weeks** (after Monday night, before
+   Thursday): the approvals list and HTML report; the merge to `main` in a temporary worktree;
+   the `data/` rebuild with a backup; `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`;
+   a browser look at the new pages; the 2026 roof recheck before the Paris game on 2026-10-25;
+   then the `../nfeloqb` fix decision.
+
+Not scheduled yet (the audit's "Not started" has the full list): projected standings on the
+ported ratings, the source's prior and wp-filter reruns and data notes, the "no game lines"
+measurement with the win-total Elo, a week-1 quarterback carryover, and the ratings refit
+speed-up. Weekly runs and picks are the user's.
 
 ## How the last sessions worked (keep doing this)
 
 - Each code chunk: an `implementer` subagent in its own worktree, a separate `reviewer`, fixes
-  back to the implementer (a second review round for anything with logic), and a `--no-ff` merge
-  into the step's branch (the commit hook needs a Conventional Commits subject on merge commits
-  too). The delegating session writes `CHANGELOG.md` and the version (`pyproject.toml`,
-  `uv lock`, then `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`), `TODO.md`,
-  `ARCHIVE.md`, `AGENTS.md`, `.agents/benchmarks.md` and this file, and lints the Markdown it
-  edits with `markdownlint-cli2` before committing.
+  back to the implementer, and a second review round for anything with logic. A fix round is
+  re-checked by a reviewer, not by the delegating session. A `--no-ff` merge into the step's
+  branch (the commit hook needs a Conventional Commits subject on merge commits too). The
+  delegating session writes `CHANGELOG.md` and the version (`pyproject.toml`, `uv lock`, then
+  `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`), `TODO.md`, `ARCHIVE.md`,
+  `AGENTS.md`, `.agents/benchmarks.md` and this file, and lints the Markdown it edits.
 - Every measured number goes through an independent reviewer's rescore before it enters the docs
-  (rule 3). Hypotheses and decision rules are written into the run directory before launch; long
-  runs go through one detached driver script with a PID watcher, and nothing is committed while
-  they run (each run records the commit).
-- Merges into `main` happen in a temporary worktree (`git worktree add ~/scratch/merge_main
-  main`), so the user's checkout and running web server are untouched. Run the gate on the final
-  tree, in the main checkout or a scratch worktree.
+  (rule 3). Hypotheses and decision rules are written before launch and committed so they are
+  tamper-evident; long runs go through one detached driver script with a PID watcher.
+- Never pipe a check through `tail` or `head` in a way that hides its exit status. Never send the
+  user's email address to any external service, including in a User-Agent header. Never use the
+  system `python3`; use `.venv/bin/python`. Closing or archiving roadmap items is must-ask.
+- Merges into `main` run in the main checkout, which stays on `main`: `git worktree add` refuses
+  a branch that is checked out elsewhere. Build and commit the branch in a scratch worktree
+  first, check that no web server or job runs from the main checkout, and run the merge there
+  with `GUARD_OK=1` once the user has approved it (the bash-guard hook blocks it otherwise).
 - Inspect an agent's worktree with `git -C <path>` or absolute paths; a `cd` into it moves this
   session's working directory there.
-- Fix lint in the code rather than suppress it. Run `.venv/bin/pre-commit run --all-files`
-  before ending a turn (the Stop hook runs it).
-- Stop at a natural point well before the context fills, and rewrite this file.
+- Run `.venv/bin/pre-commit run --all-files` before ending a turn (the Stop hook runs it). Stop
+  at a natural point well before the context fills, and rewrite this file.
 
 ## Notes
 
@@ -129,7 +162,8 @@ milestones"), `.agents/sos_port_source.md` (the source and open items of the por
   `--floor-sigma-reference-runs` with the GPU reference, and passes `--wf-start-week 1`
   (rule 11).
 - Re-run `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` after every version bump and
-  every merge or checkout that changes the version or the layout; a plain `uv sync` replaces the
-  local CUDA build of LightGBM with the CPU wheel.
-- Elo research (538's original code and methodology, `nfelo`, upstream `nfeloqb`, the free
-  win-total file) is in `~/scratch/elo_research/`.
+  every merge or checkout that changes the version or the layout.
+- The bash-guard hook denies any command starting `git merge` (including `git merge-base`) while
+  the project is on `main`; use `git rev-list --count A..B` or `git diff A...B` instead.
+- Elo research (538's code and methodology, `nfelo`, upstream `nfeloqb`, the win-total file) is in
+  `~/scratch/elo_research/`.

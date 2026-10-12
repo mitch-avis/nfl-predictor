@@ -54,7 +54,7 @@ Give your recommendation with each question (`AGENTS.md` rule 15), and stop for:
   them would conflict. When the prompt gives you a version number, write the changelog entry and the
   version bump for it as `AGENTS.md` describes.
 - Keep `README.md` and the other living docs your change affects current.
-- Commit on your worktree branch as `AGENTS.md` ("Changelog and Commit Workflow") and the
+- Commit on your worktree branch as `AGENTS.md` ("Versions, changelog and commits") and the
   committing-code skill describe.
 - Done means `VIRTUAL_ENV="$PWD/.venv" scripts/gate.sh` exits `0` on your final tree, with `--web`
   added when `web/` or `src/nfl_predictor/api/` changed. `--quick` is for iteration only.

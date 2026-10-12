@@ -55,9 +55,9 @@ so these rules are not advisory.
    cap on the number of rungs and a stopping rule) written into the check-in and accepted by
    the user counts as approval for every rung up to that cap; only a rung beyond the cap, or
    outside the ladder as written, needs a fresh ask. One walk-forward at a time; `uptime` and
-   `pgrep -af walk_forward` first; OpenMP policy by load. Any edit under `src/nfl_predictor/ml/`
-   changes every checkpoint fingerprint, so a rerun after a code change retrains from scratch;
-   plan runs after the code is stable.
+   `pgrep -af "nfl-predictor (backtest|weekly)"` first; OpenMP policy by load. Any edit under
+   `src/nfl_predictor/ml/` changes every checkpoint fingerprint, so a rerun after a code change
+   retrains from scratch; plan runs after the code is stable.
 5. **Must ask first** (stop and wait; never assume):
    - rebuilding anything under `data/` (an ETL rerun), or deleting or overwriting any file under
      `data/` or `models/`;

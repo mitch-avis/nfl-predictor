@@ -113,23 +113,39 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
   - The blend default's failure handling: read the reference runs only in week 1; on a skip, log
     an error, keep the standings, do not mark the stage done; no fallback to `composite`.
   - `main`'s handoff merged into `main`.
+  - Two walk-forwards approved (seeds 42 and 7, about 70 minutes on the GPU): the own Elo's
+    win-total variant against `models/step6/elo_marketfree_seed{42,7}` in the configuration
+    without game lines, on this build from `~/scratch/step6_runs` at `d6064eb`. They wait for the
+    GPU, which another job holds until about 2026-10-13. The rule is pre-registered in
+    `models/step6/nogamelines_wt/HYPOTHESIS.md` (sha256
+    `08bc8c7fdd902e730c0f9de31f41cf657f35aaf11b8a75eeb94959a649970caf`): all weeks, two seeds; a
+    Brier win with no log-loss loss adopts the win-total variant, anything else keeps the variant
+    without win totals; a week-1 or week-2 loss is flagged, not overriding; cap two runs.
+  - The configuration without the market's game lines, anchoring or transform is named "no game
+    lines"; "market-free test bench" stays the name of the strict reference without game lines or
+    Elo (`models/step4_reference/marketfree_all_seed{42,7}`). The rename in the docs is part of
+    the integration session.
 
 ## Open for the user
 
-1. Two walk-forwards (seeds 42 and 7, about 70 minutes on the GPU) pitting the own Elo's
-   win-total variant against the variant without win totals in the configuration without game
-   lines, on this build from `~/scratch/step6_runs`. Proposed rule, written into a new
-   `models/step6/HYPOTHESIS_*.md` before launch: all weeks, two seeds; a Brier win with no
-   log-loss loss adopts the win-total variant, anything else keeps the variant without.
-2. The configuration's name; proposed "no game lines" (the user's definition of 2026-10-10),
-   with "market-free test bench" kept for the strict reference.
-3. The `../nfeloqb` fix, for the approval session: the fork's `handle_regression`
+1. The `../nfeloqb` fix, for the approval session: the fork's `handle_regression`
    (`nfeloqb/Resources/elo.py:120-142`) applies the win-total pull only for seasons in its local
    `Manual Data/wt_ratings.csv`, which ends at 2023, so 2024-2026 get plain regression. The
    upstream `nfelosrs` file covers 2003-2026; switching changes `qb_elos.csv` for 2024-2026 and
    needs a build and a walk-forward.
 
-## Next: the integration session on this branch
+## Next: the win-total runs, then the integration session on this branch
+
+The win-total runs come first, once the GPU is free (`nvidia-smi` shows no other job, and
+`pgrep -af "nfl-predictor (backtest|weekly|data)"` is empty): `uptime`, check the hypothesis
+(`sha256sum --check models/step6/nogamelines_wt/HYPOTHESIS.md.sha256` from the main checkout),
+then `models/step6/nogamelines_wt/launch.sh d6064eb` and note the launch in a `launch_record.txt`
+beside it. The driver waits for GPU memory and other jobs, but not for another project's job
+that holds the GPU with little memory, so the check is by hand. Watch `driver.log` with a
+Monitor until both `end` lines arrive; then an independent `reviewer` rescores the pair from the
+fold checkpoints into `models/step6/nogamelines_wt/REVIEW.md` and a check-in follows (rule 7).
+The integration session need not wait for them: the runs read `~/scratch/step6_runs`, not
+this worktree.
 
 1. Bring `main` (`0.45.1`-`0.45.4`) into this branch first and run the gate: the new
    instructions, the reviewer and implementer definitions and the suppression rule then apply to
@@ -144,8 +160,8 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
 3. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
    2026-10-12 decisions: `disable_feature_groups: [strength, own_elo, own_elo_wt]` and
    `floor_sigma_reference_runs: models/step6/ratings_anchored_seed{42,7}` in
-   `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant from
-   item 1 above, once settled) and the reference arms in `.agents/benchmarks.md`.
+   `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant the
+   reviewed win-total runs select) and the reference arms in `.agents/benchmarks.md`.
 4. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
    today's labels).
 5. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, refresh the stale "Review:"

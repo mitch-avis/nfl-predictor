@@ -14,8 +14,8 @@ that branch.
 - `main` holds `0.45.4` plus this handoff (merged with the user's approval), ahead of
   `origin/main` and not pushed. `scripts/gate.sh` exited `0` on the handoff branch before the
   merge. The main checkout stays on `main`.
-- Step 6 (absorbing `nfl-sos-ratings`) lives on `feat/step6-sos-port` (`0.57.1`, tip `644760d`,
-  worktree `~/scratch/step6`), 521 commits ahead of `main` and 30 behind it.
+- Step 6 (absorbing `nfl-sos-ratings`) lives on `feat/step6-sos-port` (`0.57.1`, worktree
+  `~/scratch/step6`), about 520 commits ahead of `main` and 30 behind it before this merge.
 - The review session (2026-10-12) ran six independent reviewers, each in a fresh context; every
   verdict is "approve with findings", no P0 or P1, and every re-run gate exited `0`.
   - The phase-4 rescores are in `models/step6/REVIEW.md` (decision 1, the new-build reference

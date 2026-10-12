@@ -44,6 +44,11 @@ the session that delegated the review.
    file (`src/nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`), which invalidates every
    walk-forward checkpoint.
 
+5. Write adversarial tests against the diff in your worktree: boundaries, error paths, a
+   leakage path, and any case the task text implied but did not list. Run them and report
+   which fail, with the test code in the report. Never commit them to the implementer's
+   branch; the delegating session decides what to adopt.
+
 ## Reviewing a walk-forward run
 
 Apply `AGENTS.md` rule 3 in full:

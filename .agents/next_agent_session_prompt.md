@@ -7,12 +7,15 @@ landed, what is half done, the four unmerged branches, the breaches), `.agents/b
 before any walk-forward, and this file. The step-6 plan and decision log live only on the step-6
 branch: `~/scratch/step6/.agents/step6_plan.md` and `~/scratch/step6/.agents/sos_port/DECISIONS.md`.
 
-## State (written 2026-10-11, after the step-6 session audit)
+## State (written 2026-10-12, after the step-6 session audit)
 
-- `main` holds `0.45.3`, ahead of `origin/main` and not pushed: the instruction-file restructure
-  (`0.45.1`), no inline lint suppressions (`0.45.2`) and the prompt-audit fixes (`0.45.3`), plus
-  the step-6 session audit and this handoff (docs only, merged from `docs/step6-audit`).
-  `scripts/gate.sh` last exited `0` on `main` at `0.45.3`.
+- `main` holds `0.45.4`, ahead of `origin/main` and not pushed: the instruction-file restructure
+  (`0.45.1`), no inline lint suppressions (`0.45.2`), the prompt-audit fixes (`0.45.3`) and the
+  three-role testing standard (`0.45.4`), plus the step-6 session audit and this handoff (docs
+  only). Under the three-role standard the task text carries the test contract, the
+  `implementer` never weakens a contracted case, and the `reviewer` writes adversarial tests
+  against the diff and reports which fail without committing them (`.claude/agents/`).
+  `scripts/gate.sh` exited `0` on `main` at `0.45.4`.
 - Step 6 (absorbing `nfl-sos-ratings`) lives on `feat/step6-sos-port`, tip `2efbd3e` (`0.57.1`),
   520 commits ahead of `main`, worktree `~/scratch/step6`. Fifteen versions landed there on
   2026-10-10, each after an independent review. That branch's own handoff is stale on two points:

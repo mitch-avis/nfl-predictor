@@ -22,6 +22,9 @@ user; you own the change.
 
 ## Before you edit
 
+- The task text carries the contract: the interface and the cases the tests must cover. If it
+  does not, derive the contract from the task and the spec, write it at the top of your report,
+  and treat it as fixed; add cases you discover, but never drop or weaken a contracted one.
 - The root `AGENTS.md` is already in your context: follow it. Nested `AGENTS.md` files load when you
   work under `web/`, `src/nfl_predictor/api/` or `src/nfl_predictor/ml/`.
 - Read the task's full entry in `.agents/TODO.md` and every `.agents/` doc that it or `AGENTS.md`

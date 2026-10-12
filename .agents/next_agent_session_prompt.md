@@ -95,19 +95,20 @@ that branch.
     an error, keep the projected standings, do not mark the stage done; no fallback to
     `composite`.
   - Merge this handoff into `main` (done).
+  - Two walk-forwards approved (seeds 42 and 7, about 70 minutes on the GPU): the own Elo's
+    win-total variant against `models/step6/elo_marketfree_seed{42,7}` in the configuration
+    without game lines, on the step-6 candidate build from `~/scratch/step6_runs` at `d6064eb`.
+    They wait for the GPU, which another job holds until about 2026-10-13. The rule is
+    pre-registered in `models/step6/nogamelines_wt/HYPOTHESIS.md` (sha256 `08bc8c7f...`, in full
+    in the step-6 handoff): all weeks, two seeds; a Brier win with no log-loss loss adopts the
+    win-total variant, anything else keeps the variant without win totals; cap two runs.
+  - The configuration without the market's game lines, anchoring or transform is named "no game
+    lines"; "market-free test bench" stays the name of the strict reference without game lines or
+    Elo. The rename in the docs is part of the integration session.
 
 ## Open for the user
 
-1. Approve two walk-forwards (seeds 42 and 7, about 70 minutes on the GPU) that pit the own
-   Elo's win-total variant against the variant without win totals in the configuration without
-   game lines, on the step-6 candidate build from `~/scratch/step6_runs`. Proposed rule, written
-   into a new `models/step6/HYPOTHESIS_*.md` before launch: all weeks, two seeds; a Brier win
-   with no log-loss loss adopts the win-total variant, anything else keeps the variant without
-   win totals.
-2. The configuration's name. Proposed: "no game lines", the user's own definition of 2026-10-10,
-   already used by the blend branch's help text; "market-free test bench" stays the name of the
-   strict reference without game lines or Elo.
-3. The `../nfeloqb` fix, for the approval session. The fork's `handle_regression`
+1. The `../nfeloqb` fix, for the approval session. The fork's `handle_regression`
    (`nfeloqb/Resources/elo.py:120-142`) pulls each preseason Elo toward the Vegas win-total
    rating only when its local `Manual Data/wt_ratings.csv` has that season, and that file ends
    at 2023. So 2024-2026 get plain regression only, unlike every earlier season. The upstream
@@ -117,17 +118,23 @@ that branch.
 
 ## Next
 
-1. **Integration session on `feat/step6-sos-port`** (the step-6 handoff has the detail): bring
+1. **The win-total runs**, once `nvidia-smi` shows the GPU free of the other job and
+   `pgrep -af "nfl-predictor (backtest|weekly|data)"` is empty: `uptime`, then
+   `models/step6/nogamelines_wt/launch.sh d6064eb` (the driver checks the hypothesis checksum,
+   the build and the code first), watched with a Monitor on its `driver.log`; then an independent
+   reviewer's rescore into `models/step6/nogamelines_wt/REVIEW.md` and a check-in. The step-6
+   handoff has the detail.
+2. **Integration session on `feat/step6-sos-port`** (the step-6 handoff has the detail): bring
    `main` into the branch first; merge the four reviewed branches in order (audit refresh, rating
    tests, betting edges, blend default), each after one fix round on its findings and a
    reviewer re-check, each with its version, `CHANGELOG.md` entry and committed review report;
    the adoption chunk per the 2026-10-12 decisions (production disables `strength`, `own_elo`
    and `own_elo_wt`; `floor_sigma_reference_runs` points at
    `models/step6/ratings_anchored_seed{42,7}`), grouped with the blend branch's fingerprint
-   change; the own-Elo variant for the configuration without game lines once item 1 under "Open
-   for the user" is settled; the pre-registered betting-label test; the docs close-out, the
+   change; the own-Elo variant for the configuration without game lines that the reviewed
+   win-total runs select; the pre-registered betting-label test; the docs close-out, the
    approvals list and the final HTML report; `scripts/gate.sh --web` on the final tree.
-2. **Approval and merge session with the user, between game weeks** (after Monday night, before
+3. **Approval and merge session with the user, between game weeks** (after Monday night, before
    Thursday): the approvals list and HTML report; the merge to `main` in a temporary worktree;
    the `data/` rebuild with a backup; `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`;
    a browser look at the new pages; the 2026 roof recheck before the Paris game on 2026-10-25;

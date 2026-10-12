@@ -6,16 +6,21 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 milestones"), `.agents/sos_port_source.md` (the source and open items of the port),
 `.agents/benchmarks.md` before any walk-forward, and this file.
 
-## State (written 2026-10-11, instruction files and lint rule merged; step 6 in progress)
+## State (written 2026-10-11, prompt-audit fixes merged; step 6 in progress)
 
-- `main` holds `0.45.2`, ahead of `origin/main` and not pushed. `0.45.1` is the instruction-file
+- `main` holds `0.45.3`, ahead of `origin/main` and not pushed. `0.45.1` is the instruction-file
   restructure: `AGENTS.md` at 177 lines, the guardrails' long form in `.agents/guardrails.md`,
   path-scoped rules under `.claude/rules/`, the season and week conventions in
   `.agents/modeling_spec.md`, the launch lessons in `.agents/walk_forward_runbook.md`, and a
   `SessionStart` hook that injects this file at startup and after compaction. `0.45.2` forbids
   inline lint and type-checker suppressions: a genuine false positive goes in Ruff's per-file
-  ignores with a one-line reason, and every existing one has its reason. The user's global
-  `~/.agents/AGENTS.md` and skills say the same. Both docs branches are merged and deleted.
+  ignores with a one-line reason, and every existing one has its reason. `0.45.3` holds the
+  prompt-audit fixes (the run check is `pgrep -af "nfl-predictor (backtest|weekly)"`, current
+  section names, accurate nested `AGENTS.md` files), drops the `pragma: no cover` coverage
+  exclusion, and makes the pre-push hook run the full `scripts/gate.sh` instead of `--quick`.
+  The same audit changed the user's global `~/.agents/AGENTS.md` and skills: every change in
+  every language is covered by a test before it is committed, small fixes included (test-first
+  stays optional only for small fixes). All three docs branches are merged and deleted.
 - Step 6 work from 2026-10-10 lives on `feat/step6-sos-port` (worktree `~/scratch/step6`, 520
   commits ahead of `main`) and `feat/sos-port-inventory`. Four `worktree-agent-*` branches hold
   commits that never reached the step-6 branch and await the user's triage: `a2071e4c` (9: the

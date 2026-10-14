@@ -25,7 +25,6 @@ import argparse
 import sys
 import time
 from dataclasses import dataclass
-from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -553,7 +552,8 @@ def build_report(
         "",
         "## Provenance",
         "",
-        f"- nfl-predictor {provenance['version']}; code SHA-256: "
+        f"- nfl-predictor {provenance['version']} at commit `{provenance['git_commit']}`; code "
+        "SHA-256: "
         + ", ".join(f"`{name}` {digest[:12]}" for name, digest in provenance["code"].items())
         + ".",
         (
@@ -575,15 +575,11 @@ def run(cache_dir: Path, out_dir: Path) -> int:
         table = measure(seasons)
     plays = pl.concat(list(seasons.plays.values())).sort("season", "game_id", "play_id")
     code = [HERE / "botched_snaps.py", HERE / "rating_tests_common.py"]
-    provenance = {
-        "version": metadata.version("nfl-predictor"),
-        "code": {path.name: common.sha256_file(path) for path in code},
-        "inputs": len(ledger.files),
-        "fingerprint": ledger.fingerprint(),
-        "command": 'VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python '
-        f".agents/sos_port/botched_snaps.py --cache-dir {cache_dir}",
-        "seconds": time.perf_counter() - start,
-    }
+    command = (
+        'VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python '
+        f".agents/sos_port/botched_snaps.py --cache-dir {cache_dir}"
+    )
+    provenance = common.run_provenance(code, ledger, command, time.perf_counter() - start)
     lines = build_report(table, plays, provenance)
     (out_dir / OUT_MD).write_text("\n".join(lines).rstrip("\n") + "\n")
     payload = {

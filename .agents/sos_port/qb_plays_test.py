@@ -30,7 +30,6 @@ import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -2374,7 +2373,8 @@ def build_report(
         "",
         "## Provenance",
         "",
-        f"- nfl-predictor {provenance['version']}; code SHA-256: "
+        f"- nfl-predictor {provenance['version']} at commit `{provenance['git_commit']}`; code "
+        "SHA-256: "
         + ", ".join(f"`{name}` {digest[:12]}" for name, digest in provenance["code"].items())
         + ".",
         (
@@ -2586,14 +2586,7 @@ def run(
         f"--cache-dir {cache_dir} --ratings-dir {ratings_dir} --schedules-file {schedules_file}"
         + ("" if power_windows == POWER_WINDOWS else f" --power-windows {power_windows}")
     )
-    provenance = {
-        "version": metadata.version("nfl-predictor"),
-        "code": {path.name: common.sha256_file(path) for path in code},
-        "inputs": len(ledger.files),
-        "fingerprint": ledger.fingerprint(),
-        "command": command,
-        "seconds": time.perf_counter() - start,
-    }
+    provenance = common.run_provenance(code, ledger, command, time.perf_counter() - start)
     lines = build_report(results, provenance, _power_lines(power_result, spreads, power_windows))
     report.write_text("\n".join(lines).rstrip("\n") + "\n")
     payload = {

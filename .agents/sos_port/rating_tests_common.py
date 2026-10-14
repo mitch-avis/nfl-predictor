@@ -18,7 +18,8 @@ import json
 import re
 import textwrap
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from importlib import metadata
+from typing import TYPE_CHECKING, Any
 
 import nflreadpy as nfl
 import numpy as np
@@ -26,6 +27,7 @@ import polars as pl
 from scipy import stats
 
 from nfl_predictor import constants
+from nfl_predictor.ml.artifacts import git_commit_hash
 from nfl_predictor.ratings.pbp_inputs import SeasonSources
 from nfl_predictor.utils.polars import loaders, nflverse_sources
 
@@ -83,6 +85,31 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def git_commit() -> str | None:
+    """Return the checkout's commit (``git rev-parse HEAD``), or ``None`` outside a checkout."""
+    return git_commit_hash()
+
+
+def run_provenance(
+    code: Sequence[Path], ledger: InputLedger, command: str, seconds: float
+) -> dict[str, Any]:
+    """Return what reproduces a run: the version, commit and code hashes, inputs and command.
+
+    Keys: ``version``, ``code`` (each file's SHA-256 by name), ``inputs`` (the file count),
+    ``fingerprint`` (:meth:`InputLedger.fingerprint`), ``command``, ``seconds`` and
+    ``git_commit``.
+    """
+    return {
+        "version": metadata.version("nfl-predictor"),
+        "code": {path.name: sha256_file(path) for path in code},
+        "inputs": len(ledger.files),
+        "fingerprint": ledger.fingerprint(),
+        "command": command,
+        "seconds": seconds,
+        "git_commit": git_commit(),
+    }
 
 
 def write_json_record(

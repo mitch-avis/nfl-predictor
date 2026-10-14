@@ -1388,8 +1388,13 @@ def _table(rows: Sequence[Mapping[str, Any]], columns: Sequence[str]) -> list[st
     return lines
 
 
-def _provenance(cache_dir: Path, ratings_dir: Path, ledger: common.InputLedger) -> dict[str, Any]:
-    """Return what reproduces the run: the code's and protocol's hashes and every input's."""
+def _provenance(
+    cache_dir: Path, ratings_dir: Path, ledger: common.InputLedger, command: str, seconds: float
+) -> dict[str, Any]:
+    """Return what reproduces the run: the commit, the code's hashes, every input's, the command.
+
+    ``seconds`` is the whole run's time.
+    """
     files = [HERE / "team_plays_test.py", HERE / "rating_tests_common.py"]
     return {
         "nfl_predictor_version": metadata.version("nfl-predictor"),
@@ -1398,11 +1403,15 @@ def _provenance(cache_dir: Path, ratings_dir: Path, ledger: common.InputLedger) 
         "ratings_dir": str(ratings_dir),
         "input_fingerprint": ledger.fingerprint(),
         "inputs": ledger.files,
+        "git_commit": common.git_commit(),
+        "command": command,
+        "seconds": seconds,
     }
 
 
 def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> int:
     """Run one test end to end and write its report; return the exit code."""
+    start = time.perf_counter()
     spec = TESTS[test]
     seasons = list(range(FIRST_SEASON, LAST_SEASON + 1))
     ledger = common.InputLedger()
@@ -1484,12 +1493,18 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
             },
         ),
     )
-    provenance = _provenance(cache_dir, ratings_dir, ledger)
+    command = (
+        'VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python '
+        f".agents/sos_port/team_plays_test.py {test} --cache-dir {cache_dir} --ratings-dir "
+        f"{ratings_dir}"
+    )
+    provenance = _provenance(cache_dir, ratings_dir, ledger, command, time.perf_counter() - start)
     lines += [
         "",
         "## Provenance",
         "",
-        f"- nfl-predictor {provenance['nfl_predictor_version']}; code SHA-256: "
+        f"- nfl-predictor {provenance['nfl_predictor_version']} at commit "
+        f"`{provenance['git_commit']}`; code SHA-256: "
         + ", ".join(f"`{name}` {digest[:12]}" for name, digest in provenance["code_sha256"].items())
         + ".",
         (
@@ -1497,9 +1512,8 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
             f"(every file's SHA-256 is in `{spec.output_json}`), from `{cache_dir}` and "
             f"`{ratings_dir}`, read only, downloads blocked."
         ),
-        f'- Command: `VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python '
-        f".agents/sos_port/team_plays_test.py {test} --cache-dir {cache_dir} --ratings-dir "
-        f"{ratings_dir}`; seconds per variant: "
+        f"- Command: `{command}`; {provenance['seconds']:.0f} seconds in all; seconds per "
+        "variant: "
         + ", ".join(f"{_safe_label(run.name)} {run.seconds:.0f}" for run in (*runs.values(), zero))
         + ".",
         "",

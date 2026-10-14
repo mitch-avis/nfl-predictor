@@ -1051,6 +1051,7 @@ def test_evaluate_and_build_report_run_end_to_end_on_a_synthetic_league() -> Non
         "fingerprint": "0" * 64,
         "command": "test",
         "seconds": 0.0,
+        "git_commit": "0" * 40,
     }
     with threadpool_limits(limits=1, user_api="blas"):
         result = qb.run_harness(harness, _SIM_WINDOW)

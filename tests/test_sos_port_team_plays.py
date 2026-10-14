@@ -1,6 +1,7 @@
 """Tests for the team-rating play-set tests (``.agents/sos_port/team_plays_test.py``)."""
 
-from typing import Any
+import re
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import polars as pl
@@ -9,6 +10,9 @@ from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor.ratings.inputs import team_game_rows
 from nfl_predictor.ratings.pbp_inputs import team_games_from_pbp
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 team = load_sos_port_script("team_plays_test")
 common = load_sos_port_script("rating_tests_common")
@@ -698,3 +702,16 @@ def test_wiped_play_summary_counts_each_set_by_flag() -> None:
     assert counts["wiped runs (today's snaps), rush flag"] == (1, pytest.approx(-0.7))
     assert counts["wiped runs (today's snaps), qb_kneel flag"] == (0, 0.0)
     assert counts["wiped passes"] == (1, pytest.approx(0.9))
+
+
+def test_provenance_records_the_git_commit_command_and_runtime(tmp_path: Path) -> None:
+    # Arrange
+    ledger = common.InputLedger()
+
+    # Act
+    provenance = team._provenance(tmp_path, tmp_path, ledger, "python team.py", 61.0)
+
+    # Assert
+    assert re.fullmatch(r"[0-9a-f]{40}", provenance["git_commit"])
+    assert (provenance["command"], provenance["seconds"]) == ("python team.py", 61.0)
+    assert provenance["input_fingerprint"] == ledger.fingerprint()

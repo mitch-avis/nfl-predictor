@@ -1,6 +1,7 @@
 """Tests for the shared pieces of the rating-definition tests (``.agents/sos_port``)."""
 
 import json
+import re
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -216,6 +217,23 @@ def test_perturbed_numbers_changes_every_numeric_value_of_the_rows_only() -> Non
     assert changed.row(0) == (2010, 1, "AAA", 10, 1.0)
     assert changed.row(1) == (2010, 2, "AAA", 15, 4.0)
     assert changed.schema == frame.schema
+
+
+def test_run_provenance_records_the_git_commit_and_the_run(tmp_path: Path) -> None:
+    # Arrange
+    code = tmp_path / "script.py"
+    code.write_text("print()\n")
+    ledger = common.InputLedger()
+    ledger.record(code)
+
+    # Act
+    provenance = common.run_provenance([code], ledger, "python script.py", 12.5)
+
+    # Assert
+    assert re.fullmatch(r"[0-9a-f]{40}", provenance["git_commit"])
+    assert provenance["code"] == {"script.py": common.sha256_file(code)}
+    assert (provenance["inputs"], provenance["fingerprint"]) == (1, ledger.fingerprint())
+    assert (provenance["command"], provenance["seconds"]) == ("python script.py", 12.5)
 
 
 def test_write_json_record_ends_with_a_newline(tmp_path: Path) -> None:

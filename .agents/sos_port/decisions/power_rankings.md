@@ -255,11 +255,17 @@ No result of the measurement is quoted here: the numbers live in the generated
   `DEFAULT_POWER_RANKINGS_BLEND_WEIGHT` in `weekly_run/config.py`), which the shipped config must
   equal. Explicit `--power-rankings-model-predictions` replace both default sources. Stage 1
   writes `wf_compare/metadata.json` naming its fold checkpoint directory (a fingerprint
-  subdirectory of `wf_folds/`), so `wf_compare/` reads as a walk-forward run directory. A missing
-  or short source skips the rankings with a warning that names it, as before. The rankings
-  command's default stays the composite, and `--legacy-franchise-fit` alone still implies
-  Bradley-Terry in the weekly run. A fold without a `neutral` column now reads as null there,
-  which the fit already treats as a home game.
+  subdirectory of `wf_folds/`), so `wf_compare/` reads as a walk-forward run directory; a
+  resumed run that reuses stage 1 writes it when missing, from the one `manifest.json` under
+  `wf_folds/` that records the production configuration and the data's shape, and warns to rerun
+  with `--no-resume` when none or several match. The reference runs are read only for week 1's
+  carried-forward fit. A missing or short source skips the rankings with an error that names it
+  (the user's decision of 2026-10-12): no other method ranks in its place, the projected standings
+  are still written, the run exits `0` and the reports stage stays undone, so `--resume` retries
+  it. The rankings command's default stays the composite; `--legacy-franchise-fit` alone still
+  implies Bradley-Terry in the weekly run, and with any other method set the run refuses to
+  start. A fold without a `neutral` column, or with `neutral` null in every row, is refused; a
+  partly null column reads its nulls as home games.
 - **Reasoning**: the pre-registered rule picked the blend over the ported rating, and the same
   rule's weight for 2026 is `0.5`; stage 1 is production's own walk-forward of the ranked season
   (`AGENTS.md` rule 11), and the reference runs are the two seeds production already pools for
@@ -272,7 +278,13 @@ No result of the measurement is quoted here: the numbers live in the generated
   characterization snapshot changed only in `power_rankings.csv`.
 - **How to reverse it**: `power_rankings_method: composite` in `config/weekly_run.yaml` (and the
   code default beside it).
-- **Review**: not yet reviewed.
+- **Review**: an independent review (2026-10-12, approve with findings,
+  [review_2026-10-12.md](../review/blend_default/review_2026-10-12.md)) and two re-checks of the
+  fix rounds (2026-10-14, both approve with findings, no P0-P2,
+  [recheck_2026-10-14.md](../review/blend_default/recheck_2026-10-14.md),
+  [recheck2_2026-10-14.md](../review/blend_default/recheck2_2026-10-14.md)). Open P3: check the
+  single manifest match against the run itself (`wf_best.json` weeks or `created_at`), and three
+  older skips in `weekly_run/pipeline.py` that still log at info level.
 
 ## Review
 

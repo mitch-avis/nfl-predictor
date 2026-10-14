@@ -75,6 +75,37 @@ def test_weekly_legacy_flag_selects_the_franchise_fit() -> None:
     assert options.include_future is True
 
 
+def test_explicit_blend_with_the_legacy_fit_is_refused() -> None:
+    """Only the default method gives way to the legacy fit; a method asked for conflicts."""
+    # Act & Assert
+    with pytest.raises(SystemExit):
+        run_config.parse_args(["--power-rankings-method", "blend", "--legacy-franchise-fit"])
+
+
+def test_default_method_with_the_legacy_fit_is_bradley_terry() -> None:
+    # Arrange
+    args = run_config.parse_args(["--legacy-franchise-fit"])
+
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
+    # Assert
+    assert options.method == "bradley_terry"
+
+
+def test_explicit_bradley_terry_with_the_legacy_fit_is_accepted() -> None:
+    # Arrange
+    args = run_config.parse_args(
+        ["--power-rankings-method", "bradley_terry", "--legacy-franchise-fit"]
+    )
+
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
+    # Assert
+    assert options.method == "bradley_terry"
+
+
 def test_weekly_ranking_flags_are_valid_config_keys() -> None:
     """A config file can set the ranking options the command line can."""
     # Act

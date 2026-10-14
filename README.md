@@ -1019,7 +1019,7 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   `--power-rankings-strength-snapshots`, `--power-rankings-ratings-dir`,
   `--power-rankings-model-predictions`, `--power-rankings-blend-weight`, `--ratings-*`,
   `--legacy-franchise-fit`) and writes the same files. It ranks on the even blend by default
-  (`power_rankings_method: blend`, `power_rankings_blend_weight: 0.5` in
+  (`power_rankings_method` left unset ranks on `blend`, with `power_rankings_blend_weight: 0.5` in
   `config/weekly_run.yaml`): the user chose it after the rankings measurement, and `0.5` is the
   weight its pre-registered rule picks for 2026 (`.agents/sos_port/decisions/power_rankings.md`,
   decision 12). Without `--power-rankings-model-predictions`, the model rating reads the ranked
@@ -1028,7 +1028,8 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   `floor_sigma_reference_runs`, averaged per game in the order listed as one source; later weeks
   read the stage-1 checkpoints alone, so a missing reference run blocks only week 1. Explicit
   paths replace both. `power_rankings_method: composite` restores the composite, and
-  `--legacy-franchise-fit` alone still implies Bradley-Terry. When the snapshot or a rating
+  `--legacy-franchise-fit` with no method set implies Bradley-Terry; with any other method set, on
+  the command line or in the config, the run refuses to start. When the snapshot or a rating
   source for the requested week is missing or does not cover the games, it skips the rankings
   with an error naming what is missing, ranks on no other method in their place, and still
   writes the projected standings; the run still exits `0`, and its reports-stage marker records

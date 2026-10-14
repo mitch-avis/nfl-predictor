@@ -594,13 +594,15 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
     parser.add_argument(
         "--power-rankings-method",
         choices=power_rankings.RANKING_METHODS,
-        default=defaults.get("power_rankings_method", DEFAULT_POWER_RANKINGS_METHOD),
+        # No default here: the default applies after the legacy fit's check (_requested_method).
+        default=defaults.get("power_rankings_method"),
         help=(
             "Power rankings method: 'blend' (default; the ported team rating and the model "
             "rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's "
             "schedule-adjusted strength for the week after the through-week), 'bradley_terry', "
             "'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted "
-            "margins). --legacy-franchise-fit implies bradley_terry."
+            "margins). --legacy-franchise-fit implies bradley_terry when no method is set and "
+            "refuses any other method."
         ),
     )
     parser.add_argument(
@@ -872,10 +874,24 @@ def _default_prediction_sources(
     configuration averaged into one source.
     """
     explicit = tuple(Path(path) for path in args.power_rankings_model_predictions)
-    if explicit or run_dir is None or args.power_rankings_method not in {"model", "blend"}:
+    if explicit or run_dir is None or _requested_method(args) not in {"model", "blend"}:
         return explicit, ()
     reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or [])
     return (stage1.predictions_source(run_dir),), reference
+
+
+def _requested_method(args: argparse.Namespace) -> str | None:
+    """Return the ranking method asked for, the default applied after the legacy fit's check.
+
+    ``None`` (no method set) is ``DEFAULT_POWER_RANKINGS_METHOD``, except with the legacy fit,
+    which implies Bradley-Terry: there it stays ``None`` for
+    `power_rankings.resolve_ranking_options` to resolve, so only a method set explicitly
+    conflicts with the legacy fit.
+    """
+    method = args.power_rankings_method
+    if method is None and not args.legacy_franchise_fit:
+        return DEFAULT_POWER_RANKINGS_METHOD
+    return method
 
 
 def power_ranking_options(
@@ -887,10 +903,7 @@ def power_ranking_options(
     predictions from the run's own sources when none are given (`_default_prediction_sources`).
     """
     model_predictions, reference_predictions = _default_prediction_sources(args, run_dir)
-    method = args.power_rankings_method
-    if args.legacy_franchise_fit and method == DEFAULT_POWER_RANKINGS_METHOD:
-        # The legacy fit implies Bradley-Terry; only another method set explicitly conflicts.
-        method = None
+    method = _requested_method(args)
     return power_rankings.resolve_ranking_options(
         power_rankings.RankingRequest(
             method=method,

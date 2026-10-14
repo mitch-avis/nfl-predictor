@@ -2810,9 +2810,9 @@
     "model",
     "blend"
    ],
-   "default": "blend",
+   "default": null,
    "dest": "power_rankings_method",
-   "help": "Power rankings method: 'blend' (default; the ported team rating and the model rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's schedule-adjusted strength for the week after the through-week), 'bradley_terry', 'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted margins). --legacy-franchise-fit implies bradley_terry.",
+   "help": "Power rankings method: 'blend' (default; the ported team rating and the model rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's schedule-adjusted strength for the week after the through-week), 'bradley_terry', 'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted margins). --legacy-franchise-fit implies bradley_terry when no method is set and refuses any other method.",
    "nargs": null,
    "options": [
     "--power-rankings-method"

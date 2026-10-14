@@ -254,12 +254,15 @@ def test_report_config_of_the_default_blend_names_its_resolved_sources() -> None
 
 
 def test_shipped_weekly_config_ranks_on_the_even_blend() -> None:
-    # Act
+    # Arrange
     args = run_config.parse_args([])
 
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
     # Assert
-    assert args.power_rankings_method == "blend"
-    assert args.power_rankings_blend_weight == pytest.approx(0.5)
+    assert options.method == "blend"
+    assert options.blend_weight == pytest.approx(0.5)
     assert args.power_rankings_model_predictions == []
 
 

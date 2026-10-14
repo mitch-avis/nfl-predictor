@@ -71,3 +71,12 @@ def test_a_vector_of_usable_sigmas_is_refused_as_one_sigma_per_call() -> None:
     # Act & Assert
     with pytest.raises(ValueError, match="one number"):
         floor_sigma.home_win_prob(MARGINS, _as_given(sigma))
+
+
+@pytest.mark.parametrize(
+    "sigma", ["13.5", b"13.5", np.array(["13.5"])], ids=["str", "bytes", "array"]
+)
+def test_a_text_sigma_is_refused_as_a_type_error(sigma: object) -> None:
+    # Act & Assert
+    with pytest.raises(TypeError, match="a number"):
+        floor_sigma.home_win_prob(MARGINS, _as_given(sigma))

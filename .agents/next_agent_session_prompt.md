@@ -62,11 +62,26 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
     (docs close-out).
   - Every agent branch and its fix and review worktrees are deleted; the reviewers' untracked
     tests are in `~/scratch/step6_review/<name>/`.
-- The win-total runs (approved 2026-10-12) launched on 2026-10-14 from
-  `models/step6/nogamelines_wt/launch.sh d6064eb` (`launch_record.txt`). Seed 42 finished
-  (`end elo_wt_nogamelines_seed42 exit 0 seconds 3122`); seed 7 started at 14:23. Once its `end`
-  line is in `driver.log`, an independent `reviewer` rescores the pair from the fold checkpoints
-  into `models/step6/nogamelines_wt/REVIEW.md`, under the rule in `HYPOTHESIS.md`.
+- The win-total runs (approved 2026-10-12) ran on 2026-10-14 (`models/step6/nogamelines_wt/`,
+  `driver.log`: both `exit 0`, no failed run). The independent rescore
+  (`models/step6/nogamelines_wt/REVIEW.md`, approve with findings, provenance OK) applies the
+  rule's second branch: in all weeks over two seeds the win-total variant ties on every column
+  (Brier -0.00012 [-0.00080, +0.00055], log loss -0.00030 [-0.00179, +0.00119]), so the
+  configuration without game lines keeps the own Elo without win totals (`own_elo`), its current
+  setting. No week-1 or week-2 loss. The GPU is free of this project's jobs.
+- In flight (2026-10-14):
+  - The adoption chunk, `feat/step6-adoption` (worktree `~/scratch/adoption`, tip `256cd86`,
+    gate `0`, 3,536 tests): production, `train` and `backtest` leave out `strength`, `own_elo`
+    and `own_elo_wt` by default (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`; an empty list
+    leaves none out); the floor sigma pool reads `models/step6/ratings_anchored_seed{42,7}`;
+    `floor_sigma.home_win_prob` refuses a sigma that is not finite and positive. The backtest
+    default was the implementer's call, required by `tests/test_production_settings.py` (rule
+    11); accepted, to report to the user. A reviewer is checking it in
+    `~/scratch/review_adoption` (report to `~/scratch/step6_review/adoption_review.md`).
+  - The betting-label test, pre-registered in `.agents/sos_port/protocols/betting_labels.md`
+    (`5023f45`, corrected in `f5ea2a9` before any scoring), implemented on
+    `feat/step6-betting-labels` (worktree `~/scratch/betting_labels`); then an independent
+    rescore.
 - Worktrees: `~/scratch/step6` (this branch), `~/scratch/step6_runs` (detached at `d6064eb`, the
   runs' code). The `.claude/worktrees/agent-*` worktrees are the harness's; leave them.
 - The `/tmp` copies of the power-ranking evaluation (`RANKINGS_EVAL.md`) are snapshotted in
@@ -126,23 +141,21 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
 
 ## Next: finish the integration session on this branch
 
-1. When seed 7 ends: the independent rescore into `models/step6/nogamelines_wt/REVIEW.md`, then a
-   check-in (rule 7) with the rule's verdict, and tell the user the GPU is free.
-2. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
+1. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
    2026-10-12 decisions: `disable_feature_groups: [strength, own_elo, own_elo_wt]` and
    `floor_sigma_reference_runs: models/step6/ratings_anchored_seed{42,7}` in
    `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant the
    reviewed win-total runs select); the finite-sigma guard in `floor_sigma.home_win_prob` (test
    first); the reference arms and the kickoff-starter convention in `.agents/benchmarks.md`.
-3. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
+2. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
    today's labels).
-4. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
+3. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
    lines" where it means the configuration with Elo (including `stage1.py`), refresh the stale
    "Review:" fields in `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums into
    git, record the 2026-10-11, 2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and
    `TODO.md`, list the follow-ups above, and build the approvals list and the user's final HTML
    report.
-5. `scripts/gate.sh --web` on the final tree.
+4. `scripts/gate.sh --web` on the final tree.
 
 Then the approval and merge session with the user, between game weeks: the merge to `main`, the
 `data/` rebuild with a backup, the CUDA sync, a browser look at the new pages, the 2026 roof

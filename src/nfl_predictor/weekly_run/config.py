@@ -332,8 +332,10 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
             "the model anchored to them, both (hybrid, the default), or none (no game lines: no "
-            "game-line columns, no anchor and no market transform; the Elo groups' preseason "
-            "win-total priors stay unless --disable-feature-groups leaves them out)."
+            "game-line columns, no anchor and no market transform). The default groups keep the "
+            "elo group's preseason win-total prior; for no market information pass "
+            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
+            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
         ),
     )
     parser.add_argument(
@@ -347,7 +349,8 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
             "comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a "
             "list in the config file; default: "
             f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)}; an empty value leaves "
-            "no group out). An unknown group stops the run before the data refresh."
+            "no group out). The list replaces the default rather than adding to it. An unknown "
+            "group stops the run before the data refresh."
         ),
     )
     parser.add_argument(

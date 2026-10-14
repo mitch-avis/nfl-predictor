@@ -211,31 +211,35 @@ def resolve_feature_group_columns(
 
 
 def check_ratings_replace_strength(
-    columns: Sequence[str], groups: Sequence[str], *, stop: bool
+    games: pd.DataFrame, groups: Sequence[str], *, stop: bool
 ) -> None:
     """Stop or warn when ``groups`` leave out the strength snapshot and no ported rating is there.
 
     Production leaves out ``strength`` because the ported team ratings (``ratings``) replace
-    it; a dataset built before the port has the strength snapshot but no ratings column, so the
-    fit would train on neither. Data with neither group gets no message: leaving ``strength``
-    out removes nothing there, and no group list would help. ``stop`` raises; otherwise the
-    same message is logged as a warning and the run carries on (a backtest, which runs
-    ablations on purpose).
+    it; a dataset built before the port has the strength snapshot but no ratings column, and a
+    build without play-by-play keeps the ratings columns null in every row, so either way the
+    fit would train on neither. A ratings column counts only if some row has a value. Data with
+    neither group gets no message: leaving ``strength`` out removes nothing there, and no group
+    list would help. ``stop`` raises; otherwise the same message is logged as a warning and the
+    run carries on (a backtest, which runs ablations on purpose).
 
     Raises:
-        ValueError: if ``stop`` is set, ``groups`` include ``strength``, and ``columns`` hold a
-            column of the ``strength`` group but none of the ``ratings`` group.
+        ValueError: if ``stop`` is set, ``groups`` include ``strength``, and ``games`` hold a
+            column of the ``strength`` group but no ``ratings`` column with a value.
 
     """
     if "strength" not in groups:
         return
+    columns = list(games.columns)
     if not resolve_feature_group_columns(columns, ["strength"], warn_unmatched=False):
         return
-    if resolve_feature_group_columns(columns, ["ratings"], warn_unmatched=False):
+    ratings = resolve_feature_group_columns(columns, ["ratings"], warn_unmatched=False)
+    if ratings and bool(games[ratings].notna().any(axis=None)):
         return
     msg = (
         "The feature groups left out include the strength snapshot (strength), but the data has "
-        "no column of the ported ratings (ratings), so the model would train on neither. "
+        "no column of the ported ratings (ratings) with a value, so the model would train on "
+        "neither. "
         "Rebuild the dataset with the ported ratings (`nfl-predictor data`), or pass a group "
         "list that keeps strength: `--disable-feature-groups own_elo,own_elo_wt`, or "
         "`disable_feature_groups: [own_elo, own_elo_wt]` in the weekly config."

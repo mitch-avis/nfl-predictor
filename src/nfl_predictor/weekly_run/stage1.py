@@ -181,9 +181,7 @@ def _without_disabled_groups(df: pd.DataFrame, options: ProductionOptions) -> pd
     """
     if not options.disabled_feature_groups:
         return df
-    feature_spec.check_ratings_replace_strength(
-        list(df.columns), options.disabled_feature_groups, stop=True
-    )
+    feature_spec.check_ratings_replace_strength(df, options.disabled_feature_groups, stop=True)
     return df.drop(
         columns=feature_spec.resolve_feature_group_columns(
             list(df.columns), options.disabled_feature_groups

@@ -670,3 +670,16 @@ running `../nfeloqb`. Every backtest arm alike therefore knows each past game's 
 ruled on 2026-10-12 that this is the project's convention, not a caveat on any adoption. Knowing
 only the previous starter costs the own Elo without lines `+0.00101` `[-0.00027, +0.00232]` Brier
 and `+0.00331` `[+0.00035, +0.00631]` log loss (`.agents/sos_port/decisions/elo.md`, entry 15).
+
+**`qb_elos.csv` after the upstream Elo fix (2026-10-14, approved by the user, not yet
+measured).** Since Week 6 of 2026, `data/qb_elos.csv` comes from `../nfeloqb` with upstream's
+`90e19d9` merged (fork commit `27709b5`). That commit enters the quarterback adjustment in the
+QB-adjusted probability as home minus away (the fork added both) and tracks the plain Elo and the
+QB-adjusted Elo separately, as 538's original file does. The rows before the 2023-02-12 cutover
+are unchanged; from 2023 on, `elo1_pre` moves by 12.3 Elo points on average (110 at most),
+`qbelo1_pre` by 25.2 (142 at most), and `qb1_value_pre` not at all (`verify.py` and the file
+hashes in `~/scratch/data_backups/2026-10-14_pre_week6/`, beside the replaced files). Every step-6
+reference arm above was measured on the earlier file, so production differs from them in these
+four columns from 2023 on. The effect is to be measured with two dataset builds after the Week 6
+picks, together with the stale win-total file (`../nfeloqb` `Manual Data/wt_ratings.csv` ends at
+2023).

@@ -290,6 +290,23 @@ def test_check_counterpart_opponent_row_marker_on_a_catalog_without_team_game_ro
     assert found is False
 
 
+def test_mapping_rules_on_the_opponents_row_mark_every_counterpart(inventory: ModuleType) -> None:
+    # Arrange
+    rules = yaml.safe_load(inventory.MAPPING.read_text(encoding="utf-8"))["columns"]
+    opponent_rules = [r for r in rules if r.get("note", "").startswith("The opponent's row")]
+
+    # Act
+    unmarked = [
+        f"{rule['id']}: {ref}"
+        for rule in opponent_rules
+        for ref in ([rule["here"]] if "here" in rule else rule["here_map"].values())
+        if "[opponent]:" not in ref
+    ]
+
+    # Assert
+    assert (len(opponent_rules), unmarked) == (5, [])
+
+
 def test_classify_names_the_ported_column_before_the_rules_counterparts(
     inventory: ModuleType,
 ) -> None:

@@ -572,16 +572,16 @@ columns:
     columns: [passing_yards_allowed, rushing_yards_allowed, total_yards_allowed, passing_tds_allowed, rushing_tds_allowed, passing_epa_allowed, rushing_epa_allowed, passing_cpoe_allowed, passing_first_downs_allowed, rushing_first_downs_allowed]
     class: different
     here_map:
-      passing_yards_allowed: box_score:pass_yards
-      rushing_yards_allowed: box_score:rush_yards
-      total_yards_allowed: box_score:total_yards
-      passing_tds_allowed: box_score:pass_touchdowns
-      rushing_tds_allowed: box_score:rush_touchdowns
-      passing_epa_allowed: box_score:passing_epa
-      rushing_epa_allowed: box_score:rushing_epa
-      passing_cpoe_allowed: box_score:passing_cpoe
-      passing_first_downs_allowed: team_stats:first_downs
-      rushing_first_downs_allowed: team_stats:first_downs
+      passing_yards_allowed: box_score[opponent]:pass_yards
+      rushing_yards_allowed: box_score[opponent]:rush_yards
+      total_yards_allowed: box_score[opponent]:total_yards
+      passing_tds_allowed: box_score[opponent]:pass_touchdowns
+      rushing_tds_allowed: box_score[opponent]:rush_touchdowns
+      passing_epa_allowed: box_score[opponent]:passing_epa
+      rushing_epa_allowed: box_score[opponent]:rushing_epa
+      passing_cpoe_allowed: box_score[opponent]:passing_cpoe
+      passing_first_downs_allowed: team_stats[opponent]:first_downs
+      rushing_first_downs_allowed: team_stats[opponent]:first_downs
     note: The opponent's row of the same table, with the offense judgments above.
   - id: gl-faced
     kinds: [team_game_logs]
@@ -628,7 +628,7 @@ columns:
     kinds: [team_game_logs]
     columns: [first_downs_allowed]
     class: different
-    here: box_score:first_downs
+    here: box_score[opponent]:first_downs
     note: The opponent's row; there first downs by penalty count too.
   - id: gl-nflverse-here
     kinds: [team_game_logs]
@@ -660,8 +660,8 @@ columns:
     columns: [receptions_allowed, receiving_yards_allowed]
     class: different
     here_map:
-      receptions_allowed: team_stats:receptions
-      receiving_yards_allowed: team_stats:receiving_yards
+      receptions_allowed: team_stats[opponent]:receptions
+      receiving_yards_allowed: team_stats[opponent]:receiving_yards
     note: The opponent's row; there play-by-play copies, here nflverse's weekly team stats.
   - id: gl-player-stats-pbp-here
     kinds: [team_game_logs]

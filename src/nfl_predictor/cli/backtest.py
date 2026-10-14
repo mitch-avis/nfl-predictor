@@ -236,6 +236,7 @@ def _apply_ablations(df: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.Dat
     disabled_groups = options.parse_feature_groups(args.disable_feature_groups)
     group_columns: list[str] = []
     if disabled_groups:
+        feature_spec.check_ratings_replace_strength(list(df.columns), disabled_groups, stop=False)
         group_columns = feature_spec.resolve_feature_group_columns(
             list(df.columns), disabled_groups
         )

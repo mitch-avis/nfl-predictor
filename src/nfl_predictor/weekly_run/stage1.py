@@ -174,9 +174,16 @@ def _fold_directories_matching(
 
 
 def _without_disabled_groups(df: pd.DataFrame, options: ProductionOptions) -> pd.DataFrame:
-    """Return the games without the disabled feature groups' columns, as the backtest drops them."""
+    """Return the games without the disabled feature groups' columns, as the backtest drops them.
+
+    Leaving out the strength snapshot on data without the ported ratings stops the run
+    (``feature_spec.check_ratings_replace_strength``).
+    """
     if not options.disabled_feature_groups:
         return df
+    feature_spec.check_ratings_replace_strength(
+        list(df.columns), options.disabled_feature_groups, stop=True
+    )
     return df.drop(
         columns=feature_spec.resolve_feature_group_columns(
             list(df.columns), options.disabled_feature_groups

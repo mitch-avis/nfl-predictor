@@ -91,7 +91,7 @@ def test_the_fit_leaves_the_groups_out_and_the_run_records_them(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    paths = build_group_fixture(tmp_path)
+    paths = build_group_fixture(tmp_path, ratings=True)
     run_dir = tmp_path / "run"
     dropped = sorted([*GROUP_COLUMNS["strength"], *GROUP_COLUMNS["own_elo"]])
     monkeypatch.setattr(

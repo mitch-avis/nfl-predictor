@@ -2,8 +2,10 @@
 
 A walk-forward arm that disables feature groups can be adopted only if production then trains
 on exactly the columns the arm trained on. Each test runs ``nfl-predictor backtest
---disable-feature-groups`` on the weekly fixture with four groups' columns added
-(``tests/feature_group_fixture.py``) as the reference, then one production entry point with the
+--disable-feature-groups`` on the weekly fixture with four groups' columns and the ported
+ratings added (``tests/feature_group_fixture.py``; every set leaves out the strength snapshot,
+which production allows only beside the ported ratings) as the reference, then one production
+entry point with the
 same groups: the weekly run (``disable_feature_groups`` in its config; stage 1's walk-forward and
 the final fit) or ``nfl-predictor train``. They must drop the same columns, the hand-written
 columns of those groups, and train on the same feature list. The production runs use the
@@ -111,7 +113,7 @@ def test_the_weekly_run_drops_the_columns_the_backtest_drops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, groups: tuple[str, ...]
 ) -> None:
     # Arrange
-    paths = build_group_fixture(tmp_path)
+    paths = build_group_fixture(tmp_path, ratings=True)
     reference = _run_backtest(tmp_path, paths, groups, monkeypatch)
     config_path = write_group_weekly_config(
         tmp_path, paths, {"disable_feature_groups": list(groups)}
@@ -140,7 +142,7 @@ def test_train_drops_the_columns_the_backtest_drops(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, groups: tuple[str, ...]
 ) -> None:
     # Arrange
-    paths = build_group_fixture(tmp_path)
+    paths = build_group_fixture(tmp_path, ratings=True)
     reference = _run_backtest(tmp_path, paths, groups, monkeypatch)
     run_dir = tmp_path / "train_run"
     monkeypatch.setattr(

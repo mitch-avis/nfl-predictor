@@ -13,7 +13,10 @@ import xgboost as xgb
 
 from nfl_predictor import constants
 from nfl_predictor.ml import artifacts, feature_importance, floor_sigma
-from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
+from nfl_predictor.ml.feature_spec import (
+    check_ratings_replace_strength,
+    resolve_feature_group_columns,
+)
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_FEATURE_END_COLUMN,
     DEFAULT_FEATURE_START_COLUMN,
@@ -182,6 +185,7 @@ def _load_training_games(options: TrainingOptions) -> _TrainingGames:
     df = _load_games(options.data_path)
     dropped: list[str] = []
     if options.disabled_feature_groups:
+        check_ratings_replace_strength(list(df.columns), options.disabled_feature_groups, stop=True)
         dropped = resolve_feature_group_columns(list(df.columns), options.disabled_feature_groups)
         df = df.drop(columns=dropped)
         log.info(

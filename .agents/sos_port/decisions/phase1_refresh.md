@@ -298,17 +298,23 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
 ## Review record
 
 - 2026-10-12, independent review of entries 1-11 (approve with findings,
-  `~/scratch/step6_review/audit_refresh_review.md`). Fixed after it: the parity check judges the
-  four allowed rates and `carries_faced` (a pair on the opponent's row, `row: opponent`), and
-  `gl-carries-faced` names `box_score[opponent]:rush_attempts`; the ten web items matched by
-  `decisions/web_pages.md` say so in their notes; an empty cached schedule fails the run instead
-  of raising; the `no_play` EPA sums are rounded to 9 decimals, so `parity.json` is the same at any
-  thread count; entry 3's heading and the `ratings-history` note's citation are corrected.
+  [review_2026-10-12.md](../review/audit_refresh/review_2026-10-12.md)). Fixed after it: the
+  parity check judges the four allowed rates and `carries_faced` (a pair on the opponent's row,
+  `row: opponent`), and `gl-carries-faced` names `box_score[opponent]:rush_attempts`; the ten web
+  items matched by `decisions/web_pages.md` say so in their notes; an empty cached schedule fails
+  the run instead of raising; the `no_play` EPA sums are rounded to 9 decimals, so `parity.json`
+  is the same at any thread count; entry 3's heading and the `ratings-history` note's citation
+  are corrected.
 - 2026-10-14, independent re-check of those fixes (approve with findings,
-  `~/scratch/step6_review/audit_refresh_recheck.md`). Fixed after it: the parity check judges
-  `attempts_faced` and `completions_allowed` on the opponent's row too, and `gl-faced` names
-  them `box_score[opponent]:`; the counterparts of `gl-official-allowed`,
+  [recheck_2026-10-14.md](../review/audit_refresh/recheck_2026-10-14.md)). Fixed after it: the
+  parity check judges `attempts_faced` and `completions_allowed` on the opponent's row too, and
+  `gl-faced` names them `box_score[opponent]:`; the counterparts of `gl-official-allowed`,
   `gl-first-downs-allowed` and `gl-receiving-allowed` carry `[opponent]` (still `different`);
-  the marker is accepted only on `team_game`, `box_score` and `team_stats`; a team-game
-  without its opponent's row fails the parity check; the `no_play` EPA sums are exact
-  (`math.fsum`) before the rounding.
+  the marker is accepted only on `team_game`, `box_score` and `team_stats`; a team-game without
+  its opponent's row fails the parity check; the `no_play` EPA sums are exact (`math.fsum`)
+  before the rounding.
+- 2026-10-14, independent re-check of the second fix round (approve with findings, no P0-P2,
+  [recheck2_2026-10-14.md](../review/audit_refresh/recheck2_2026-10-14.md)): every number
+  reproduced at 4 and 8 threads. At the merge, `gl-faced`'s note cites its two pairs in the
+  reviewer's wording. Open P3: no test covers the run loop's call to `check_opponent_rows`
+  (`parity.py`, the per-season checks).

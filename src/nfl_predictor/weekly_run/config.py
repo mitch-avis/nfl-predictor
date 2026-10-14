@@ -44,6 +44,8 @@ _PATH_LIST_KEYS = {"floor_sigma_reference_runs", "power_rankings_model_predictio
 # The weekly run ranks on the even blend of the ported and model ratings: the user's choice after
 # the rankings measurement, whose pre-registered rule picks this weight for the current season.
 DEFAULT_POWER_RANKINGS_METHOD = "blend"
+# The weight is 0.5 for every season ranked, earlier ones included. The rule gives 0.7 for
+# 2008-2009 and 0.6 for 2012-2014, which matters only when one of those seasons is ranked again.
 DEFAULT_POWER_RANKINGS_BLEND_WEIGHT = 0.5
 # Config keys that list feature groups; the command line takes them comma-separated.
 _FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}

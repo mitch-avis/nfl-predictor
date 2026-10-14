@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 SECTION = production_settings.SECTION_KEY
+# The feature groups production leaves out by default.
+PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
 
 
 def _games() -> pd.DataFrame:
@@ -251,7 +253,11 @@ def test_xgboost_and_market_overrides_are_named_setting_by_setting(
         ),
         (
             ["--disable-feature-groups", "pbp"],
-            {"setting": "disabled_feature_groups", "run": ["pbp"], "production": []},
+            {
+                "setting": "disabled_feature_groups",
+                "run": ["pbp"],
+                "production": ["own_elo", "own_elo_wt", "strength"],
+            },
         ),
         (
             ["--disable-trend-features"],
@@ -284,7 +290,10 @@ def test_production_without_feature_groups_differs_from_a_run_with_them_in_both_
     """The weekly config's groups are what stage 1 and the final fit both leave out."""
     # Act
     section = _run_backtest(
-        tmp_path, monkeypatch, [], production_config={"disable_feature_groups": ["elo"]}
+        tmp_path,
+        monkeypatch,
+        ["--disable-feature-groups", ""],
+        production_config={"disable_feature_groups": ["elo"]},
     )[SECTION]
 
     # Assert
@@ -507,7 +516,9 @@ def test_format_says_when_nothing_differs() -> None:
     section = production_settings.settings_versus_production(
         walk_forward.with_resolved_xgb_device(
             walk_forward.WalkForwardConfig(
-                include_quantiles=False, xgb_params_overrides={"device": "cpu"}
+                include_quantiles=False,
+                xgb_params_overrides={"device": "cpu"},
+                disabled_feature_groups=PRODUCTION_GROUPS,
             )
         ),
         _games(),
@@ -551,7 +562,7 @@ def test_compare_shows_each_runs_settings_versus_production(
         "calibration": "auto",
         "include_quantiles": True,
         "xgb_params_overrides": {"device": "cuda"},
-        "disabled_feature_groups": [],
+        "disabled_feature_groups": list(PRODUCTION_GROUPS),
     }
     candidate = _write_compare_run(
         tmp_path, "cand", {**recorded, "recency_half_life_seasons": 16.0}, data_path
@@ -626,7 +637,13 @@ def _metadata_section(
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
     data_path = tmp_path / "games.csv"
     _games().to_csv(data_path, index=False)
-    recorded = {"calibration": "auto", "random_seed": 42, "data_path": str(data_path), **config}
+    recorded = {
+        "calibration": "auto",
+        "random_seed": 42,
+        "data_path": str(data_path),
+        "disabled_feature_groups": list(PRODUCTION_GROUPS),
+        **config,
+    }
     return production_settings.section_for_metadata({"config": recorded})
 
 

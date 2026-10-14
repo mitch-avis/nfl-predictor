@@ -135,7 +135,7 @@ def _parse_args() -> argparse.Namespace:
         default=0.5,
         help="Drop categorical columns with unique ratio above this threshold.",
     )
-    options.add_feature_group_option(parser)
+    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
     parser.add_argument(
         "--win-prob-calibration",
         choices=["auto", "none"],
@@ -357,7 +357,7 @@ def _predict_from_checkpoint(args: argparse.Namespace, output_path: Path | None)
     """Load ``--model-in`` and predict ``--predict-path`` with it, training nothing."""
     if args.tune:
         log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
-    if args.disable_feature_groups:
+    if args.disable_feature_groups != constants.PRODUCTION_DISABLED_FEATURE_GROUPS:
         log.info(
             "Model checkpoint provided; ignoring --disable-feature-groups: a saved model "
             "predicts with the columns it was trained on."

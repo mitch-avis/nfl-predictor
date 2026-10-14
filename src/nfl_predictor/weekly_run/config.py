@@ -335,12 +335,15 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
     parser.add_argument(
         "--disable-feature-groups",
         type=options.parse_feature_groups,
-        default=defaults.get("disable_feature_groups", ()),
+        default=defaults.get(
+            "disable_feature_groups", constants.PRODUCTION_DISABLED_FEATURE_GROUPS
+        ),
         help=(
             "Stage 1 and the final fit: feature groups to leave out, every column of each, "
             "comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a "
-            "list in the config file; default: none). An unknown group stops the run before "
-            "the data refresh."
+            "list in the config file; default: "
+            f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)}; an empty value leaves "
+            "no group out). An unknown group stops the run before the data refresh."
         ),
     )
     parser.add_argument(

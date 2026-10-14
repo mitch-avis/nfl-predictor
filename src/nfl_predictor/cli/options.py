@@ -84,14 +84,19 @@ FEATURE_GROUPS_HELP = (
 )
 
 
-def add_feature_group_option(parser: argparse.ArgumentParser) -> None:
+def add_feature_group_option(parser: argparse.ArgumentParser, groups: tuple[str, ...] = ()) -> None:
     """Add ``--disable-feature-groups``, which ``backtest`` and ``train`` share.
 
-    The value is the raw comma-separated string; ``parse_feature_groups`` splits it.
+    The value is the raw comma-separated string; ``parse_feature_groups`` splits it. ``groups``
+    is the default; an empty value on the command line leaves no group out.
     """
+    default = ",".join(groups)
+    help_text = FEATURE_GROUPS_HELP
+    if default:
+        help_text += f" Default: {default}; an empty value leaves no group out."
     parser.add_argument(
         "--disable-feature-groups",
         type=str,
-        default=None,
-        help=FEATURE_GROUPS_HELP,
+        default=default or None,
+        help=help_text,
     )

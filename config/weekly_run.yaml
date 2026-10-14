@@ -37,11 +37,12 @@ wf_checkpoint_per_fold: false
 # directories or fold checkpoint directories, relative to the repository root; their checkpoints
 # are only read, and several runs are averaged per game. A listed run that is missing stops the
 # run. An empty list ([]) uses only stage 1's folds, which fall back to the constant 14.21 until
-# they span three earlier seasons, any weeks of them (default: both seeds of the GPU reference
-# walk-forward)
+# they span three earlier seasons, any weeks of them (default: both seeds of the reviewed
+# reference walk-forward of production's settings, market anchored with the strength snapshot and
+# both own-Elo presets left out; constants.FLOOR_SIGMA_REFERENCE_RUNS)
 floor_sigma_reference_runs:
-  - models/step4_reference/adopted_seed42
-  - models/step4_reference/adopted_seed7
+  - models/step6/ratings_anchored_seed42
+  - models/step6/ratings_anchored_seed7
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3
@@ -59,10 +60,16 @@ wf_include_postseason: false
 wf_market_mode: hybrid
 # feature groups stage 1 and the final fit both leave out, every column of each: the columns
 # `nfl-predictor backtest --disable-feature-groups` drops for the same groups (the groups and their
-# column markers are constants.FEATURE_GROUP_COLUMN_MARKERS; for example [elo, own_elo_wt]). The
-# saved model records them. An unknown group stops the run before the data refresh, and
-# --disable-feature-groups on the command line takes them comma-separated (default: [], none)
-disable_feature_groups: []
+# column markers are constants.FEATURE_GROUP_COLUMN_MARKERS). Production leaves out the strength
+# snapshot (strength) and both presets of this repository's own Elo (own_elo, own_elo_wt), so it
+# trains on the ported team ratings (ratings) and the qb_elos.csv Elo (elo); an empty list ([])
+# leaves no group out. The saved model records them. An unknown group stops the run before the
+# data refresh, and --disable-feature-groups on the command line takes them comma-separated, an
+# empty value for none (default: [strength, own_elo, own_elo_wt])
+disable_feature_groups:
+  - strength
+  - own_elo
+  - own_elo_wt
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false
 

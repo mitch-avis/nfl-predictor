@@ -142,7 +142,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Drop trend + season-phase features for ablation comparisons.",
     )
-    options.add_feature_group_option(parser)
+    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
     parser.add_argument(
         "--xgb-tree-method",
         type=str,

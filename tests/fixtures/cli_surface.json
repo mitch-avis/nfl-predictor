@@ -338,9 +338,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
+   "default": "strength,own_elo,own_elo_wt",
    "dest": "disable_feature_groups",
-   "help": "Comma-separated feature groups to leave out, every column of each (for example 'elo' or 'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error.",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'elo' or 'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt; an empty value leaves no group out.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -1352,9 +1352,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
+   "default": "strength,own_elo,own_elo_wt",
    "dest": "disable_feature_groups",
-   "help": "Comma-separated feature groups to leave out, every column of each (for example 'elo' or 'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error.",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'elo' or 'elo,own_elo_wt'); a column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt; an empty value leaves no group out.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -1384,8 +1384,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": [
-    "models/step4_reference/adopted_seed42",
-    "models/step4_reference/adopted_seed7"
+    "models/step6/ratings_anchored_seed42",
+    "models/step6/ratings_anchored_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
    "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the floor's sigma, which the saved model records; their checkpoints are only read. A missing run is an error; give no paths to train without them (the constant, recorded as the fallback).",
@@ -2325,9 +2325,13 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": [],
+   "default": [
+    "strength",
+    "own_elo",
+    "own_elo_wt"
+   ],
    "dest": "disable_feature_groups",
-   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file; default: none). An unknown group stops the run before the data refresh.",
+   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file; default: strength,own_elo,own_elo_wt; an empty value leaves no group out). An unknown group stops the run before the data refresh.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -2511,8 +2515,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": [
-    "models/step4_reference/adopted_seed42",
-    "models/step4_reference/adopted_seed7"
+    "models/step6/ratings_anchored_seed42",
+    "models/step6/ratings_anchored_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
    "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks).",

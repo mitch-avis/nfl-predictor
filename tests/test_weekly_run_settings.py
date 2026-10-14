@@ -33,7 +33,10 @@ REFERENCE_POOL = floor_sigma.ErrorPool()
 PRODUCTION_POOL = floor_sigma.ErrorPool(sources=("stage1",))
 # The shipped configuration's stage-1 and final-fit marker hashes, which a run directory
 # resumes from.
-DEFAULT_HASHES = ["ca6a81c8", "082f6915"]
+DEFAULT_HASHES = ["e50d0fc8", "25ef09c0"]
+# The same with an empty group list, which leaves no feature group out: an empty list stays out
+# of both hashes, so a run directory that left no group out resumes.
+NO_GROUP_HASHES = ["ca6a81c8", "082f6915"]
 
 
 def _capture_weekly_settings(
@@ -132,7 +135,7 @@ def test_default_weekly_settings_and_hashes(
         "include_quantiles": False,
         "market_transform": None,
         "max_cardinality_ratio": 0.5,
-        "disabled_feature_groups": (),
+        "disabled_feature_groups": ("strength", "own_elo", "own_elo_wt"),
     }
     optuna_config = captured["train"].pop("optuna_config")
     assert optuna_config == ml_model_core.OptunaConfig(
@@ -163,13 +166,25 @@ def test_default_weekly_settings_and_hashes(
         "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
         "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
-        "disabled_feature_groups": (),
+        "disabled_feature_groups": ("strength", "own_elo", "own_elo_wt"),
     }
     # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
     # pool and week), so a run directory from before them retrains instead of resuming. The
-    # stage-1 hash also covers the start week (now 1). Leaving no feature group out keeps both
-    # hashes, so a run directory from before that setting still resumes.
+    # stage-1 hash also covers the start week (now 1) and both cover the groups left out.
     assert captured["hashes"] == DEFAULT_HASHES
+
+
+def test_an_empty_group_list_leaves_no_group_out_and_keeps_the_no_group_hashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With an empty value both stages keep every group and hash as a run that kept them."""
+    # Act
+    captured = _capture_weekly_settings(tmp_path, monkeypatch, ["--disable-feature-groups", ""])
+
+    # Assert
+    assert captured["stage1"]["disabled_feature_groups"] == ()
+    assert captured["train"]["disabled_feature_groups"] == ()
+    assert captured["hashes"] == NO_GROUP_HASHES
 
 
 def test_disabled_feature_groups_reach_both_stages_and_change_both_hashes(
@@ -237,7 +252,7 @@ def test_overridden_weekly_settings_and_hashes(
         captured["train"]["market_anchor"],
     ) == (False, False, True)
     # The final fit's hash covers the Optuna storage path, which names the temporary directory.
-    assert captured["hashes"][0] == "8ae118ca"
+    assert captured["hashes"][0] == "c2ac2868"
 
 
 def test_config_tree_settings_reach_stage1_and_the_final_fit(

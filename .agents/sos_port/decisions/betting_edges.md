@@ -141,4 +141,9 @@ The rule:
   one doc fix (these script copies). Every number reproduced from the fold checkpoints with the
   reviewer's own scripts (commands above). A reviewer subagent re-checked the fix commits
   `07bd2ca..e9c7a09` on 2026-10-12: approve with findings, one P3 (an infinite sigma passed the
-  positive-sigma check in the report and the weekly run), fixed in `623543c`.
+  positive-sigma check in the report and the weekly run), fixed in `623543c`. A fresh reviewer
+  subagent (`agent-ac13082dcc42bf326`) re-checked that fix on 2026-10-14: approve with findings,
+  the tests failing first and the gate passing; its one open P3 (the floor's own
+  `home_win_prob` accepts an infinite sigma, unreachable today) goes with the next change to the
+  model code. Both re-check reports are in
+  [../review/betting_edges/](../review/betting_edges/).

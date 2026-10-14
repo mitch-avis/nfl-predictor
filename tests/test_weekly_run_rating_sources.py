@@ -509,5 +509,96 @@ def test_resume_with_a_reused_walk_forward_and_no_fold_checkpoints_writes_no_poi
 
     # Assert
     assert not pointer.exists()
-    missing = [record for record in caplog.records if "are missing" in record.message]
-    assert [record.levelno for record in missing] == [logging.WARNING]
+    assert _rerun_stage_one_warnings(caplog) == [logging.WARNING]
+
+
+def _finished_run_without_its_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path]:
+    """Run the weekly fixture, remove stage 1's pointer, and set the config to resume.
+
+    Returns:
+        The config and where the pointer was.
+
+    """
+    paths = build_fixture(tmp_path)
+    config_path = write_weekly_config(tmp_path, paths, tmp_path / "out")
+    _run_weekly(config_path, monkeypatch)
+    (pointer,) = tmp_path.rglob("wf_compare/metadata.json")
+    pointer.unlink()
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["resume"] = True
+    config_path.write_text(yaml.safe_dump(config, sort_keys=True), encoding="utf-8")
+    return config_path, pointer
+
+
+def _upgrade_a_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Change the library versions the fold checkpoint fingerprint covers, not the reuse check."""
+    original = walk_forward._library_versions
+    monkeypatch.setattr(
+        walk_forward, "_library_versions", lambda: {**original(), "xgboost": "upgraded"}
+    )
+
+
+def _rerun_stage_one_warnings(caplog: pytest.LogCaptureFixture) -> list[int]:
+    """Return the levels of the records that tell the user to rerun stage 1."""
+    return [record.levelno for record in caplog.records if "--no-resume" in record.message]
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_reused_stage_one_after_a_fingerprint_change_still_finds_its_folds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    config_path, pointer = _finished_run_without_its_pointer(tmp_path, monkeypatch)
+    (folds,) = (tmp_path / "run" / "wf_compare" / "wf_folds").iterdir()
+    _upgrade_a_library(monkeypatch)
+
+    # Act
+    _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    written = json.loads(pointer.read_text(encoding="utf-8"))
+    assert written == {"config": {"checkpoint": {"dir": str(folds)}}}
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_reused_stage_one_with_two_matching_fold_folders_writes_no_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    config_path, pointer = _finished_run_without_its_pointer(tmp_path, monkeypatch)
+    (folds,) = (tmp_path / "run" / "wf_compare" / "wf_folds").iterdir()
+    copy = folds.with_name("0" * len(folds.name))
+    copy.mkdir()
+    (copy / "manifest.json").write_bytes((folds / "manifest.json").read_bytes())
+    _upgrade_a_library(monkeypatch)
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    assert not pointer.exists()
+    assert _rerun_stage_one_warnings(caplog) == [logging.WARNING]
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_reused_stage_one_with_no_matching_fold_folder_writes_no_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    config_path, pointer = _finished_run_without_its_pointer(tmp_path, monkeypatch)
+    (manifest_path,) = tmp_path.rglob("wf_compare/wf_folds/*/manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["rows"] += 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    _upgrade_a_library(monkeypatch)
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    assert not pointer.exists()
+    assert _rerun_stage_one_warnings(caplog) == [logging.WARNING]

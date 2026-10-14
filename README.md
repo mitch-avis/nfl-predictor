@@ -1024,7 +1024,11 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   weight its pre-registered rule picks for 2026 (`.agents/sos_port/decisions/power_rankings.md`,
   decision 12). Without `--power-rankings-model-predictions`, the model rating reads the ranked
   season from the run's own stage-1 fold checkpoints (`wf_compare/`, whose `metadata.json` names
-  them; a resumed run that reuses stage 1 writes it when missing) and earlier seasons, which
+  them; a resumed run that reuses stage 1 writes it when missing, finding the folds under
+  `wf_compare/wf_folds/` by name or, for a stage 1 run on other code or library versions, by the
+  one `manifest.json` that records the production configuration and the data's row and column
+  counts; with none or several matching it writes nothing and warns to rerun with
+  `--no-resume`) and earlier seasons, which
   only week 1's carried-forward fit reads, from the `floor_sigma_reference_runs`, averaged per
   game in the order listed as one source; later weeks read the stage-1 checkpoints alone, so a
   missing reference run blocks only week 1. Explicit paths replace both.

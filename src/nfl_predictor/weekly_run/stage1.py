@@ -119,22 +119,58 @@ def write_reused_predictions_source(
 
     A run directory whose stage 1 finished before the pointer was written has none, so the
     power rankings' model rating could not read it. The directory is the one the walk-forward
-    names for these games and settings (`walk_forward.fold_checkpoint_fingerprint`); when it
-    does not exist, nothing is written and the rankings report the source as unavailable.
+    names for these games and settings (`walk_forward.fold_checkpoint_fingerprint`). That name
+    also covers the modelling code and the library versions, which the stage-1 reuse check does
+    not, so a stage 1 run on other code is looked up by its ``manifest.json`` instead: the
+    production configuration and the row and column counts of the games. The pointer is written
+    only when exactly one directory matches; otherwise a warning names the remedy, and the
+    rankings report the source as unavailable.
     """
-    config = production_walk_forward_config(options)
-    fingerprint = walk_forward.fold_checkpoint_fingerprint(
-        _without_disabled_groups(df, options), config, floor_sigma_history
+    games = _without_disabled_groups(df, options)
+    config = walk_forward.with_resolved_xgb_device(production_walk_forward_config(options))
+    folds_root = _wf_compare_dir(run_dir) / "wf_folds"
+    fingerprint = walk_forward.fold_checkpoint_fingerprint(games, config, floor_sigma_history)
+    directory = folds_root / fingerprint[:_FOLD_DIRECTORY_CHARS]
+    if directory.is_dir():
+        _write_predictions_source(run_dir, {"dir": str(directory)})
+        return
+    matches = _fold_directories_matching(
+        folds_root, config, rows=len(games), columns=len(games.columns)
     )
-    directory = _wf_compare_dir(run_dir) / "wf_folds" / fingerprint[:_FOLD_DIRECTORY_CHARS]
-    if not directory.is_dir():
+    if len(matches) != 1:
         log.warning(
-            "Stage 1 reused, but its fold checkpoints %s are missing: the model rating cannot "
-            "read this run's walk-forward",
-            directory,
+            "Stage 1 reused, but %d fold checkpoint directories under %s match its production "
+            "configuration and %d rows by %d columns, so the model rating cannot read this "
+            "run's walk-forward; rerun stage 1 with --no-resume",
+            len(matches),
+            folds_root,
+            len(games),
+            len(games.columns),
         )
         return
-    _write_predictions_source(run_dir, {"dir": str(directory)})
+    log.info("Stage 1 reused: its fold checkpoints are %s, found by their manifest", matches[0])
+    _write_predictions_source(run_dir, {"dir": str(matches[0])})
+
+
+def _fold_directories_matching(
+    folds_root: Path, config: walk_forward.WalkForwardConfig, *, rows: int, columns: int
+) -> list[Path]:
+    """Return the fold checkpoint directories whose manifest records this config and shape."""
+    expected = json.loads(json.dumps(config.to_dict(), sort_keys=True, default=str))
+    matches: list[Path] = []
+    for manifest_path in sorted(folds_root.glob("*/manifest.json")):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except OSError, json.JSONDecodeError:
+            continue
+        if (
+            isinstance(manifest, dict)
+            and manifest.get("config") == expected
+            and manifest.get("rows") == rows
+            and manifest.get("columns") == columns
+        ):
+            matches.append(manifest_path.parent)
+    return matches
 
 
 def _without_disabled_groups(df: pd.DataFrame, options: ProductionOptions) -> pd.DataFrame:

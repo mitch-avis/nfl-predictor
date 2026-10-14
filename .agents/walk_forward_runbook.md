@@ -38,6 +38,9 @@ walk-forward at a time, `launch.sh` with `nohup setsid`, the OpenMP wait policy)
 - Never execute a fragment cut from a `launch.sh`: a cut that includes the `nfl-predictor backtest`
   line starts a second walk-forward with default settings. Never `pkill -f` a pattern that can
   match your own shell.
+- Since the adoption of the ported ratings (decided 2026-10-12), a backtest with no group option
+  leaves out production's groups (`strength,own_elo,own_elo_wt`), so a command recorded before it
+  reproduces with `--disable-feature-groups ''` added.
 - Progress: every finished week prints a `Walk-forward fold N/M done` line with elapsed and
   remaining time. After a stop, re-running the identical command resumes at the next unfinished
   week (`--no-resume` retrains everything). A `weekly_run`'s own walk-forward of the production

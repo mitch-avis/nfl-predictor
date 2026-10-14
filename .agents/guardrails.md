@@ -120,6 +120,10 @@ so these rules are not advisory.
       stage 1 walks forward from week 1. An arm that judges probabilities runs from 2007 week 1 or
       passes `--floor-sigma-reference-runs` with the GPU reference, and passes
       `--wf-start-week 1`; arms compared only with each other may keep the default.
+    - recorded commands: since the adoption of the ported ratings (decided 2026-10-12), a
+      backtest with no group option leaves out production's groups
+      (`strength,own_elo,own_elo_wt`), so a command recorded before it reproduces with
+      `--disable-feature-groups ''` added.
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
     applied as written. If the result falls between its branches, or its first condition fails
     and a fallback branch rescues the preferred outcome, the result goes to the user as a

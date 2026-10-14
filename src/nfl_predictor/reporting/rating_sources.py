@@ -470,20 +470,22 @@ def read_fold_predictions(path: Path) -> FoldPredictions:
 def _fold_predictions(path: Path) -> pl.DataFrame:
     """Return one fold file's predictions with ``PREDICTION_COLUMNS``.
 
-    A dataset without the ``neutral`` column reads as null there, which the fit treats as a home
-    game (:func:`fit_model_ratings`).
+    Raises:
+        TypeError: If the file holds no prediction frame.
+        RatingSourceUnavailableError: If the frame lacks one of ``PREDICTION_COLUMNS``, the
+            ``neutral`` site flag included: a fold without it would fit neutral-site games as
+            home games.
+
     """
     payload = joblib.load(path)
     frame = payload.get("predictions") if isinstance(payload, dict) else None
     if not isinstance(frame, pd.DataFrame):
         msg = f"{path} holds no prediction frame"
         raise TypeError(msg)
-    if "neutral" not in frame.columns:
-        frame = frame.assign(neutral=np.nan)
     missing = [column for column in PREDICTION_COLUMNS if column not in frame.columns]
     if missing:
         msg = f"{path} lacks {missing}"
-        raise ValueError(msg)
+        raise RatingSourceUnavailableError(msg)
     return pl.DataFrame(
         {
             "game_id": frame["game_id"].astype(str).tolist(),

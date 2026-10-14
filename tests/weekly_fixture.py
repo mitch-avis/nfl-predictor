@@ -67,6 +67,7 @@ ID_COLUMNS = (
     "season",
     "week",
     "game_type",
+    "neutral",
     "date",
     "gametime",
     "game_datetime",
@@ -130,6 +131,7 @@ def game_rows(
             "season": season,
             "week": week,
             "game_type": "REG",
+            "neutral": 0,
             "date": kickoff.isoformat(),
             "gametime": "13:00",
             "game_datetime": f"{kickoff.isoformat()}T13:00:00",
@@ -254,6 +256,7 @@ def write_reference_run(root: Path, games: pd.DataFrame) -> Path:
             "week": games["week"],
             "away_abbr": games["away_abbr"],
             "home_abbr": games["home_abbr"],
+            "neutral": games["neutral"],
             "actual_margin": games["home_score"] - games["away_score"],
             "predicted_margin": games["away_spread"],
         }

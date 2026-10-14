@@ -179,12 +179,19 @@ def _null_downs(pbp: pl.DataFrame) -> pl.DataFrame:
     return pbp.with_columns(pl.col("down").fill_null(0.0))
 
 
+# Decimals the diagnostic EPA sums keep: finer than the comparison tolerance (1e-6), coarser than
+# the last-digit differences the summation order makes.
+DIAGNOSTIC_DECIMALS = 9
+
+
 def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
     """Count the plays nflverse records as ``no_play`` by the flag they keep.
 
     ``plays`` is every such play with a team on each side; ``without_penalty_flag`` counts those
     whose ``penalty`` flag is not set. ``rush``, ``pass`` and ``qb_dropback`` count those with that
-    flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA.
+    flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA, rounded to
+    ``DIAGNOSTIC_DECIMALS`` so the report does not change with the order Polars sums in (which
+    depends on its thread count).
     """
     sides = pl.all_horizontal(
         pl.col(c).is_not_null() & (pl.col(c) != "") for c in ("posteam", "defteam")
@@ -197,8 +204,8 @@ def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
         "rush": runs.height,
         "pass": passes.height,
         "qb_dropback": wiped.filter(_flag("qb_dropback")).height,
-        "rush_epa": float(runs["epa"].fill_null(0.0).sum()),
-        "pass_epa": float(passes["epa"].fill_null(0.0).sum()),
+        "rush_epa": round(float(runs["epa"].fill_null(0.0).sum()), DIAGNOSTIC_DECIMALS),
+        "pass_epa": round(float(passes["epa"].fill_null(0.0).sum()), DIAGNOSTIC_DECIMALS),
     }
 
 

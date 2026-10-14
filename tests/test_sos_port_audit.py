@@ -113,6 +113,23 @@ def _rush_epa(plays: pl.DataFrame) -> float:
     return float(games.filter(pl.col("team_abbr") == "BUF")["rush_epa_sum"][0])
 
 
+def _wiped_out_passes(epa: list[float]) -> pl.DataFrame:
+    """Return Buffalo's passes a penalty wiped out (``no_play``), one per EPA value."""
+    count = len(epa)
+    return pl.DataFrame(
+        {
+            "posteam": ["BUF"] * count,
+            "defteam": ["MIA"] * count,
+            "play_type": ["no_play"] * count,
+            "penalty": [1.0] * count,
+            "rush": [0.0] * count,
+            "pass": [1.0] * count,
+            "qb_dropback": [1.0] * count,
+            "epa": epa,
+        }
+    )
+
+
 def _column(inventory: ModuleType, kind: str, column: str, **fields: str) -> Any:
     """Return an inventory column of ``kind`` resolved to itself, with ``fields`` overridden."""
     values = {"base": column, "prefix": "", "suffix": "", "registry_source": "", "entity": "team"}
@@ -484,6 +501,33 @@ def test_season_pbp_missing_cache_fails(parity: ModuleType, tmp_path: Path) -> N
     # Assert
     assert found is None
     assert [failure.what for failure in audit.failures] == ["cache"]
+
+
+def test_wiped_out_plays_writes_the_epa_sum_rounded_to_nine_decimals(
+    parity_rules: ModuleType,
+) -> None:
+    # Arrange
+    plays = _wiped_out_passes([0.25, 1e-10])
+
+    # Act
+    found = parity_rules.wiped_out_plays(plays)
+
+    # Assert
+    assert found["pass_epa"] == round(0.25 + 1e-10, 9)
+
+
+def test_wiped_out_plays_epa_sums_in_either_summation_order_serialize_identically(
+    parity_rules: ModuleType,
+) -> None:
+    # Arrange
+    report_text = load_sos_port_script("report_text")
+    forward, backward = _wiped_out_passes([0.1, 0.2, 0.3]), _wiped_out_passes([0.3, 0.2, 0.1])
+
+    # Act
+    written = [report_text.dump_json(parity_rules.wiped_out_plays(p)) for p in (forward, backward)]
+
+    # Assert
+    assert written[0] == written[1]
 
 
 def test_check_coverage_empty_schedule_fails_the_audit_instead_of_raising(

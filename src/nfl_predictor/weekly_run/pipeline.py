@@ -36,7 +36,14 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.ml import artifacts, floor_sigma, metrics, ml_model_core, walk_forward
+from nfl_predictor.ml import (
+    artifacts,
+    feature_spec,
+    floor_sigma,
+    metrics,
+    ml_model_core,
+    walk_forward,
+)
 from nfl_predictor.ml.metrics import confidence_ranks
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import (
@@ -265,6 +272,29 @@ class _RunContext:
     dataset_hash: str
     dataset_fingerprint: dict[str, Any]
     config_payload: dict[str, Any]
+
+
+def _check_ratings_replace_strength(args: argparse.Namespace) -> None:
+    """Stop before any work when the groups left out need ported ratings the data lacks.
+
+    It reads only the strength and ratings columns of the dataset, so a dry run on old data
+    stops here rather than reporting success. A dry run that would refresh the data first
+    warns instead, since the refresh may add the ratings. Stage 1 and the final fit repeat the
+    check on the frames they load, which covers a stage reused from an earlier run. A missing
+    dataset is left to ``_start_run``, which names it.
+    """
+    groups = list(args.disable_feature_groups)
+    if "strength" not in groups or not args.data_path.exists():
+        return
+    header = list(pd.read_csv(args.data_path, nrows=0).columns)
+    needed = feature_spec.resolve_feature_group_columns(
+        header, ["strength", "ratings"], warn_unmatched=False
+    )
+    if not needed:
+        return
+    games = pd.read_csv(args.data_path, usecols=needed)
+    stop = args.skip_data_refresh or not args.dry_run
+    feature_spec.check_ratings_replace_strength(games, groups, stop=stop)
 
 
 def _start_run(args: argparse.Namespace) -> _RunContext:
@@ -667,6 +697,7 @@ def main() -> int:
             log.info("Dry-run: would refresh data before running the stages")
         else:
             _refresh_data(args.data_collection_args)
+    _check_ratings_replace_strength(args)
 
     ctx = _start_run(args)
     if args.dry_run:

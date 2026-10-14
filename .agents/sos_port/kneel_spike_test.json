@@ -1,0 +1,1961 @@
+{
+ "test": "kneel-spike",
+ "integrity": {
+  "production": {
+   "full_season_gap": 0.0,
+   "snapshots_compared": 421,
+   "snapshot_gap": 0.0,
+   "first_season_gap": 0.0
+  },
+  "source_validation": {
+   "overall": [
+    5297,
+    10.575036421574003,
+    13.561688558294295
+   ],
+   "weeks 5-7": [
+    1141,
+    10.567105211972965,
+    13.690796647568465
+   ],
+   "weeks 8+": [
+    4156,
+    10.577213878300372,
+    13.526027248714572
+   ]
+  },
+  "variant_rows": {
+   "epa_gap": 7.105427357601002e-15,
+   "moved": {
+    "without_kneel_spike": {
+     "removed": 11282,
+     "removed_epa": -5516.247920805519,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    "without_kneels": {
+     "removed": 9404,
+     "removed_epa": -5266.91462454169,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    "without_spikes": {
+     "removed": 1878,
+     "removed_epa": -249.3332962638285,
+     "added": 0,
+     "added_epa": 0.0
+    }
+   }
+  },
+  "zero_change_gap": 0.0,
+  "penalty_seasons": 104,
+  "information_snapshots": {
+   "today": 437,
+   "without_kneel_spike": 437,
+   "without_kneels": 437,
+   "without_spikes": 437
+  },
+  "margin_rows": 26485
+ },
+ "decision": {
+  "recommended": "today",
+  "qualifying": [],
+  "band_guard": [],
+  "excluding_zero": [
+   [
+    "without_kneel_spike",
+    "weeks 8+",
+    "better"
+   ]
+  ],
+  "confidence": 0.95
+ },
+ "comparisons": {
+  "without_kneel_spike": {
+   "overall": [
+    -0.0211546063286018,
+    -0.03930042020355923,
+    0.0004672020964831546
+   ],
+   "weeks 5-7": [
+    -0.027485616411209172,
+    -0.08291049274216744,
+    0.02227226367150454
+   ],
+   "weeks 8+": [
+    -0.019416472906018792,
+    -0.03495044188613745,
+    -0.0006921245224092244
+   ]
+  }
+ },
+ "scores": {
+  "today": {
+   "overall": [
+    5297,
+    10.575036421574003,
+    13.561688558294295
+   ],
+   "weeks 5-7": [
+    1141,
+    10.567105211972965,
+    13.690796647568465
+   ],
+   "weeks 8+": [
+    4156,
+    10.577213878300372,
+    13.526027248714572
+   ]
+  },
+  "without_kneel_spike": {
+   "overall": [
+    5297,
+    10.5538818152454,
+    13.533298292122106
+   ],
+   "weeks 5-7": [
+    1141,
+    10.539619595561756,
+    13.65784992879303
+   ],
+   "weeks 8+": [
+    4156,
+    10.557797405394352,
+    13.498902470553107
+   ]
+  },
+  "without_kneels": {
+   "overall": [
+    5297,
+    10.554558388850674,
+    13.534285018367173
+   ],
+   "weeks 5-7": [
+    1141,
+    10.541292395821113,
+    13.659956717004546
+   ],
+   "weeks 8+": [
+    4156,
+    10.558200472115043,
+    13.499578069612452
+   ]
+  },
+  "without_spikes": {
+   "overall": [
+    5297,
+    10.57437413572852,
+    13.560782904624206
+   ],
+   "weeks 5-7": [
+    1141,
+    10.56600211254626,
+    13.688889572304925
+   ],
+   "weeks 8+": [
+    4156,
+    10.576672614662824,
+    13.525399850049165
+   ]
+  }
+ },
+ "slopes": {
+  "today": {
+   "overall": 0.9027279773514837,
+   "weeks 5-7": 0.9111030106688227,
+   "weeks 8+": 0.9004286720061794
+  },
+  "without_kneel_spike": {
+   "overall": 0.8583477397128921,
+   "weeks 5-7": 0.8672396271358416,
+   "weeks 8+": 0.8559065357789207
+  },
+  "without_kneels": {
+   "overall": 0.8567503299791597,
+   "weeks 5-7": 0.8656948796763423,
+   "weeks 8+": 0.8542946679954049
+  },
+  "without_spikes": {
+   "overall": 0.9044262543897229,
+   "weeks 5-7": 0.9127470830270108,
+   "weeks 8+": 0.90214183055066
+  }
+ },
+ "extras": {
+  "by_game": {
+   "without_kneel_spike": {
+    "overall": [
+     -0.02115460632860181,
+     -0.035268403283069245,
+     -0.007341639077709583
+    ],
+    "weeks 5-7": [
+     -0.027485616411209165,
+     -0.06397577295154289,
+     0.009140008951906352
+    ],
+    "weeks 8+": [
+     -0.019416472906018792,
+     -0.03421219936992788,
+     -0.004256468985435305
+    ]
+   },
+   "without_kneels": {
+    "overall": [
+     -0.020478032723329268,
+     -0.03440694884407279,
+     -0.006796058474108524
+    ],
+    "weeks 5-7": [
+     -0.025812816151851808,
+     -0.06198553568520808,
+     0.010679283644278968
+    ],
+    "weeks 8+": [
+     -0.019013406185325366,
+     -0.0338024723520965,
+     -0.004010536482766185
+    ]
+   },
+   "without_spikes": {
+    "overall": [
+     -0.0006622858454813069,
+     -0.001997787224658276,
+     0.0006555112624350998
+    ],
+    "weeks 5-7": [
+     -0.0011030994267057282,
+     -0.00407247807200213,
+     0.0018524420157492488
+    ],
+    "weeks 8+": [
+     -0.0005412636375464982,
+     -0.0020564389459690182,
+     0.0009520973971854804
+    ]
+   }
+  },
+  "season": {
+   "without_kneels": {
+    "overall": [
+     -0.02047803272332926,
+     -0.0381745430993579,
+     0.0009980152058476984
+    ],
+    "weeks 5-7": [
+     -0.025812816151851808,
+     -0.0784346173644995,
+     0.023463504421708147
+    ],
+    "weeks 8+": [
+     -0.01901340618532536,
+     -0.03437521600560692,
+     -0.0003367942549830931
+    ]
+   },
+   "without_spikes": {
+    "overall": [
+     -0.0006622858454813069,
+     -0.002014959844855212,
+     0.000591050777411694
+    ],
+    "weeks 5-7": [
+     -0.0011030994267057282,
+     -0.004143893350612115,
+     0.001478260148372122
+    ],
+    "weeks 8+": [
+     -0.0005412636375464982,
+     -0.001854877556780513,
+     0.0006993845283858085
+    ]
+   }
+  },
+  "moved": {
+   "without_kneel_spike": [
+    {
+     "season": 1999,
+     "removed": 344,
+     "removed_epa": -155.83895038078848,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2000,
+     "removed": 38,
+     "removed_epa": -14.119737459870521,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2001,
+     "removed": 43,
+     "removed_epa": -17.08661747313339,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2002,
+     "removed": 245,
+     "removed_epa": -127.10398272328894,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2003,
+     "removed": 363,
+     "removed_epa": -152.5090551268676,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2004,
+     "removed": 434,
+     "removed_epa": -239.9475853469698,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2005,
+     "removed": 430,
+     "removed_epa": -207.07860469521688,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2006,
+     "removed": 484,
+     "removed_epa": -262.1928988718032,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2007,
+     "removed": 465,
+     "removed_epa": -171.1332773728531,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2008,
+     "removed": 478,
+     "removed_epa": -238.0106365584649,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2009,
+     "removed": 463,
+     "removed_epa": -229.60328337591363,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2010,
+     "removed": 426,
+     "removed_epa": -156.93036010129666,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2011,
+     "removed": 444,
+     "removed_epa": -191.16124874058607,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2012,
+     "removed": 449,
+     "removed_epa": -235.8635992035833,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2013,
+     "removed": 452,
+     "removed_epa": -210.31431883989478,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2014,
+     "removed": 457,
+     "removed_epa": -236.22084155453027,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2015,
+     "removed": 474,
+     "removed_epa": -234.88043419778626,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2016,
+     "removed": 445,
+     "removed_epa": -219.3329781660589,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2017,
+     "removed": 455,
+     "removed_epa": -204.96527609446665,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2018,
+     "removed": 473,
+     "removed_epa": -231.28213636008405,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2019,
+     "removed": 473,
+     "removed_epa": -225.33907745935042,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2020,
+     "removed": 504,
+     "removed_epa": -255.81894791527253,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2021,
+     "removed": 466,
+     "removed_epa": -242.5417931398631,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2022,
+     "removed": 485,
+     "removed_epa": -290.80168444738126,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2023,
+     "removed": 497,
+     "removed_epa": -294.7465838741333,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2024,
+     "removed": 480,
+     "removed_epa": -230.6871825376979,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2025,
+     "removed": 515,
+     "removed_epa": -240.7368287883627,
+     "added": 0,
+     "added_epa": 0.0
+    }
+   ],
+   "without_kneels": [
+    {
+     "season": 1999,
+     "removed": 292,
+     "removed_epa": -144.65607745459155,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2000,
+     "removed": 26,
+     "removed_epa": -7.441130512510426,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2001,
+     "removed": 26,
+     "removed_epa": -14.279456532734912,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2002,
+     "removed": 232,
+     "removed_epa": -125.53571091225604,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2003,
+     "removed": 277,
+     "removed_epa": -135.2021476288132,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2004,
+     "removed": 352,
+     "removed_epa": -220.83045708070156,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2005,
+     "removed": 359,
+     "removed_epa": -191.5612509065778,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2006,
+     "removed": 387,
+     "removed_epa": -238.28522624983796,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2007,
+     "removed": 353,
+     "removed_epa": -149.75610832485737,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2008,
+     "removed": 380,
+     "removed_epa": -220.9634906278709,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2009,
+     "removed": 371,
+     "removed_epa": -211.53505151796833,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2010,
+     "removed": 350,
+     "removed_epa": -147.37982946299306,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2011,
+     "removed": 361,
+     "removed_epa": -176.9058967147007,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2012,
+     "removed": 368,
+     "removed_epa": -223.60594742845996,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2013,
+     "removed": 393,
+     "removed_epa": -203.86846224120356,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2014,
+     "removed": 383,
+     "removed_epa": -231.83204463665257,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2015,
+     "removed": 422,
+     "removed_epa": -229.5525936775619,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2016,
+     "removed": 374,
+     "removed_epa": -215.96873723703953,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2017,
+     "removed": 398,
+     "removed_epa": -201.68081089789598,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2018,
+     "removed": 395,
+     "removed_epa": -226.809067180744,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2019,
+     "removed": 398,
+     "removed_epa": -219.14003834433666,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2020,
+     "removed": 419,
+     "removed_epa": -255.0679188942858,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2021,
+     "removed": 396,
+     "removed_epa": -239.4795373894662,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2022,
+     "removed": 424,
+     "removed_epa": -285.8610461471846,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2023,
+     "removed": 429,
+     "removed_epa": -289.6175058625761,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2024,
+     "removed": 405,
+     "removed_epa": -221.81164663197757,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2025,
+     "removed": 434,
+     "removed_epa": -238.2874340458918,
+     "added": 0,
+     "added_epa": 0.0
+    }
+   ],
+   "without_spikes": [
+    {
+     "season": 1999,
+     "removed": 52,
+     "removed_epa": -11.18287292619691,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2000,
+     "removed": 12,
+     "removed_epa": -6.678606947360095,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2001,
+     "removed": 17,
+     "removed_epa": -2.8071609403984787,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2002,
+     "removed": 13,
+     "removed_epa": -1.5682718110329006,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2003,
+     "removed": 86,
+     "removed_epa": -17.30690749805438,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2004,
+     "removed": 82,
+     "removed_epa": -19.117128266268217,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2005,
+     "removed": 71,
+     "removed_epa": -15.517353788639092,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2006,
+     "removed": 97,
+     "removed_epa": -23.907672621965276,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2007,
+     "removed": 112,
+     "removed_epa": -21.377169047995697,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2008,
+     "removed": 98,
+     "removed_epa": -17.04714593059399,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2009,
+     "removed": 92,
+     "removed_epa": -18.068231857945324,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2010,
+     "removed": 76,
+     "removed_epa": -9.550530638303599,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2011,
+     "removed": 83,
+     "removed_epa": -14.255352025885365,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2012,
+     "removed": 81,
+     "removed_epa": -12.257651775123335,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2013,
+     "removed": 59,
+     "removed_epa": -6.445856598691192,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2014,
+     "removed": 74,
+     "removed_epa": -4.388796917877705,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2015,
+     "removed": 52,
+     "removed_epa": -5.327840520224298,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2016,
+     "removed": 71,
+     "removed_epa": -3.3642409290193673,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2017,
+     "removed": 57,
+     "removed_epa": -3.284465196570623,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2018,
+     "removed": 78,
+     "removed_epa": -4.47306917934007,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2019,
+     "removed": 75,
+     "removed_epa": -6.199039115013761,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2020,
+     "removed": 85,
+     "removed_epa": -0.7510290209867267,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2021,
+     "removed": 70,
+     "removed_epa": -3.0622557503969046,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2022,
+     "removed": 61,
+     "removed_epa": -4.940638300196668,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2023,
+     "removed": 68,
+     "removed_epa": -5.12907801155724,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2024,
+     "removed": 75,
+     "removed_epa": -8.875535905720376,
+     "added": 0,
+     "added_epa": 0.0
+    },
+    {
+     "season": 2025,
+     "removed": 81,
+     "removed_epa": -2.449394742470907,
+     "added": 0,
+     "added_epa": 0.0
+    }
+   ]
+  },
+  "stability": {
+   "today": {
+    "pairs": 829.0,
+    "pearson": 0.4322565311649521
+   },
+   "without_kneel_spike": {
+    "pairs": 829.0,
+    "pearson": 0.4451224599696621
+   },
+   "without_kneels": {
+    "pairs": 829.0,
+    "pearson": 0.44477154634423743
+   },
+   "without_spikes": {
+    "pairs": 829.0,
+    "pearson": 0.4325933694191558
+   }
+  },
+  "impact": {
+   "without_kneel_spike": {
+    "team_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13930.0,
+     "largest": 4.321213324905113,
+     "mean": 0.3097239381946127
+    },
+    "offense_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13930.0,
+     "largest": 2.6488896333584844,
+     "mean": 0.20838395289557782
+    },
+    "defense_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13930.0,
+     "largest": 2.5964172969115227,
+     "mean": 0.19905313423883608
+    }
+   },
+   "without_kneels": {
+    "team_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13900.0,
+     "largest": 4.371290986671726,
+     "mean": 0.31037826125582835
+    },
+    "offense_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13900.0,
+     "largest": 2.6602424707128094,
+     "mean": 0.20838674616974046
+    },
+    "defense_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13900.0,
+     "largest": 2.629847905873084,
+     "mean": 0.19776091189134198
+    }
+   },
+   "without_spikes": {
+    "team_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13868.0,
+     "largest": 0.3046763356695066,
+     "mean": 0.024085800510776915
+    },
+    "offense_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13868.0,
+     "largest": 0.29660597275060147,
+     "mean": 0.01681290374884452
+    },
+    "defense_rating": {
+     "rows": 13930.0,
+     "rows_moved": 13868.0,
+     "largest": 0.28936039944095804,
+     "mean": 0.01561490955375356
+    }
+   }
+  },
+  "ranks": {
+   "today": [
+    {
+     "team": "LAR",
+     "offense_rating": 6.968179782025982,
+     "defense_rating": 3.4672855027383243,
+     "team_rating": 9.944107883565282,
+     "rank": 1
+    },
+    {
+     "team": "SEA",
+     "offense_rating": 1.3051069326504177,
+     "defense_rating": 5.96921611467942,
+     "team_rating": 8.829237897214206,
+     "rank": 2
+    },
+    {
+     "team": "HOU",
+     "offense_rating": -0.6717457446556498,
+     "defense_rating": 6.405652056433855,
+     "team_rating": 7.0190558737883935,
+     "rank": 3
+    },
+    {
+     "team": "JAX",
+     "offense_rating": 1.3389191678691317,
+     "defense_rating": 4.790239027116716,
+     "team_rating": 6.837057178857628,
+     "rank": 4
+    },
+    {
+     "team": "NE",
+     "offense_rating": 5.196196119678475,
+     "defense_rating": 0.7498358922622668,
+     "team_rating": 5.919088656316714,
+     "rank": 5
+    },
+    {
+     "team": "DEN",
+     "offense_rating": 1.4409631970132415,
+     "defense_rating": 3.4249314159421167,
+     "team_rating": 4.619320605415361,
+     "rank": 6
+    },
+    {
+     "team": "PHI",
+     "offense_rating": -0.13211748635703116,
+     "defense_rating": 4.891118621463003,
+     "team_rating": 4.3922535662432916,
+     "rank": 7
+    },
+    {
+     "team": "DET",
+     "offense_rating": 3.2289019562451586,
+     "defense_rating": 0.9236107306486917,
+     "team_rating": 4.169628355625162,
+     "rank": 8
+    },
+    {
+     "team": "IND",
+     "offense_rating": 4.232933890734049,
+     "defense_rating": -0.39696029551619066,
+     "team_rating": 3.9763364092661386,
+     "rank": 9
+    },
+    {
+     "team": "BUF",
+     "offense_rating": 5.069544610385138,
+     "defense_rating": -0.5140596584844813,
+     "team_rating": 3.8970742090347534,
+     "rank": 10
+    },
+    {
+     "team": "SF",
+     "offense_rating": 4.516810399491378,
+     "defense_rating": -2.577002575697828,
+     "team_rating": 3.3663883697447314,
+     "rank": 11
+    },
+    {
+     "team": "GB",
+     "offense_rating": 4.577482249097881,
+     "defense_rating": -1.4144072896403732,
+     "team_rating": 2.5750259447165758,
+     "rank": 12
+    },
+    {
+     "team": "CHI",
+     "offense_rating": 3.5561676506095132,
+     "defense_rating": -1.0766538719658647,
+     "team_rating": 2.5715585010294024,
+     "rank": 13
+    },
+    {
+     "team": "KC",
+     "offense_rating": 2.0151262777608294,
+     "defense_rating": 1.0264846571907855,
+     "team_rating": 2.5668233012255612,
+     "rank": 14
+    },
+    {
+     "team": "LAC",
+     "offense_rating": -1.4367288493080155,
+     "defense_rating": 3.2512280298452163,
+     "team_rating": 1.437941692035612,
+     "rank": 15
+    },
+    {
+     "team": "BAL",
+     "offense_rating": 1.3648157237933296,
+     "defense_rating": -0.548932614651371,
+     "team_rating": 0.7445759732142473,
+     "rank": 16
+    },
+    {
+     "team": "PIT",
+     "offense_rating": 1.135873805716968,
+     "defense_rating": -0.9469400024234921,
+     "team_rating": 0.25523068342170496,
+     "rank": 17
+    },
+    {
+     "team": "MIN",
+     "offense_rating": -5.806045108949922,
+     "defense_rating": 5.676748924946823,
+     "team_rating": 0.23647497146287044,
+     "rank": 18
+    },
+    {
+     "team": "TB",
+     "offense_rating": 0.030172270922838668,
+     "defense_rating": -0.7827248173311215,
+     "team_rating": -1.3983414414437183,
+     "rank": 19
+    },
+    {
+     "team": "ATL",
+     "offense_rating": -1.30140373364966,
+     "defense_rating": 0.14877882238771864,
+     "team_rating": -1.9440861537418483,
+     "rank": 20
+    },
+    {
+     "team": "NYG",
+     "offense_rating": 0.27946926357783286,
+     "defense_rating": -2.879954321775828,
+     "team_rating": -2.760320012069362,
+     "rank": 21
+    },
+    {
+     "team": "NO",
+     "offense_rating": -5.166431259872901,
+     "defense_rating": 3.800568095797127,
+     "team_rating": -2.9397435817411512,
+     "rank": 22
+    },
+    {
+     "team": "DAL",
+     "offense_rating": 4.1374705820923765,
+     "defense_rating": -7.966823223888232,
+     "team_rating": -3.749576168586539,
+     "rank": 23
+    },
+    {
+     "team": "ARI",
+     "offense_rating": -0.654473476482251,
+     "defense_rating": -2.586780095004079,
+     "team_rating": -4.318501308644903,
+     "rank": 24
+    },
+    {
+     "team": "CAR",
+     "offense_rating": -2.5268366869936223,
+     "defense_rating": -1.9520338814852018,
+     "team_rating": -4.421849294334942,
+     "rank": 25
+    },
+    {
+     "team": "MIA",
+     "offense_rating": -1.235043376206259,
+     "defense_rating": -3.9513053528367346,
+     "team_rating": -4.607991006216449,
+     "rank": 26
+    },
+    {
+     "team": "WSH",
+     "offense_rating": 0.39856498183900385,
+     "defense_rating": -6.210525964690438,
+     "team_rating": -5.244806848345199,
+     "rank": 27
+    },
+    {
+     "team": "CIN",
+     "offense_rating": -0.052009281620120376,
+     "defense_rating": -5.865533306101685,
+     "team_rating": -5.465908702305245,
+     "rank": 28
+    },
+    {
+     "team": "CLE",
+     "offense_rating": -10.344557513789338,
+     "defense_rating": 4.56827995133712,
+     "team_rating": -6.3484432054602085,
+     "rank": 29
+    },
+    {
+     "team": "TEN",
+     "offense_rating": -5.801598269523216,
+     "defense_rating": -3.5884237805615076,
+     "team_rating": -8.905103728824447,
+     "rank": 30
+    },
+    {
+     "team": "LV",
+     "offense_rating": -9.183732322122847,
+     "defense_rating": 0.20038969624337574,
+     "team_rating": -9.747125896878165,
+     "rank": 31
+    },
+    {
+     "team": "NYJ",
+     "offense_rating": -6.479975751972711,
+     "defense_rating": -6.035306486978175,
+     "team_rating": -11.505382723585502,
+     "rank": 32
+    }
+   ],
+   "without_kneel_spike": [
+    {
+     "team": "LAR",
+     "offense_rating": 7.337067598382914,
+     "defense_rating": 3.8196519200200783,
+     "team_rating": 10.66536211720397,
+     "rank": 1
+    },
+    {
+     "team": "SEA",
+     "offense_rating": 1.5643541436735011,
+     "defense_rating": 6.1169796682605435,
+     "team_rating": 9.236248661818413,
+     "rank": 2
+    },
+    {
+     "team": "HOU",
+     "offense_rating": -0.6571975140420406,
+     "defense_rating": 6.592248468555713,
+     "team_rating": 7.22020051652386,
+     "rank": 3
+    },
+    {
+     "team": "JAX",
+     "offense_rating": 1.2026260517416127,
+     "defense_rating": 4.8250079971933895,
+     "team_rating": 6.735533032806783,
+     "rank": 4
+    },
+    {
+     "team": "NE",
+     "offense_rating": 5.633375715543351,
+     "defense_rating": 0.8650889626675682,
+     "team_rating": 6.4715213225868915,
+     "rank": 5
+    },
+    {
+     "team": "DEN",
+     "offense_rating": 1.4163271095508358,
+     "defense_rating": 3.682207939202236,
+     "team_rating": 4.851961041213074,
+     "rank": 6
+    },
+    {
+     "team": "PHI",
+     "offense_rating": 0.16847022625349278,
+     "defense_rating": 4.975151532031035,
+     "team_rating": 4.7768741894218465,
+     "rank": 7
+    },
+    {
+     "team": "BUF",
+     "offense_rating": 5.432821337174692,
+     "defense_rating": -0.2205114922742845,
+     "team_rating": 4.553899102034506,
+     "rank": 8
+    },
+    {
+     "team": "DET",
+     "offense_rating": 3.2021657258237823,
+     "defense_rating": 0.9691554845044548,
+     "team_rating": 4.188436879059549,
+     "rank": 9
+    },
+    {
+     "team": "IND",
+     "offense_rating": 4.123914743623462,
+     "defense_rating": -0.3403572372195588,
+     "team_rating": 3.9239203204521838,
+     "rank": 10
+    },
+    {
+     "team": "SF",
+     "offense_rating": 4.932087052214341,
+     "defense_rating": -2.6841149467538026,
+     "team_rating": 3.6745526514117195,
+     "rank": 11
+    },
+    {
+     "team": "GB",
+     "offense_rating": 4.709299466826969,
+     "defense_rating": -1.2136780417662412,
+     "team_rating": 2.907572410319796,
+     "rank": 12
+    },
+    {
+     "team": "CHI",
+     "offense_rating": 3.3949620387997617,
+     "defense_rating": -0.7293038934223838,
+     "team_rating": 2.7577028677631317,
+     "rank": 13
+    },
+    {
+     "team": "KC",
+     "offense_rating": 1.7613962031186174,
+     "defense_rating": 1.016795376397318,
+     "team_rating": 2.3034039457898814,
+     "rank": 14
+    },
+    {
+     "team": "LAC",
+     "offense_rating": -1.121834486764047,
+     "defense_rating": 3.3194729947211266,
+     "team_rating": 1.8210810194554907,
+     "rank": 15
+    },
+    {
+     "team": "BAL",
+     "offense_rating": 1.4176441634408399,
+     "defense_rating": -0.8614095470463997,
+     "team_rating": 0.4849274804667289,
+     "rank": 16
+    },
+    {
+     "team": "MIN",
+     "offense_rating": -5.733821562002287,
+     "defense_rating": 5.572482492377225,
+     "team_rating": 0.20443208584090744,
+     "rank": 17
+    },
+    {
+     "team": "PIT",
+     "offense_rating": 0.9349421419471188,
+     "defense_rating": -0.8100792678471886,
+     "team_rating": 0.19115975422815926,
+     "rank": 18
+    },
+    {
+     "team": "TB",
+     "offense_rating": -0.0536928341002016,
+     "defense_rating": -0.481383401963479,
+     "team_rating": -1.1808651310991163,
+     "rank": 19
+    },
+    {
+     "team": "ATL",
+     "offense_rating": -1.5341907626885576,
+     "defense_rating": 0.36677724423128555,
+     "team_rating": -1.958874760937179,
+     "rank": 20
+    },
+    {
+     "team": "NYG",
+     "offense_rating": 0.05223584249796409,
+     "defense_rating": -3.0881116624985956,
+     "team_rating": -3.195710773871999,
+     "rank": 21
+    },
+    {
+     "team": "NO",
+     "offense_rating": -5.123908506660318,
+     "defense_rating": 3.4625127769195414,
+     "team_rating": -3.2352761474061538,
+     "rank": 22
+    },
+    {
+     "team": "DAL",
+     "offense_rating": 4.146081112173151,
+     "defense_rating": -7.994034130448354,
+     "team_rating": -3.7681765450658866,
+     "rank": 23
+    },
+    {
+     "team": "CAR",
+     "offense_rating": -2.469239628366863,
+     "defense_rating": -2.104886306168143,
+     "team_rating": -4.517104660391125,
+     "rank": 24
+    },
+    {
+     "team": "ARI",
+     "offense_rating": -0.9713201405719837,
+     "defense_rating": -2.632303313867435,
+     "team_rating": -4.680871191597992,
+     "rank": 25
+    },
+    {
+     "team": "MIA",
+     "offense_rating": -1.5391129315048153,
+     "defense_rating": -3.9126582147259756,
+     "team_rating": -4.873413423404246,
+     "rank": 26
+    },
+    {
+     "team": "WSH",
+     "offense_rating": 0.40753882115265055,
+     "defense_rating": -6.310366335735877,
+     "team_rating": -5.335673380076991,
+     "rank": 27
+    },
+    {
+     "team": "CIN",
+     "offense_rating": -0.28142193854378056,
+     "defense_rating": -5.93845506448225,
+     "team_rating": -5.76824311760947,
+     "rank": 28
+    },
+    {
+     "team": "CLE",
+     "offense_rating": -10.57524532596408,
+     "defense_rating": 4.517592232330944,
+     "team_rating": -6.629818736641125,
+     "rank": 29
+    },
+    {
+     "team": "TEN",
+     "offense_rating": -5.8929810764598765,
+     "defense_rating": -4.105684960058631,
+     "team_rating": -9.51374771525823,
+     "rank": 30
+    },
+    {
+     "team": "LV",
+     "offense_rating": -9.33855526651104,
+     "defense_rating": -0.2906736099093271,
+     "team_rating": -10.39301214741906,
+     "rank": 31
+    },
+    {
+     "team": "NYJ",
+     "offense_rating": -6.544787519759169,
+     "defense_rating": -6.383113663224597,
+     "team_rating": -11.918001667618382,
+     "rank": 32
+    }
+   ],
+   "without_kneels": [
+    {
+     "team": "LAR",
+     "offense_rating": 7.316635915827795,
+     "defense_rating": 3.83307031681202,
+     "team_rating": 10.658348831440792,
+     "rank": 1
+    },
+    {
+     "team": "SEA",
+     "offense_rating": 1.5594200808477099,
+     "defense_rating": 6.129235297122643,
+     "team_rating": 9.243570227854722,
+     "rank": 2
+    },
+    {
+     "team": "HOU",
+     "offense_rating": -0.6625287732456291,
+     "defense_rating": 6.608363480871692,
+     "team_rating": 7.2309842696362505,
+     "rank": 3
+    },
+    {
+     "team": "JAX",
+     "offense_rating": 1.2138874959752268,
+     "defense_rating": 4.8481434334907085,
+     "team_rating": 6.769929913337716,
+     "rank": 4
+    },
+    {
+     "team": "NE",
+     "offense_rating": 5.651268435030077,
+     "defense_rating": 0.8376047567257112,
+     "team_rating": 6.461929836131761,
+     "rank": 5
+    },
+    {
+     "team": "DEN",
+     "offense_rating": 1.4422067430163237,
+     "defense_rating": 3.719490598541214,
+     "team_rating": 4.91512333401754,
+     "rank": 6
+    },
+    {
+     "team": "PHI",
+     "offense_rating": 0.15583498638347623,
+     "defense_rating": 4.921836319007435,
+     "team_rating": 4.71092373652823,
+     "rank": 7
+    },
+    {
+     "team": "BUF",
+     "offense_rating": 5.436261076713845,
+     "defense_rating": -0.21854896952499303,
+     "team_rating": 4.55930136432295,
+     "rank": 8
+    },
+    {
+     "team": "DET",
+     "offense_rating": 3.165379622708693,
+     "defense_rating": 0.9641954257215136,
+     "team_rating": 4.146690717161518,
+     "rank": 9
+    },
+    {
+     "team": "IND",
+     "offense_rating": 4.186711321700667,
+     "defense_rating": -0.3339494497442455,
+     "team_rating": 3.9931246860047014,
+     "rank": 10
+    },
+    {
+     "team": "SF",
+     "offense_rating": 4.926238192786749,
+     "defense_rating": -2.649781269304994,
+     "team_rating": 3.703037469432936,
+     "rank": 11
+    },
+    {
+     "team": "GB",
+     "offense_rating": 4.719795915229107,
+     "defense_rating": -1.2438728403103414,
+     "team_rating": 2.887874060177834,
+     "rank": 12
+    },
+    {
+     "team": "CHI",
+     "offense_rating": 3.3805336406801763,
+     "defense_rating": -0.7294666318350416,
+     "team_rating": 2.7431117312308886,
+     "rank": 13
+    },
+    {
+     "team": "KC",
+     "offense_rating": 1.7619235106922606,
+     "defense_rating": 1.0177156356997044,
+     "team_rating": 2.304851512665911,
+     "rank": 14
+    },
+    {
+     "team": "LAC",
+     "offense_rating": -1.158544009062158,
+     "defense_rating": 3.300060717691264,
+     "team_rating": 1.764959220127517,
+     "rank": 15
+    },
+    {
+     "team": "BAL",
+     "offense_rating": 1.3982803725767656,
+     "defense_rating": -0.8604183142567532,
+     "team_rating": 0.4665549223923012,
+     "rank": 16
+    },
+    {
+     "team": "PIT",
+     "offense_rating": 0.947953720530935,
+     "defense_rating": -0.8141442100884078,
+     "team_rating": 0.20010639057075633,
+     "rank": 17
+    },
+    {
+     "team": "MIN",
+     "offense_rating": -5.7471528475093425,
+     "defense_rating": 5.567862901027737,
+     "team_rating": 0.1864812089843637,
+     "rank": 18
+    },
+    {
+     "team": "TB",
+     "offense_rating": -0.052294800934258014,
+     "defense_rating": -0.5607537785829326,
+     "team_rating": -1.2588374745526263,
+     "rank": 19
+    },
+    {
+     "team": "ATL",
+     "offense_rating": -1.4559273596960813,
+     "defense_rating": 0.44668428441608,
+     "team_rating": -1.8007043177599085,
+     "rank": 20
+    },
+    {
+     "team": "NYG",
+     "offense_rating": 0.03828050093394273,
+     "defense_rating": -3.0895195891394125,
+     "team_rating": -3.211074042076837,
+     "rank": 21
+    },
+    {
+     "team": "NO",
+     "offense_rating": -5.146105853506942,
+     "defense_rating": 3.4484622218861434,
+     "team_rating": -3.2715240492861755,
+     "rank": 22
+    },
+    {
+     "team": "DAL",
+     "offense_rating": 4.216026985676259,
+     "defense_rating": -7.955099273354356,
+     "team_rating": -3.65929581446878,
+     "rank": 23
+    },
+    {
+     "team": "CAR",
+     "offense_rating": -2.4821543295515203,
+     "defense_rating": -2.0939563274865223,
+     "team_rating": -4.519089382894161,
+     "rank": 24
+    },
+    {
+     "team": "ARI",
+     "offense_rating": -0.9507671971520637,
+     "defense_rating": -2.644667333260952,
+     "team_rating": -4.67268226757159,
+     "rank": 25
+    },
+    {
+     "team": "MIA",
+     "offense_rating": -1.5222449644658216,
+     "defense_rating": -3.9157645543076476,
+     "team_rating": -4.859651795946925,
+     "rank": 26
+    },
+    {
+     "team": "WSH",
+     "offense_rating": 0.2879691462890945,
+     "defense_rating": -6.308345676481127,
+     "team_rating": -5.453222395685798,
+     "rank": 27
+    },
+    {
+     "team": "CIN",
+     "offense_rating": -0.29128258469028095,
+     "defense_rating": -5.941799073273192,
+     "team_rating": -5.781447772546912,
+     "rank": 28
+    },
+    {
+     "team": "CLE",
+     "offense_rating": -10.561276335015249,
+     "defense_rating": 4.514305274458086,
+     "team_rating": -6.619136703565152,
+     "rank": 29
+    },
+    {
+     "team": "TEN",
+     "offense_rating": -5.87425124499277,
+     "defense_rating": -4.111465649131408,
+     "team_rating": -9.5007985728639,
+     "rank": 30
+    },
+    {
+     "team": "LV",
+     "offense_rating": -9.309415231669512,
+     "defense_rating": -0.29742086712345556,
+     "team_rating": -10.370619369791662,
+     "rank": 31
+    },
+    {
+     "team": "NYJ",
+     "offense_rating": -6.590662132107493,
+     "defense_rating": -6.388056856266145,
+     "team_rating": -11.968819473008253,
+     "rank": 32
+    }
+   ],
+   "without_spikes": [
+    {
+     "team": "LAR",
+     "offense_rating": 6.988463228115424,
+     "defense_rating": 3.4544519910685305,
+     "team_rating": 9.95155781798493,
+     "rank": 1
+    },
+    {
+     "team": "SEA",
+     "offense_rating": 1.3098330012095571,
+     "defense_rating": 5.956493020972655,
+     "team_rating": 8.82124087206658,
+     "rank": 2
+    },
+    {
+     "team": "HOU",
+     "offense_rating": -0.666371342107847,
+     "defense_rating": 6.389467677882932,
+     "team_rating": 7.008245897785273,
+     "rank": 3
+    },
+    {
+     "team": "JAX",
+     "offense_rating": 1.3266857658139546,
+     "defense_rating": 4.766828835398495,
+     "team_rating": 6.80141358508423,
+     "rank": 4
+    },
+    {
+     "team": "NE",
+     "offense_rating": 5.18026922770651,
+     "defense_rating": 0.7772570509000609,
+     "team_rating": 5.930582922982543,
+     "rank": 5
+    },
+    {
+     "team": "DEN",
+     "offense_rating": 1.4153709547442794,
+     "defense_rating": 3.3881827509341917,
+     "team_rating": 4.556979698138473,
+     "rank": 6
+    },
+    {
+     "team": "PHI",
+     "offense_rating": -0.11873871529594754,
+     "defense_rating": 4.945805325137844,
+     "team_rating": 4.460319040979216,
+     "rank": 7
+    },
+    {
+     "team": "DET",
+     "offense_rating": 3.265616967949598,
+     "defense_rating": 0.9281207216855758,
+     "team_rating": 4.210853358366485,
+     "rank": 8
+    },
+    {
+     "team": "IND",
+     "offense_rating": 4.169804895546612,
+     "defense_rating": -0.4022092279098012,
+     "team_rating": 3.9079584816850907,
+     "rank": 9
+    },
+    {
+     "team": "BUF",
+     "offense_rating": 5.067051748876946,
+     "defense_rating": -0.5159630786986912,
+     "team_rating": 3.8926779273123526,
+     "rank": 10
+    },
+    {
+     "team": "SF",
+     "offense_rating": 4.522518244702396,
+     "defense_rating": -2.610654955484373,
+     "team_rating": 3.338443835169204,
+     "rank": 11
+    },
+    {
+     "team": "GB",
+     "offense_rating": 4.567924381629011,
+     "defense_rating": -1.3840046441237317,
+     "team_rating": 2.595870722764347,
+     "rank": 12
+    },
+    {
+     "team": "CHI",
+     "offense_rating": 3.570817969367154,
+     "defense_rating": -1.0760102307016999,
+     "team_rating": 2.586852461051208,
+     "rank": 13
+    },
+    {
+     "team": "KC",
+     "offense_rating": 2.015025779127242,
+     "defense_rating": 1.024674254014501,
+     "team_rating": 2.564912399415689,
+     "rank": 14
+    },
+    {
+     "team": "LAC",
+     "offense_rating": -1.3999283521145593,
+     "defense_rating": 3.27090810903943,
+     "team_rating": 1.4944222684232817,
+     "rank": 15
+    },
+    {
+     "team": "BAL",
+     "offense_rating": 1.3844109634320019,
+     "defense_rating": -0.550079517180122,
+     "team_rating": 0.7630243103241685,
+     "rank": 16
+    },
+    {
+     "team": "MIN",
+     "offense_rating": -5.7923299857660515,
+     "defense_rating": 5.680586734677932,
+     "team_rating": 0.2540279043778497,
+     "rank": 17
+    },
+    {
+     "team": "PIT",
+     "offense_rating": 1.122632228152837,
+     "defense_rating": -0.9417400398263396,
+     "team_rating": 0.24718906845472646,
+     "rank": 18
+    },
+    {
+     "team": "TB",
+     "offense_rating": 0.029122038590200735,
+     "defense_rating": -0.70282742903442,
+     "team_rating": -1.3194942854796547,
+     "rank": 19
+    },
+    {
+     "team": "ATL",
+     "offense_rating": -1.3805521692154727,
+     "defense_rating": 0.06821662126034245,
+     "team_rating": -2.1037967904350374,
+     "rank": 20
+    },
+    {
+     "team": "NYG",
+     "offense_rating": 0.29363888450179143,
+     "defense_rating": -2.8780745856417367,
+     "team_rating": -2.7442706550113125,
+     "rank": 21
+    },
+    {
+     "team": "NO",
+     "offense_rating": -5.145238301569767,
+     "defense_rating": 3.815610942800062,
+     "team_rating": -2.9035077764350827,
+     "rank": 22
+    },
+    {
+     "team": "DAL",
+     "offense_rating": 4.067597868715382,
+     "defense_rating": -8.005965869209835,
+     "team_rating": -3.8585915272851357,
+     "rank": 23
+    },
+    {
+     "team": "ARI",
+     "offense_rating": -0.6753162148544208,
+     "defense_rating": -2.572979554785135,
+     "team_rating": -4.325543506798129,
+     "rank": 24
+    },
+    {
+     "team": "CAR",
+     "offense_rating": -2.513886346691564,
+     "defense_rating": -1.9635307593847324,
+     "team_rating": -4.4203958319324155,
+     "rank": 25
+    },
+    {
+     "team": "MIA",
+     "offense_rating": -1.252552185948831,
+     "defense_rating": -3.9487946563138223,
+     "team_rating": -4.622989119436109,
+     "rank": 26
+    },
+    {
+     "team": "WSH",
+     "offense_rating": 0.5174242187256357,
+     "defense_rating": -6.213081715742307,
+     "team_rating": -5.128503362510436,
+     "rank": 27
+    },
+    {
+     "team": "CIN",
+     "offense_rating": -0.04208498836821638,
+     "defense_rating": -5.862674128811165,
+     "team_rating": -5.4531252317628205,
+     "rank": 28
+    },
+    {
+     "team": "CLE",
+     "offense_rating": -10.35894167914259,
+     "defense_rating": 4.571682058837343,
+     "team_rating": -6.359425263313238,
+     "rank": 29
+    },
+    {
+     "team": "TEN",
+     "offense_rating": -5.820953412045915,
+     "defense_rating": -3.5851181876799867,
+     "team_rating": -8.921153278465624,
+     "rank": 30
+    },
+    {
+     "team": "LV",
+     "offense_rating": -9.213045316560255,
+     "defense_rating": 0.20694583442354483,
+     "team_rating": -9.769882753135404,
+     "rank": 31
+    },
+    {
+     "team": "NYJ",
+     "offense_rating": -6.434269357225081,
+     "defense_rating": -6.031523348505512,
+     "team_rating": -11.455893190365208,
+     "rank": 32
+    }
+   ]
+  },
+  "sides": [],
+  "wiped_sets": []
+ },
+ "provenance": {
+  "nfl_predictor_version": "0.57.1",
+  "code_sha256": {
+   "team_plays_test.py": "576a3b3d5bb03002656269a6c51ec4fe0723d443727ffc9021bade789767900f",
+   "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516"
+  },
+  "cache_dir": "/home/mitch/scratch/step6/data/cache/nflreadpy",
+  "ratings_dir": "/home/mitch/scratch/step6/data/ratings",
+  "input_fingerprint": "85783d39e38c710f8f901fa423d2f46713429ab6f12e91a42c64150e7fd35a7a",
+  "inputs": {
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_1999_reg.parquet": "e5e7d95838f97eb8a8c5d4fedbcea52678120c20cd630e86f817e168d27c16a9",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_1999.parquet": "a412cd97d0d3e1c58383f7e06a81bd6b7d25496a6dc9769b806aa9e7edbd0d30",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2000_reg.parquet": "ced050da34904444651772228eed997bfb2f538962bf12a5126368610411f4fa",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2000.parquet": "81da91863bd35e03acd3fbb6e3297761d2b8f0e0d6adde529b2b06e4cb602ce0",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2001_reg.parquet": "09924364076aa632e6e8fe82c06ad97750b98c4f1619cf92aa924ca4f7475b16",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2001.parquet": "33df3b05e9bb3f07633f6c7d72b26d5d3e0b165523292a0c7cfed832924d9a4e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2002_reg.parquet": "9ec175ab7b9ad473d81d9d53d47bde60aad15ebfb91dd479191788d7ef8c7770",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2002.parquet": "69ea33535b318cbdfaf8599f8fd14737a3398a0e50542a46620329c114a795c2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2003_reg.parquet": "797e7c99747fa6f5095e9a32801354aa58de6c0b267031aaf691b76afec4c283",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2003.parquet": "5f66d339589bd90bea7f0217c5ac6811005fca2d2cdf1d934da0db687ae8fca6",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2004_reg.parquet": "2f7c0dbd89603e401c5d4d40d04aa9635fe3797c4c68fa081322d64814c44d63",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2004.parquet": "f17d9a5634f50bc5e76bc8321ff18a269bef1185bc37f6bd6fba9aaacd4c5734",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2005_reg.parquet": "9bc1ed202d07042c14612897afb7ff029780b416ce6bfae8587d6e8b9b7b3cb4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2005.parquet": "61d25e09109817760077f8e0f69359394222362b4fed8db863e9684ff76a81ee",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2006_reg.parquet": "a066cb8d96769d6d35493e569079c525dfbd3472e3d729ad3b5e0cb39a98e0ed",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2006.parquet": "332da9d4aa1ce1fe7bcb03b5801bce1aafdc20aa9cee7ea526d76dbe9458a5ac",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2007_reg.parquet": "f0099127899d9693792b9e5707df34b61f9d7acddb2b416cd20315dab58e406d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2007.parquet": "e582de1e7d3f32264bc6a9d4c2c32093a4cf4f1e4ea835cc23964910d424383c",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2008_reg.parquet": "cd474c8924b5580f636f54c3c631bcd7af9177f01d02d88bb54a3ac536e4a98b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2008.parquet": "4315c62e79b19ca9c47a5ca19183fe4a12da87fee136ba20f2e911064288d42d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2009_reg.parquet": "bf85d5559477dcf5135534dcfa59431dc6c7a2c927461faa9d1053f4e0bb92c5",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2009.parquet": "61a32fc5e8cf0aac55561b02c8e46bc4c7e8c440416f242ca8fd62b9de7eb1df",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2010_reg.parquet": "f0db0d658396e354e863279288a7f6362915567d5077bf26e18865d6cad3c501",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2010.parquet": "81d54580c3236a4f95865f887b420d274d7797f5613b48859b187b42a2e6f974",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2011_reg.parquet": "5a96398a85c48db0761ef53457f9e3f27f8a92696d2adb9b34990f9fbaf8e2ec",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2011.parquet": "63b1425c1f91a327de8537f8fc8bd813217f94a3bfaf3092b129fa8d03615119",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2012_reg.parquet": "45312bbb3a22c91b10a60296c9c2acc48c7330f07120bc5777f7de65484a37ed",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2012.parquet": "c4495aae42121421378d9fc90b45e3f04483ddead6676d8c40f4cab80f0ec474",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2013_reg.parquet": "895885da99f3328058f6cbc8532461e5d31399028b0394ef114a936c97d3d39d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2013.parquet": "4b6f0f1f123a81685a47b5fed40e3346fb620c54ee009c8f87f8a46c5cab258e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2014_reg.parquet": "3e2d72c225772d9b188a0555d8b75db13e266f4d9f587147e98e6e40078f101a",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2014.parquet": "56fb33613d8ad5e551d150adb18999e3fd3f118e103d07727e48696c29cad633",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2015_reg.parquet": "1a7798a94dd928c7df20cf693c5ff4ae2b1778ce8a0f5fc3c415aacf5732367b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2015.parquet": "fd2a81d048115465a613595f7c8df65da57331adc2854a285bc5b3483f2d3c7c",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2016_reg.parquet": "44f8d70fa3e3e640d1f46e9c3d9adc8585ea18aa0a32874ae882fbe8b9b130f2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2016.parquet": "e0e0d2cb2afc5733ed87166f5237dc5bbc928383d711c488d85387b4c41eeb1d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2017_reg.parquet": "2c60aff2133888d90934524c82c567c2fcfa2ed8be6adee2576e6b4589d67fc2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2017.parquet": "72e37e7b4581d4e051d0fa486bce560195c86e70705d6adda2d715f867f98c6f",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2018_reg.parquet": "98882862248b774e99d89bb4991f6657599b51c7e914396e4fd4d4dc7a73cd09",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2018.parquet": "41e50497c81e0934bf3b915725f8f9b12ba22655ab2f6d4f152dd3fb3e2c20b7",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2019_reg.parquet": "1349cb263e0acae104303ef56ba90207047e4fef8d27c907346e853c496bd697",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2019.parquet": "5454f627f20464da4d355c792d2a78ec19b369da208305f93635a947fa243ab4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2020_reg.parquet": "694d7a8119abe077854d86606eb595d842c201f17b1b2a5bf134b626b0b84059",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2020.parquet": "4837401aee047de17657adf046ceb4420a02ac25d442b0fdabdb9f6df303cd56",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2021_reg.parquet": "dc98a2206e581c47d8ed68421d78fbcb1f6a35a302bcffe183a30ca7f0ddda97",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2021.parquet": "ac5db528ca0bd50b392a6efeb8169ffc67ef0037b476e73037e5b4d01eff1b14",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2022_reg.parquet": "8531fac4d34110437f652ac134fae13a6790dc30c0e372e03a62f0d115473916",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2022.parquet": "feb296ba83c53de57320a8080fd7ea7951f5fa3ef16887c29cd54631bbb8c62b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2023_reg.parquet": "d7c415f2e1e87f21eaa8fec3efd660fa2328c9dd10dae3400d96b29b64b632d0",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2023.parquet": "ef59edecdd4de6676d71f129b7512be5edbbc4b2b2ba2ed9a8fe7638971c46a3",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2024_reg.parquet": "f23b1322332e492b8f0ea6132f746168abd4608f18b9ce75f57fb1603dbe94f1",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2024.parquet": "2834d8d0883d16d245baae4d30ded9a491a42eaa5b15829c77da51555d26fe7d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2025_reg.parquet": "7adcccad0cc3ac8f10a74edadb7ec2be93ffa715fa5ddb2e9de92a52c2a5ccc5",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2025.parquet": "a65b3bc8407a1c45f8f4a74b8fce735febb471a6690641753ffbf0ea764291f5",
+   "/home/mitch/scratch/step6/data/ratings/1999_ratings.parquet": "e0204141aada5f548ea4698a6511c039d47d7161a92e71e7f80901f3cd600dba",
+   "/home/mitch/scratch/step6/data/ratings/1999_ratings_by_week.parquet": "423e8b2f5e53a118952d775a2694fcdcc5bc5e7d7030e444075b4c5284d54f53",
+   "/home/mitch/scratch/step6/data/ratings/2000_ratings.parquet": "dae54ca0c81d7a7a29e9b9657797e6b3bb9bcd01a81eec14b7b938cf9c0077ca",
+   "/home/mitch/scratch/step6/data/ratings/2000_ratings_by_week.parquet": "fd925832fa74cc4bb4adc121fe07d18f6d1e92ffc0dd4b7e416f39069e00aa9e",
+   "/home/mitch/scratch/step6/data/ratings/2001_ratings.parquet": "7ef3e608f1d4ca8d53cd1c328a8f72324871eac0c2f2dcd7cc5df42689d72d25",
+   "/home/mitch/scratch/step6/data/ratings/2001_ratings_by_week.parquet": "090036271a7aac14ffbf318799c522489238f0f4ac6d7ce7566cf9dba47c4b3c",
+   "/home/mitch/scratch/step6/data/ratings/2002_ratings.parquet": "79ea58690617c7712eef409465abe65b711f8d2027775b3081fa95b8102e0ccd",
+   "/home/mitch/scratch/step6/data/ratings/2002_ratings_by_week.parquet": "2816ce0f5d94b8634422eeba03e7e7403233779f36044933086e338567247525",
+   "/home/mitch/scratch/step6/data/ratings/2003_ratings.parquet": "910b814e20bd110c1aca02eaa9039afdec5ceaf640d26fcb0ea74cfc781d62cf",
+   "/home/mitch/scratch/step6/data/ratings/2003_ratings_by_week.parquet": "77cdea4e90bfbffdbd6a43981bb00293764e78e381860a4c63f029f9fb595d06",
+   "/home/mitch/scratch/step6/data/ratings/2004_ratings.parquet": "975619304e98070cf06e43d0e9ff86b6a2cd08177134b46cd6ba32f4372129a4",
+   "/home/mitch/scratch/step6/data/ratings/2004_ratings_by_week.parquet": "28c1668f77e2ccadce20d27afc49f7041335168d5e9831344f2a7daa90e3164f",
+   "/home/mitch/scratch/step6/data/ratings/2005_ratings.parquet": "cd443f6fe6f08ea9b7e65bc8dd24411564702280e9cf6dcf1947647092212b6b",
+   "/home/mitch/scratch/step6/data/ratings/2005_ratings_by_week.parquet": "eb42d7762547f623c149929ad80354f29428aa7790f24ad5d9273bd20b897240",
+   "/home/mitch/scratch/step6/data/ratings/2006_ratings.parquet": "e44c448c8e9a138132042f75fc30c91dd55c1f3f0a08a5f1b04cd0a170ce0e6c",
+   "/home/mitch/scratch/step6/data/ratings/2006_ratings_by_week.parquet": "ebc2f8b95282b5659881f9acf91e7b3a59179c3717dfae1009cbeca2b8a6a1e4",
+   "/home/mitch/scratch/step6/data/ratings/2007_ratings.parquet": "67943471c488fa9bca7dfa498c1d0daf2186252a52c0af6a3fbec69438a7e9f2",
+   "/home/mitch/scratch/step6/data/ratings/2007_ratings_by_week.parquet": "5e533761cb27a2b71350a0b1333d107b4e17991b0514b4509cad3245be4781f9",
+   "/home/mitch/scratch/step6/data/ratings/2008_ratings.parquet": "dcacff5908f606692e6cdf3fce58e86811c6cf8efa257f108fb15d973d82d9cc",
+   "/home/mitch/scratch/step6/data/ratings/2008_ratings_by_week.parquet": "8fce0b778c3fe6f7b61c32f59f9660a5b7779c4e0d18ea7eda5a2a9b995b45ed",
+   "/home/mitch/scratch/step6/data/ratings/2009_ratings.parquet": "8a83f632dc5c899a67adf5627307dabafca84055f7a92a6395ccbe0f085cff40",
+   "/home/mitch/scratch/step6/data/ratings/2009_ratings_by_week.parquet": "9bc6dd9543189421dd2c164b3eec7cc332b26cc8ddf58405097b6d7e75101b20",
+   "/home/mitch/scratch/step6/data/ratings/2010_ratings.parquet": "ac317804bcb841523b4e810b0e0dca160d5289200fde454ee56cae35ea98e679",
+   "/home/mitch/scratch/step6/data/ratings/2010_ratings_by_week.parquet": "15b09d9f529d259be9f0e2df3a509035d622b6cb5483a3efeb7c0ccd2a50f558",
+   "/home/mitch/scratch/step6/data/ratings/2011_ratings.parquet": "ec151d942ebc6dfdab6d509a68d2f30135f659f630ad20dd9dd2145334a151c0",
+   "/home/mitch/scratch/step6/data/ratings/2011_ratings_by_week.parquet": "3a550a868ca9873c0fb2b2b481e79f66186574ffa89bf146701f0327688c19db",
+   "/home/mitch/scratch/step6/data/ratings/2012_ratings.parquet": "699d4e8698357572fa84a1be55bfeb3e705e75f3293a0b6ebeba84e7eba29100",
+   "/home/mitch/scratch/step6/data/ratings/2012_ratings_by_week.parquet": "2dc91d91ee0893e801ee0666f1a575baf90f04c776ca3231a8c4e89621a409c9",
+   "/home/mitch/scratch/step6/data/ratings/2013_ratings.parquet": "b13f561135be025dbbd51d5dc0c65886c3f9b7f774668663c0d3441def37c904",
+   "/home/mitch/scratch/step6/data/ratings/2013_ratings_by_week.parquet": "ad08efdfe2fa029bc08dc7b5cdf786b88daf8a6c5e4eff89bae81ed8b2611a81",
+   "/home/mitch/scratch/step6/data/ratings/2014_ratings.parquet": "b1efc9560f92a850a377121e486006ed31dc4762007f41cb908edf972753e53d",
+   "/home/mitch/scratch/step6/data/ratings/2014_ratings_by_week.parquet": "6e9c5c44a05443698551cacf1d28fe7e667a9e4296518b62d63bcda9f62d3b8d",
+   "/home/mitch/scratch/step6/data/ratings/2015_ratings.parquet": "f0f1e227bc530586d2afb822243ac2887c6b7c68f96ce153e86a479d22d5e18f",
+   "/home/mitch/scratch/step6/data/ratings/2015_ratings_by_week.parquet": "ba81b7fb9b0905cc6becc8f5ddd6367ce3e92f9b96617fe41748a0c305106904",
+   "/home/mitch/scratch/step6/data/ratings/2016_ratings.parquet": "7c7e7278a624f58f4af9e50523d4c6edf3e70e02caed371e2b2c7b792e4af756",
+   "/home/mitch/scratch/step6/data/ratings/2016_ratings_by_week.parquet": "9644bd3a16039fb224c6f17188eddd5a0c6e3a586863a0bf8f6bb124eb39b5ac",
+   "/home/mitch/scratch/step6/data/ratings/2017_ratings.parquet": "f5322f4cd25bd5d4d6c7d1dbe3ed9cb10fefd289d781b3b28a47245b4bbf020d",
+   "/home/mitch/scratch/step6/data/ratings/2017_ratings_by_week.parquet": "72d7dff4a94dbfc8f25d15d558de73d43ab74570c2c31f66626248268ca6f55d",
+   "/home/mitch/scratch/step6/data/ratings/2018_ratings.parquet": "206eb8d56726a805470c778ad5977e4da8a2c92909bf2bd7d23329af6ee64dac",
+   "/home/mitch/scratch/step6/data/ratings/2018_ratings_by_week.parquet": "bf218adbbf8382d69e13b9adea3bc3033bfeda070d1ade9d182577602355a1ed",
+   "/home/mitch/scratch/step6/data/ratings/2019_ratings.parquet": "8319ae705b5a9b7c7ee9dcb5f3f0f748290274cfcdf5758ad89c05f929760a9d",
+   "/home/mitch/scratch/step6/data/ratings/2019_ratings_by_week.parquet": "3d0e41de71b719a9abd19a3929970df58fbb96b138ee64374d1090e67a5695a8",
+   "/home/mitch/scratch/step6/data/ratings/2020_ratings.parquet": "7d850d9e3322bdb799b421a53a9478f56222721af3b5dab61b8a487a6d952d3b",
+   "/home/mitch/scratch/step6/data/ratings/2020_ratings_by_week.parquet": "431921db1da92e2637193ffc60ecfecb0f1d8b19625c34a91885955827b858ed",
+   "/home/mitch/scratch/step6/data/ratings/2021_ratings.parquet": "615592633f5079285db7d6cf1b0103fd2752a2baf602a1a974b0e3fdcc083cf0",
+   "/home/mitch/scratch/step6/data/ratings/2021_ratings_by_week.parquet": "1597272e0876b5c84212b2adafd407538056647d5daecf3a8a4bcb27bb8e60d3",
+   "/home/mitch/scratch/step6/data/ratings/2022_ratings.parquet": "e0029fbc55678e7f32116b45b6292f774d948c9caba6ac2ad83f74d1fc11439e",
+   "/home/mitch/scratch/step6/data/ratings/2022_ratings_by_week.parquet": "210370744b2e403dbc04e67e413742472b34c1f23cf677899cd6847aece119c6",
+   "/home/mitch/scratch/step6/data/ratings/2023_ratings.parquet": "f0b2fbe37f3b472f2290d36b4b5024a923d52fa1a4f028788754ba5d718eb5e2",
+   "/home/mitch/scratch/step6/data/ratings/2023_ratings_by_week.parquet": "f511da7b8d38738b9ea3bec3805cc4591404fb6c3f3070ed018385bc9d8b1119",
+   "/home/mitch/scratch/step6/data/ratings/2024_ratings.parquet": "12afa71eb1e27b6dc38d25d5ad63207d8a7af6270f4982c5a8a6ee23037476b4",
+   "/home/mitch/scratch/step6/data/ratings/2024_ratings_by_week.parquet": "3ba50be13747e0d25cd4bb6400f570b9d9b97ca2d6d3fd87b370060022a5a593",
+   "/home/mitch/scratch/step6/data/ratings/2025_ratings.parquet": "fd8f3968bd96cdc1b5b8054ae9be60658cdecd77523686436d6128f6c7a7df2c",
+   "/home/mitch/scratch/step6/data/ratings/2025_ratings_by_week.parquet": "c5c8167c22996252d8b80acab94544b1819ca8f76c1ee4806067ce8aa6cf7c7b"
+  },
+  "git_commit": "0fdf79cee44dbaec2554315706071ea1bd88d855",
+  "command": "VIRTUAL_ENV=\"$PWD/.venv\" nice -n 10 .venv/bin/python .agents/sos_port/team_plays_test.py kneel-spike --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy --ratings-dir /home/mitch/scratch/step6/data/ratings",
+  "seconds": 117.47332048999988
+ }
+}

@@ -1,0 +1,1199 @@
+{
+ "integrity": {
+  "reproduction": {
+   "season_gap": 0.0,
+   "week_gap": 0.0,
+   "weeks_compared": 325
+  },
+  "parts_and_snaps": {
+   "qb_games": 13070.0,
+   "scramble_mismatches": 0.0,
+   "kneel_mismatches": 0.0,
+   "carry_mismatches": 0.0,
+   "rushing_epa_gaps": 0.0,
+   "passing_epa_gaps": 0.0,
+   "scrambles_not_snaps": 0.0,
+   "designed_runs_not_snaps": 0.0,
+   "charged_aborted_not_snaps": 0.0,
+   "team_games_unmatched": 0.0,
+   "snap_mismatches": 0.0,
+   "target_gap": 0.0
+  },
+  "team_term": {
+   "term_gap": 0.0,
+   "history_gap": 0.0,
+   "snapshots": 325.0
+  },
+  "zero_addition_gap": 0.0,
+  "penalties": 100,
+  "information": {
+   "snapshots": 325,
+   "gap": 0.0,
+   "qb_fit_gap": 0.0,
+   "calibration_weeks": 5200
+  },
+  "rows": [
+   {
+    "season": 2006,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 4,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2007,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 2,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2008,
+    "team_games": 512,
+    "unknown_starters": 1,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 2,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2009,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 2,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2010,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 0,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2011,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 2,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2012,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 0,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2013,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 0,
+    "qb_rows_without_dropback": 25,
+    "runs_on_those_rows": 10
+   },
+   {
+    "season": 2014,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 29,
+    "runs_on_those_rows": 5
+   },
+   {
+    "season": 2015,
+    "team_games": 512,
+    "unknown_starters": 1,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 35,
+    "runs_on_those_rows": 6
+   },
+   {
+    "season": 2016,
+    "team_games": 512,
+    "unknown_starters": 1,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 3,
+    "qb_rows_without_dropback": 22,
+    "runs_on_those_rows": 2
+   },
+   {
+    "season": 2017,
+    "team_games": 512,
+    "unknown_starters": 1,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 2,
+    "qb_rows_without_dropback": 20,
+    "runs_on_those_rows": 0
+   },
+   {
+    "season": 2018,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 45,
+    "runs_on_those_rows": 30
+   },
+   {
+    "season": 2019,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 44,
+    "runs_on_those_rows": 17
+   },
+   {
+    "season": 2020,
+    "team_games": 512,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 47,
+    "runs_on_those_rows": 46
+   },
+   {
+    "season": 2021,
+    "team_games": 544,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 1,
+    "qb_rows_without_dropback": 64,
+    "runs_on_those_rows": 33
+   },
+   {
+    "season": 2022,
+    "team_games": 542,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 4,
+    "first_snap_differs": 8,
+    "qb_rows_without_dropback": 34,
+    "runs_on_those_rows": 19
+   },
+   {
+    "season": 2023,
+    "team_games": 544,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 0,
+    "first_snap_differs": 0,
+    "qb_rows_without_dropback": 52,
+    "runs_on_those_rows": 36
+   },
+   {
+    "season": 2024,
+    "team_games": 544,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 31,
+    "first_snap_differs": 37,
+    "qb_rows_without_dropback": 48,
+    "runs_on_those_rows": 18
+   },
+   {
+    "season": 2025,
+    "team_games": 544,
+    "unknown_starters": 0,
+    "listed_without_qb_row": 7,
+    "first_snap_differs": 8,
+    "qb_rows_without_dropback": 52,
+    "runs_on_those_rows": 25
+   }
+  ],
+  "stability": [
+   0.4551374219665365,
+   601
+  ],
+  "parts_fingerprint": "3cdc9e7bae83e2a99b620723f782b171846cfc762027a723632f653ffdb69560"
+ },
+ "decision": {
+  "recommended": "C",
+  "wins": [],
+  "excluding_zero": [],
+  "order": [
+   "C",
+   "B",
+   "A"
+  ]
+ },
+ "scores": {
+  "A": {
+   "overall": [
+    7496,
+    0.14662787247203043,
+    0.18588665581512281
+   ],
+   "weeks 5-8": [
+    2150,
+    0.145538640874657,
+    0.18435301963982131
+   ],
+   "weeks 9+": [
+    5346,
+    0.1470659285764736,
+    0.18649988220125546
+   ]
+  },
+  "B": {
+   "overall": [
+    7496,
+    0.1466344631112971,
+    0.1858908856128325
+   ],
+   "weeks 5-8": [
+    2150,
+    0.1455701800946672,
+    0.18436346516806632
+   ],
+   "weeks 9+": [
+    5346,
+    0.14706248564884936,
+    0.18650164101733333
+   ]
+  },
+  "C": {
+   "overall": [
+    7496,
+    0.1466403341363788,
+    0.18588588006200132
+   ],
+   "weeks 5-8": [
+    2150,
+    0.14562242700894965,
+    0.1844093850911539
+   ],
+   "weeks 9+": [
+    5346,
+    0.14704970568968462,
+    0.18647638559639013
+   ]
+  },
+  "C_without_botched": {
+   "overall": [
+    7496,
+    0.14668714944316985,
+    0.18594738578586362
+   ],
+   "weeks 5-8": [
+    2150,
+    0.14556625644940488,
+    0.18440370406437004
+   ],
+   "weeks 9+": [
+    5346,
+    0.14713793880654336,
+    0.18656460670291022
+   ]
+  }
+ },
+ "comparisons": {
+  "B - A": {
+   "overall": [
+    6.590639266672018e-06,
+    -1.8531909235187516e-05,
+    3.071377004740444e-05
+   ],
+   "weeks 5-8": [
+    3.153922001023912e-05,
+    -5.785302552255823e-05,
+    0.00011376549779556203
+   ],
+   "weeks 9+": [
+    -3.4429276242126183e-06,
+    -4.127277933478221e-05,
+    3.7182056279102436e-05
+   ]
+  },
+  "C - A": {
+   "overall": [
+    1.2461664348362313e-05,
+    -4.756637976847571e-05,
+    7.870606154750471e-05
+   ],
+   "weeks 5-8": [
+    8.378613429263914e-05,
+    -4.429105883917165e-05,
+    0.00022885235593884818
+   ],
+   "weeks 9+": [
+    -1.6222886788973116e-05,
+    -8.159392925689083e-05,
+    7.401046246842451e-05
+   ]
+  },
+  "C - B": {
+   "overall": [
+    5.871025081690285e-06,
+    -4.1163117964514424e-05,
+    6.704647713472457e-05
+   ],
+   "weeks 5-8": [
+    5.224691428240001e-05,
+    -2.7133896227727024e-05,
+    0.00014120636498203334
+   ],
+   "weeks 9+": [
+    -1.27799591647605e-05,
+    -5.806757897919772e-05,
+    5.112615411294416e-05
+   ]
+  }
+ },
+ "extras": {
+  "coefficients": {
+   "A": {
+    "overall": {
+     "p": -0.07096604044963621,
+     "t": 0.9964938226677125
+    },
+    "weeks 5-8": {
+     "p": -0.07769953848797723,
+     "t": 1.0010550672567127
+    },
+    "weeks 9+": {
+     "p": -0.068258030576379,
+     "t": 0.994659427630984
+    }
+   },
+   "B": {
+    "overall": {
+     "p": -0.06262046024833014,
+     "t": 0.9860465027590642
+    },
+    "weeks 5-8": {
+     "p": -0.07014645714602498,
+     "t": 0.9914405527532298
+    },
+    "weeks 9+": {
+     "p": -0.05959373123036459,
+     "t": 0.9838771785002808
+    }
+   },
+   "C": {
+    "overall": {
+     "p": -0.048426929767003,
+     "t": 0.9698496856905054
+    },
+    "weeks 5-8": {
+     "p": -0.05725101165147301,
+     "t": 0.9766651317857693
+    },
+    "weeks 9+": {
+     "p": -0.04487815010901375,
+     "t": 0.9671087187797653
+    }
+   },
+   "C_without_botched": {
+    "overall": {
+     "p": -0.07284570215614686,
+     "t": 0.9902717295366449
+    },
+    "weeks 5-8": {
+     "p": -0.08182161558620547,
+     "t": 0.9969756836276219
+    },
+    "weeks 9+": {
+     "p": -0.069235860428757,
+     "t": 0.9875756013481676
+    }
+   }
+  },
+  "one_term_scores": {
+   "A": {
+    "overall": [
+     7496,
+     0.1492850433169248,
+     0.18866256943161136
+    ],
+    "weeks 5-8": [
+     2150,
+     0.1505246474125578,
+     0.18929858900370966
+    ],
+    "weeks 9+": [
+     5346,
+     0.14878651192792164,
+     0.18840617616177133
+    ]
+   },
+   "B": {
+    "overall": [
+     7496,
+     0.14890712744362686,
+     0.18819166963459608
+    ],
+    "weeks 5-8": [
+     2150,
+     0.15031613274976835,
+     0.1891296707834634
+    ],
+    "weeks 9+": [
+     5346,
+     0.14834046799577721,
+     0.18781311298838121
+    ]
+   },
+   "C": {
+    "overall": [
+     7496,
+     0.1484374895953944,
+     0.18772431830181435
+    ],
+    "weeks 5-8": [
+     2150,
+     0.1499583827588736,
+     0.18898411896274556
+    ],
+    "weeks 9+": [
+     5346,
+     0.14782583222512122,
+     0.18721527423294987
+    ]
+   },
+   "C_without_botched": {
+    "overall": [
+     7496,
+     0.14865100036796228,
+     0.18793161375815912
+    ],
+    "weeks 5-8": [
+     2150,
+     0.15013202830573616,
+     0.18893346118948462
+    ],
+    "weeks 9+": [
+     5346,
+     0.1480553755893963,
+     0.1875271918328234
+    ]
+   }
+  },
+  "one_term": {
+   "B - A": {
+    "overall": [
+     -0.00037791587329791943,
+     -0.0007903837899178805,
+     -3.086274143728106e-05
+    ],
+    "weeks 5-8": [
+     -0.00020851466278944312,
+     -0.0009331140582501007,
+     0.000610342740359467
+    ],
+    "weeks 9+": [
+     -0.00044604393214438867,
+     -0.0008521953535413064,
+     -7.298149979090172e-05
+    ]
+   },
+   "C - A": {
+    "overall": [
+     -0.000847553721530393,
+     -0.0013807080782461956,
+     -0.0003553995250353208
+    ],
+    "weeks 5-8": [
+     -0.0005662646536842022,
+     -0.001574932390597605,
+     0.0004949847801931067
+    ],
+    "weeks 9+": [
+     -0.0009606797028003724,
+     -0.0014945222726341423,
+     -0.0003861572902517602
+    ]
+   },
+   "C - B": {
+    "overall": [
+     -0.00046963784823247353,
+     -0.000758553899270539,
+     -0.0002094062690726889
+    ],
+    "weeks 5-8": [
+     -0.00035774999089475924,
+     -0.0007264892816040065,
+     -1.8198184092168956e-05
+    ],
+    "weeks 9+": [
+     -0.0005146357706559836,
+     -0.0009133973811154664,
+     -0.00011962757436602863
+    ]
+   }
+  },
+  "team_only": {
+   "overall": [
+    7496,
+    0.1465120934783812,
+    0.18574139434217565
+   ],
+   "weeks 5-8": [
+    2150,
+    0.14571375085107338,
+    0.1844957303435794
+   ],
+   "weeks 9+": [
+    5346,
+    0.14683316281035122,
+    0.18624001371589155
+   ]
+  },
+  "starter_change": {
+   "B - A": [
+    -8.472609489867404e-05,
+    -0.00018025692581761499,
+    1.0303217885898627e-05
+   ],
+   "C - A": [
+    -7.225329914542542e-05,
+    -0.00026202651923511107,
+    0.00012518966705015383
+   ],
+   "C - B": [
+    1.2472795753248627e-05,
+    -0.00013901859428087717,
+    0.00019461348760113905
+   ]
+  },
+  "t_intervals": {
+   "B - A": [
+    6.45557038226486e-06,
+    -2.2136147436797095e-05,
+    3.5047288201326816e-05
+   ],
+   "C - A": [
+    1.2609086549365296e-05,
+    -5.973106583447864e-05,
+    8.494923893320923e-05
+   ],
+   "C - B": [
+    6.1535161671004246e-06,
+    -5.748891110430304e-05,
+    6.979594343850389e-05
+   ]
+  },
+  "points_scores": {
+   "A": {
+    "overall": [
+     7496,
+     7.824987422023716,
+     9.821157979696471
+    ],
+    "weeks 5-8": [
+     2150,
+     7.750439642071716,
+     9.73788531764154
+    ],
+    "weeks 9+": [
+     5346,
+     7.854968291252449,
+     9.854449330393642
+    ]
+   },
+   "B": {
+    "overall": [
+     7496,
+     7.824377941527429,
+     9.819755595304404
+    ],
+    "weeks 5-8": [
+     2150,
+     7.753930912259184,
+     9.740983844800999
+    ],
+    "weeks 9+": [
+     5346,
+     7.85270961248267,
+     9.851257625247953
+    ]
+   },
+   "C": {
+    "overall": [
+     7496,
+     7.822403738813349,
+     9.817310221299449
+    ],
+    "weeks 5-8": [
+     2150,
+     7.749744874437566,
+     9.738204383836113
+    ],
+    "weeks 9+": [
+     5346,
+     7.851624943154525,
+     9.848945059295794
+    ]
+   },
+   "C_without_botched": {
+    "overall": [
+     7496,
+     7.823308673991877,
+     9.81875356951993
+    ],
+    "weeks 5-8": [
+     2150,
+     7.7467499993525095,
+     9.734799141881902
+    ],
+    "weeks 9+": [
+     5346,
+     7.854098264428584,
+     9.852315800131937
+    ]
+   }
+  },
+  "points": {
+   "B - A": {
+    "overall": [
+     -0.0006094804962890496,
+     -0.0035982339385649802,
+     0.002192371689503799
+    ],
+    "weeks 5-8": [
+     0.0034912701874693247,
+     -0.0022064544386040967,
+     0.011386120969513084
+    ],
+    "weeks 9+": [
+     -0.0022586787697796043,
+     -0.005473446598342403,
+     0.0006355934861264717
+    ]
+   },
+   "C - A": {
+    "overall": [
+     -0.0025836832103682695,
+     -0.0068930026014844895,
+     0.001759201785327849
+    ],
+    "weeks 5-8": [
+     -0.0006947676341499134,
+     -0.009749859541773286,
+     0.010719823270530107
+    ],
+    "weeks 9+": [
+     -0.0033433480979233503,
+     -0.009077432763325283,
+     0.002729740288359587
+    ]
+   },
+   "C - B": {
+    "overall": [
+     -0.0019742027140792194,
+     -0.005013412498654697,
+     0.0016280723652175872
+    ],
+    "weeks 5-8": [
+     -0.004186037821619238,
+     -0.010411654250027493,
+     0.0013077560586953418
+    ],
+    "weeks 9+": [
+     -0.0010846693281437462,
+     -0.005537465930744184,
+     0.00370115053695145
+    ]
+   }
+  },
+  "own_a": {
+   "A": {
+    "overall": [
+     7492,
+     0.2330690747391439,
+     0.29925073268321223
+    ],
+    "weeks 5-8": [
+     2149,
+     0.23268315931434405,
+     0.29754350807273083
+    ],
+    "weeks 9+": [
+     5343,
+     0.2332266124098316,
+     0.29994485971614354
+    ]
+   },
+   "B": {
+    "overall": [
+     7492,
+     0.23310145178325264,
+     0.29926225649041377
+    ],
+    "weeks 5-8": [
+     2149,
+     0.23277429257704602,
+     0.29761237278964237
+    ],
+    "weeks 9+": [
+     5343,
+     0.23323500410062,
+     0.2999331602892177
+    ]
+   },
+   "C": {
+    "overall": [
+     7492,
+     0.23309278669593214,
+     0.2992434254193701
+    ],
+    "weeks 5-8": [
+     2149,
+     0.23273555871413903,
+     0.2976840539818929
+    ],
+    "weeks 9+": [
+     5343,
+     0.2332386136324568,
+     0.29987765840634595
+    ]
+   },
+   "C_without_botched": {
+    "overall": [
+     7492,
+     0.23321848925158137,
+     0.29938913778235193
+    ],
+    "weeks 5-8": [
+     2149,
+     0.23265305783670995,
+     0.29747804219021223
+    ],
+    "weeks 9+": [
+     5343,
+     0.23344930860294233,
+     0.300165784336033
+    ]
+   }
+  },
+  "own_c": {
+   "A": {
+    "overall": [
+     7492,
+     0.22173884482211176,
+     0.28591338016999246
+    ],
+    "weeks 5-8": [
+     2149,
+     0.22287002664811204,
+     0.28569969236356246
+    ],
+    "weeks 9+": [
+     5343,
+     0.22127827543755246,
+     0.28600033906757577
+    ]
+   },
+   "B": {
+    "overall": [
+     7492,
+     0.22173666813713327,
+     0.28587465521173533
+    ],
+    "weeks 5-8": [
+     2149,
+     0.22298024783922193,
+     0.28579305961887863
+    ],
+    "weeks 9+": [
+     5343,
+     0.22123033509245676,
+     0.28590787081434693
+    ]
+   },
+   "C": {
+    "overall": [
+     7492,
+     0.2216788708005588,
+     0.28582553783898923
+    ],
+    "weeks 5-8": [
+     2149,
+     0.2229550224185678,
+     0.28593351609443984
+    ],
+    "weeks 9+": [
+     5343,
+     0.22115927584968423,
+     0.28578156197413235
+    ]
+   },
+   "C_without_botched": {
+    "overall": [
+     7492,
+     0.22177962042072866,
+     0.2859587053521243
+    ],
+    "weeks 5-8": [
+     2149,
+     0.222790187743118,
+     0.2856869157541078
+    ],
+    "weeks 9+": [
+     5343,
+     0.22136816015940675,
+     0.2860692926058829
+    ]
+   }
+  },
+  "without_botched": {
+   "C_without_botched - A": {
+    "overall": [
+     5.927697113941317e-05,
+     -9.466334936742775e-06,
+     0.0001935747133310937
+    ],
+    "weeks 5-8": [
+     2.7615574747900395e-05,
+     -5.780881377545356e-05,
+     0.00011009347423126507
+    ],
+    "weeks 9+": [
+     7.201023006978212e-05,
+     -2.0008109521152837e-05,
+     0.0002534850117386863
+    ]
+   },
+   "C - C_without_botched": {
+    "overall": [
+     -4.681530679105085e-05,
+     -0.00013766608142456318,
+     2.632270372203517e-05
+    ],
+    "weeks 5-8": [
+     5.617055954473874e-05,
+     -6.83371130390802e-05,
+     0.00023958485786205
+    ],
+    "weeks 9+": [
+     -8.823311685875525e-05,
+     -0.0001874507505051702,
+     -3.122742952443992e-05
+    ]
+   }
+  },
+  "stability": {
+   "A": {
+    "pairs": 446.0,
+    "pearson": 0.4592346405650488,
+    "spearman": 0.43942800003922616
+   },
+   "B": {
+    "pairs": 446.0,
+    "pearson": 0.4446731025786565,
+    "spearman": 0.4244228752642277
+   },
+   "C": {
+    "pairs": 446.0,
+    "pearson": 0.45369033785259716,
+    "spearman": 0.43118494063478224
+   },
+   "C_without_botched": {
+    "pairs": 446.0,
+    "pearson": 0.44917953124165,
+    "spearman": 0.42701897705365505
+   }
+  },
+  "spotlight": {
+   "faced_correlation": {
+    "A": 1.0,
+    "B": 0.9945918199958739,
+    "C": 0.9876087019041707,
+    "C_without_botched": 0.9866943094501326
+   },
+   "ranks": {
+    "A": {
+     "Josh Allen": [
+      11,
+      0.10239414473192866
+     ],
+     "Drake Maye": [
+      1,
+      0.20944035811467068
+     ]
+    },
+    "B": {
+     "Josh Allen": [
+      8,
+      0.14947472909942422
+     ],
+     "Drake Maye": [
+      1,
+      0.253616800969279
+     ]
+    },
+    "C": {
+     "Josh Allen": [
+      6,
+      0.17000623806548215
+     ],
+     "Drake Maye": [
+      1,
+      0.24294008249967777
+     ]
+    },
+    "C_without_botched": {
+     "Josh Allen": [
+      5,
+      0.1861229487524787
+     ],
+     "Drake Maye": [
+      1,
+      0.2466157601639274
+     ]
+    }
+   }
+  },
+  "impact": {
+   "B": {
+    "rows": 9599.0,
+    "mean": 0.01654544552246785,
+    "largest": 0.08452075087937969,
+    "beyond_cut": 2850.0
+   },
+   "C": {
+    "rows": 9599.0,
+    "mean": 0.015423532468002758,
+    "largest": 0.10423855101484134,
+    "beyond_cut": 2587.0
+   },
+   "C_without_botched": {
+    "rows": 9599.0,
+    "mean": 0.020432882695689283,
+    "largest": 0.11344896772850772,
+    "beyond_cut": 3997.0
+   }
+  }
+ },
+ "power": {
+  "windows": 100,
+  "seed": 1,
+  "shares": {
+   "B beats A": 0.04,
+   "C beats A": 0.01,
+   "C beats B": 0.0
+  }
+ },
+ "spreads": {
+  "offense": 0.06126262966195,
+  "defense": 0.046317968483724714,
+  "home_field": -0.004023260021221625,
+  "passer": 0.09191882599459901,
+  "scramble": 0.11588765875131589,
+  "designed": 0.15075414566909742,
+  "play": 1.3050836336231328,
+  "means": {
+   "dropback": 0.034883841091478664,
+   "scramble": 0.4509092245237136,
+   "designed": 0.21598066420238476,
+   "botched": -2.2461838321210625,
+   "other": -0.12430924690451231
+  }
+ },
+ "provenance": {
+  "version": "0.57.1",
+  "code": {
+   "qb_plays_test.py": "070baac272c0ed3fb29e7929f734040670629b9847a469f149d1f05322911594",
+   "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516"
+  },
+  "inputs": 179,
+  "fingerprint": "dd46eecd2b1010d053ad8a520ea2e3ede9d3428b914180ce64173b8316871a55",
+  "command": "VIRTUAL_ENV=\"$PWD/.venv\" nice -n 10 .venv/bin/python .agents/sos_port/qb_plays_test.py --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy --ratings-dir /home/mitch/scratch/step6/data/ratings --schedules-file /home/mitch/scratch/nflreadpy_cache_snapshot_20261008/a7d0d7a2405b3d35047e8de4a40035e6.parquet",
+  "seconds": 1237.0929692100003,
+  "git_commit": "0fdf79cee44dbaec2554315706071ea1bd88d855",
+  "input_files": {
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/players.parquet": "7dd203e2ca845e29a0601c5aa241116607a6ef49e5d49d1f98f1baf6ad3c237a",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_1999_reg.parquet": "e5e7d95838f97eb8a8c5d4fedbcea52678120c20cd630e86f817e168d27c16a9",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_1999.parquet": "a412cd97d0d3e1c58383f7e06a81bd6b7d25496a6dc9769b806aa9e7edbd0d30",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2000_reg.parquet": "ced050da34904444651772228eed997bfb2f538962bf12a5126368610411f4fa",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2000.parquet": "81da91863bd35e03acd3fbb6e3297761d2b8f0e0d6adde529b2b06e4cb602ce0",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2001_reg.parquet": "09924364076aa632e6e8fe82c06ad97750b98c4f1619cf92aa924ca4f7475b16",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2001.parquet": "33df3b05e9bb3f07633f6c7d72b26d5d3e0b165523292a0c7cfed832924d9a4e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2002_reg.parquet": "9ec175ab7b9ad473d81d9d53d47bde60aad15ebfb91dd479191788d7ef8c7770",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2002.parquet": "69ea33535b318cbdfaf8599f8fd14737a3398a0e50542a46620329c114a795c2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2003_reg.parquet": "797e7c99747fa6f5095e9a32801354aa58de6c0b267031aaf691b76afec4c283",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2003.parquet": "5f66d339589bd90bea7f0217c5ac6811005fca2d2cdf1d934da0db687ae8fca6",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2004_reg.parquet": "2f7c0dbd89603e401c5d4d40d04aa9635fe3797c4c68fa081322d64814c44d63",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2004.parquet": "f17d9a5634f50bc5e76bc8321ff18a269bef1185bc37f6bd6fba9aaacd4c5734",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2005_reg.parquet": "9bc1ed202d07042c14612897afb7ff029780b416ce6bfae8587d6e8b9b7b3cb4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2005.parquet": "61d25e09109817760077f8e0f69359394222362b4fed8db863e9684ff76a81ee",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2005_reg.parquet": "ba52a19e7d27036ae0c6a2155c40f282903dc9638100ef5153c6035e58bd5235",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2005_reg.parquet": "87504101afe34d8f63f197fb779e6e5d5060adba5a23459d52fffbf6d37599b3",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2006_reg.parquet": "a066cb8d96769d6d35493e569079c525dfbd3472e3d729ad3b5e0cb39a98e0ed",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2006.parquet": "332da9d4aa1ce1fe7bcb03b5801bce1aafdc20aa9cee7ea526d76dbe9458a5ac",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2006_reg.parquet": "4f2165afa7e29a9e0493c32ee9aeec2a7862be0115452ad02c830aaa0a23c622",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2006_reg.parquet": "71982435f75ec27bcdd447d9d7ebab56ab88e3937d828744e207e7f33dcceb81",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2007_reg.parquet": "f0099127899d9693792b9e5707df34b61f9d7acddb2b416cd20315dab58e406d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2007.parquet": "e582de1e7d3f32264bc6a9d4c2c32093a4cf4f1e4ea835cc23964910d424383c",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2007_reg.parquet": "60083000b0f57ac14aa4f1e4e3e62b46c6592e046a1ddd424c5547d539ff39f0",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2007_reg.parquet": "3eb5446ef0188497a710c281af1dc616d7e72d2a9ff7060d71032ee70048fb4d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2008_reg.parquet": "cd474c8924b5580f636f54c3c631bcd7af9177f01d02d88bb54a3ac536e4a98b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2008.parquet": "4315c62e79b19ca9c47a5ca19183fe4a12da87fee136ba20f2e911064288d42d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2008_reg.parquet": "1983d755fb10475ec176f71521043f0d4d1126088f092ef56bd7921320dc5456",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2008_reg.parquet": "50b9499f66546d2b7a0a8d58ffefb43de5c00e034b315cd924d6b64ccba5fec0",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2009_reg.parquet": "bf85d5559477dcf5135534dcfa59431dc6c7a2c927461faa9d1053f4e0bb92c5",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2009.parquet": "61a32fc5e8cf0aac55561b02c8e46bc4c7e8c440416f242ca8fd62b9de7eb1df",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2009_reg.parquet": "3f41070f4da4a325315e2ba00a0fd2d54cd701a9a94be09984b858f79c35d48a",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2009_reg.parquet": "037561c897263c8dec8d761fc56834a3553327ac0205c4f9bea0e5e0574f248d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2010_reg.parquet": "f0db0d658396e354e863279288a7f6362915567d5077bf26e18865d6cad3c501",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2010.parquet": "81d54580c3236a4f95865f887b420d274d7797f5613b48859b187b42a2e6f974",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2010_reg.parquet": "57b2a6e9fc806108832b4c50c3c878fb1a9ef95718d64204f739beda8f51abc2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2010_reg.parquet": "9f9bc7b4902800db29d3144c9bfdd023cfdb606bc4c9689b1d777d50542223d4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2011_reg.parquet": "5a96398a85c48db0761ef53457f9e3f27f8a92696d2adb9b34990f9fbaf8e2ec",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2011.parquet": "63b1425c1f91a327de8537f8fc8bd813217f94a3bfaf3092b129fa8d03615119",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2011_reg.parquet": "c7cd12e065bf6523a9fbeec78899c2ebe47d024c0872d791a054100f83009f6f",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2011_reg.parquet": "32afbf4b6d15b6367d591f06ec9a8046cd511e186f3dbf900401a157a179e44e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2012_reg.parquet": "45312bbb3a22c91b10a60296c9c2acc48c7330f07120bc5777f7de65484a37ed",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2012.parquet": "c4495aae42121421378d9fc90b45e3f04483ddead6676d8c40f4cab80f0ec474",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2012_reg.parquet": "e60239bda359748ee0fc4fdad588ec5f603e2e7dd381202b1e7e1151241e8799",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2012_reg.parquet": "7fe8efa2b31d7c932859698531f29a29949614a260fd9383d3660ba43344a652",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2012_reg.parquet": "50c29c5325f3a12e2f932c2b5103eebde80f0dea18b5a7c2edba0efac863a37f",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2013_reg.parquet": "895885da99f3328058f6cbc8532461e5d31399028b0394ef114a936c97d3d39d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2013.parquet": "4b6f0f1f123a81685a47b5fed40e3346fb620c54ee009c8f87f8a46c5cab258e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2013_reg.parquet": "0d7cf534b39e66e7ea3d23794b5cb28a0ba4fa48069a691e67d31039f3e953cd",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2013_reg.parquet": "2a4408439042e2431c256f6d70282e876b11a705d714591b8adf29db5cfee7d4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2013_reg.parquet": "663df0f1fc44ef0b31f26c011342118a75402d175efacb41ca445a7ec029ea7e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2014_reg.parquet": "3e2d72c225772d9b188a0555d8b75db13e266f4d9f587147e98e6e40078f101a",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2014.parquet": "56fb33613d8ad5e551d150adb18999e3fd3f118e103d07727e48696c29cad633",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2014_reg.parquet": "f09b4dcbb8d9823ed67372bc59d6bf6a0de7477671ae3956369e448d149e665f",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2014_reg.parquet": "b7b7975edf9c0647532f30595ca21ef96a82df6046ef239fea645536cef5b4bb",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2014_reg.parquet": "4d7141b2781f6df74e678e010039236c665c8f1668a60bf78c0c97717184527b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2015_reg.parquet": "1a7798a94dd928c7df20cf693c5ff4ae2b1778ce8a0f5fc3c415aacf5732367b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2015.parquet": "fd2a81d048115465a613595f7c8df65da57331adc2854a285bc5b3483f2d3c7c",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2015_reg.parquet": "bf6f4ff0d0a3a32942f64f0072d072628ce8e861a53f7608d8ca0287e0fab2e8",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2015_reg.parquet": "856bc7865c4a7bb9d5efd120d37ce32eaa370a1f71aff37120eb3badd065d316",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2015_reg.parquet": "e07ad050be2297b23489b29321d3058e9e14742c5ef6bccc2854ac0d416c900c",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2016_reg.parquet": "44f8d70fa3e3e640d1f46e9c3d9adc8585ea18aa0a32874ae882fbe8b9b130f2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2016.parquet": "e0e0d2cb2afc5733ed87166f5237dc5bbc928383d711c488d85387b4c41eeb1d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2016_reg.parquet": "617753d37efbcb4150da77eb611d6bb6b33312391ce8657a89fc1b0e3e00c63c",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2016_reg.parquet": "ed8ee9374625ef895d6eddba527acc834bb22ea3c978166087bc61cb4a9b3741",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2016_reg.parquet": "471ffd7c0b23ce7742b850f9a0f2d16ccfcda1d38420ca7e799dc45f7035cc26",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2017_reg.parquet": "2c60aff2133888d90934524c82c567c2fcfa2ed8be6adee2576e6b4589d67fc2",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2017.parquet": "72e37e7b4581d4e051d0fa486bce560195c86e70705d6adda2d715f867f98c6f",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2017_reg.parquet": "48577c4475b405ade9b9b928148a942d2b1cdd5545dd66eb7520398cf49302de",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2017_reg.parquet": "ea7649ff1ea6f5a5d7aff31ea249330e9f59807f5af83a2bfbe1c0361278f6c4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2017_reg.parquet": "ab1b56708aa5755a7fa45333ea5e84d43445733d079f049eb9bd6e6c63af84f8",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2018_reg.parquet": "98882862248b774e99d89bb4991f6657599b51c7e914396e4fd4d4dc7a73cd09",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2018.parquet": "41e50497c81e0934bf3b915725f8f9b12ba22655ab2f6d4f152dd3fb3e2c20b7",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2018_reg.parquet": "e7acb370c5a8834535ea53de5c86224b6c5d4f46e000d023a53c6b24ce27b489",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2018_reg.parquet": "fd399fd2ba93de5d5f59d2df5f64c49fcd316137cdf55b0288191608e2647016",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2018_reg.parquet": "bd94abd2d66d4f227401afb00146b586998d396eb6a5da2364bb952034cccd53",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2019_reg.parquet": "1349cb263e0acae104303ef56ba90207047e4fef8d27c907346e853c496bd697",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2019.parquet": "5454f627f20464da4d355c792d2a78ec19b369da208305f93635a947fa243ab4",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2019_reg.parquet": "e05786b5d069a6b9a73dfcb133f79a6fcb2440da22cc1bceb458dda6bc94bd56",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2019_reg.parquet": "a62138fbe1b92f7d5f71b8b73ad80e4675ebb7bf46d2ecc34492b0952b29f17e",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2019_reg.parquet": "dab2812d966c0a6fc28622b4ae587a548b78c8518f39939e8d5917ba0f1dd05d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2020_reg.parquet": "694d7a8119abe077854d86606eb595d842c201f17b1b2a5bf134b626b0b84059",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2020.parquet": "4837401aee047de17657adf046ceb4420a02ac25d442b0fdabdb9f6df303cd56",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2020_reg.parquet": "b57174543b4eb691609c27288eccc8b33777432da1fc6748fb830b7da7220841",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2020_reg.parquet": "f8e5f4e0d3493c30de51eb14119269e1a901ebed9ed6b4e6fd9a7c705bea4c16",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2020_reg.parquet": "16de0e99b3a9ba826bce1075872549283fd88f8ae363a924559a4942f72f3a88",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2021_reg.parquet": "dc98a2206e581c47d8ed68421d78fbcb1f6a35a302bcffe183a30ca7f0ddda97",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2021.parquet": "ac5db528ca0bd50b392a6efeb8169ffc67ef0037b476e73037e5b4d01eff1b14",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2021_reg.parquet": "a8eaafaccd54d9c9446e8ded9ebcdb94ea85815a70e139fccf96c28d17d0b11a",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2021_reg.parquet": "23beb9e304fd239718204dc802194429f37abd0ab1e9de57cfb9987ba0d6d1c1",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2021_reg.parquet": "cba00ff9c32ddc88522c66a1a304817a6c58924df7820a8398de083975b2058a",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2022_reg.parquet": "8531fac4d34110437f652ac134fae13a6790dc30c0e372e03a62f0d115473916",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2022.parquet": "feb296ba83c53de57320a8080fd7ea7951f5fa3ef16887c29cd54631bbb8c62b",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2022_reg.parquet": "10dafaf0329582cfd45a37ed5bfe700c2746d1d4b756a499780d922e937986cc",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2022_reg.parquet": "f37ccc7bb457c45a99e7d0dc787c62019870c6be24402354c4c5009c2f5cf8ff",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2022_reg.parquet": "70961583012cdcb7f2b78891a08e283a1d7376d2779ef13495411ec2f1743c7d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2023_reg.parquet": "d7c415f2e1e87f21eaa8fec3efd660fa2328c9dd10dae3400d96b29b64b632d0",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2023.parquet": "ef59edecdd4de6676d71f129b7512be5edbbc4b2b2ba2ed9a8fe7638971c46a3",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2023_reg.parquet": "44e0b50d4f870b0cfd7aa06058315883026c920685459bfc5b80cc7969f93562",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2023_reg.parquet": "356727bb21036d35e46bd9c36c19f464dbe9e4b7bf4afeb57f11b86bcf9135d3",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2023_reg.parquet": "7be8423d43a7ab019fc8b0294e350fd0d42a9426f637a19f6cb37d111267ad18",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2024_reg.parquet": "f23b1322332e492b8f0ea6132f746168abd4608f18b9ce75f57fb1603dbe94f1",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2024.parquet": "2834d8d0883d16d245baae4d30ded9a491a42eaa5b15829c77da51555d26fe7d",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2024_reg.parquet": "15de15b05f2f21687860484f17f9685d35d3f59644ee7989777152d10d9006de",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2024_reg.parquet": "d145dee60b4f631f96e48be8e35469b5c71693a3c35ac715dd18b96b3d0c2e10",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2024_reg.parquet": "bbee26f1937b23f90b90ac0ffcae7f9588d3e286d5f90c6dd148467aca9337c7",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_2025_reg.parquet": "7adcccad0cc3ac8f10a74edadb7ec2be93ffa715fa5ddb2e9de92a52c2a5ccc5",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/schedule_2025.parquet": "a65b3bc8407a1c45f8f4a74b8fce735febb471a6690641753ffbf0ea764291f5",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/player_stats_week_2025_reg.parquet": "6f0a29d4cc28dba9b17c4d12e55cf1e5b5272b7ab32fa5dea67c59fe93573ace",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/snap_counts_2025_reg.parquet": "3c42b3f6618b6679206433a4df40accf3ebb3e6f4fe5ec2b0494d8215e084238",
+   "/home/mitch/scratch/step6/data/cache/nflreadpy/rosters_weekly_2025_reg.parquet": "a9e4fa766b406c41ae0f8153342cc6e2da0136994bcba0f08c10d81dbe18cf85",
+   "/home/mitch/scratch/step6/data/ratings/2005_qb_ratings.parquet": "a8f063dcee504380819804c1b0a46c72d20cfec5265ee2a4e1af0869eb5b59d8",
+   "/home/mitch/scratch/step6/data/ratings/2006_qb_ratings.parquet": "2f4411cd1923c029f60bd83a4da61e81867b2aceb3e501ea0dfea7df8c417c50",
+   "/home/mitch/scratch/step6/data/ratings/2006_qb_ratings_by_week.parquet": "b40b294169b26f9a9fe963fe5b1beedc89abe017b1840c9a77e46bea188aec8e",
+   "/home/mitch/scratch/step6/data/ratings/2007_qb_ratings.parquet": "1ede8d807828ee954d0cda5448b058414e96606935918df59ce8d5882fb9812f",
+   "/home/mitch/scratch/step6/data/ratings/2007_qb_ratings_by_week.parquet": "ca3dc27b6ed255d955e27e0d799ccc3d24cc519cd2873224d2cc5444a1ac448e",
+   "/home/mitch/scratch/step6/data/ratings/2008_qb_ratings.parquet": "3b57804b24bf8c3e651e86bd5080c087c7a96e258b3f3c15650a1b1833d03f07",
+   "/home/mitch/scratch/step6/data/ratings/2008_qb_ratings_by_week.parquet": "3cd734b4f1710fb7cd97eb6f7c49469dc2f81493251d481715e9727fe448cc87",
+   "/home/mitch/scratch/step6/data/ratings/2009_qb_ratings.parquet": "d83613ddf02871f6415529ce5d5c9a1605a5828a83c60e799a64a812379eeaee",
+   "/home/mitch/scratch/step6/data/ratings/2009_qb_ratings_by_week.parquet": "d2859b3558e16cb32151d2c2bee4d2c608e8e62ddc11ff0f632ee88aec0dbd38",
+   "/home/mitch/scratch/step6/data/ratings/2010_qb_ratings.parquet": "c2d2d5d1b7bf7d8096e8c08dc30476c4cb25851d7d83028c0c623274699ba2b5",
+   "/home/mitch/scratch/step6/data/ratings/2010_qb_ratings_by_week.parquet": "5e75ad7dc5beda9bc90f2f2552152e2c5d51d5249a776bda437cf09559bec104",
+   "/home/mitch/scratch/step6/data/ratings/2011_qb_ratings.parquet": "359aa3048fdf174a58d8b3f9c6b9e112b01683c4e50656df927f92e9f4464dc7",
+   "/home/mitch/scratch/step6/data/ratings/2011_qb_ratings_by_week.parquet": "994916eaa7bc75c9166131b2f3e29d8c25f8cbe1e8824a6c7bf01e3451cf9ab6",
+   "/home/mitch/scratch/step6/data/ratings/2012_qb_ratings.parquet": "d170c5489adbef72d2f79a67168495b37fdfe8cd67be2423c8efa6de8dbf1791",
+   "/home/mitch/scratch/step6/data/ratings/2012_qb_ratings_by_week.parquet": "226fc3463a7ec5db37ad23315ee0e8bfae0db6bbc2c3f3a527045b7a0feab76f",
+   "/home/mitch/scratch/step6/data/ratings/2013_qb_ratings.parquet": "20e1944f0572b4a71a091352177bca47ae6900daedebd4853e843dd66ecd252c",
+   "/home/mitch/scratch/step6/data/ratings/2013_qb_ratings_by_week.parquet": "e15c91c6fc353db5f50bcf098df825649c7895c1bf61656d909a8a3fd9221710",
+   "/home/mitch/scratch/step6/data/ratings/2014_qb_ratings.parquet": "71d0a5eb6a70a4a430416ba1d1e060a0d369b56cad4354554bb5ccfe323fa23a",
+   "/home/mitch/scratch/step6/data/ratings/2014_qb_ratings_by_week.parquet": "b02b23167b993a035f014dbcf564a96a6d790bdd31c0800865e55f9fd2627e85",
+   "/home/mitch/scratch/step6/data/ratings/2015_qb_ratings.parquet": "f2f0026c31ca84f614c88281bdc728c0e39613f4d9f9dbf47e8fc895310b6fcc",
+   "/home/mitch/scratch/step6/data/ratings/2015_qb_ratings_by_week.parquet": "92416c9395e363fd02c9e49831154d8956755c0e508288a8ac6b151c884c4175",
+   "/home/mitch/scratch/step6/data/ratings/2016_qb_ratings.parquet": "6eb4d98dd81a2104b060b952cb60225a0e7b043bebc9ce13a112d768f3471042",
+   "/home/mitch/scratch/step6/data/ratings/2016_qb_ratings_by_week.parquet": "964043d9ebef2885a0054502771a0cddc1c193043182a9564b2ecaaec3b92b8c",
+   "/home/mitch/scratch/step6/data/ratings/2017_qb_ratings.parquet": "ae2ba9f80ac7351b79f3bd171447531fa2d772c7c8b3d6845ed2379d2e9f8f35",
+   "/home/mitch/scratch/step6/data/ratings/2017_qb_ratings_by_week.parquet": "0c66828095b57fa2553445945417812e9d18e8dd6a4d3a75d0857b43160a6052",
+   "/home/mitch/scratch/step6/data/ratings/2018_qb_ratings.parquet": "9d03b8873d876b2c013d5d32b1dd9be05e950db928097bd4d30ad3eabdeead96",
+   "/home/mitch/scratch/step6/data/ratings/2018_qb_ratings_by_week.parquet": "17af6d7f6ef1db61d31fd4090b4fa113c38925c090244ec0cc688bc29f5af560",
+   "/home/mitch/scratch/step6/data/ratings/2019_qb_ratings.parquet": "d3088136065890bd4f6c5a1fdb349a9b570dceda8d61d364655baf81410136af",
+   "/home/mitch/scratch/step6/data/ratings/2019_qb_ratings_by_week.parquet": "28d26e7431f9cb388dfe998ee4c43b6feaa8879a4296c115761648e78617e7c0",
+   "/home/mitch/scratch/step6/data/ratings/2020_qb_ratings.parquet": "05535d15137d0ed2f9559b64f0e5c5848825dc8ffabe78c265c3f2c41e46b2b9",
+   "/home/mitch/scratch/step6/data/ratings/2020_qb_ratings_by_week.parquet": "953c6a0d63b754688a73894bf17cc32473080041aad4fcfce9d20128812f5fb4",
+   "/home/mitch/scratch/step6/data/ratings/2021_qb_ratings.parquet": "c4c8eab82534a87200c0e91bf5afbb5e1a3b203a045d4db0aae7136f47956852",
+   "/home/mitch/scratch/step6/data/ratings/2021_qb_ratings_by_week.parquet": "dd01ee8455dffaecf24359126a121f691dd2527919281929eb4d5e7d22ec67d9",
+   "/home/mitch/scratch/step6/data/ratings/2022_qb_ratings.parquet": "733851e54fe5476d22f6c73f8727e0f698b064564da70c6e46d591a1669aeb94",
+   "/home/mitch/scratch/step6/data/ratings/2022_qb_ratings_by_week.parquet": "1d55d03667d7c382ea8bc850738797569ffb249e52c99de8ec7f6000662adf41",
+   "/home/mitch/scratch/step6/data/ratings/2023_qb_ratings.parquet": "bf3970912bb368e6d4b22c50d483e317a92703a667b8675aee6112626a970510",
+   "/home/mitch/scratch/step6/data/ratings/2023_qb_ratings_by_week.parquet": "64446ccfa774198ee19023e5186f2a4605342dd64f9f08fda25134590802fb8f",
+   "/home/mitch/scratch/step6/data/ratings/2024_qb_ratings.parquet": "17ddb28a06127b294fad1df91757bad6a21fc6866a34b9a7ae66bd6f73427bdb",
+   "/home/mitch/scratch/step6/data/ratings/2024_qb_ratings_by_week.parquet": "8cc2396ca6ab7dd8763711a65124f2d5b9744bbb2f9a25e86a01cdf8f91bd51c",
+   "/home/mitch/scratch/step6/data/ratings/2025_qb_ratings.parquet": "0c62c16c86254e5822300b79a1f6dc07699d96dddfc3e2ae863fc50e28b062a8",
+   "/home/mitch/scratch/step6/data/ratings/2025_qb_ratings_by_week.parquet": "ed8a20533664e8b27b3e9050000b7edc2c3a6c7eafb117471977620a209c4c44",
+   "/home/mitch/scratch/step6/data/ratings/2006_ratings_by_week.parquet": "ebc2f8b95282b5659881f9acf91e7b3a59179c3717dfae1009cbeca2b8a6a1e4",
+   "/home/mitch/scratch/step6/data/ratings/2007_ratings_by_week.parquet": "5e533761cb27a2b71350a0b1333d107b4e17991b0514b4509cad3245be4781f9",
+   "/home/mitch/scratch/step6/data/ratings/2008_ratings_by_week.parquet": "8fce0b778c3fe6f7b61c32f59f9660a5b7779c4e0d18ea7eda5a2a9b995b45ed",
+   "/home/mitch/scratch/step6/data/ratings/2009_ratings_by_week.parquet": "9bc6dd9543189421dd2c164b3eec7cc332b26cc8ddf58405097b6d7e75101b20",
+   "/home/mitch/scratch/step6/data/ratings/2010_ratings_by_week.parquet": "15b09d9f529d259be9f0e2df3a509035d622b6cb5483a3efeb7c0ccd2a50f558",
+   "/home/mitch/scratch/step6/data/ratings/2011_ratings_by_week.parquet": "3a550a868ca9873c0fb2b2b481e79f66186574ffa89bf146701f0327688c19db",
+   "/home/mitch/scratch/step6/data/ratings/2012_ratings_by_week.parquet": "2dc91d91ee0893e801ee0666f1a575baf90f04c776ca3231a8c4e89621a409c9",
+   "/home/mitch/scratch/step6/data/ratings/2013_ratings_by_week.parquet": "ad08efdfe2fa029bc08dc7b5cdf786b88daf8a6c5e4eff89bae81ed8b2611a81",
+   "/home/mitch/scratch/step6/data/ratings/2014_ratings_by_week.parquet": "6e9c5c44a05443698551cacf1d28fe7e667a9e4296518b62d63bcda9f62d3b8d",
+   "/home/mitch/scratch/step6/data/ratings/2015_ratings_by_week.parquet": "ba81b7fb9b0905cc6becc8f5ddd6367ce3e92f9b96617fe41748a0c305106904",
+   "/home/mitch/scratch/step6/data/ratings/2016_ratings_by_week.parquet": "9644bd3a16039fb224c6f17188eddd5a0c6e3a586863a0bf8f6bb124eb39b5ac",
+   "/home/mitch/scratch/step6/data/ratings/2017_ratings_by_week.parquet": "72d7dff4a94dbfc8f25d15d558de73d43ab74570c2c31f66626248268ca6f55d",
+   "/home/mitch/scratch/step6/data/ratings/2018_ratings_by_week.parquet": "bf218adbbf8382d69e13b9adea3bc3033bfeda070d1ade9d182577602355a1ed",
+   "/home/mitch/scratch/step6/data/ratings/2019_ratings_by_week.parquet": "3d0e41de71b719a9abd19a3929970df58fbb96b138ee64374d1090e67a5695a8",
+   "/home/mitch/scratch/step6/data/ratings/2020_ratings_by_week.parquet": "431921db1da92e2637193ffc60ecfecb0f1d8b19625c34a91885955827b858ed",
+   "/home/mitch/scratch/step6/data/ratings/2021_ratings_by_week.parquet": "1597272e0876b5c84212b2adafd407538056647d5daecf3a8a4bcb27bb8e60d3",
+   "/home/mitch/scratch/step6/data/ratings/2022_ratings_by_week.parquet": "210370744b2e403dbc04e67e413742472b34c1f23cf677899cd6847aece119c6",
+   "/home/mitch/scratch/step6/data/ratings/2023_ratings_by_week.parquet": "f511da7b8d38738b9ea3bec3805cc4591404fb6c3f3070ed018385bc9d8b1119",
+   "/home/mitch/scratch/step6/data/ratings/2024_ratings_by_week.parquet": "3ba50be13747e0d25cd4bb6400f570b9d9b97ca2d6d3fd87b370060022a5a593",
+   "/home/mitch/scratch/step6/data/ratings/2025_ratings_by_week.parquet": "c5c8167c22996252d8b80acab94544b1819ca8f76c1ee4806067ce8aa6cf7c7b",
+   "/home/mitch/scratch/nflreadpy_cache_snapshot_20261008/a7d0d7a2405b3d35047e8de4a40035e6.parquet": "7e866506c21a8143bbbbdd822ed7776dcc5a990e7292a062d5ebe77f0c078f9c",
+   "/home/mitch/scratch/step6/data/ratings/1999_qb_ratings.parquet": "ac1b6e0a619c3c52e4830914233cf45115aafaee0aeda200696fe5c0215a4a40",
+   "/home/mitch/scratch/step6/data/ratings/2000_qb_ratings.parquet": "18339c781c1d84901cdf2c138b02f450fcb0ef5c0d4088ddb15ede5104f9a982",
+   "/home/mitch/scratch/step6/data/ratings/2001_qb_ratings.parquet": "3ba4bb2c53d6068c7af88e663973b79529e1f885f837635c09d93350ed6ae0c2",
+   "/home/mitch/scratch/step6/data/ratings/2002_qb_ratings.parquet": "7d4a182037189ccf8253d272f8542a02ebd3ec1fa1933abd511a36ac19a54433",
+   "/home/mitch/scratch/step6/data/ratings/2003_qb_ratings.parquet": "cc75720feadaa56d59221ea6c8b72543ac484d34c6f795fb4517b45bfd50a124",
+   "/home/mitch/scratch/step6/data/ratings/2004_qb_ratings.parquet": "2908792e2e0e2df09dc88a61565fc27cb5e2752255cc416cdd22f525ed20d85f"
+  }
+ }
+}

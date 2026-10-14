@@ -4,6 +4,11 @@
   42,
   7
  ],
+ "bootstrap": {
+  "resamples": 5000,
+  "numpy_seed": 0,
+  "game_order": "game_id"
+ },
  "runs": [
   {
    "seed": 42,
@@ -303,7 +308,7 @@
  "provenance": {
   "version": "0.58.0",
   "code": {
-   "betting_labels.py": "37f59d19db674ee5834365a17a6ae0b067c3dfa348684c4d123868f610dc29f2",
+   "betting_labels.py": "fb41d448c74febf734642cb55a9a3e9b0621a3313c13c2a14949b985248caaa1",
    "betting_edges.py": "f68d0918cf34a5f384750355d2c2d420b3cb5a4c83a6e3403fe8214164644c8e",
    "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516",
    "betting_report.py": "fe3a177d10545a23896dd8835464b05bc29722352d6a84346b2ed25cde436e60"
@@ -314,8 +319,8 @@
    "/home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json": "0b867908bb39c9218e93cd986f6ebcf48597d8d017fcea08379037cf7cf5b9bf",
    "/home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json": "c6d5e1ab6690fa9aa6e2b178677f847e0f6331188d0e3aee3db18b735f9cb9f5"
   },
-  "git_commit": "a0d1903fb7662ca960075956695567733e6a2baa",
-  "command": ".agents/sos_port/betting_labels.py --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349 --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4 --market-lines-metadata /home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json",
-  "seconds": 5.730207303999123
+  "git_commit": "9ea61a573d4ac144811d7612dd9c4381bd712f90",
+  "command": "VIRTUAL_ENV=\"$PWD/.venv\" PYTHONDONTWRITEBYTECODE=1 nice -n 10 .venv/bin/python .agents/sos_port/betting_labels.py --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349 --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4 --market-lines-metadata /home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json --earlier-market-lines-metadata /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json",
+  "seconds": 5.440027332999307
  }
 }

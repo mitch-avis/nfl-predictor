@@ -8,7 +8,7 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
 
 ## State (written 2026-10-14, during the integration session)
 
-- This branch, `feat/step6-sos-port`, is at `0.57.3` (worktree `~/scratch/step6`). `main`
+- This branch, `feat/step6-sos-port`, is at `0.58.0` (worktree `~/scratch/step6`). `main`
   (`0.45.4` plus the handoff merges, up to `5087a5c`, not pushed) is merged in (`d288907`,
   `1d9f84c`), so the instruction-file restructure, the suppression rule and the three-role testing
   standard apply here. The main checkout stays on `main`; its handoff still reads 2026-10-12 and
@@ -42,33 +42,33 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
   - Phase-1 audit refresh: merged (`d6c9489`), released as `0.57.3` (`db13ae1`), gate `0` (3,357
     tests); 35 judged pairs; reports in `.agents/sos_port/review/audit_refresh/`. Open P3: no test
     covers the run loop's call to `check_opponent_rows` (`.agents/sos_port/parity.py:577-578`).
-  - Open rating-definition tests, `worktree-agent-a5c5909054257aa73`, tip `8df3932` (fix worktree
-    `~/scratch/fix_rating_tests`, `1d9f84c` merged in as `2589b68`): fix round done; re-check
-    running in `~/scratch/review_rating_tests`. Next: merge as `0.57.4` with a `DECISIONS.md`
-    index entry and its reports under `.agents/sos_port/review/rating_tests/`.
-  - Blend ranking default, `worktree-agent-a2071e4c492dbbdda`, tip `085211d` (fix worktree
-    `~/scratch/fix_blend_default`, `1d9f84c` merged in as `6197f58`): two fix rounds, both
-    re-checks "approve with findings"; the user's failure handling is in (reference runs read in
-    week 1 only; a skip logs an error, keeps the standings and leaves the stage undone). Accepted
-    without asking, to report at the check-in: `power_rankings_method` stays commented out in
-    `config/weekly_run.yaml` (the same report hash), the docs advise `--no-resume` instead of a
-    new flag, and a `composite` skip takes the same error path. Follow-ups: check the single
-    manifest match against the run itself (`wf_best.json` weeks or `created_at`); three older
-    info-level skips (`weekly_run/pipeline.py:532-539`); "market-free" wording in
-    `stage1.py:63,68` (docs close-out). Merge last as `0.58.0`; `README.md` conflicts with the
-    betting merge near the weekly-rankings bullet (keep this branch's bullet, the betting
-    branch's two paragraphs after it and its removal of the old Totals paragraph), then rerun
-    `tests/test_weekly_run_characterization.py`.
+  - Open rating-definition tests: merged (`327f30d`, the `.agents/sos_port/README.md` conflict
+    resolved to the audit's failure list plus the new section), released as `0.57.4` (`ccd4d45`),
+    gate `0` (3,488 tests); reports in `.agents/sos_port/review/rating_tests/`, review record in
+    `decisions/open_rating_tests.md`. Open P3: the quarterback test's calibration check reads the
+    recorded row count, not the fit, and no test shows `run_integrity_checks` calls it; the
+    information-set change leaves 1.75 and nulls as they were and the team check does not flip
+    later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds for
+    one season.
+  - Blend ranking default: merged (`fa52884`, no conflict: the branch had merged `1d9f84c`, which
+    carries the betting edges), released as `0.58.0` (`cd1b2ac`), gate `0` (3,518 tests); reports
+    in `.agents/sos_port/review/blend_default/`; `decisions/power_rankings.md` entry 12 now states
+    the reviewed behavior. Accepted without asking, to report at the check-in:
+    `power_rankings_method` stays commented out in `config/weekly_run.yaml` (unset ranks on the
+    blend, the same report), the docs advise `--no-resume` instead of a new flag, and a
+    `composite` skip takes the same error path. Open P3: check the single manifest match against
+    the run itself (`wf_best.json` weeks or `created_at`); three older skips at
+    `weekly_run/pipeline.py:533-539` log at info level; "market-free" wording in `stage1.py:63,68`
+    (docs close-out).
+  - Every agent branch and its fix and review worktrees are deleted; the reviewers' untracked
+    tests are in `~/scratch/step6_review/<name>/`.
 - The win-total runs (approved 2026-10-12) launched on 2026-10-14 from
   `models/step6/nogamelines_wt/launch.sh d6064eb` (`launch_record.txt`). Seed 42 finished
   (`end elo_wt_nogamelines_seed42 exit 0 seconds 3122`); seed 7 started at 14:23. Once its `end`
   line is in `driver.log`, an independent `reviewer` rescores the pair from the fold checkpoints
   into `models/step6/nogamelines_wt/REVIEW.md`, under the rule in `HYPOTHESIS.md`.
 - Worktrees: `~/scratch/step6` (this branch), `~/scratch/step6_runs` (detached at `d6064eb`, the
-  runs' code), `~/scratch/fix_*` and `~/scratch/review_*` for the two unmerged branches (remove
-  each pair once its branch merges, after copying the review worktree's untracked tests into
-  `~/scratch/step6_review/<name>/`). The `.claude/worktrees/agent-*` worktrees are the harness's;
-  leave them.
+  runs' code). The `.claude/worktrees/agent-*` worktrees are the harness's; leave them.
 - The `/tmp` copies of the power-ranking evaluation (`RANKINGS_EVAL.md`) are snapshotted in
   `~/scratch/step6_review/tmp_rankings_eval_snapshot/`.
 
@@ -126,29 +126,23 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
 
 ## Next: finish the integration session on this branch
 
-1. When the rating-tests re-check approves: merge `worktree-agent-a5c5909054257aa73` with
-   `--no-ff`, commit its reports under `.agents/sos_port/review/rating_tests/` (lint them first),
-   add the `DECISIONS.md` index entry, release `0.57.4` (`CHANGELOG.md`, `pyproject.toml`,
-   `uv lock`, the CUDA sync), run the gate, delete the branch and its two worktrees.
-2. Merge the blend default the same way as `0.58.0` (minor), resolving the `README.md` conflict
-   as above.
-3. When seed 7 ends: the independent rescore into `models/step6/nogamelines_wt/REVIEW.md`, then a
+1. When seed 7 ends: the independent rescore into `models/step6/nogamelines_wt/REVIEW.md`, then a
    check-in (rule 7) with the rule's verdict, and tell the user the GPU is free.
-4. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
+2. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
    2026-10-12 decisions: `disable_feature_groups: [strength, own_elo, own_elo_wt]` and
    `floor_sigma_reference_runs: models/step6/ratings_anchored_seed{42,7}` in
    `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant the
    reviewed win-total runs select); the finite-sigma guard in `floor_sigma.home_win_prob` (test
    first); the reference arms and the kickoff-starter convention in `.agents/benchmarks.md`.
-5. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
+3. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
    today's labels).
-6. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
+4. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
    lines" where it means the configuration with Elo (including `stage1.py`), refresh the stale
    "Review:" fields in `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums into
    git, record the 2026-10-11, 2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and
    `TODO.md`, list the follow-ups above, and build the approvals list and the user's final HTML
    report.
-7. `scripts/gate.sh --web` on the final tree.
+5. `scripts/gate.sh --web` on the final tree.
 
 Then the approval and merge session with the user, between game weeks: the merge to `main`, the
 `data/` rebuild with a backup, the CUDA sync, a browser look at the new pages, the 2026 roof

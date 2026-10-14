@@ -552,6 +552,22 @@ def test_wiped_out_plays_epa_sums_in_either_summation_order_serialize_identicall
     assert written[0] == written[1]
 
 
+@pytest.mark.parametrize(
+    "epa", [[0.1000000005, 1.0, -1.0], [-1.0, 1.0, 0.1000000005]], ids=["forward", "backward"]
+)
+def test_wiped_out_plays_epa_sum_straddling_a_ninth_decimal_boundary_rounds_the_exact_sum(
+    parity_rules: ModuleType, epa: list[float]
+) -> None:
+    # Arrange
+    plays = _wiped_out_passes(epa)
+
+    # Act
+    found = parity_rules.wiped_out_plays(plays)
+
+    # Assert
+    assert found["pass_epa"] == round(0.1000000005, 9)
+
+
 def _carries_faced_pair(parity_rules: ModuleType) -> Any:
     """Return a pair judging its ``carries_faced`` against this repository's opponent row."""
     return parity_rules.Pair(

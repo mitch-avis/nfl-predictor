@@ -7,6 +7,7 @@ cause has exactly one implementation here and the script can fail when the two l
 from __future__ import annotations
 
 import ast
+import math
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
@@ -186,8 +187,8 @@ def _null_downs(pbp: pl.DataFrame) -> pl.DataFrame:
     return pbp.with_columns(pl.col("down").fill_null(0.0))
 
 
-# Decimals the diagnostic EPA sums keep: finer than the comparison tolerance (1e-6), coarser than
-# the last-digit differences the summation order makes.
+# Decimals the diagnostic EPA sums keep: finer than the comparison tolerance (1e-6), which is all
+# the report needs.
 DIAGNOSTIC_DECIMALS = 9
 
 
@@ -196,9 +197,9 @@ def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
 
     ``plays`` is every such play with a team on each side; ``without_penalty_flag`` counts those
     whose ``penalty`` flag is not set. ``rush``, ``pass`` and ``qb_dropback`` count those with that
-    flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA, rounded to
-    ``DIAGNOSTIC_DECIMALS`` so the report does not change with the order Polars sums in (which
-    depends on its thread count).
+    flag still set, and ``rush_epa`` and ``pass_epa`` sum their EPA exactly (``math.fsum``, so the
+    sum does not depend on the row order or Polars' thread count), rounded to
+    ``DIAGNOSTIC_DECIMALS``.
     """
     sides = pl.all_horizontal(
         pl.col(c).is_not_null() & (pl.col(c) != "") for c in ("posteam", "defteam")
@@ -211,8 +212,8 @@ def wiped_out_plays(pbp: pl.DataFrame) -> dict[str, float]:
         "rush": runs.height,
         "pass": passes.height,
         "qb_dropback": wiped.filter(_flag("qb_dropback")).height,
-        "rush_epa": round(float(runs["epa"].fill_null(0.0).sum()), DIAGNOSTIC_DECIMALS),
-        "pass_epa": round(float(passes["epa"].fill_null(0.0).sum()), DIAGNOSTIC_DECIMALS),
+        "rush_epa": round(math.fsum(runs["epa"].fill_null(0.0).to_list()), DIAGNOSTIC_DECIMALS),
+        "pass_epa": round(math.fsum(passes["epa"].fill_null(0.0).to_list()), DIAGNOSTIC_DECIMALS),
     }
 
 

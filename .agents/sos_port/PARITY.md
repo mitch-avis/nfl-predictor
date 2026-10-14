@@ -11,8 +11,8 @@ match, is in `parity_attributions.parquet` (unexplained ones also in `parity.jso
 
 ## Summary
 
-- Seasons: 1999-2025 (27); judged pairs: 33.
-- Pair values compared (team-games times pairs): 459624.
+- Seasons: 1999-2025 (27); judged pairs: 35.
+- Pair values compared (team-games times pairs): 487480.
 - Mismatching pair values: 25564; explained: 25564; unexplained: 0 (in 0 team-games).
 - This repository's play-by-play read from `~/scratch/step6/data/cache/nflreadpy`.
 - Snapshot of the play-by-play it read: 27 of 27 seasons equal to this repository's cache row by row on all 139 cached columns (1225182 plays).
@@ -64,6 +64,8 @@ Counts must be equal; sums and rates within the tolerance (1e-06).
 | `fourth_down_pct_allowed` | `fourth_down_conversions_allowed / fourth_down_attempts_allowed` | `fourth_down_pct_allowed` | own | rate | 13928 | 0 | 0 | 0 | - |
 | `two_pt_conversion_rate_allowed` | `two_point_successes_allowed / two_point_attempts_allowed` | `two_pt_conversion_rate_allowed` | own | rate | 13928 | 0 | 0 | 0 | - |
 | `carries_faced` | `rush_attempts` | `carries_faced` | opponent | count | 13928 | 0 | 0 | 0 | - |
+| `attempts_faced` | `pass_attempts` | `attempts_faced` | opponent | count | 13928 | 0 | 0 | 0 | - |
+| `completions_allowed` | `pass_completions` | `completions_allowed` | opponent | count | 13928 | 0 | 0 | 0 | - |
 
 ## Causes
 
@@ -479,8 +481,8 @@ be judged; the others are listed with their source.
 | `team_passer_rating` | play-by-play | team_stats / team_stats_expanded | - |
 | `explosive_play_rate` | play-by-play | team_stats / team_stats_expanded | - |
 | `giveaways_per_drive` | play-by-play | team_stats / team_stats_expanded | - |
-| `attempts_faced` | play-by-play | team_stats / team_stats_expanded | - |
-| `completions_allowed` | play-by-play | team_stats / team_stats_expanded | - |
+| `attempts_faced` | play-by-play | team_stats / team_stats_expanded | attempts_faced |
+| `completions_allowed` | play-by-play | team_stats / team_stats_expanded | completions_allowed |
 | `completion_pct_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `targets_faced` | play-by-play | team_stats / team_stats_expanded | - |
 | `catch_rate_allowed` | play-by-play | team_stats / team_stats_expanded | - |

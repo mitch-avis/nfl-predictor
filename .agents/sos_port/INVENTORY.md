@@ -343,8 +343,8 @@ name each.
 | `rushing_epa_allowed` | `rushing_epa_allowed` | PBP +TS | different | `ratings:rushing_epa_allowed`, `dataset:opponent_rushing_epa` | `season-features` |
 | `passing_tds_allowed` | `passing_tds_allowed` | PBP +TS | different | `ratings:passing_tds_allowed`, `dataset:opponent_pass_touchdowns` | `season-features` |
 | `rushing_tds_allowed` | `rushing_tds_allowed` | PBP +TS | different | `ratings:rushing_tds_allowed`, `dataset:opponent_rush_touchdowns` | `season-features` |
-| `passing_first_downs_allowed` | `passing_first_downs_allowed` | PBP +TS | different | `ratings:passing_first_downs_allowed`, `team_stats:first_downs` | `season-mirrors-game-logs` |
-| `rushing_first_downs_allowed` | `rushing_first_downs_allowed` | PBP +TS | different | `ratings:rushing_first_downs_allowed`, `team_stats:first_downs` | `season-mirrors-game-logs` |
+| `passing_first_downs_allowed` | `passing_first_downs_allowed` | PBP +TS | different | `ratings:passing_first_downs_allowed`, `team_stats[opponent]:first_downs` | `season-mirrors-game-logs` |
+| `rushing_first_downs_allowed` | `rushing_first_downs_allowed` | PBP +TS | different | `ratings:rushing_first_downs_allowed`, `team_stats[opponent]:first_downs` | `season-mirrors-game-logs` |
 | `passing_cpoe_allowed` | `passing_cpoe_allowed` | PBP +TS | different | `ratings:passing_cpoe_allowed`, `dataset:opponent_passing_cpoe` | `season-features` |
 | `total_yards_allowed` | `total_yards_allowed` | PBP +TS | different | `ratings:total_yards_allowed`, `dataset:opponent_total_yards` | `season-features` |
 | `offensive_snaps` | `offensive_snaps` | PBP | different | `ratings:offensive_snaps`, `dataset:offensive_snaps` | `season-features` |
@@ -561,8 +561,8 @@ name each.
 | `receiving_air_yards` | `receiving_air_yards` | PBP +TS | different | `ratings:receiving_air_yards`, `team_stats:receiving_air_yards` | `season-nflverse-here` |
 | `receiving_yards_after_catch` | `receiving_yards_after_catch` | PBP +TS | different | `ratings:receiving_yards_after_catch`, `team_stats:receiving_yac` | `season-nflverse-here` |
 | `receiving_first_downs` | `receiving_first_downs` | PBP +TS | different | `ratings:receiving_first_downs`, `team_stats:receiving_first_downs` | `season-nflverse-here` |
-| `receptions_allowed` | `receptions_allowed` | PBP +TS | different | `ratings:receptions_allowed`, `team_stats:receptions` | `season-mirrors-game-logs` |
-| `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | different | `ratings:receiving_yards_allowed`, `team_stats:receiving_yards` | `season-mirrors-game-logs` |
+| `receptions_allowed` | `receptions_allowed` | PBP +TS | different | `ratings:receptions_allowed`, `team_stats[opponent]:receptions` | `season-mirrors-game-logs` |
+| `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | different | `ratings:receiving_yards_allowed`, `team_stats[opponent]:receiving_yards` | `season-mirrors-game-logs` |
 | `games_played` | `games_played` | SCH | different | `ratings:games_played`, `dataset:games_played` | `season-features` |
 | `wins` | `wins` | SCH | different | `ratings:wins`, `dataset:wins` | `season-features` |
 | `losses` | `losses` | SCH | different | `ratings:losses`, `dataset:losses` | `season-features` |
@@ -1451,16 +1451,16 @@ name each.
 | `sack_fumbles_lost` | `sack_fumbles_lost` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:sack_fumbles_lost`, `team_stats:fumbles_lost` | `gl-official-team-stats` |
 | `rushing_fumbles_lost` | `rushing_fumbles_lost` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_fumbles_lost`, `team_stats:fumbles_lost` | `gl-official-team-stats` |
 | `total_yards` | `total_yards` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:total_yards`, `box_score:total_yards` | `gl-official-box` |
-| `passing_yards_allowed` | `passing_yards_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_yards_allowed`, `box_score:pass_yards` | `gl-official-allowed` |
-| `rushing_yards_allowed` | `rushing_yards_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_yards_allowed`, `box_score:rush_yards` | `gl-official-allowed` |
-| `passing_epa_allowed` | `passing_epa_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_epa_allowed`, `box_score:passing_epa` | `gl-official-allowed` |
-| `rushing_epa_allowed` | `rushing_epa_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_epa_allowed`, `box_score:rushing_epa` | `gl-official-allowed` |
-| `passing_tds_allowed` | `passing_tds_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_tds_allowed`, `box_score:pass_touchdowns` | `gl-official-allowed` |
-| `rushing_tds_allowed` | `rushing_tds_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_tds_allowed`, `box_score:rush_touchdowns` | `gl-official-allowed` |
-| `passing_first_downs_allowed` | `passing_first_downs_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_first_downs_allowed`, `team_stats:first_downs` | `gl-official-allowed` |
-| `rushing_first_downs_allowed` | `rushing_first_downs_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_first_downs_allowed`, `team_stats:first_downs` | `gl-official-allowed` |
-| `passing_cpoe_allowed` | `passing_cpoe_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_cpoe_allowed`, `box_score:passing_cpoe` | `gl-official-allowed` |
-| `total_yards_allowed` | `total_yards_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:total_yards_allowed`, `box_score:total_yards` | `gl-official-allowed` |
+| `passing_yards_allowed` | `passing_yards_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_yards_allowed`, `box_score[opponent]:pass_yards` | `gl-official-allowed` |
+| `rushing_yards_allowed` | `rushing_yards_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_yards_allowed`, `box_score[opponent]:rush_yards` | `gl-official-allowed` |
+| `passing_epa_allowed` | `passing_epa_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_epa_allowed`, `box_score[opponent]:passing_epa` | `gl-official-allowed` |
+| `rushing_epa_allowed` | `rushing_epa_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_epa_allowed`, `box_score[opponent]:rushing_epa` | `gl-official-allowed` |
+| `passing_tds_allowed` | `passing_tds_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_tds_allowed`, `box_score[opponent]:pass_touchdowns` | `gl-official-allowed` |
+| `rushing_tds_allowed` | `rushing_tds_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_tds_allowed`, `box_score[opponent]:rush_touchdowns` | `gl-official-allowed` |
+| `passing_first_downs_allowed` | `passing_first_downs_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_first_downs_allowed`, `team_stats[opponent]:first_downs` | `gl-official-allowed` |
+| `rushing_first_downs_allowed` | `rushing_first_downs_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:rushing_first_downs_allowed`, `team_stats[opponent]:first_downs` | `gl-official-allowed` |
+| `passing_cpoe_allowed` | `passing_cpoe_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:passing_cpoe_allowed`, `box_score[opponent]:passing_cpoe` | `gl-official-allowed` |
+| `total_yards_allowed` | `total_yards_allowed` | official weekly team stats (play-by-play where nflverse has one team's row only) | different | `ratings:total_yards_allowed`, `box_score[opponent]:total_yards` | `gl-official-allowed` |
 | `offensive_snaps` | `offensive_snaps` | play-by-play | matched | `ratings:offensive_snaps`, `team_game:offensive_snaps` | `gl-snaps` |
 | `defensive_snaps` | `defensive_snaps` | play-by-play | matched | `ratings:defensive_snaps`, `team_game:defensive_snaps` | `gl-snaps` |
 | `is_home` | `is_home` | schedule | matched | `ratings:is_home`, `team_game:is_home` | `gl-home` |
@@ -1611,8 +1611,8 @@ name each.
 | `team_passer_rating` | `team_passer_rating` | play-by-play | matched | `ratings:team_passer_rating` | `gl-rest` |
 | `explosive_play_rate` | `explosive_play_rate` | play-by-play | matched | `ratings:explosive_play_rate` | `gl-rest` |
 | `giveaways_per_drive` | `giveaways_per_drive` | play-by-play | matched | `ratings:giveaways_per_drive` | `gl-rest` |
-| `attempts_faced` | `attempts_faced` | play-by-play | matched | `ratings:attempts_faced`, `box_score:pass_attempts` | `gl-faced` |
-| `completions_allowed` | `completions_allowed` | play-by-play | matched | `ratings:completions_allowed`, `box_score:pass_completions` | `gl-faced` |
+| `attempts_faced` | `attempts_faced` | play-by-play | matched | `ratings:attempts_faced`, `box_score[opponent]:pass_attempts` | `gl-faced` |
+| `completions_allowed` | `completions_allowed` | play-by-play | matched | `ratings:completions_allowed`, `box_score[opponent]:pass_completions` | `gl-faced` |
 | `completion_pct_allowed` | `completion_pct_allowed` | play-by-play | matched | `ratings:completion_pct_allowed` | `gl-rest` |
 | `targets_faced` | `targets_faced` | play-by-play | matched | `ratings:targets_faced` | `gl-rest` |
 | `catch_rate_allowed` | `catch_rate_allowed` | play-by-play | matched | `ratings:catch_rate_allowed` | `gl-rest` |
@@ -1636,7 +1636,7 @@ name each.
 | `explosive_play_rate_allowed` | `explosive_play_rate_allowed` | play-by-play | matched | `ratings:explosive_play_rate_allowed` | `gl-rest` |
 | `epa_per_defensive_snap_allowed` | `epa_per_defensive_snap_allowed` | play-by-play | different | `ratings:epa_per_defensive_snap_allowed`, `team_game:(pass_epa_allowed_sum + rush_epa_allowed_sum) / defensive_snaps` | `gl-defense-rates` |
 | `yards_per_defensive_snap_allowed` | `yards_per_defensive_snap_allowed` | play-by-play | matched | `ratings:yards_per_defensive_snap_allowed` | `gl-rest` |
-| `first_downs_allowed` | `first_downs_allowed` | play-by-play | different | `ratings:first_downs_allowed`, `box_score:first_downs` | `gl-first-downs-allowed` |
+| `first_downs_allowed` | `first_downs_allowed` | play-by-play | different | `ratings:first_downs_allowed`, `box_score[opponent]:first_downs` | `gl-first-downs-allowed` |
 | `penalty_first_downs_allowed` | `penalty_first_downs_allowed` | play-by-play | matched | `ratings:penalty_first_downs_allowed` | `gl-rest` |
 | `third_down_pct_allowed` | `third_down_pct_allowed` | play-by-play | matched | `ratings:third_down_pct_allowed`, `team_game:third_down_conversions_allowed / third_down_attempts_allowed` | `gl-defense-rates-same` |
 | `fourth_down_pct_allowed` | `fourth_down_pct_allowed` | play-by-play | matched | `ratings:fourth_down_pct_allowed`, `team_game:fourth_down_conversions_allowed / fourth_down_attempts_allowed` | `gl-defense-rates-same` |
@@ -1677,8 +1677,8 @@ name each.
 | `receiving_air_yards` | `receiving_air_yards` | play-by-play | different | `ratings:receiving_air_yards`, `team_stats:receiving_air_yards` | `gl-nflverse-here` |
 | `receiving_yards_after_catch` | `receiving_yards_after_catch` | play-by-play | different | `ratings:receiving_yards_after_catch`, `team_stats:receiving_yac` | `gl-nflverse-here` |
 | `receiving_first_downs` | `receiving_first_downs` | play-by-play | different | `ratings:receiving_first_downs`, `team_stats:receiving_first_downs` | `gl-nflverse-here` |
-| `receptions_allowed` | `receptions_allowed` | play-by-play | different | `ratings:receptions_allowed`, `team_stats:receptions` | `gl-receiving-allowed` |
-| `receiving_yards_allowed` | `receiving_yards_allowed` | play-by-play | different | `ratings:receiving_yards_allowed`, `team_stats:receiving_yards` | `gl-receiving-allowed` |
+| `receptions_allowed` | `receptions_allowed` | play-by-play | different | `ratings:receptions_allowed`, `team_stats[opponent]:receptions` | `gl-receiving-allowed` |
+| `receiving_yards_allowed` | `receiving_yards_allowed` | play-by-play | different | `ratings:receiving_yards_allowed`, `team_stats[opponent]:receiving_yards` | `gl-receiving-allowed` |
 
 ### `team_per_game_stats` (246; matched 112, different 134, missing 0)
 
@@ -1705,8 +1705,8 @@ name each.
 | `rushing_epa_allowed` | `rushing_epa_allowed` | PBP +TS | different | `ratings:rushing_epa_allowed`, `dataset:opponent_rushing_epa` | `season-features` |
 | `passing_tds_allowed` | `passing_tds_allowed` | PBP +TS | different | `ratings:passing_tds_allowed`, `dataset:opponent_pass_touchdowns` | `season-features` |
 | `rushing_tds_allowed` | `rushing_tds_allowed` | PBP +TS | different | `ratings:rushing_tds_allowed`, `dataset:opponent_rush_touchdowns` | `season-features` |
-| `passing_first_downs_allowed` | `passing_first_downs_allowed` | PBP +TS | different | `ratings:passing_first_downs_allowed`, `team_stats:first_downs` | `season-mirrors-game-logs` |
-| `rushing_first_downs_allowed` | `rushing_first_downs_allowed` | PBP +TS | different | `ratings:rushing_first_downs_allowed`, `team_stats:first_downs` | `season-mirrors-game-logs` |
+| `passing_first_downs_allowed` | `passing_first_downs_allowed` | PBP +TS | different | `ratings:passing_first_downs_allowed`, `team_stats[opponent]:first_downs` | `season-mirrors-game-logs` |
+| `rushing_first_downs_allowed` | `rushing_first_downs_allowed` | PBP +TS | different | `ratings:rushing_first_downs_allowed`, `team_stats[opponent]:first_downs` | `season-mirrors-game-logs` |
 | `passing_cpoe_allowed` | `passing_cpoe_allowed` | PBP +TS | different | `ratings:passing_cpoe_allowed`, `dataset:opponent_passing_cpoe` | `season-features` |
 | `total_yards_allowed` | `total_yards_allowed` | PBP +TS | different | `ratings:total_yards_allowed`, `dataset:opponent_total_yards` | `season-features` |
 | `offensive_snaps` | `offensive_snaps` | PBP | different | `ratings:offensive_snaps`, `dataset:offensive_snaps` | `season-features` |
@@ -1923,8 +1923,8 @@ name each.
 | `receiving_air_yards` | `receiving_air_yards` | PBP +TS | different | `ratings:receiving_air_yards`, `team_stats:receiving_air_yards` | `season-nflverse-here` |
 | `receiving_yards_after_catch` | `receiving_yards_after_catch` | PBP +TS | different | `ratings:receiving_yards_after_catch`, `team_stats:receiving_yac` | `season-nflverse-here` |
 | `receiving_first_downs` | `receiving_first_downs` | PBP +TS | different | `ratings:receiving_first_downs`, `team_stats:receiving_first_downs` | `season-nflverse-here` |
-| `receptions_allowed` | `receptions_allowed` | PBP +TS | different | `ratings:receptions_allowed`, `team_stats:receptions` | `season-mirrors-game-logs` |
-| `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | different | `ratings:receiving_yards_allowed`, `team_stats:receiving_yards` | `season-mirrors-game-logs` |
+| `receptions_allowed` | `receptions_allowed` | PBP +TS | different | `ratings:receptions_allowed`, `team_stats[opponent]:receptions` | `season-mirrors-game-logs` |
+| `receiving_yards_allowed` | `receiving_yards_allowed` | PBP +TS | different | `ratings:receiving_yards_allowed`, `team_stats[opponent]:receiving_yards` | `season-mirrors-game-logs` |
 | `games_played` | `games_played` | SCH | different | `ratings:games_played`, `dataset:games_played` | `season-features` |
 | `wins` | `wins` | SCH | different | `ratings:wins`, `dataset:wins` | `season-features` |
 | `losses` | `losses` | SCH | different | `ratings:losses`, `dataset:losses` | `season-features` |

@@ -8,7 +8,7 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
 
 ## State (written 2026-10-14, during the integration session)
 
-- This branch, `feat/step6-sos-port`, is at `0.58.0` (worktree `~/scratch/step6`). `main`
+- This branch, `feat/step6-sos-port`, is at `0.58.1` (worktree `~/scratch/step6`). `main`
   (`0.45.4` plus the handoff merges, up to `5087a5c`, not pushed) is merged in (`d288907`,
   `1d9f84c`), so the instruction-file restructure, the suppression rule and the three-role testing
   standard apply here. The main checkout stays on `main`; its handoff still reads 2026-10-12 and
@@ -60,8 +60,15 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
     the run itself (`wf_best.json` weeks or `created_at`); three older skips at
     `weekly_run/pipeline.py:533-539` log at info level; "market-free" wording in `stage1.py:63,68`
     (docs close-out).
-  - Every agent branch and its fix and review worktrees are deleted; the reviewers' untracked
-    tests are in `~/scratch/step6_review/<name>/`.
+  - Betting-label test, pre-registered in `.agents/sos_port/protocols/betting_labels.md`
+    (`5023f45`, corrected in `f5ea2a9` before any scoring): merged (`f76e2cf`), released as
+    `0.58.1` (`94fd18f`), gate `0` (3,553 tests); one independent round and a re-check (approve),
+    whose own script reproduced the governing number; reports in
+    `.agents/sos_port/review/betting_labels/`, record in `decisions/betting_edges.md` entry 3. On
+    the 815 real-moneyline games (2022, 2024, 2025), the beyond-the-spread claim minus the model's
+    Brier is -0.00036 [-0.00198, +0.00135], a tie, so the labels stay on the whole edge.
+  - Every merged agent branch and its fix and review worktrees are deleted; the reviewers'
+    untracked tests are in `~/scratch/step6_review/<name>/`.
 - The win-total runs (approved 2026-10-12) ran on 2026-10-14 (`models/step6/nogamelines_wt/`,
   `driver.log`: both `exit 0`, no failed run). The independent rescore
   (`models/step6/nogamelines_wt/REVIEW.md`, approve with findings, provenance OK) applies the
@@ -69,19 +76,29 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
   (Brier -0.00012 [-0.00080, +0.00055], log loss -0.00030 [-0.00179, +0.00119]), so the
   configuration without game lines keeps the own Elo without win totals (`own_elo`), its current
   setting. No week-1 or week-2 loss. The GPU is free of this project's jobs.
-- In flight (2026-10-14):
-  - The adoption chunk, `feat/step6-adoption` (worktree `~/scratch/adoption`, tip `256cd86`,
-    gate `0`, 3,536 tests): production, `train` and `backtest` leave out `strength`, `own_elo`
-    and `own_elo_wt` by default (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`; an empty list
-    leaves none out); the floor sigma pool reads `models/step6/ratings_anchored_seed{42,7}`;
-    `floor_sigma.home_win_prob` refuses a sigma that is not finite and positive. The backtest
-    default was the implementer's call, required by `tests/test_production_settings.py` (rule
-    11); accepted, to report to the user. A reviewer is checking it in
-    `~/scratch/review_adoption` (report to `~/scratch/step6_review/adoption_review.md`).
-  - The betting-label test, pre-registered in `.agents/sos_port/protocols/betting_labels.md`
-    (`5023f45`, corrected in `f5ea2a9` before any scoring), implemented on
-    `feat/step6-betting-labels` (worktree `~/scratch/betting_labels`); then an independent
-    rescore.
+- In flight (2026-10-14): the adoption chunk, `feat/step6-adoption` (worktree
+  `~/scratch/adoption`).
+  - What it does: production, `train` and `backtest` leave out `strength`, `own_elo` and
+    `own_elo_wt` by default (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`; `''` or `[]` leaves
+    none out, a list replaces the default, a YAML key with no value is refused); the floor sigma
+    pool reads `models/step6/ratings_anchored_seed{42,7}`; `floor_sigma.home_win_prob` refuses a
+    sigma that is not finite and positive or not one number; `train` and the weekly run stop, and
+    `backtest` warns, when `strength` is left out and the data has strength columns but no ported
+    ratings; help and docs name whole group lists (no market information with the own Elo:
+    `strength,elo,own_elo_wt`; no Elo at all: `strength,elo,own_elo,own_elo_wt`).
+  - Review: first round at `256cd86` (`~/scratch/step6_review/adoption_review.md`, approve with
+    findings); fix round to `6678b37` (gate `0`, 3,559 tests); re-check
+    (`~/scratch/step6_review/adoption_recheck.md`, approve with findings, all P3, accepts the
+    narrowed ratings check with high confidence). A second fix round is running on the re-check's
+    five P3s (weekly help text, two README pointers, all-null ratings columns, the weekly check
+    moved before other work, a string sigma). Then a short re-check, then the merge as `0.59.0`.
+  - Ready for the release commit, uncommitted in this worktree: `.agents/benchmarks.md`'s "Step 6
+    reference arms" section (the reference arms, every step-6 comparison and the kickoff-starter
+    convention), restated from the reviewers' `REVIEW.md` files. The re-check's CHANGELOG
+    corrections are in its report.
+  - Accepted without asking, to report to the user: a backtest with no group option leaves out
+    production's groups (required by `tests/test_production_settings.py`, rule 11); older recorded
+    commands reproduce with `--disable-feature-groups ''`.
 - Worktrees: `~/scratch/step6` (this branch), `~/scratch/step6_runs` (detached at `d6064eb`, the
   runs' code). The `.claude/worktrees/agent-*` worktrees are the harness's; leave them.
 - The `/tmp` copies of the power-ranking evaluation (`RANKINGS_EVAL.md`) are snapshotted in
@@ -138,24 +155,31 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
    `../nfeloqb` unchanged for week 6 and decide after the step-6 merge.
 2. The approval and merge session: proposed for Tuesday 2026-10-20 to Wednesday 2026-10-21,
    between game weeks 6 and 7 (asked 2026-10-14).
+3. The missing-ratings check (asked 2026-10-14): it stops `train` and the weekly run and warns in
+   `backtest`, and fires only when the data has strength columns but no ratings, narrower than
+   the contract's "no ratings columns" (data with neither group loses nothing by leaving out
+   `strength`). Recommended: accept both; both reviewers agree. After the merge to `main` the
+   weekly run stops until `data/` is rebuilt with the ratings.
+4. What the "no game lines" mode leaves out (asked 2026-10-14): today `--wf-market-mode none` and
+   the three market options use production's groups, keeping the `qb_elos.csv` columns with the
+   own Elo off; the reviewed configuration where the own Elo won drops `qb_elos.csv` and keeps
+   `own_elo` (`models/step6/elo_marketfree_seed{42,7}`). Recommended, with moderate confidence:
+   make the mode use that measured list, so it matches a reviewed reference.
+5. The top-decile ranking for future label reports (asked 2026-10-14, decides nothing now):
+   recommended the two-seed mean magnitude.
 
 ## Next: finish the integration session on this branch
 
-1. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
-   2026-10-12 decisions: `disable_feature_groups: [strength, own_elo, own_elo_wt]` and
-   `floor_sigma_reference_runs: models/step6/ratings_anchored_seed{42,7}` in
-   `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant the
-   reviewed win-total runs select); the finite-sigma guard in `floor_sigma.home_win_prob` (test
-   first); the reference arms and the kickoff-starter convention in `.agents/benchmarks.md`.
-2. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
-   today's labels).
-3. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
+1. Land the adoption chunk (In flight above) as `0.59.0`: the second fix round, a short
+   re-check, the merge, the release commit with `.agents/benchmarks.md` and a DECISIONS.md
+   index entry, the CUDA sync, the gate, then delete its branch and worktrees.
+2. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
    lines" where it means the configuration with Elo (including `stage1.py`), refresh the stale
    "Review:" fields in `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums into
    git, record the 2026-10-11, 2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and
    `TODO.md`, list the follow-ups above, and build the approvals list and the user's final HTML
    report.
-4. `scripts/gate.sh --web` on the final tree.
+3. `scripts/gate.sh --web` on the final tree.
 
 Then the approval and merge session with the user, between game weeks: the merge to `main`, the
 `data/` rebuild with a backup, the CUDA sync, a browser look at the new pages, the 2026 roof

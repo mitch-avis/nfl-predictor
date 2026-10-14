@@ -390,3 +390,21 @@ fold checkpoints, and the scripts and re-check reports are in
 - **User decision** (2026-10-11): the three columns and the sigma check are approved, the labels
   unchanged. Still open: a label test on the 815 real-moneyline games, written before it is
   scored, in step 6's integration; a tie keeps today's labels, and any change goes to the user.
+
+### The phase-1 audit refreshed on the integrated code (`0.57.3`)
+
+Full record: [decisions/phase1_refresh.md](decisions/phase1_refresh.md) (11 entries) and the
+regenerated [INVENTORY.md](INVENTORY.md) and [PARITY.md](PARITY.md). Review: one independent
+round (2026-10-12) and two re-checks of the fix rounds (2026-10-14), all "approve with findings";
+the reports are in [review/audit_refresh/](review/audit_refresh/).
+
+- **Read on**: the candidate build, through `--data-dir` (the main checkout's `data/` predates the
+  integration), with every input file's sha256 recorded and downloads blocked.
+- **Inventory**: 1,736 output columns, matched 1,236 (the 1,180 missing ones on the ported tables,
+  26 the integration made equal), different 500 (kept on purpose, notes refreshed), missing 0;
+  data sources matched 10, different 1, missing 1 (team colors); web items matched 11, different
+  30, missing 4 (the garbage-time filter).
+- **Parity**: 35 judged pairs; 25,564 mismatching pair values, all explained; two new
+  scrimmage-EPA causes from the designed-carry rule, and nine causes the integration closed
+  removed.
+- **Open**: no test covers the run loop's call to `check_opponent_rows` (P3).

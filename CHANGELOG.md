@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.57.3] - 2026-10-14
+
+### Changed
+
+- The phase-1 audit scripts (`.agents/sos_port/inventory.py`, `parity.py`) read this repository's
+  data from `--data-dir` (default `data/`) and judge the integrated code: of 1,736 output columns,
+  1,236 match the source and 500 differ on purpose, none missing, and every one of the 25,564
+  mismatching pair values on the candidate build has a named cause (reviewed independently).
+- The parity check reads the play-by-play through the ETL's loader and its Jacksonville 2001-2002
+  repair, with downloads blocked, and judges 35 pairs, among them the four allowed rates and three
+  pairs read on the opponent's row (`carries_faced`, `attempts_faced`, `completions_allowed`).
+
+### Fixed
+
+- The parity check fails the run on an empty cached schedule instead of raising, and on a
+  team-game without its opponent's row.
+- `parity.json` is the same at any thread count: the wiped-out EPA sums are exact before they are
+  rounded to 9 decimals.
+- The inventory accepts the `[opponent]` marker only on the team-game catalogs (`team_game`,
+  `box_score`, `team_stats`).
+
 ## [0.57.2] - 2026-10-14
 
 ### Added

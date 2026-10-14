@@ -456,6 +456,67 @@ def test_main_leaves_n_estimators_out_of_the_xgb_overrides_when_omitted(
     assert "n_estimators" not in (captured[0].xgb_params_overrides or {})
 
 
+# A dataset built before the ported ratings: the strength snapshot and no `ratings` column.
+GAMES_WITHOUT_RATINGS = pd.DataFrame({"season": [2023], "home_adj_srs": [1.0]})
+
+
+def _ratings_warnings(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """Return the warnings that name the ported ratings."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING and "ported ratings" in record.getMessage()
+    ]
+
+
+def test_a_backtest_on_data_without_the_ported_ratings_warns_and_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    captured, base_argv = _record_engine_configs(monkeypatch, tmp_path)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: GAMES_WITHOUT_RATINGS.copy())
+    monkeypatch.setattr(sys, "argv", base_argv)
+
+    # Act
+    backtest.main()
+
+    # Assert
+    assert len(captured) == 1
+    (message,) = _ratings_warnings(caplog)
+    assert "nfl-predictor data" in message
+    assert "--disable-feature-groups" in message
+
+
+@pytest.mark.parametrize(
+    ("games", "extra"),
+    [
+        (GAMES_WITHOUT_RATINGS.assign(ratings_team_diff=[0.5]), []),
+        (GAMES_WITHOUT_RATINGS, ["--disable-feature-groups", ""]),
+    ],
+    ids=["ratings present", "strength kept"],
+)
+def test_a_backtest_says_nothing_when_the_ratings_are_there_or_strength_is_kept(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    games: pd.DataFrame,
+    extra: list[str],
+) -> None:
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    captured, base_argv = _record_engine_configs(monkeypatch, tmp_path)
+    monkeypatch.setattr(walk_forward, "load_games", lambda _path: games.copy())
+    monkeypatch.setattr(sys, "argv", [*base_argv, *extra])
+
+    # Act
+    backtest.main()
+
+    # Assert
+    assert len(captured) == 1
+    assert _ratings_warnings(caplog) == []
+
+
 def _prediction_rows() -> pd.DataFrame:
     """Return a small walk-forward prediction frame over two seasons."""
     games = [

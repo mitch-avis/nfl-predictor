@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -120,11 +121,11 @@ def home_win_prob(margin: np.ndarray, sigma: float) -> np.ndarray:
     """Return the floor, ``Phi(margin / sigma)``.
 
     Raises:
-        ValueError: If ``sigma`` is not positive.
+        ValueError: If ``sigma`` is not finite and positive.
 
     """
-    if not sigma > 0:
-        msg = f"The floor's sigma must be positive, got {sigma!r}."
+    if not (math.isfinite(sigma) and sigma > 0):
+        msg = f"The floor's sigma must be finite and positive, got {sigma!r}."
         raise ValueError(msg)
     return norm.cdf(margin / float(sigma))
 

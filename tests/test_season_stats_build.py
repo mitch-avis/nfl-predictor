@@ -545,7 +545,7 @@ def _without(sources: season_stats_build.SeasonStatsSources, source: str, season
 
 @pytest.mark.parametrize("source", ["official_team_stats", "player_stats", "snap_counts"])
 def test_a_build_missing_a_source_has_every_column_of_a_full_build(source: str) -> None:
-    """AGENTS.md, "Missing Data Rules": an invariant schema, a missing source's columns null."""
+    """.claude/rules/etl.md: an invariant schema, a missing source's columns null."""
     # Arrange
     build = season_stats_build.SeasonStatsBuild(_without(_sources(_league()), source, _SEASON))
 

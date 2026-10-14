@@ -591,6 +591,35 @@ def test_read_fold_predictions_without_a_neutral_column_is_refused(tmp_path: Pat
         rating_sources.read_fold_predictions(checkpoints)
 
 
+def test_read_fold_predictions_with_an_all_null_neutral_column_is_refused(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    frames = [frame.assign(neutral=float("nan")) for frame in _fold_frames()]
+    checkpoints = write_fold_checkpoints(tmp_path / "abc", frames)
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="neutral"):
+        rating_sources.read_fold_predictions(checkpoints)
+
+
+def test_read_fold_predictions_with_a_partly_null_neutral_column_keeps_the_nulls(
+    tmp_path: Path,
+) -> None:
+    """The fit documents a null flag as not neutral, so a partly null column is read as is."""
+    # Arrange
+    first, *rest = _fold_frames()
+    first = first.assign(neutral=first["neutral"].astype(float))
+    first.loc[first.index[0], "neutral"] = float("nan")
+    checkpoints = write_fold_checkpoints(tmp_path / "abc", [first, *rest])
+
+    # Act
+    read = rating_sources.read_fold_predictions(checkpoints)
+
+    # Assert
+    assert read.predictions.get_column("neutral").null_count() == 1
+
+
 def test_fit_model_ratings_with_a_missing_margin_raises() -> None:
     # Arrange
     games = _round_robin(STRENGTHS).with_columns(

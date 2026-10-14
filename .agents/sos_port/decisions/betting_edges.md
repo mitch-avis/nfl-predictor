@@ -212,4 +212,6 @@ interval) that resamples the games in game-id order. Only an interval wholly bel
   `_edge_to_confidence_1_to_10` and `_edge_to_action` in
   `src/nfl_predictor/reporting/betting_report.py` (entry 2).
 - **Review**: reviewed 2026-10-14 by an independent reviewer, who rescored with its own script and
-  reproduced the governing number, review `../review/betting_labels/review_2026-10-14.md`.
+  reproduced the governing number ("approve with findings"), review
+  `../review/betting_labels/review_2026-10-14.md`; a re-check of the fixes the same day approved
+  them (`../review/betting_labels/recheck_2026-10-14.md`).

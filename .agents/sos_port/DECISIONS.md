@@ -388,8 +388,8 @@ fold checkpoints, and the scripts and re-check reports are in
   positive; the report itself rejects such a sigma. Most seasons' moneylines are derived from the
   spread through the fitted map, so on those games the gap is a function of the spread and sigma.
 - **User decision** (2026-10-11): the three columns and the sigma check are approved, the labels
-  unchanged. Still open: a label test on the 815 real-moneyline games, written before it is
-  scored, in step 6's integration; a tie keeps today's labels, and any change goes to the user.
+  unchanged, pending a label test on the 815 real-moneyline games, written before it is
+  scored; a tie keeps today's labels, and any change goes to the user. It ran in `0.58.1` (below).
 
 ### The phase-1 audit refreshed on the integrated code (`0.57.3`)
 
@@ -451,3 +451,22 @@ with findings"; the reports are in [review/blend_default/](review/blend_default/
   error path.
 - **Open (P3)**: check the single manifest match against the run itself; three older skips in
   `weekly_run/pipeline.py` still log at info level.
+
+### The betting report's labels stay on the whole edge (`0.58.1`)
+
+Full record: [decisions/betting_edges.md](decisions/betting_edges.md), entry 3, under the protocol
+[protocols/betting_labels.md](protocols/betting_labels.md), committed before any game was scored,
+and the generated [BETTING_LABELS.md](BETTING_LABELS.md). Review: one independent round
+(2026-10-14, "approve with findings"), whose script reproduced the governing number from the fold
+checkpoints, and a re-check of the fixes the same day ("approve"); the reports are in
+[review/betting_labels/](review/betting_labels/).
+
+- **What was measured**: whether the confidence score and action label predict better on the
+  whole edge or on the model's part beyond the spread, on both seeds of the adopted
+  configuration's reference, over the 815 games of the seasons with real moneylines (2022, 2024,
+  2025).
+- **Outcome, applied as written**: the Brier score of the beyond-the-spread claim minus the
+  model's is `-0.00036` (95% interval `-0.00198` to `+0.00135`), a tie, so the labels stay on the
+  whole edge, as the user decided on 2026-10-11 for a tie. Nothing in the report changes.
+- **Open for the user** (deciding nothing here): which top-decile ranking a future report uses;
+  both reviewers and the implementer recommend the two-seed mean magnitude.

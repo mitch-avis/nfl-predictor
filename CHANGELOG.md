@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.58.1] - 2026-10-14
+
+### Added
+
+- `.agents/sos_port/betting_labels.py` tests the betting report's confidence score and action
+  label on the whole moneyline edge against the model's part beyond the spread (report-only), on
+  both seeds of the adopted configuration's reference, and writes
+  `.agents/sos_port/BETTING_LABELS.md` and `betting_labels.json`. Under its protocol, written
+  before any score (`.agents/sos_port/protocols/betting_labels.md`), the labels stay on the whole
+  edge: on the 815 games of the seasons with real moneylines (2022, 2024, 2025), the Brier score of
+  the beyond-the-spread claim minus the model's is `-0.00036` (95% interval `-0.00198` to
+  `+0.00135`), which contains zero (reviewed independently; decision entry 3 in
+  `.agents/sos_port/decisions/betting_edges.md`).
+
 ## [0.58.0] - 2026-10-14
 
 ### Changed

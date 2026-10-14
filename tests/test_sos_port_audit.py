@@ -484,3 +484,38 @@ def test_season_pbp_missing_cache_fails(parity: ModuleType, tmp_path: Path) -> N
     # Assert
     assert found is None
     assert [failure.what for failure in audit.failures] == ["cache"]
+
+
+def test_check_coverage_empty_schedule_fails_the_audit_instead_of_raising(
+    parity: ModuleType,
+) -> None:
+    # Arrange
+    schedule = pl.DataFrame(
+        schema={
+            "season": pl.Int64,
+            "game_id": pl.String,
+            "game_type": pl.String,
+            "home_score": pl.Int64,
+            "away_score": pl.Int64,
+            "home_abbr": pl.String,
+            "away_abbr": pl.String,
+            "week": pl.Int64,
+        }
+    )
+    team_games = pl.DataFrame(
+        schema={
+            "game_id": pl.String,
+            "week": pl.Int64,
+            "team_abbr": pl.String,
+            "opponent_abbr": pl.String,
+        }
+    )
+    audit = parity.Audit()
+
+    # Act
+    parity.check_coverage(
+        schedule, team_games, team_games, pl.DataFrame({"game_id": []}), set(), audit
+    )
+
+    # Assert
+    assert [failure.what for failure in audit.failures] == ["coverage"]

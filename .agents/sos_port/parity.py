@@ -434,7 +434,13 @@ def check_coverage(
     expected_missing: set[str],
     audit: Audit,
 ) -> dict[str, Any]:
-    """Check every played regular-season game of the season's cached schedule against both sides."""
+    """Check every played regular-season game of the season's cached schedule against both sides.
+
+    An empty schedule names no season to check, so it fails the audit.
+    """
+    if cached_schedule.is_empty():
+        audit.fail("coverage", "the cached schedule has no games")
+        return {"played_games": 0, "games_without_play_by_play": [], "unexpected": []}
     season = int(cached_schedule["season"][0])
     schedule = cached_schedule.filter(
         (pl.col("game_type") == "REG")

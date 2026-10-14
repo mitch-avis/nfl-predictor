@@ -1470,9 +1470,10 @@ games.
 - The team and quarterback ratings ported from `nfl-sos-ratings`
   (`constants.RATINGS_FEATURE_STATS`, built by `src/nfl_predictor/utils/polars/ratings_build.py`),
   the `ratings` feature group (every name starts with `ratings_`). Per side with a `_diff`
-  companion: `ratings_offense`, `ratings_defense`, `ratings_special_teams` and `ratings_team` (points per game against an average team on a
-  neutral field, from opponent-adjusted EPA) and `ratings_sos` (the mean team rating of the
-  opponents played, each rated without the team's games), each fit only on the season's games
+  companion: `ratings_offense`, `ratings_defense`, `ratings_special_teams` and `ratings_team`
+  (points per game against an average team on a neutral field, from opponent-adjusted EPA) and
+  `ratings_sos` (the mean team rating of the opponents played, each rated without the team's
+  games), each fit only on the season's games
   before the row's week with the previous season's penalties and a preseason prior from earlier
   seasons; and `ratings_qb` (the starter's adjusted EPA per dropback, the starter every
   quarterback feature reads) with `ratings_qb_dropbacks`, his dropbacks this season before the

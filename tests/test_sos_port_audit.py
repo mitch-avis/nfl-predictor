@@ -651,6 +651,34 @@ def test_compare_opponent_row_pair_mismatches_the_value_on_the_teams_own_row(
     assert compared.sort("team_abbr")["match"].to_list() == [False, False]
 
 
+def test_check_opponent_rows_team_game_without_its_opponents_row_fails_the_audit(
+    parity: ModuleType,
+) -> None:
+    # Arrange
+    ours = _one_game("rush_attempts", 20.0, 30.0).head(1)
+    theirs = _one_game("carries_faced", 30.0, 20.0).head(1)
+    audit = parity.Audit()
+
+    # Act
+    missing = parity.check_opponent_rows(2025, ours, theirs, audit)
+
+    # Assert
+    assert (missing, [f.what for f in audit.failures]) == (1, ["team-game keys"])
+
+
+def test_check_opponent_rows_complete_game_passes(parity: ModuleType) -> None:
+    # Arrange
+    ours = _one_game("rush_attempts", 20.0, 30.0)
+    theirs = _one_game("carries_faced", 30.0, 20.0)
+    audit = parity.Audit()
+
+    # Act
+    missing = parity.check_opponent_rows(2025, ours, theirs, audit)
+
+    # Assert
+    assert (missing, audit.failures) == (0, [])
+
+
 def test_load_pairs_unknown_row_fails_the_audit(parity: ModuleType) -> None:
     # Arrange
     entry = {"id": "x", "ours": "a", "theirs": "b", "kind": "count", "causes": [], "row": "home"}

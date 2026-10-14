@@ -435,6 +435,23 @@ def check_keys(
     }
 
 
+def check_opponent_rows(season: int, ours: pl.DataFrame, theirs: pl.DataFrame, audit: Audit) -> int:
+    """Fail every team-game of ``ours`` whose opponent's row ``theirs`` lacks; return how many.
+
+    An opponent-row pair reads each team-game's value from the opponent's row (``compare``), whose
+    inner join would drop such a team-game without a word. Both frames are canonically keyed.
+    """
+    their_keys = {tuple(row) for row in theirs.select(KEYS).iter_rows()}
+    missing = sorted(
+        str(key)
+        for key in (tuple(row) for row in ours.select(KEYS).iter_rows())
+        if (key[0], key[2], key[1]) not in their_keys
+    )
+    for key in missing:
+        audit.fail("team-game keys", f"{season} {key} has no opponent row on their side")
+    return len(missing)
+
+
 def check_coverage(
     cached_schedule: pl.DataFrame,
     ours: pl.DataFrame,
@@ -557,6 +574,8 @@ def _run(code: SosCode, data_dir: Path) -> int:
         keys = check_keys(season, ours_frame(pbp), theirs, pbp, audit)
         schedule = pl.read_parquet(audit.record(cache_dir / f"schedule_{season}.parquet"))
         coverage = check_coverage(schedule, base_ours, theirs, pbp, expected_missing, audit)
+        if any(pair.row == "opponent" for pair in pairs):
+            check_opponent_rows(season, base_ours, theirs, audit)
         season_pairs = {}
         for pair in pairs:
             base = compare(pair, base_ours, theirs, tolerance)

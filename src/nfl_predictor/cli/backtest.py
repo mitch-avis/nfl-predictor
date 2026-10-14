@@ -125,8 +125,9 @@ def _parse_args() -> argparse.Namespace:
             "Train with no game-line columns (no spread, total or moneyline, raw or "
             "transformed). With --no-market-anchor and --no-market-transform the run uses no "
             "game lines; the market-implied probability is still scored as the yardstick. The "
-            "Elo groups' preseason win-total priors (elo, own_elo_wt) stay unless "
-            "--disable-feature-groups leaves them out."
+            "default groups keep the elo group's preseason win-total prior; for no market "
+            "information pass --disable-feature-groups strength,elo,own_elo_wt (keeps the "
+            "market-free own Elo) or strength,elo,own_elo,own_elo_wt (no Elo at all)."
         ),
     )
     parser.add_argument(

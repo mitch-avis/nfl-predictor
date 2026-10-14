@@ -6,13 +6,24 @@ score and an action label, and adds the spread and total differences in points w
 cover probability. Totals carry ``TOTAL_SIGNAL_STATUS`` because the total head trails the
 market's line in walk-forward. The report is decision support only and makes no profitability
 claim; the weekly run writes it next to its predictions.
+
+Given the floor's sigma, the home edge is split in two: ``market_home_prob_spread`` is the
+floor's curve at the market's margin, ``Phi(-home_spread / sigma)``;
+``edge_beyond_spread_home_prob`` (the model's probability minus that) is what the model adds
+beyond the spread; and ``spread_moneyline_gap_home_prob`` (that minus the no-vig moneyline
+probability) is the gap between the spread and the moneyline, with no information from the
+model's margin. The two parts sum to ``edge_home_prob``. The confidence score and the action label
+still read the whole edge.
 """
 
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 
 from nfl_predictor import constants
+from nfl_predictor.ml.floor_sigma import home_win_prob as floor_home_win_prob
 
 # Upper edge bounds (exclusive) of the 1..9 confidence scores; a larger edge scores 10.
 CONFIDENCE_EDGE_BOUNDS = (0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.10)
@@ -95,14 +106,45 @@ therefore diagnostics, not betting signals, until a total model beats the line i
 """
 
 
-def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
+def _spread_home_prob(df: pd.DataFrame, floor_sigma: float | None) -> pd.Series:
+    """Return the floor's home win probability at the market's margin.
+
+    That is ``Phi(-home_spread / floor_sigma)``. Every game is NaN when ``floor_sigma`` is None
+    or the predictions carry no ``home_spread``, and a game without a spread is NaN.
+    """
+    if floor_sigma is None or "home_spread" not in df.columns:
+        return pd.Series(float("nan"), index=df.index, dtype=float)
+    spread = pd.to_numeric(df["home_spread"], errors="coerce").to_numpy(dtype=float)
+    return pd.Series(floor_home_win_prob(-spread, floor_sigma), index=df.index, dtype=float)
+
+
+def build_betting_report(
+    predictions: pd.DataFrame, *, floor_sigma: float | None = None
+) -> pd.DataFrame:
     """Build a betting-oriented report from a predictions table.
 
-    Expects the output schema from ml_model_predict.predict_week_blended (or margin_total).
+    Expects the output schema of ``ml_model_predict.predict_week_margin_total``.
 
     The report focuses on moneyline value signals (probability calibration) and also
     includes simple spread/total deltas (without claiming cover probabilities).
+
+    Args:
+        predictions: The week's predictions with the market's moneylines (and spreads).
+        floor_sigma: The sigma of the floor that gave ``home_win_prob``. With it, the moneyline
+            edge is split into the part beyond the spread and the spread-moneyline gap; without
+            it those columns are NaN.
+
+    Returns:
+        The report, sorted by the moneyline edge.
+
+    Raises:
+        ValueError: If ``predictions`` lacks a required column, or ``floor_sigma`` is given and
+            is not finite and positive.
+
     """
+    if floor_sigma is not None and not (math.isfinite(floor_sigma) and floor_sigma > 0):
+        msg = f"The floor's sigma must be positive and finite, got {floor_sigma!r}."
+        raise ValueError(msg)
     required = {
         "away_abbr",
         "home_abbr",
@@ -135,6 +177,13 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
 
     df["edge_home_prob"] = df["model_home_prob"] - df["market_home_prob_novig"]
     df["edge_away_prob"] = df["model_away_prob"] - df["market_away_prob_novig"]
+
+    # The home edge is the part beyond the spread plus the spread-moneyline gap.
+    df["market_home_prob_spread"] = _spread_home_prob(df, floor_sigma)
+    df["edge_beyond_spread_home_prob"] = df["model_home_prob"] - df["market_home_prob_spread"]
+    df["spread_moneyline_gap_home_prob"] = (
+        df["market_home_prob_spread"] - df["market_home_prob_novig"]
+    )
 
     df["model_fair_home_moneyline"] = df["model_home_prob"].map(_implied_prob_to_moneyline)
     df["model_fair_away_moneyline"] = df["model_away_prob"].map(_implied_prob_to_moneyline)
@@ -192,6 +241,9 @@ def build_betting_report(predictions: pd.DataFrame) -> pd.DataFrame:
         "model_home_prob",
         "market_home_prob_novig",
         "edge_home_prob",
+        "market_home_prob_spread",
+        "edge_beyond_spread_home_prob",
+        "spread_moneyline_gap_home_prob",
         "away_moneyline",
         "home_moneyline",
         "model_fair_away_moneyline",

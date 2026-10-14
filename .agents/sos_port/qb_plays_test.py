@@ -553,33 +553,23 @@ def predict_week(
 def _perturbed_inputs(inputs: HarnessInputs, season: int, week: int) -> HarnessInputs:
     """Return ``inputs`` with every value of ``season``'s games from ``week`` on replaced.
 
-    The team rows' EPA and snaps, every candidate's plays and EPA, and the starters of the games
-    after ``week`` change; the week's own starters stay (they are known at the first snap).
+    Every numeric value of the team rows and of every candidate's rows from ``week`` on changes
+    (``rating_tests_common.perturbed_numbers``), and so do the sites (``is_home``) and starters of
+    the games after ``week``; the week's own sites and starters stay (they are known before its
+    first snap).
     """
     later = pl.col("week") >= week
+    after = pl.col("week") > week
+    flipped_sites = pl.when(after).then(~pl.col("is_home")).otherwise(pl.col("is_home"))
     team_rows = dict(inputs.team_rows)
-    team_rows[season] = team_rows[season].with_columns(
-        pl.when(later)
-        .then(pl.col("offensive_epa") * -3.0 + 7.0)
-        .otherwise(pl.col("offensive_epa"))
-        .alias("offensive_epa"),
-        pl.when(later)
-        .then(pl.col("offensive_snaps") + 5)
-        .otherwise(pl.col("offensive_snaps"))
-        .alias("offensive_snaps"),
+    team_rows[season] = common.perturbed_numbers(team_rows[season], later).with_columns(
+        flipped_sites.alias("is_home")
     )
     candidate_rows: dict[str, Mapping[int, pl.DataFrame]] = {}
     for name, by_season in inputs.candidate_rows.items():
         rows = dict(by_season)
-        rows[season] = rows[season].with_columns(
-            pl.when(later)
-            .then(pl.col("qb_dropbacks") + 3)
-            .otherwise(pl.col("qb_dropbacks"))
-            .alias("qb_dropbacks"),
-            pl.when(later)
-            .then(pl.col("qb_dropback_epa") * -2.0 + 1.0)
-            .otherwise(pl.col("qb_dropback_epa"))
-            .alias("qb_dropback_epa"),
+        rows[season] = common.perturbed_numbers(rows[season], later).with_columns(
+            flipped_sites.alias("is_home")
         )
         candidate_rows[name] = rows
     later_games = (

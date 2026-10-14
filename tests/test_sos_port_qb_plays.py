@@ -596,6 +596,67 @@ def test_check_week_information_catches_a_prediction_that_reads_its_own_week() -
         qb.check_week_information(leaky, inputs, 2007, 3, lambdas)
 
 
+def test_check_week_information_catches_a_prediction_reading_later_point_margins() -> None:
+    # Arrange
+    inputs = _harness_inputs()
+    lambdas = dict.fromkeys(qb.CANDIDATES, 10.0)
+
+    def leaky(inputs: Any, season: int, week: int, lambdas: Any) -> Any:
+        rows = inputs.team_rows[season].filter(pl.col("week") >= week)
+        signal = float(rows.get_column("point_margin").abs().sum())
+        return qb.predict_week(inputs, season, week, lambdas).with_columns(pl.col("t") + signal)
+
+    # Act & Assert
+    with threadpool_limits(limits=1, user_api="blas"), pytest.raises(qb.IntegrityError):
+        qb.check_week_information(leaky, inputs, 2007, 3, lambdas)
+
+
+def _later_team_values(column: str) -> Any:
+    """Return a reader of ``column`` over a season's team rows from the predicted week on."""
+
+    def read(inputs: Any, season: int, week: int) -> float:
+        rows = inputs.team_rows[season].filter(pl.col("week") >= week)
+        return float(rows.get_column(column).cast(pl.Float64).sum())
+
+    return read
+
+
+def _next_week_sites(inputs: Any, season: int, week: int) -> float:
+    """Return how many of AAA's games after ``week`` are at home."""
+    rows = inputs.team_rows[season].filter((pl.col("week") > week) & (pl.col("team") == "AAA"))
+    return float(rows.get_column("is_home").cast(pl.Float64).sum())
+
+
+def _later_attempts(inputs: Any, season: int, week: int) -> float:
+    """Return passes and sacks' pass attempts from ``week`` on."""
+    rows = inputs.candidate_rows["A"][season].filter(pl.col("week") >= week)
+    return float(rows.get_column("qb_attempts").sum())
+
+
+@pytest.mark.parametrize(
+    "reader",
+    [
+        _later_team_values("st_plays"),
+        _later_team_values("st_epa"),
+        _next_week_sites,
+        _later_attempts,
+    ],
+    ids=["st_plays", "st_epa", "is_home_after_the_week", "qb_attempts"],
+)
+def test_check_week_information_catches_a_prediction_reading_any_later_value(reader: Any) -> None:
+    # Arrange
+    inputs = _harness_inputs()
+    lambdas = dict.fromkeys(qb.CANDIDATES, 10.0)
+
+    def leaky(inputs: Any, season: int, week: int, lambdas: Any) -> Any:
+        signal = reader(inputs, season, week)
+        return qb.predict_week(inputs, season, week, lambdas).with_columns(pl.col("t") + signal)
+
+    # Act & Assert
+    with threadpool_limits(limits=1, user_api="blas"), pytest.raises(qb.IntegrityError):
+        qb.check_week_information(leaky, inputs, 2007, 3, lambdas)
+
+
 def _calibration_rows() -> pl.DataFrame:
     """Return prediction rows over three weeks; the last week's target would move any fit."""
     rows = [

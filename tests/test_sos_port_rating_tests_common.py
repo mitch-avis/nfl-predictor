@@ -197,6 +197,27 @@ def test_bound_text_keeps_a_bound_near_zero_visible(value: float, text: str) -> 
     assert formatted == text
 
 
+def test_perturbed_numbers_changes_every_numeric_value_of_the_rows_only() -> None:
+    # Arrange
+    frame = pl.DataFrame(
+        {
+            "season": [2010, 2010],
+            "week": [1, 2],
+            "team": ["AAA", "AAA"],
+            "plays": [10, 10],
+            "epa": [1.0, 1.0],
+        }
+    )
+
+    # Act
+    changed = common.perturbed_numbers(frame, pl.col("week") >= 2)
+
+    # Assert
+    assert changed.row(0) == (2010, 1, "AAA", 10, 1.0)
+    assert changed.row(1) == (2010, 2, "AAA", 15, 4.0)
+    assert changed.schema == frame.schema
+
+
 def test_write_json_record_ends_with_a_newline(tmp_path: Path) -> None:
     # Arrange
     path = tmp_path / "record.json"

@@ -492,23 +492,8 @@ def band_rows(rows: pl.DataFrame, band: str) -> pl.DataFrame:
 
 
 def _perturbed(game_logs: pl.DataFrame, week: int) -> pl.DataFrame:
-    """Return ``game_logs`` with every value of the games from ``week`` on replaced."""
-    later = pl.col("week") >= week
-    return game_logs.with_columns(
-        pl.when(later)
-        .then(pl.col("offensive_epa") * -3.0 + 7.0)
-        .otherwise(pl.col("offensive_epa"))
-        .alias("offensive_epa"),
-        pl.when(later)
-        .then(pl.col("offensive_snaps") + 5)
-        .otherwise(pl.col("offensive_snaps"))
-        .alias("offensive_snaps"),
-        pl.when(later).then(1.0 - pl.col("st_epa")).otherwise(pl.col("st_epa")).alias("st_epa"),
-        pl.when(later)
-        .then(3 - pl.col("point_margin"))
-        .otherwise(pl.col("point_margin"))
-        .alias("point_margin"),
-    )
+    """Return ``game_logs`` with every numeric value of the games from ``week`` on replaced."""
+    return common.perturbed_numbers(game_logs, pl.col("week") >= week)
 
 
 def largest_gap(left: pl.DataFrame, right: pl.DataFrame, key: str = "team") -> float:

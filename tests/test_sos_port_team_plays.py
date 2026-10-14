@@ -466,6 +466,18 @@ def test_check_information_set_catches_a_snapshot_that_reads_later_weeks() -> No
         team.check_information_set(logs, leaky)
 
 
+def test_check_information_set_catches_a_snapshot_reading_later_special_teams_plays() -> None:
+    # Arrange
+    def leaky(prior_games: pl.DataFrame, season_logs: pl.DataFrame) -> pl.DataFrame:
+        week = int(prior_games.get_column("week").max()) + 1
+        signal = float(season_logs.filter(pl.col("week") >= week).get_column("st_plays").sum())
+        return pl.DataFrame({"team": ["AAA", "BBB"], "team_rating": [signal, -signal]})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="information set"):
+        team.check_information_set(_team_logs(), leaky)
+
+
 def test_check_information_set_passes_a_snapshot_of_earlier_weeks() -> None:
     # Arrange
     logs = _team_logs()

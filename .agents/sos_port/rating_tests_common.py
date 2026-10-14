@@ -241,6 +241,28 @@ def wrap_markdown(lines: Sequence[str], width: int = REPORT_WIDTH) -> list[str]:
     return wrapped
 
 
+# The columns that place a row in time stay as they are when the information-set checks change
+# the values of later games.
+_PLACING_COLUMNS = frozenset({"season", "week"})
+
+
+def perturbed_numbers(frame: pl.DataFrame, rows: pl.Expr) -> pl.DataFrame:
+    """Return ``frame`` with every numeric value in ``rows`` changed, ``season`` and ``week`` aside.
+
+    Floats become ``7 - 3x`` and integers ``x + 5``, so any value of those rows a prediction
+    reads moves it. The information-set checks pass the rows of the games from the predicted
+    week on.
+    """
+    return frame.with_columns(
+        pl.when(rows)
+        .then(pl.col(name) * -3.0 + 7.0 if dtype.is_float() else pl.col(name) + 5)
+        .otherwise(pl.col(name))
+        .alias(name)
+        for name, dtype in frame.schema.items()
+        if dtype.is_numeric() and name not in _PLACING_COLUMNS
+    )
+
+
 def comparison_confidence(comparisons: int, family: float = FAMILY_CONFIDENCE) -> float:
     """Return the per-comparison level that keeps ``family`` over ``comparisons`` (Bonferroni)."""
     return 1.0 - (1.0 - family) / comparisons

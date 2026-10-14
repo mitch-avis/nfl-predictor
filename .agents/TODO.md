@@ -242,10 +242,10 @@ Steps:
    6. its web pages (teams, quarterbacks, schedules, rank ranges, head-to-head) folded into this
       app, together with Milestone 58 phases 4-6.
    Feature ideas to evaluate after phase 4, each a measured arm (raised by the user 2026-10-08,
-   not yet approved): the referee crew (nflverse `referee` since 1999, full crews in
-   `load_officials`), game-day weather (temperature and wind for outdoor games), attendance, and
-   team health (nflverse injury reports since 2009). Each needs a pick-time check: what is known
-   before Thursday for an upcoming game.
+   not yet approved; on 2026-10-10 the user moved them to a later session): the referee crew
+   (nflverse `referee` since 1999, full crews in `load_officials`), game-day weather (temperature
+   and wind for outdoor games), attendance, and team health (nflverse injury reports since 2009).
+   Each needs a pick-time check: what is known before Thursday for an upcoming game.
 7. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
    three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
    (wiring the chosen settings into the weekly run and the benchmark, one shared source).

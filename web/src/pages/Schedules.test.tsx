@@ -8,12 +8,12 @@ import { metricMeta } from '@/test/ratingsFixtures'
 
 import { SchedulesPage } from './Schedules'
 
-function ranks(rows: Array<[number, string, number]>): ScheduleRanks {
+function ranks(rows: Array<[number, string, number]>, skipped: number[] = [2026]): ScheduleRanks {
   const count = rows.length
   return {
     count,
     seasons: [...new Set(rows.map(([season]) => season))].sort(),
-    skipped_seasons: [2026],
+    skipped_seasons: skipped,
     table: {
       rows: rows.map(([season, team, sos], index) => ({ season, team, sos, softest_rank: index + 1, hardest_rank: count - index })),
       visible_columns: ['season', 'team', 'sos', 'softest_rank', 'hardest_rank'],
@@ -79,9 +79,9 @@ describe('SchedulesPage', () => {
     expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2)
   })
 
-  it('explains an empty ranking by the tables it reads', async () => {
+  it('explains an empty ranking by the tables it reads, which the ETL writes, and to run it', async () => {
     // Arrange
-    stubApi({ '/api/ratings/schedules': ranks([]) })
+    stubApi({ '/api/ratings/schedules': ranks([], []) })
 
     // Act
     renderWithProviders(<SchedulesPage />, { route: '/schedules' })
@@ -89,6 +89,20 @@ describe('SchedulesPage', () => {
     // Assert
     expect(await screen.findByText('No completed seasons to rank yet')).toBeInTheDocument()
     expect(screen.getByText(/\{season\}_ratings\.parquet in data\/ratings\//)).toBeInTheDocument()
-    expect(screen.queryByText(/ETL/)).toBeNull()
+    expect(screen.getByText(/The ETL writes them/)).toBeInTheDocument()
+    expect(screen.getByText(/run it, then reload/)).toBeInTheDocument()
+  })
+
+  it('explains an empty ranking whose only season is still in progress', async () => {
+    // Arrange
+    stubApi({ '/api/ratings/schedules': ranks([], [2026]) })
+
+    // Act
+    renderWithProviders(<SchedulesPage />, { route: '/schedules' })
+
+    // Assert
+    expect(await screen.findByText('No completed seasons to rank yet')).toBeInTheDocument()
+    expect(screen.getByText(/2026 is still in progress/)).toBeInTheDocument()
+    expect(screen.queryByText(/run it, then reload/)).toBeNull()
   })
 })

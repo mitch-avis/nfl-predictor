@@ -6,6 +6,8 @@ description: >-
   checkpoints, check provenance, write REVIEW.md). Give it the task ID, the branch and worktree path,
   or the run directories and the decision rule written before the run. Never use it to review work
   the same agent produced.
+effort: medium
+maxTurns: 100
 skills:
   - code-review
 disallowedTools:
@@ -41,6 +43,11 @@ the session that delegated the review.
    "No data leakage"), tests, living docs, commit hygiene, and whether it touches a fingerprinted
    file (`src/nfl_predictor/ml/*.py`, `constants.py`, `ml_model.py`), which invalidates every
    walk-forward checkpoint.
+
+5. Write adversarial tests against the diff in your worktree: boundaries, error paths, a
+   leakage path, and any case the task text implied but did not list. Run them and report
+   which fail, with the test code in the report. Never commit them to the implementer's
+   branch; the delegating session decides what to adopt.
 
 ## Reviewing a walk-forward run
 

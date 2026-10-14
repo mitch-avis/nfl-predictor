@@ -1,8 +1,9 @@
 """Per-season cache of the ETL's season builds, for the incremental rebuild.
 
 A season's build is its game rows and its weekly strength snapshots, as
-``data_collection.process_season`` produces them, and its ratings frames (published tables and
-pre-week ratings, ``utils.polars.ratings_build``). For a finished season those depend on the
+``data_collection.process_season`` produces them, and its ratings frames (the ratings' published
+tables and pre-week ratings, ``utils.polars.ratings_build``, and the season statistics' tables,
+``utils.polars.season_stats_build``). For a finished season those depend on the
 code, the library environment, the run's options and the values of the input rows from that
 season and earlier, so ``SeasonKeys`` hashes exactly those and the cache returns a stored build
 only when the key matches. Anything else, including a later season's rows, cannot change the
@@ -50,10 +51,10 @@ _SNAPSHOTS = "snapshots.arrow"
 _RATINGS_PREFIX = "ratings_"
 # A season build reads Polars and NumPy (the strength ridge); their versions can move results.
 _LIBRARIES = ("polars", "numpy")
-# The modules a season build runs: the orchestration, the constants, every utility module and
-# the ratings package.
+# The modules a season build runs: the orchestration, the constants, every utility module, the
+# ratings package and the season statistics package.
 _ETL_SOURCES = ("data_collection.py", "constants.py")
-_ETL_SOURCE_DIRECTORIES = ("utils", "ratings")
+_ETL_SOURCE_DIRECTORIES = ("utils", "ratings", "season_stats")
 
 
 @dataclass(frozen=True)

@@ -170,7 +170,7 @@ describe('RatingsIndexPage', () => {
     expect(within(passing).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['4,258.5', '4,590.0'])
   })
 
-  it('says where the tables are read from when there are none, without sending you to a job', async () => {
+  it('says where the tables are read from, that the ETL writes them, and to run it when there are none', async () => {
     // Arrange
     stubApi({ '/api/ratings/seasons': { seasons: [], current_season: 2026 } })
 
@@ -181,7 +181,8 @@ describe('RatingsIndexPage', () => {
     expect(await screen.findByText('No team or quarterback tables yet')).toBeInTheDocument()
     expect(screen.getByText('data/ratings/')).toBeInTheDocument()
     expect(screen.getByText('{season}_combined.parquet')).toBeInTheDocument()
-    expect(screen.queryByText(/ETL/)).toBeNull()
-    expect(screen.queryByRole('link', { name: /jobs/i })).toBeNull()
+    expect(screen.getByText(/The ETL writes them/)).toBeInTheDocument()
+    expect(screen.getByText('nfl-predictor data')).toBeInTheDocument()
+    expect(screen.getByText(/run it, then reload/)).toBeInTheDocument()
   })
 })

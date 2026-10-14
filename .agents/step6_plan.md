@@ -42,19 +42,22 @@ data are logged for review. Read as:
 
 | stream | phase | depends on | branch / state |
 | --- | --- | --- | --- |
-| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh after integration (also the stale `gl-red-zone`, `gl-designed-runs`, `gl-carries-faced` notes in `mapping.yaml`) |
+| S1 inventory and parity scripts | 1 | none | merged `0.50.1` (reports pinned to `main`'s code); refresh on the candidate build running (judgments for the integrated code, including the stale `gl-red-zone`, `gl-designed-runs`, `gl-carries-faced` notes in `mapping.yaml`) |
 | S2 new nflverse sources, `MODELS_PATH`, `compare` tie fix | 2 | none | merged, `0.46.0` |
 | S3 own Elo (538 framework, 2019 additions, QB value, win totals) | 4 candidate | none | merged, `0.47.0` |
 | S4 ratings core port (ridge, team, prior, sos, QB, histories, ranges) | 3 | none for the algorithms | merged, `0.49.0` |
 | S8a web: pool helpers, margin toggle, live-betting design | 6 (58.1, 58.6, 58.3) | none | merged, `0.48.0` |
 | S5a play-by-play cache columns, stadium table | 3-4 | none | merged, `0.50.0` |
-| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | in review; contains S5c, merges alone |
-| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | reviewed (merge after fixes); fixes go on S5b's branch |
-| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | in review (270 tables, 11,754,571 cells bit-identical) |
-| S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | implementer running (on S10's branch) |
-| S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | after those merge |
-| S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | after S5b and S5c |
-| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | after S6's first arm |
+| S5b integration: play-by-play corrections, one starter, own Elo in the ETL | 3-4 | S5a | merged with S5c, `0.54.0`; red zone `0.55.0`, trend fix `0.55.1` |
+| S5c integration: ratings in the ETL (published tables, pre-week features) | 3-4 | S4, S5a | merged with S5b, `0.54.0` |
+| S10 season statistics tables and metric registry | 6 (data for the pages) | S2 | merged, `0.51.0` |
+| S8b web: teams, quarterbacks, schedules, rank ranges, head-to-head, glossary (58.2) | 6 | S4, S10 | merged, `0.53.0`; 58.2 stays open for the production rebuild and a browser check |
+| S5d ETL step for the season statistics tables, ratings columns into `combined` | 6 | S5c, S10 | merged, `0.56.0` |
+| S6 candidate build and measurement (`models/step6/build.sh`, `driver.sh`) | 4 | S3, S5b, S5c | build done at `0.55.0`; runs in progress since 10:08 (one at a time, ten plus two conditional) |
+| S7 power rankings and projected standings (`models/step6/rankings/HYPOTHESIS.md`) | 5 | S5c, S6 | merged, `0.57.0` (two review rounds, `models/step6/rankings/REVIEW.md`); the default switch is the user's |
+| S13 the betting report's edges split into the model's view beyond the spread and the spread-versus-moneyline gap | 5 (follow-up) | none | implementer running; the rule is written before scoring |
+| S11 the source's open rating tests (all-plays, botched snaps, kneel-downs and spikes, penalty-wiped plays) | report only | S4, S5c | implementer running; each rule pre-registered before scoring |
+| S12 the own Elo's alternative quarterback adjustment (the ported rating in place of VALUE) | report only | S3, S4 | third attempt running with every design choice fixed in the brief (the first two stopped on runaway deliberation, not on the task) |
 
 Data contract for the pages (decided 2026-10-10): every per-season table, the ratings kinds and
 the season-statistics kinds alike, is written by the ETL to `data/ratings/{season}_{kind}.parquet`,
@@ -143,8 +146,13 @@ small and local.
   source's rush-attempt rule (`.agents/sos_port/DECISIONS.md`).
 - Held for the user: the live-betting design's three choices (score source, odds source, odds
   snapshots under `data/live/`); calibrating the tiebreaker's top-score estimate (runs about 2
-  points low); the reviewed pool-interval labels in `benchmarks.md` (lines 459, 503, 577 need
-  their resampling unit confirmed from each run's own artifacts before labeling).
+  points low).
+- Fixed without asking (rule 2): three pool-point intervals in `.agents/benchmarks.md` (the GPU
+  reference against the CPU pair, the market transform's off-minus-on, the adopted-settings
+  reference against the pick-time lines test) were quoted without their resampling unit; each now
+  says "week-block bootstrap", the unit each run's `REVIEW.md` states
+  (`models/step3_gpu_reference/`, `models/step3_market_transform/`, `models/step4/`). No number
+  changed.
 - The `compare` tie fix changes market-line pick accuracy in future reports (170 pick-time and 25
   closing-line coin flips; 0.6401 to 0.6579 and 0.6648 to 0.6670), no model number.
 - Modeling observation (not changed): completed games carry the actual starting quarterback in
@@ -159,20 +167,25 @@ small and local.
   (Betting under "This week", Model above Data); the "Opponents faced" ledger is simpler than the
   source's; season tables go out uncompressed (about 0.9 MB per team table). None was checked in a
   browser (signing in needs a typed password); the user should look at the pages once.
-- Power rankings (phase 5, review pending): the pre-registered scoring, applied as written, picks
-  the blend of the ported team rating and a model rating (weight about 0.5 on each since 2015) over
-  the ported rating alone; the composite production ranks on today and the model rating alone tie.
-  Switching what the weekly run publishes (`config/weekly_run.yaml`, default the composite) is the
-  user's call; if the blend is chosen, the weekly run also needs a source for the model's
-  predictions (the implementer recommends the run's own stage-1 folds for the current season plus
-  the floor-sigma reference runs for the previous season's week 1).
-- Question: should a market-free run leave out the market-informed Elo groups automatically? Today
-  `--exclude-market` (and the weekly run's market-free mode) drops only line columns, per the
-  step-5 design the user accepted; the `qb_elos.csv` Elo and, after a rebuild, the own Elo's
-  win-total preset still enter unless `--disable-feature-groups elo,own_elo_wt` (or the weekly
-  run's `disable_feature_groups`) is set. The integration adds a warning, not an automatic drop.
-  The reviewer recommends automatic (high confidence); the cost is that market-free results stop
-  being comparable with earlier market-free runs that kept the `elo` group.
+- The own Elo's alternative quarterback adjustment (the ported quarterback rating in place of
+  538's VALUE), merged as `0.57.1`, reviewed: VALUE stays (Brier +0.00524 [+0.00319, +0.00725]
+  for the ported rating). Two implementer attempts had stopped on an API limit before writing
+  anything: each response spent its whole 16,000-token output budget deliberating over design
+  choices the brief had left open; the third, with every choice fixed in the brief, finished.
+  Its check found that the published quarterback week-by-week tables use the penalty chosen on
+  the whole season (a mild look-ahead in past seasons' displayed histories; no feature or
+  evaluation reads them).
+- Power rankings (phase 5, reviewed in two rounds, `models/step6/rankings/REVIEW.md`): the
+  pre-registered scoring (next-week margin MAE, 2008-2025 from week 2, 4,400 games), applied as
+  written, picks the blend of the ported team rating and a model rating over the ported rating
+  alone: blend 10.497 against 10.643, difference -0.146, games [-0.204, -0.088], seasons
+  [-0.194, -0.102], better in 18 of 18 seasons; the composite production ranks on today (10.590)
+  and the model rating alone (10.678) tie the ported rating. On both seeds the blend is 10.492,
+  -0.151 [-0.208, -0.094] (weights on the ported rating 0.7 in 2008-2009, 0.6 in 2010-2014, 0.5
+  from 2015). The supplement averages each game's predicted margin over the seeds before the fit,
+  where rule 13 averages per-game loss differences; the reviewer computed both and the outcome is
+  the same (-0.146 [-0.202, -0.090]). Decided by the user (see "User decisions during the run").
+
 - Pre-existing defect found in review and fixed on a branch (held with step 6): an upcoming
   game's `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` were filled with 0.0 (and
   every playoff game's), while the completed rows the model trains on carry the real pre-game
@@ -192,6 +205,27 @@ small and local.
   because the current season's schedule is downloaded again on every ETL run; recheck before the
   Paris game (2026-10-25) and add a roof override then if it is still wrong
   (`.agents/sos_port/decisions/pbp_columns.md`).
+
+## User decisions during the run (2026-10-10, about 13:20)
+
+Asked at the user's check-in, each with its context and a recommendation; recorded as answered.
+
+- **Power rankings**: the weekly run publishes the blend (half the ported team rating, half the
+  model rating, weight `0.5` by the measured rule) instead of the composite. The user's aim for the
+  rankings: an as-objective-as-possible snapshot of current strength on a neutral field, using
+  all available data (the rankings make no predictions, so the market-informed model half is
+  fine). Implementation (on the step-6 branch, held with the merge): the default, and the weekly
+  run's own stage-1 folds plus the averaged floor-sigma reference runs as the model's predictions.
+- **The stats-only model and win totals**: the model without game lines and without anchoring may
+  keep the preseason win-total prior the Elo groups carry (`elo`, `own_elo_wt`); the mode means
+  "no game lines", and its log message and help text say so. The strict variant (also
+  `--disable-feature-groups elo,own_elo_wt`) stays the step-6 test bench. The user's goal for that
+  model: predict outcomes and scores from the ETL's own data, not from the game line as a
+  baseline. Production picks stay on the anchored model, which ties the market.
+- **Betting labels**: run a pre-registered test of today's labels (the whole edge) against labels
+  on the model's part beyond the spread, governed by the games with real moneylines; a tie keeps
+  today's labels, and any switch goes back to the user.
+- **Feature ideas** (referee, weather, attendance, team health): a later session.
 
 ## Snapshots and timings
 

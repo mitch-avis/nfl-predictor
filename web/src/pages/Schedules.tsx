@@ -103,6 +103,15 @@ function Leaderboard({ data }: { data: ScheduleRanks }) {
   )
 }
 
+/** Why the ranking is empty: no team ratings at all (run the ETL), or only seasons still in progress. */
+function EmptyRanking({ skipped }: { skipped: number[] }) {
+  const description =
+    skipped.length === 0
+      ? 'The ranking reads each completed season’s team ratings, {season}_ratings.parquet in data/ratings/, and that folder holds none yet. The ETL writes them (nfl-predictor data, or the Full ETL rebuild on the Jobs page); run it, then reload.'
+      : `The ranking reads each completed season’s team ratings, and ${skipped.join(', ')} ${skipped.length === 1 ? 'is' : 'are'} still in progress, left out until complete. The ETL writes each season’s ratings again on every run.`
+  return <EmptyState title="No completed seasons to rank yet" description={description} />
+}
+
 /** Every completed team-season ranked on schedule strength, across every season with ratings. */
 export function SchedulesPage() {
   const query = useScheduleRanks()
@@ -114,9 +123,7 @@ export function SchedulesPage() {
       />
       {query.isLoading ? <Skeleton className="h-96 w-full" /> : null}
       {query.isError ? <ErrorState error={query.error} title="Could not load the schedule rankings" /> : null}
-      {query.data && query.data.count === 0 ? (
-        <EmptyState title="No completed seasons to rank yet" description="The ranking reads each completed season’s team ratings, {season}_ratings.parquet in data/ratings/, and that folder holds none yet." />
-      ) : null}
+      {query.data && query.data.count === 0 ? <EmptyRanking skipped={query.data.skipped_seasons} /> : null}
       {query.data && query.data.count > 0 ? <Leaderboard data={query.data} /> : null}
     </>
   )

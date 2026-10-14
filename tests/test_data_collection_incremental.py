@@ -2,10 +2,11 @@
 
 A small three-season world (two finished seasons and the current one) runs through the real
 season and week builders; only the upstream loaders, the play-by-play quarterback join and
-the SurvivorGrid scrape are replaced, and the ratings read the world's own play-by-play. Each
-test compares every written CSV and ratings table byte for byte with a full rebuild of the same
-inputs, and the combined frame exactly, after the cache was filled, after a cached input changed,
-after the code fingerprint changed and after an entry was damaged.
+the SurvivorGrid scrape are replaced, and the ratings and the season statistics read the world's
+own play-by-play. Each test compares every written CSV, ratings table and season statistics table
+byte for byte with a full rebuild of the same inputs, and the combined frame exactly, after the
+cache was filled, after a cached input changed, after the code fingerprint changed and after an
+entry was damaged.
 """
 
 from __future__ import annotations
@@ -22,12 +23,18 @@ import numpy as np
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
-from tests.ratings_league import plays_for, rewritten_plays, starter_id
+from tests.ratings_league import (
+    plays_for,
+    rewritten_plays,
+    starter_id,
+    with_season_stats_play_columns,
+)
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.ratings.season import BootstrapSettings
+from nfl_predictor.season_stats.sources import OFFICIAL_TEAM_STATS
 from nfl_predictor.utils import clock, polars_utils, season_cache
-from nfl_predictor.utils.polars import ratings_build
+from nfl_predictor.utils.polars import nflverse_sources, ratings_build, season_stats_build
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,9 +68,12 @@ class _World:
     schedule: pl.DataFrame
     team_stats: pl.DataFrame
     elo: pl.DataFrame
-    # Every played game's plays, the prior season's included, and every season's schedule.
+    # Every played game's plays, the prior season's included, with every column the season
+    # statistics read, and every season's schedule.
     plays: pl.DataFrame
     ratings_schedule: pl.DataFrame
+    # The players file: each team's starter.
+    players: pl.DataFrame
     rankings: dict[int, pl.DataFrame] = field(default_factory=dict)
 
 
@@ -167,8 +177,17 @@ def _world(seed: int = 7, *, played_through: int = _CURRENT_WEEK - 1) -> _World:
         schedule=schedule.filter(pl.col("season") >= _SEASONS[0]),
         team_stats=pl.DataFrame(team_games),
         elo=pl.DataFrame(elo_rows).filter(pl.col("season") >= _SEASONS[0]),
-        plays=plays_for(played, seed),
+        plays=with_season_stats_play_columns(plays_for(played, seed), seed),
         ratings_schedule=schedule,
+        players=pl.DataFrame(
+            {
+                "gsis_id": [starter_id(team) for team in _TEAMS],
+                "position": ["QB"] * len(_TEAMS),
+                "display_name": [None] * len(_TEAMS),
+                "pfr_id": [None] * len(_TEAMS),
+            },
+            schema_overrides={"display_name": pl.String, "pfr_id": pl.String},
+        ),
         rankings=rankings,
     )
 
@@ -178,41 +197,17 @@ _FAST_BOOTSTRAP = BootstrapSettings(resamples=20, seed=0)
 
 
 def _ratings(world: _World) -> ratings_build.RatingsBuild:
-    """Return the ratings build of the world: its plays, schedule and starters."""
-    starters = pl.DataFrame(
-        {"gsis_id": [starter_id(team) for team in _TEAMS], "position": ["QB"] * len(_TEAMS)}
-    )
+    """Return the ratings build of the world, with its season statistics.
+
+    Both read the world's plays, schedule and starters; the world has no player stats, snap
+    counts or official team stats, as the current season has none before nflverse publishes them.
+    """
     sources = ratings_build.LoadedSources(
         plays=world.plays,
         schedule=world.ratings_schedule,
-        player_stats=pl.DataFrame(
-            schema={
-                "player_id": pl.String(),
-                "position": pl.String(),
-                "season": pl.Int64(),
-                "week": pl.Int64(),
-                "game_id": pl.String(),
-                "team": pl.String(),
-                "attempts": pl.Int64(),
-                "passing_epa": pl.Float64(),
-            }
-        ),
-        snap_counts=pl.DataFrame(
-            schema={
-                "game_id": pl.String(),
-                "season": pl.Int64(),
-                "week": pl.Int64(),
-                "team": pl.String(),
-                "player": pl.String(),
-                "pfr_player_id": pl.String(),
-                "position": pl.String(),
-                "offense_snaps": pl.Float64(),
-            }
-        ),
-        players=starters.with_columns(
-            pl.lit(None, dtype=pl.String).alias("display_name"),
-            pl.lit(None, dtype=pl.String).alias("pfr_id"),
-        ),
+        player_stats=nflverse_sources.PLAYER_STATS.empty(),
+        snap_counts=nflverse_sources.SNAP_COUNTS.empty(),
+        players=world.players,
         weekly_rosters=pl.DataFrame(
             schema={
                 "season": pl.Int64(),
@@ -231,11 +226,22 @@ def _ratings(world: _World) -> ratings_build.RatingsBuild:
             }
         ),
     )
+    season_stats = season_stats_build.SeasonStatsBuild(
+        season_stats_build.SeasonStatsSources(
+            plays=sources.plays,
+            schedule=sources.schedule,
+            player_stats=sources.player_stats,
+            snap_counts=sources.snap_counts,
+            official_team_stats=OFFICIAL_TEAM_STATS.empty(),
+            identity=nflverse_sources.QbIdentitySources(sources.players, sources.weekly_rosters),
+        )
+    )
     return ratings_build.RatingsBuild(
         ratings_build.ratings_inputs(sources),
         current_season=_CURRENT_SEASON,
         first_season=_PRIOR_SEASON,
         bootstrap=_FAST_BOOTSTRAP,
+        season_stats=season_stats,
     )
 
 
@@ -366,9 +372,11 @@ def _assert_identical(incremental: _Result, full: _Result) -> None:
     csv = [name for name in full.files if name.endswith(".csv")]
     assert len(csv) == 6, "five datasets and one games-to-predict file"
     ratings = [name for name in full.files if name.startswith(f"{constants.RATINGS_DIRNAME}/")]
-    assert len(ratings) == len(_SEASONS) * len(ratings_build.PUBLISHED_KINDS) + len(
-        ratings_build.IN_PROGRESS_KINDS
-    ), "every season's published tables and the current season's weekly ranges"
+    assert len(ratings) == len(_SEASONS) * (
+        len(ratings_build.PUBLISHED_KINDS) + len(season_stats_build.SEASON_STATS_KINDS)
+    ) + len(ratings_build.IN_PROGRESS_KINDS), (
+        "every season's ratings and season statistics tables and the current season's weekly ranges"
+    )
     for name, content in full.files.items():
         assert incremental.files[name] == content, f"{name} differs from the full rebuild"
 
@@ -539,6 +547,30 @@ def test_a_changed_play_in_a_cached_season_rebuilds_from_that_season_on(
     _assert_identical(warm, full)
     assert warm.built == [2020, 2021]
     assert warm.rated == [2020, 2021]
+
+
+def test_a_changed_play_only_the_season_statistics_read_rebuilds_that_season(
+    baseline: _Baseline, etl: _Run, warm_dir: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The win probability feeds only the season statistics' win-probability bins."""
+    # Arrange
+    etl.world.plays = etl.world.plays.with_columns(
+        pl.when((pl.col("season") == 2019) & (pl.col("week") == 2))
+        .then(pl.col("wp") / 2.0)
+        .otherwise(pl.col("wp"))
+        .alias("wp")
+    )
+    full = _main(etl, tmp_path_factory.mktemp("full"))
+
+    # Act
+    warm = _main(etl, warm_dir, "--incremental")
+
+    # Assert
+    bins = f"{constants.RATINGS_DIRNAME}/2019_team_wp_bins.parquet"
+    assert full.files[bins] != baseline.full.files[bins]
+    assert full.files["all_data_ml.csv"] == baseline.full.files["all_data_ml.csv"]
+    _assert_identical(warm, full)
+    assert warm.rated == [2019, _CURRENT_SEASON]
 
 
 def test_a_changed_input_in_a_cached_season_rebuilds_from_that_season_on(
@@ -724,10 +756,15 @@ def _season_keys(
     return {
         season: cache.keys.key(
             season,
-            {
-                "tr": world.rankings[season],
-                "prev_tr": world.rankings[season - 1] if season > _SEASONS[0] else None,
-            },
+            data_collection._season_frames(
+                season,
+                sources,
+                data_collection.SeasonInputs(
+                    min_season=_SEASONS[0],
+                    tr_df=world.rankings[season],
+                    prev_tr_df=world.rankings[season - 1] if season > _SEASONS[0] else None,
+                ),
+            ),
         )
         for season in _CACHED_SEASONS
     }
@@ -801,6 +838,41 @@ def test_a_changed_prior_season_play_changes_every_finished_season_key() -> None
 
     # Assert
     assert all(changed[season] != baseline[season] for season in _CACHED_SEASONS)
+
+
+def test_a_changed_season_statistics_play_changes_only_that_seasons_key() -> None:
+    """A season's statistics read no other season, so the change reaches no later key."""
+    # Arrange
+    world = _world()
+    baseline = _season_keys(world, _incremental_config())
+    world.plays = world.plays.with_columns(
+        pl.when(pl.col("season") == 2019).then(pl.col("wp") / 2.0).otherwise("wp").alias("wp")
+    )
+
+    # Act
+    changed = _season_keys(world, _incremental_config())
+
+    # Assert
+    assert changed[2019] != baseline[2019]
+    assert changed[2020] == baseline[2020]
+
+
+def test_a_new_player_in_the_players_file_keeps_every_finished_season_cached(
+    baseline: _Baseline, etl: _Run, warm_dir: Path
+) -> None:
+    """An in-season run downloads the players file again, with new players every week."""
+    # Arrange
+    signing = pl.DataFrame(
+        {"gsis_id": ["00-0099999"], "position": ["QB"], "display_name": ["New Signing"]}
+    )
+    etl.world.players = pl.concat([etl.world.players, signing], how="diagonal")
+
+    # Act
+    warm = _main(etl, warm_dir, "--incremental")
+
+    # Assert
+    _assert_identical(warm, baseline.full)
+    assert warm.rated == [_CURRENT_SEASON]
 
 
 def test_a_changed_current_season_play_keeps_every_finished_season_key() -> None:

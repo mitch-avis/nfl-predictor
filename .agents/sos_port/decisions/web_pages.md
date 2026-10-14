@@ -13,11 +13,15 @@ Data marked "published tables" comes from a manual check: the `nfl-sos-ratings` 
 (534 files) copied read-only into a scratch folder with this repository's team codes (`WAS` to
 `WSH`; its other codes were already canonical), served from the worktree's code on a spare port.
 
-**Status.** No job in this repository writes `data/ratings/` yet: the season-statistics ETL step
-that is to write those tables is planned separately. Until it lands, the pages show an empty state
-naming the folder and the files they read, and the phase's done-criterion in
-`.agents/web_ui_plan.md` (the current-season team page shows rating heatmaps and a team detail with
-game logs) waits on that step; so far the pages have been checked only against the copied tables.
+**Status.** The ETL writes every table these pages read to `data/ratings/`: the ratings tables
+and, since the season-statistics ETL step (`.agents/sos_port/decisions/season_stats_etl.md`), the
+season-statistics tables, which equal the published files cell for cell when built through the
+ETL's own path (`.agents/sos_port/SEASON_STATS_ETL_PARITY.md`). While the folder holds none, the
+pages show an empty state naming the folder and the files they read and saying to run the ETL.
+The phase's done-criterion in `.agents/web_ui_plan.md` (the current-season team page shows rating
+heatmaps and a team detail with game logs) now waits on an ETL run that writes `data/ratings/`
+(held with step 6's approvals) and a look in a browser; so far the pages have been checked only
+against the copied tables.
 
 ## 1. The pages read `data/ratings/` under the configured data directory
 

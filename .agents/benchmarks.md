@@ -456,11 +456,12 @@ with `.venv/bin/python models/step3_gpu_reference/independent_rescore.py`.
 - Determinism: two GPU runs of the whole 2025 season (18 folds) are identical in every column.
 - Against the CPU task 55.8 unweighted pair on 2020-2025, all weeks, two seeds (GPU minus CPU):
   deterministic Brier `+0.00015` `[-0.00069, +0.00098]`, pick accuracy `+0.0046`
-  `[-0.0000, +0.0096]`, pool points `-2.5` `[-45.5, +39.5]`, margin MAE `+0.0213`
-  `[-0.0121, +0.0550]`, all inside the six-season noise floors; weeks 3-18 pick accuracy `+0.0060`
-  `[+0.0004, +0.0116]` is the one interval that excludes zero. The per-game GPU-vs-CPU margin move
-  (median `0.62`-`0.66` points) is about the size of a reseed on either device. The CPU pair ran on
-  code 246 commits older; the changes in between are documented as prediction-neutral.
+  `[-0.0000, +0.0096]`, pool points (week-block bootstrap) `-2.5` `[-45.5, +39.5]`, margin MAE
+  `+0.0213` `[-0.0121, +0.0550]`, all inside the six-season noise floors; weeks 3-18 pick accuracy
+  `+0.0060` `[+0.0004, +0.0116]` is the one interval that excludes zero. The per-game GPU-vs-CPU
+  margin move (median `0.62`-`0.66` points) is about the size of a reseed on either device. The
+  CPU pair ran on code 246 commits older; the changes in between are documented as
+  prediction-neutral.
 - The retired market blend (`0.2` toward the raw moneyline, clamp `0.1`) minus the floor, 2007-2025
   with an opener (4930 games), all weeks, two seeds: at the stored moneyline Brier `-0.00072`
   `[-0.00105, -0.00041]`, log loss `-0.00173` `[-0.00244, -0.00104]`; built from the opening spread
@@ -500,11 +501,11 @@ the reference lacks (2026 week 1 sigma `13.248`, both seeds averaged per game).
 (`r_seed42`, `r_seed7`) against `--no-market-transform` (`t_seed42`, `t_seed7`); every fold on
 the GPU, 200 trees in every head. Off minus on, all weeks, both seeds averaged per game:
 deterministic Brier `+0.00003` `[-0.00022, +0.00028]`, log loss `-0.00001`
-`[-0.00056, +0.00058]`, pick accuracy `-0.0019` `[-0.0043, +0.0005]`, pool points `-31.0`
-`[-85.5, +20.0]`, margin MAE `+0.0013` `[-0.0093, +0.0120]`, total MAE `+0.0024`
-`[-0.0087, +0.0135]`. No two-seed interval excludes zero in any window (all weeks, week 1,
-week 2, weeks 3-18); on ranks first on every all-weeks column but log loss (by `0.00001`). The
-Brier difference is about a seventeenth of the seed-7-minus-seed-42 move. Rules:
+`[-0.00056, +0.00058]`, pick accuracy `-0.0019` `[-0.0043, +0.0005]`, pool points (week-block
+bootstrap) `-31.0` `[-85.5, +20.0]`, margin MAE `+0.0013` `[-0.0093, +0.0120]`, total MAE
+`+0.0024` `[-0.0087, +0.0135]`. No two-seed interval excludes zero in any window (all weeks,
+week 1, week 2, weeks 3-18); on ranks first on every all-weeks column but log loss (by `0.00001`).
+The Brier difference is about a seventeenth of the seed-7-minus-seed-42 move. Rules:
 `HYPOTHESIS.md` there; second key `REVIEW.md` there (a separate reviewer); reproduce with
 `.venv/bin/python models/step3_market_transform/independent_rescore.py`.
 
@@ -574,11 +575,12 @@ there; second key: `REVIEW.md` there (a separate reviewer, recomputed from the f
 - The reference against the pick-time lines test (`models/step4/PT_seed*`, the same games and
   inputs apart from the removed columns), all weeks: deterministic Brier `+0.00032`
   `[-0.00021, +0.00085]` (the rule's tie, so it was adopted), log loss `+0.00080`
-  `[-0.00041, +0.00200]`, pick accuracy `+0.0029` `[-0.0007, +0.0066]`, pool points `+14.0`
-  `[-68.0, +95.0]`, margin MAE `+0.0094` `[-0.0118, +0.0301]`. Week 1 favors the pick-time lines
-  test (Brier `+0.00213` `[+0.00031, +0.00398]`, log loss `+0.00520` `[+0.00119, +0.00922]`),
-  about the size of that arm's own seed-7-minus-seed-42 week-1 move (`+0.00217`). The reference's
-  own seed-7-minus-seed-42 all-weeks Brier is `+0.00066` `[-0.00013, +0.00144]`.
+  `[-0.00041, +0.00200]`, pick accuracy `+0.0029` `[-0.0007, +0.0066]`, pool points (week-block
+  bootstrap) `+14.0` `[-68.0, +95.0]`, margin MAE `+0.0094` `[-0.0118, +0.0301]`. Week 1 favors
+  the pick-time lines test (Brier `+0.00213` `[+0.00031, +0.00398]`, log loss `+0.00520`
+  `[+0.00119, +0.00922]`), about the size of that arm's own seed-7-minus-seed-42 week-1 move
+  (`+0.00217`). The reference's own seed-7-minus-seed-42 all-weeks Brier is `+0.00066`
+  `[-0.00013, +0.00144]`.
 - The market yardstick, all weeks: the reference minus the pick-time line `+0.00105`
   `[-0.00016, +0.00222]`, minus the closing line (`compare --market-from models/step4/R0_seed42`)
   `+0.00412` `[+0.00246, +0.00586]`; the pick-time line itself trails the close by `+0.00307`

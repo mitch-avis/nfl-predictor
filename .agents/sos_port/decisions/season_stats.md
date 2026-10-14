@@ -381,9 +381,10 @@ Commands run from this repository's root with the worktree's environment:
 
 - **What differs**: that project builds a season only once it has games (its current season ran
   through week 4); a season with a schedule and no plays fails in its win totals for want of
-  scores. This repository's ETL runs before kickoff (`AGENTS.md`, "Readiness behaviors"), so here
-  `build_season_games` succeeds on such a season, `SeasonGames.played` is false, and
-  `build_season_tables` refuses it with a `ValueError` that says so.
+  scores. This repository's ETL runs before kickoff (`.agents/modeling_spec.md`, "Operational
+  behaviors that must not regress"), so here `build_season_games` succeeds on such a season,
+  `SeasonGames.played` is false, and `build_season_tables` refuses it with a `ValueError` that
+  says so.
 - **Options**: (a) a `played` flag and a clear refusal; (b) return `None` from
   `build_season_tables`; (c) empty tables of the published schema.
 - **Decision**: (a).

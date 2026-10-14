@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
-version = "0.55.1"
+version = "0.57.1"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 keywords = ["stats", "sports", "football", "machine learning"]
 readme = "README.md"
@@ -148,12 +148,11 @@ extend-allowed-calls = ["polars.lit"]
     "D",       # test names document themselves
     "ANN",     # fixtures/params don't need annotations everywhere
     "SLF001",  # tests may poke private helpers
-    "INP001",
-    "ARG001",
-    "ARG002",
-    "ARG005",
-    "DTZ001",  # EXIF timestamps are naive by definition
-    "PLC0415",
+    "INP001",  # tests/ sits on pytest's pythonpath as a plain directory, not a package
+    "ARG001",  # fixtures requested for their side effects; stubs keep the replaced signature
+    "ARG005",  # monkeypatched lambdas keep the signature of the function they replace
+    "DTZ001",  # test data uses naive datetimes, like the schedule dates it stands in for
+    "PLC0415", # an import used by a single test stays local to that test
 ]
 # Genuine false positives, each reviewed; the reason sits beside the rule.
 "src/nfl_predictor/api/registry/*.py" = [
@@ -263,4 +262,4 @@ omit = ["config.py", "config-*.py", "*/config.py", "*/config-*.py"]
 fail_under = 90
 show_missing = true
 skip_empty = true
-exclude_lines = ["pragma: no cover", "if __name__ == \"__main__\":"]
+exclude_lines = ["if __name__ == \"__main__\":"]

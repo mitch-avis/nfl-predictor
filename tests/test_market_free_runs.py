@@ -432,7 +432,7 @@ def _recorded_infos(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return infos
 
 
-def _spec_warnings(
+def _spec_notes(
     monkeypatch: pytest.MonkeyPatch, frame: pd.DataFrame, *, include_market: bool, builds: int = 1
 ) -> list[str]:
     """Build the feature spec ``builds`` times and return its "No game lines" notes.
@@ -459,7 +459,7 @@ def test_a_run_without_game_lines_notes_the_win_total_groups_it_keeps(
     frame = _schema_frame(derived_in_range=False)
 
     # Act
-    notes = _spec_warnings(monkeypatch, frame, include_market=False)
+    notes = _spec_notes(monkeypatch, frame, include_market=False)
 
     # Assert
     expected = (
@@ -476,7 +476,7 @@ def test_a_run_without_game_lines_logs_its_note_at_info_level(
 ) -> None:
     # Arrange
     warnings = _recorded_warnings(monkeypatch)
-    _recorded_infos(monkeypatch)
+    infos = _recorded_infos(monkeypatch)
     monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
     selection = FeatureSelection(
         include_market=False,
@@ -487,6 +487,7 @@ def test_a_run_without_game_lines_logs_its_note_at_info_level(
     build_feature_spec(_schema_frame(derived_in_range=False), selection)
 
     # Assert
+    assert len([message for message in infos if message.startswith("No game lines:")]) == 1
     assert not [message for message in warnings if "own_elo_wt" in message]
 
 
@@ -497,10 +498,10 @@ def test_a_run_without_game_lines_notes_once_for_every_fold(
     frame = _schema_frame(derived_in_range=False)
 
     # Act
-    warnings = _spec_warnings(monkeypatch, frame, include_market=False, builds=3)
+    notes = _spec_notes(monkeypatch, frame, include_market=False, builds=3)
 
     # Assert
-    assert len(warnings) == 1
+    assert len(notes) == 1
 
 
 def test_a_run_that_leaves_one_group_out_names_only_the_other(
@@ -513,11 +514,11 @@ def test_a_run_that_leaves_one_group_out_names_only_the_other(
     )
 
     # Act
-    warnings = _spec_warnings(monkeypatch, frame, include_market=False)
+    notes = _spec_notes(monkeypatch, frame, include_market=False)
 
     # Assert
-    assert len(warnings) == 1
-    assert "['own_elo_wt']" in warnings[0]
+    assert len(notes) == 1
+    assert "['own_elo_wt']" in notes[0]
 
 
 @pytest.mark.parametrize(
@@ -528,18 +529,18 @@ def test_a_run_that_leaves_one_group_out_names_only_the_other(
 def test_a_market_informed_group_the_spec_drops_as_empty_goes_unnamed(
     monkeypatch: pytest.MonkeyPatch, emptied: tuple[str, ...], kept: list[str]
 ) -> None:
-    """A group whose columns are all null leaves the features, so the warning leaves it out."""
+    """A group whose columns are all null leaves the features, so the note leaves it out."""
     # Arrange
     frame = _schema_frame(derived_in_range=False)
     empty = walk_forward.resolve_feature_group_columns(list(frame.columns), emptied)
     frame.loc[:, empty] = np.nan
 
     # Act
-    warnings = _spec_warnings(monkeypatch, frame, include_market=False)
+    notes = _spec_notes(monkeypatch, frame, include_market=False)
 
     # Assert
-    assert len(warnings) == (1 if kept else 0)
-    assert all(f"feature group(s) {kept};" in message for message in warnings)
+    assert len(notes) == (1 if kept else 0)
+    assert all(f"feature group(s) {kept};" in message for message in notes)
 
 
 @pytest.mark.parametrize(
@@ -558,7 +559,7 @@ def test_no_warning_when_the_market_columns_stay_or_the_groups_are_left_out(
         )
 
     # Act
-    warnings = _spec_warnings(monkeypatch, frame, include_market=include_market)
+    notes = _spec_notes(monkeypatch, frame, include_market=include_market)
 
     # Assert
-    assert warnings == []
+    assert notes == []

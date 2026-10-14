@@ -193,7 +193,19 @@ class RuleOutcome:
 
 
 def apply_rule(difference: Difference) -> RuleOutcome:
-    """Return the rule's outcome: only an interval wholly below zero recommends ``beyond``."""
+    """Return the rule's outcome: only an interval wholly below zero recommends ``beyond``.
+
+    Raises:
+        ValueError: If a bound is not finite (an empty set of games gives NaN bounds), so no
+            outcome is read from an interval that does not exist.
+
+    """
+    if not (math.isfinite(difference.low) and math.isfinite(difference.high)):
+        msg = (
+            f"The interval's bounds must be finite, got {difference.low!r} to "
+            f"{difference.high!r} over {difference.games} games."
+        )
+        raise ValueError(msg)
     if difference.high < 0.0:
         return RuleOutcome(branch=BRANCH_BELOW, recommend_beyond=True)
     if difference.low > 0.0:
@@ -489,6 +501,7 @@ class RunInputs:
     earlier_metadata_path: Path
     real_seasons: Sequence[int]
     comparison: Sequence[Mapping[str, Any]]
+    command: Sequence[tuple[str, str]]
 
 
 _BRANCH_TEXT = {
@@ -498,18 +511,71 @@ _BRANCH_TEXT = {
 }
 
 
+def _run_label(run: SeedRun, index: int) -> str:
+    """Return the reference run's directory and a comma for its default checkpoints, else ``""``.
+
+    Only the protocol's own checkpoint directories are labeled as the reference runs.
+    """
+    if (
+        index < len(DEFAULT_CHECKPOINT_DIRS)
+        and run.checkpoint_dir == (DEFAULT_CHECKPOINT_DIRS[index])
+    ):
+        return f"`{RUN_DIRS[index]}`, "
+    return ""
+
+
+def command_arguments(args: argparse.Namespace) -> list[tuple[str, str]]:
+    """Return every option of a run with its value, as the run used them.
+
+    The checkpoint directories and both metadata files are always named; the fold count and the
+    output only when they differ from their defaults.
+    """
+    pairs = [("--checkpoint-dir", str(directory)) for directory in args.checkpoint_dir]
+    pairs += [
+        ("--market-lines-metadata", str(args.market_lines_metadata)),
+        ("--earlier-market-lines-metadata", str(args.earlier_market_lines_metadata)),
+    ]
+    if args.expected_folds != edges.EXPECTED_FOLDS:
+        pairs.append(("--expected-folds", str(args.expected_folds)))
+    if args.out != HERE / OUT_MD:
+        pairs.append(("--out", str(args.out)))
+    return pairs
+
+
+_COMMAND_PREFIX = 'VIRTUAL_ENV="$PWD/.venv" PYTHONDONTWRITEBYTECODE=1 nice -n 10 .venv/bin/python'
+
+
+def command_text(pairs: Sequence[tuple[str, str]]) -> str:
+    """Return the run's command on one line."""
+    options = " ".join(f"{flag} {shlex.quote(value)}" for flag, value in pairs)
+    return f"{_COMMAND_PREFIX} {SCRIPT} {options}"
+
+
+def _command_block(pairs: Sequence[tuple[str, str]]) -> list[str]:
+    """Return the run's command as a fenced shell block, one option per line."""
+    body = [f"    {SCRIPT}", *(f"    {flag} {shlex.quote(value)}" for flag, value in pairs)]
+    return [
+        "```bash",
+        f"{_COMMAND_PREFIX} \\",
+        *(f"{line} \\" for line in body[:-1]),
+        body[-1],
+        "```",
+    ]
+
+
 def _data_lines(inputs: RunInputs, governing_games: int) -> list[str]:
     """Return the report's data section."""
     lines = ["## Data", ""]
     lines += [
-        f"- Seed {run.seed}: `{run_dir}`, {run.folds} fold checkpoints and {run.rows} game rows "
-        f"from `{run.checkpoint_dir}` (its manifest's `random_seed` is {run.seed}); "
+        f"- Seed {run.seed}: {_run_label(run, index)}{run.folds} fold checkpoints and "
+        f"{run.rows} game rows from `{run.checkpoint_dir}` (its manifest's `random_seed` is "
+        f"{run.seed}); "
         f"{len(run.scored)} scored games ({edges.FIRST_SEASON}-{edges.LAST_SEASON} regular "
         "season, both moneylines and a spread). Floor check: "
         "`Phi(predicted_margin / floor_sigma)` reproduces every fold's deterministic "
         f"probability to a largest difference of `{run.floor_difference:.1e}` (tolerance "
         f"`{edges.FLOOR_TOLERANCE:.0e}`)."
-        for run, run_dir in zip(inputs.runs, RUN_DIRS, strict=False)
+        for index, run in enumerate(inputs.runs)
     ]
     seasons_text = ", ".join(str(season) for season in inputs.real_seasons)
     return [
@@ -609,7 +675,8 @@ def build_report(scores: Scores, inputs: RunInputs, provenance: Mapping[str, Any
             "`d = (q_beyond - y)^2 - (p_model - y)^2`, `q_beyond` unclipped, averaged over the two "
             "seeds per game, then its mean over the governing games with a bootstrap over games "
             f"({edges.BOOTSTRAP_RESAMPLES:,} resamples, numpy seed {edges.BOOTSTRAP_SEED}, 95% "
-            "percentile interval). A negative `d` means the beyond claim scored better."
+            "percentile interval) that resamples the games in game-id order, so the interval "
+            "depends on that order. A negative `d` means the beyond claim scored better."
         ),
         "",
         (
@@ -617,13 +684,7 @@ def build_report(scores: Scores, inputs: RunInputs, provenance: Mapping[str, Any
             f"file and `{OUT_JSON}`):"
         ),
         "",
-        "```bash",
-        'VIRTUAL_ENV="$PWD/.venv" PYTHONDONTWRITEBYTECODE=1 nice -n 10 .venv/bin/python \\',
-        f"    {SCRIPT} \\",
-        *[f"    --checkpoint-dir {run.checkpoint_dir} \\" for run in inputs.runs],
-        f"    --market-lines-metadata {inputs.metadata_path} \\",
-        f"    --earlier-market-lines-metadata {inputs.earlier_metadata_path}",
-        "```",
+        *_command_block(inputs.command),
         "",
         *_data_lines(inputs, rule_number.games),
         "",
@@ -669,6 +730,11 @@ def _record(scores: Scores, inputs: RunInputs) -> dict[str, Any]:
     return {
         "protocol": ".agents/sos_port/protocols/betting_labels.md",
         "seeds": [run.seed for run in inputs.runs],
+        "bootstrap": {
+            "resamples": edges.BOOTSTRAP_RESAMPLES,
+            "numpy_seed": edges.BOOTSTRAP_SEED,
+            "game_order": "game_id",
+        },
         "runs": [
             {
                 "seed": run.seed,
@@ -705,7 +771,7 @@ def _record(scores: Scores, inputs: RunInputs) -> dict[str, Any]:
     }
 
 
-def run(args: argparse.Namespace, command: str) -> int:
+def run(args: argparse.Namespace) -> int:
     """Check the inputs, score once, and write the report and its JSON record.
 
     Raises:
@@ -713,7 +779,8 @@ def run(args: argparse.Namespace, command: str) -> int:
 
     """
     start = time.perf_counter()
-    checkpoint_dirs: list[Path] = args.checkpoint_dir or list(DEFAULT_CHECKPOINT_DIRS)
+    args.checkpoint_dir = args.checkpoint_dir or list(DEFAULT_CHECKPOINT_DIRS)
+    checkpoint_dirs: list[Path] = args.checkpoint_dir
     if len(checkpoint_dirs) != len(SEEDS):
         msg = f"Give one checkpoint directory per seed, in seed order {SEEDS}."
         raise ValueError(msg)
@@ -727,6 +794,12 @@ def run(args: argparse.Namespace, command: str) -> int:
         paired, real_seasons, args.market_lines_metadata, args.earlier_market_lines_metadata
     )
     governing_games = int(paired["season"].isin(real_seasons).sum())
+    if governing_games == 0:
+        msg = (
+            f"No governing games: the real-moneyline seasons {real_seasons} hold no scored game, "
+            "so the rule has nothing to read."
+        )
+        raise ValueError(msg)
     log.info("Governing games: %d in seasons %s.", governing_games, real_seasons)
     scores = score(paired, real_seasons, SEEDS)
     inputs = RunInputs(
@@ -735,6 +808,7 @@ def run(args: argparse.Namespace, command: str) -> int:
         earlier_metadata_path=args.earlier_market_lines_metadata,
         real_seasons=real_seasons,
         comparison=comparison,
+        command=command_arguments(args),
     )
     input_digests = {str(directory): directory_digest(directory) for directory in checkpoint_dirs}
     for path in (args.market_lines_metadata, args.earlier_market_lines_metadata):
@@ -750,7 +824,7 @@ def run(args: argparse.Namespace, command: str) -> int:
         "code": {path.name: common.sha256_file(path) for path in code_paths},
         "inputs": input_digests,
         "git_commit": common.git_commit(),
-        "command": command,
+        "command": command_text(inputs.command),
         "seconds": time.perf_counter() - start,
     }
     out: Path = args.out
@@ -777,9 +851,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--earlier-market-lines-metadata", type=Path, default=DEFAULT_EARLIER_METADATA_PATH
     )
     parser.add_argument("--out", type=Path, default=HERE / OUT_MD)
-    arguments = list(sys.argv[1:] if argv is None else argv)
-    command = " ".join([SCRIPT, *map(shlex.quote, arguments)])
-    return run(parser.parse_args(arguments), command)
+    return run(parser.parse_args(argv))
 
 
 if __name__ == "__main__":

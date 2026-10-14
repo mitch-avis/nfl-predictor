@@ -146,48 +146,51 @@ Answered on 2026-10-14 (record in DECISIONS.md and `step6_plan.md` at the docs c
 - The "no game lines" mode (`--wf-market-mode none` and the three market options): make it leave
   out `strength,elo,own_elo_wt`, the reviewed list of `models/step6/elo_marketfree_seed{42,7}`
   (today it uses production's groups). Approved; implement test first after the Week 6 picks.
-- The approval and merge session: the user wants it now, before the Week 6 picks (Thursday
-  2026-10-15), not on 2026-10-20; a merge before Thursday's game counts as between game weeks.
+- The merge: approved for today, after a preliminary Week 6 run on today's `main` and the user's
+  review of it and of the `../nfeloqb` changes; then back up and rebuild `data/`.
+- `../nfeloqb`: the user allowed me to run their weekly process for Week 6 (memory
+  `nfeloqb-weekly-process`) and approved taking upstream's Elo fix (`90e19d9`). Done: fork `main`
+  at `27709b5`, pushed. It merges upstream, adds `tests/test_elo_qb_adjustment.py` (failed on the
+  old code, passes now) and restores the fork's legacy team-code lookups in next-week projections
+  for both Elo tracks, which the merge had dropped. `data/qb_elos.csv` and `data/meta_data.csv`
+  replaced; the old copies, hashes and checks are in `~/scratch/data_backups/2026-10-14_pre_week6/`
+  (record in `.agents/benchmarks.md`, end of "Step 6 reference arms"). Week 6 swaps: `TB,2` only;
+  Baltimore (Lamar) is the toss-up to recheck after Friday's injury report.
+- The preliminary Week 6 run on `main` (`0.45.4`): launched 2026-10-14 17:51 MDT by
+  `~/scratch/week06_prelim/launch.sh` (log `run.log` beside it).
 
-Still open (asked 2026-10-14):
+Still open:
 
-1. OK to merge this branch into `main` today (`0.59.0`, `gate.sh --web` `0`)?
-2. OK to back up `data/` and rebuild it with the ratings (about 5 minutes, then the leakage
-   audit)?
-3. `../nfeloqb` for Week 6: the user runs it unchanged (sets projected starters by hand, runs
-   `workflow.py run_now`, copies `qb_elos.csv` into `data/`), or tells me where the starters go
-   and I run it. Touching `../nfeloqb` is must-ask. The win-total fix (its `handle_regression`,
-   `nfeloqb/Resources/elo.py:120-142`, reads `Manual Data/wt_ratings.csv`, which ends at 2023;
-   the upstream `nfelosrs` file covers 2003-2026) waits until after the picks: it changes
-   `qb_elos.csv` for 2024-2026 and needs a build and a walk-forward.
-4. Who launches the Week 6 weekly run (the first after the merge retrains stage 1, since every
-   fingerprint changed; estimated under an hour on the GPU, not measured).
-5. The top-decile ranking for future label reports (decides nothing now): explained on
+1. The top-decile ranking for future label reports (decides nothing now): explained on
    2026-10-14 as (a) one list ranked by the two-seed mean edge, recommended as the headline, or
-   (b) one list per seed, as a robustness note; the user has not chosen.
+   (b) one list per seed; the user leaned to (b) on reading the more negative numbers as stronger,
+   and was told those numbers measure the labels, not the ranking. Not chosen yet.
+2. A pre-existing `../nfeloqb` quirk (not from the merge, not read by this repo): next-week
+   projections inflate Las Vegas's `qb1_adj` (Cousins `+160` for Week 6 and `+158` for Week 5,
+   against `+36` once Week 5 was played), likely an `OAK`/`LV` lookup in the starter values.
 
-## Next: the merge and the Week 6 picks, then the close-out
+## Next: the user's review, the merge, then the close-out
 
-On the user's approvals, in order:
-
-1. The merge into `main` (`--no-ff`, from the main checkout; check `ss -ltnp` first), then
+1. The user reviews the `../nfeloqb` changes and the preliminary Week 6 run. Hold until then.
+2. The merge into `main` (`--no-ff`, from the main checkout; check `ss -ltnp` first), then
    `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` there.
-2. Back up `data/`, rebuild it (`nfl-predictor data`), run `nfl-predictor leakage-audit`.
-3. `../nfeloqb` and the `data/qb_elos.csv` copy, as the user decides.
-4. The Week 6 weekly run, as the user decides. Fallback: `main` at `5087a5c` with the backed-up
+3. Back up `data/`, rebuild it (`nfl-predictor data`), run `nfl-predictor leakage-audit`, then a
+   second Week 6 run on the merged `main`. Fallback: `main` at `5087a5c` with the backed-up
    `data/`.
 
 After the picks, on this branch or a fresh one off `main`:
 
 1. The "no game lines" groups change, test first through an implementer and a reviewer.
-2. The docs close-out: regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/`
+2. Measure the `qb_elos.csv` fix and the stale win-total file with two dataset builds (a
+   hypothesis and decision rule first; walk-forwards are must-ask beyond one per hypothesis).
+3. The docs close-out: regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/`
    write: ask), rename "market-free" to "no game lines" where it means the configuration with Elo
    (including `stage1.py:63,68`), refresh the stale "Review:" fields in
    `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums, record the 2026-10-11,
    2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and `TODO.md`, list the open P3s above,
    and build the approvals list and the user's final HTML report.
-3. `scripts/gate.sh --web` on the final tree; a browser look at the new pages; the 2026 roof
-   recheck before the Paris game on 2026-10-25; the `../nfeloqb` win-total fix decision.
+4. `scripts/gate.sh --web` on the final tree; a browser look at the new pages; the 2026 roof
+   recheck before the Paris game on 2026-10-25.
 
 ## How the last sessions worked (keep doing this)
 

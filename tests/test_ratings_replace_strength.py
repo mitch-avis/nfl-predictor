@@ -16,6 +16,8 @@ import logging
 import sys
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+import pandas as pd
 import pytest
 from tests.feature_group_fixture import (
     GROUP_COLUMNS,
@@ -44,6 +46,19 @@ COLUMNS_WITH_NEITHER = ("season", "week", *GROUP_COLUMNS["elo"])
 REMEDIES = ("nfl-predictor data", "--disable-feature-groups", "disable_feature_groups")
 
 
+def _frame(columns: tuple[str, ...], *, null: tuple[str, ...] = ()) -> pd.DataFrame:
+    """Return two rows of ``columns``, every value set except in the ``null`` columns."""
+    return pd.DataFrame({c: [np.nan, np.nan] if c in null else [1.0, 2.0] for c in columns})
+
+
+def _null_ratings_csv(path: Path) -> None:
+    """Empty every ratings column of the games file at ``path``, as a build without play-by-play."""
+    games = pd.read_csv(path)
+    for column in RATINGS_COLUMNS:
+        games[column] = np.nan
+    games.to_csv(path, index=False)
+
+
 def _train_argv(data_path: Path, run_dir: Path, *extra: str) -> list[str]:
     """Return ``nfl-predictor train``'s arguments for a CPU fit of ``data_path``."""
     return [
@@ -67,7 +82,7 @@ def test_the_check_stops_when_strength_is_left_out_and_the_data_has_no_ratings()
     # Act & Assert
     with pytest.raises(ValueError, match="no column of the ported ratings") as stopped:
         feature_spec.check_ratings_replace_strength(
-            COLUMNS_WITHOUT_RATINGS, PRODUCTION_GROUPS, stop=True
+            _frame(COLUMNS_WITHOUT_RATINGS), PRODUCTION_GROUPS, stop=True
         )
     assert all(remedy in str(stopped.value) for remedy in REMEDIES)
 
@@ -80,13 +95,38 @@ def test_the_check_warns_with_the_same_remedies_when_asked_to_carry_on(
 
     # Act
     feature_spec.check_ratings_replace_strength(
-        COLUMNS_WITHOUT_RATINGS, PRODUCTION_GROUPS, stop=False
+        _frame(COLUMNS_WITHOUT_RATINGS), PRODUCTION_GROUPS, stop=False
     )
 
     # Assert
     (message,) = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
     assert "no column of the ported ratings" in message
     assert all(remedy in message for remedy in REMEDIES)
+
+
+def test_the_check_counts_ratings_columns_null_in_every_row_as_missing() -> None:
+    """A build without play-by-play keeps the ratings columns, null in every row."""
+    # Arrange
+    frame = _frame(COLUMNS_WITH_RATINGS, null=RATINGS_COLUMNS)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="no column of the ported ratings"):
+        feature_spec.check_ratings_replace_strength(frame, PRODUCTION_GROUPS, stop=True)
+
+
+def test_the_check_accepts_ratings_with_a_value_in_one_column_and_row(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    frame = _frame(COLUMNS_WITH_RATINGS, null=RATINGS_COLUMNS[1:])
+    frame.loc[1, RATINGS_COLUMNS[0]] = np.nan
+
+    # Act
+    feature_spec.check_ratings_replace_strength(frame, PRODUCTION_GROUPS, stop=False)
+
+    # Assert
+    assert caplog.records == []
 
 
 @pytest.mark.parametrize(
@@ -111,7 +151,7 @@ def test_the_check_says_nothing_when_the_ratings_are_there_or_strength_is_kept(
     caplog.set_level(logging.WARNING)
 
     # Act
-    feature_spec.check_ratings_replace_strength(columns, groups, stop=stop)
+    feature_spec.check_ratings_replace_strength(_frame(columns), groups, stop=stop)
 
     # Assert
     assert caplog.records == []
@@ -122,6 +162,21 @@ def test_train_stops_on_data_without_the_ported_ratings(
 ) -> None:
     # Arrange
     paths = build_group_fixture(tmp_path)
+    run_dir = tmp_path / "run"
+    monkeypatch.setattr(sys, "argv", _train_argv(paths["completed"], run_dir))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="nfl-predictor data"):
+        train.main()
+    assert not (run_dir / "metadata.json").exists()
+
+
+def test_train_stops_when_the_ratings_columns_are_null_in_every_row(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    paths = build_group_fixture(tmp_path, ratings=True)
+    _null_ratings_csv(paths["completed"])
     run_dir = tmp_path / "run"
     monkeypatch.setattr(sys, "argv", _train_argv(paths["completed"], run_dir))
 
@@ -196,3 +251,21 @@ def test_the_weekly_runs_final_fit_stops_on_data_without_the_ported_ratings(
     with pytest.raises(ValueError, match="nfl-predictor data"):
         pipeline.main()
     assert not (tmp_path / "run" / "metadata.json").exists()
+
+
+@pytest.mark.parametrize("all_null", [False, True], ids=["no ratings column", "ratings all null"])
+def test_a_weekly_dry_run_stops_before_any_work_on_data_without_the_ported_ratings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, all_null: bool
+) -> None:
+    """The check runs right after the data refresh or its skip, before the run directory."""
+    # Arrange
+    paths = build_group_fixture(tmp_path, ratings=all_null)
+    if all_null:
+        _null_ratings_csv(paths["completed"])
+    config_path = write_group_weekly_config(tmp_path, paths, {"dry_run": True})
+    monkeypatch.setattr(sys, "argv", ["nfl-predictor weekly", "--config", str(config_path)])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="nfl-predictor data"):
+        pipeline.main()
+    assert not (tmp_path / "run").exists()

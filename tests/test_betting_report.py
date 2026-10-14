@@ -298,6 +298,15 @@ def test_build_betting_report_nan_floor_sigma_raises() -> None:
         betting_report.build_betting_report(predictions, floor_sigma=float("nan"))
 
 
+def test_build_betting_report_infinite_floor_sigma_raises() -> None:
+    # Arrange
+    predictions = _spread_predictions([-2.5, 3.0])
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="sigma"):
+        betting_report.build_betting_report(predictions, floor_sigma=math.inf)
+
+
 @pytest.mark.parametrize("sigma", [0.0, -0.0, -1.0, -math.inf, math.nan])
 def test_build_betting_report_non_positive_or_nan_floor_sigma_with_spreads_raises(
     sigma: float,

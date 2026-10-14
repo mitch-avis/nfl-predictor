@@ -18,6 +18,8 @@ still read the whole edge.
 
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 
 from nfl_predictor import constants
@@ -137,11 +139,11 @@ def build_betting_report(
 
     Raises:
         ValueError: If ``predictions`` lacks a required column, or ``floor_sigma`` is given and
-            is not positive.
+            is not finite and positive.
 
     """
-    if floor_sigma is not None and not floor_sigma > 0:
-        msg = f"The floor's sigma must be positive, got {floor_sigma!r}."
+    if floor_sigma is not None and not (math.isfinite(floor_sigma) and floor_sigma > 0):
+        msg = f"The floor's sigma must be positive and finite, got {floor_sigma!r}."
         raise ValueError(msg)
     required = {
         "away_abbr",

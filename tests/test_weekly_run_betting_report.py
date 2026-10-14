@@ -84,6 +84,17 @@ def test_weekly_run_with_several_floor_sigmas_passes_no_sigma(
     assert received == [None]
 
 
+def test_report_floor_sigma_rejects_an_infinite_sigma() -> None:
+    # Arrange
+    predictions = pd.DataFrame({"floor_sigma": [math.inf, math.inf]})
+
+    # Act
+    sigma = pipeline._report_floor_sigma(predictions)
+
+    # Assert
+    assert sigma is None
+
+
 @pytest.mark.parametrize(
     ("values", "expected"),
     [

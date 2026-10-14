@@ -24,6 +24,7 @@ Outputs land under the run directory (default: models/<run_id>/) and include:
 from __future__ import annotations
 
 import json
+import math
 import shlex
 import sys
 from dataclasses import asdict, dataclass
@@ -542,12 +543,12 @@ def _report_floor_sigma(predictions: pd.DataFrame) -> float | None:
 
     Every prediction row carries the sigma the final fit estimated for the week
     (``floor_sigma``); the betting report needs it to split the moneyline edge at the spread.
-    None when the column is missing or does not hold exactly one positive value.
+    None when the column is missing or does not hold exactly one finite positive value.
     """
     if "floor_sigma" not in predictions.columns:
         return None
     values = pd.to_numeric(predictions["floor_sigma"], errors="coerce").dropna().unique()
-    if len(values) != 1 or not values[0] > 0:
+    if len(values) != 1 or not (math.isfinite(values[0]) and values[0] > 0):
         return None
     return float(values[0])
 

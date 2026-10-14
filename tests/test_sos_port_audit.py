@@ -693,6 +693,8 @@ def test_load_pairs_unknown_row_fails_the_audit(parity: ModuleType) -> None:
 
 _RULE_10_PAIRS = {
     "carries_faced": "opponent",
+    "attempts_faced": "opponent",
+    "completions_allowed": "opponent",
     "rush_success_rate_allowed": "own",
     "third_down_pct_allowed": "own",
     "fourth_down_pct_allowed": "own",

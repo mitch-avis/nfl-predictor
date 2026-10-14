@@ -588,8 +588,8 @@ columns:
     columns: [attempts_faced, completions_allowed]
     class: matched
     here_map:
-      attempts_faced: box_score:pass_attempts
-      completions_allowed: box_score:pass_completions
+      attempts_faced: box_score[opponent]:pass_attempts
+      completions_allowed: box_score[opponent]:pass_completions
     note: The opponent's row; the same play-by-play definition.
   - id: gl-carries-faced
     kinds: [team_game_logs]

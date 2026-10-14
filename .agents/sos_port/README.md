@@ -143,7 +143,8 @@ and `aggregate_pbp_team_box_score_stats`, and compares every team-game with
 must be equal, sums and rates within `1e-6`. Only game-log columns its own code builds from
 play-by-play can be judged; the report lists every other column with its source. A pair with
 `row: opponent` compares this repository's value for a team with the game-log value on its
-opponent's row of the same game (`carries_faced`, the carries the defense faced). Both sides are
+opponent's row of the same game (`carries_faced`, `attempts_faced` and `completions_allowed`, what
+the defense faced); a team-game whose opponent's row is missing fails the check. Both sides are
 keyed in canonical team codes, so a team-game one side writes with the Rams as `LA` is compared
 like any other.
 

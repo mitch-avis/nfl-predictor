@@ -203,6 +203,18 @@ pairs:
     kind: count
     row: opponent
     causes: []
+  - id: attempts_faced
+    ours: pass_attempts
+    theirs: attempts_faced
+    kind: count
+    row: opponent
+    causes: []
+  - id: completions_allowed
+    ours: pass_completions
+    theirs: completions_allowed
+    kind: count
+    row: opponent
+    causes: []
 
 # Every cause below explains team-games or is a check the report runs (team codes, coverage, the
 # snapshot). The causes the step-6 integration left without a team-game are gone; the run that

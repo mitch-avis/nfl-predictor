@@ -44,10 +44,12 @@ production's reference after adoption, and has not been run on any data.
 - **Market**: the build's `models/step6/inputs/candidate_market_lines_metadata.json`, read as
   `betting_edges.py` reads its metadata: `p_ml` from the report's own `_moneyline_to_implied_prob`
   and `_novig_pair`, and the real-or-derived split from the metadata.
-- **Governing games**: the 2007-2025 regular-season games with a real moneyline pair (prices, not
-  derived from the spread through the fitted map) and a spread. The count is reported; it is
-  expected near 815, the count on the earlier build, and any difference is explained from the
-  metadata before scoring.
+- **Governing games**: the 2007-2025 regular-season games with both moneylines and a spread in
+  the seasons none of whose moneylines were derived from the spread through the fitted map
+  (`betting_edges.real_moneyline_seasons`: the metadata records per-season counts, so a season
+  with any derived moneyline is left out whole). The count is reported; it is expected near 815,
+  the count on the earlier build, and any difference is explained from the metadata before
+  scoring.
 - **Outcome**: the fold's `actual_home_win`; a tie scores 0, as in entry 1 and every walk-forward
   Brier here.
 
@@ -69,8 +71,7 @@ production's reference after adoption, and has not been run on any data.
 ## Reported beside the rule, deciding nothing
 
 - Each seed alone, with its interval.
-- The same difference on every scored game (real and derived moneylines) and on the derived ones
-  alone.
+- The same difference on every scored game and on the games of the other seasons alone.
 - Log loss of both claims with each probability clipped to `[1e-6, 1 - 1e-6]`, paired and
   bootstrapped the same way.
 - The difference within the top decile (`ceil(n / 10)` games) of `|edge|` and, separately, of

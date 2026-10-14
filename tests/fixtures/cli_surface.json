@@ -973,11 +973,14 @@
    "action": "_StoreAction",
    "choices": [
     "composite",
-    "bradley_terry"
+    "bradley_terry",
+    "ported",
+    "model",
+    "blend"
    ],
    "default": null,
    "dest": "method",
-   "help": "How teams are rated. 'composite' (default) ranks on the ETL's schedule-adjusted strength composite for the week after --through-week: the current-season view. 'bradley_terry' fits ratings to game results with the --ratings-* options. --legacy-franchise-fit implies bradley_terry.",
+   "help": "How teams are rated. 'composite' (default) ranks on the ETL's schedule-adjusted strength composite for the week after --through-week: the current-season view. 'bradley_terry' fits ratings to game results with the --ratings-* options. --legacy-franchise-fit implies bradley_terry. 'ported' ranks on the ported team rating (--ratings-dir), 'model' on a fit to a walk-forward's predicted margins (--model-predictions), and 'blend' on both (--blend-weight on the ported rating).",
    "nargs": null,
    "options": [
     "--method"
@@ -985,6 +988,48 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/ratings",
+   "dest": "ratings_dir",
+   "help": "Published ported ratings tables, read by the ported method and by the model and blend methods in week 1 (default: data/ratings).",
+   "nargs": null,
+   "options": [
+    "--ratings-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [],
+   "dest": "model_predictions",
+   "help": "Model and blend methods: walk-forward run directories or fold checkpoint directories whose pre-game predictions cover every completed regular-season game of the season before the ranked week (the previous season for week 1).",
+   "nargs": "+",
+   "options": [
+    "--model-predictions"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "blend_weight",
+   "help": "Blend method: the weight on the ported rating, from 0 to 1.",
+   "nargs": null,
+   "options": [
+    "--blend-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
   },
   {
    "action": "_StoreAction",
@@ -2760,11 +2805,14 @@
    "action": "_StoreAction",
    "choices": [
     "composite",
-    "bradley_terry"
+    "bradley_terry",
+    "ported",
+    "model",
+    "blend"
    ],
    "default": null,
    "dest": "power_rankings_method",
-   "help": "Power rankings method: 'composite' (default; the ETL's schedule-adjusted strength for the week after the through-week) or 'bradley_terry'. --legacy-franchise-fit implies bradley_terry.",
+   "help": "Power rankings method: 'composite' (default; the ETL's schedule-adjusted strength for the week after the through-week), 'bradley_terry', 'ported' (the ported team rating), 'model' (a fit to walk-forward predicted margins) or 'blend' (both). --legacy-franchise-fit implies bradley_terry.",
    "nargs": null,
    "options": [
     "--power-rankings-method"
@@ -2786,6 +2834,48 @@
    "required": false,
    "subcommand": null,
    "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/ratings",
+   "dest": "power_rankings_ratings_dir",
+   "help": "Published ported ratings tables the ported method reads (and the model and blend methods in week 1).",
+   "nargs": null,
+   "options": [
+    "--power-rankings-ratings-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [],
+   "dest": "power_rankings_model_predictions",
+   "help": "Walk-forward runs or fold checkpoint directories whose pre-game predictions the model and blend methods fit their rating to; they must cover every completed regular-season game of the season before the ranked week (the previous season for week 1).",
+   "nargs": "*",
+   "options": [
+    "--power-rankings-model-predictions"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "power_rankings_blend_weight",
+   "help": "The blend method's weight on the ported rating, from 0 to 1.",
+   "nargs": null,
+   "options": [
+    "--power-rankings-blend-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
   },
   {
    "action": "_StoreAction",

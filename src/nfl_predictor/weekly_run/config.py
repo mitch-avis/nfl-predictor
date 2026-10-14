@@ -38,8 +38,9 @@ _PATH_KEYS = {
     "power_rankings_data_schedule",
     "power_rankings_out_dir",
     "power_rankings_strength_snapshots",
+    "power_rankings_ratings_dir",
 }
-_PATH_LIST_KEYS = {"floor_sigma_reference_runs"}
+_PATH_LIST_KEYS = {"floor_sigma_reference_runs", "power_rankings_model_predictions"}
 # Config keys that list feature groups; the command line takes them comma-separated.
 _FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}
 
@@ -591,8 +592,9 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
         default=defaults.get("power_rankings_method"),
         help=(
             "Power rankings method: 'composite' (default; the ETL's schedule-adjusted "
-            "strength for the week after the through-week) or 'bradley_terry'. "
-            "--legacy-franchise-fit implies bradley_terry."
+            "strength for the week after the through-week), 'bradley_terry', 'ported' (the "
+            "ported team rating), 'model' (a fit to walk-forward predicted margins) or "
+            "'blend' (both). --legacy-franchise-fit implies bradley_terry."
         ),
     )
     parser.add_argument(
@@ -602,6 +604,33 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
             "power_rankings_strength_snapshots", power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
         ),
         help="Per-team weekly strength file the composite method reads.",
+    )
+    parser.add_argument(
+        "--power-rankings-ratings-dir",
+        type=Path,
+        default=defaults.get("power_rankings_ratings_dir", power_rankings.DEFAULT_RATINGS_DIR),
+        help=(
+            "Published ported ratings tables the ported method reads (and the model and blend "
+            "methods in week 1)."
+        ),
+    )
+    parser.add_argument(
+        "--power-rankings-model-predictions",
+        type=Path,
+        nargs="*",
+        default=defaults.get("power_rankings_model_predictions", []),
+        help=(
+            "Walk-forward runs or fold checkpoint directories whose pre-game predictions the "
+            "model and blend methods fit their rating to; they must cover every completed "
+            "regular-season game of the season before the ranked week (the previous season "
+            "for week 1)."
+        ),
+    )
+    parser.add_argument(
+        "--power-rankings-blend-weight",
+        type=float,
+        default=defaults.get("power_rankings_blend_weight"),
+        help="The blend method's weight on the ported rating, from 0 to 1.",
     )
     parser.add_argument(
         "--ratings-window-seasons",
@@ -836,14 +865,21 @@ def power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOpt
             include_future=bool(args.ratings_include_future),
             ratings_min_season=args.ratings_min_season,
             strength_snapshots=Path(args.power_rankings_strength_snapshots),
+            ratings_dir=Path(args.power_rankings_ratings_dir),
+            model_predictions=tuple(Path(path) for path in args.power_rankings_model_predictions),
+            blend_weight=args.power_rankings_blend_weight,
         )
     )
 
 
 def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
-    """Return the ranking settings that decide whether a reports stage can be reused."""
+    """Return the ranking settings that decide whether a reports stage can be reused.
+
+    The ported, model and blend sources' settings join only when one of those methods ranks,
+    so the other methods' records stay as they were.
+    """
     options = power_ranking_options(args)
-    return {
+    report: dict[str, Any] = {
         "power_rankings_method": options.method,
         "power_rankings_strength_snapshots": str(options.strength_snapshots),
         "ratings_window_seasons": options.window_seasons,
@@ -852,3 +888,10 @@ def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
         "ratings_include_future": options.include_future,
         "ratings_min_season": options.ratings_min_season,
     }
+    if options.method in power_rankings.POINTS_METHODS:
+        report |= {
+            "power_rankings_ratings_dir": str(options.ratings_dir),
+            "power_rankings_model_predictions": [str(path) for path in options.model_predictions],
+            "power_rankings_blend_weight": options.blend_weight,
+        }
+    return report

@@ -24,3 +24,21 @@ walk-forward at a time, `launch.sh` with `nohup setsid`, the OpenMP wait policy)
   about half a core continuously) a three-season from-week-1 run took about 110 minutes instead of
   about 50 idle, so the seed-7 arm was relaunched with `OMP_WAIT_POLICY=PASSIVE` and resumed from
   its checkpoints. Check `uptime` and `ps -eo pcpu,args --sort=-pcpu | head -4` before a launch.
+
+## Launching a run
+
+- Every walk-forward starts through a small `launch.sh` in its own run directory: it `cd`s to the
+  repo root, runs `.venv/bin/nfl-predictor <command>` with the run's options and echoes the exit
+  code. Start it with `nohup setsid`, never from a harness-bound shell, which stops at 10 minutes.
+  Several accepted rungs run back to back through one driver script; check the driver's log after
+  its first run-to-run transition, not only at the end.
+- Any logic added to a `launch.sh` (a load probe, for example) is tested under the script's own
+  strict-mode header, because `IFS=$'\n\t'` changes how `read` splits. A probe written without it
+  failed and stopped the whole queue overnight on 2026-09-23.
+- Never execute a fragment cut from a `launch.sh`: a cut that includes the `nfl-predictor backtest`
+  line starts a second walk-forward with default settings. Never `pkill -f` a pattern that can
+  match your own shell.
+- Progress: every finished week prints a `Walk-forward fold N/M done` line with elapsed and
+  remaining time. After a stop, re-running the identical command resumes at the next unfinished
+  week (`--no-resume` retrains everything). A `weekly_run`'s own walk-forward of the production
+  configuration is in `wf_compare/wf_compare.csv`.

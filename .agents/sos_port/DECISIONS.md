@@ -313,3 +313,54 @@ generated [SEASON_STATS_ETL_PARITY.md](SEASON_STATS_ETL_PARITY.md). Review: two 
   back to the cache.
 - **Cost**: about a minute more on a full rebuild and about half a minute on an incremental run
   (measured under the walk-forwards' load, so high).
+
+### Power rankings on the ported ratings and the model (`0.57.0`)
+
+Full record: [decisions/power_rankings.md](decisions/power_rankings.md) (11 entries); the score's
+rule is `models/step6/rankings/HYPOTHESIS.md` (main checkout, written before any candidate was
+scored) and its second key `models/step6/rankings/REVIEW.md` (two rounds, verdict "merge as is";
+the reviewer reproduced every number with an independent script).
+
+- **What was measured**: four candidate rankings, each a rating in points known before the week,
+  scored on next-week margins (MAE, 2008-2025 from week 2, 4,400 games, game and season
+  bootstraps): the ported team rating, the composite production ranks on today, a model rating
+  (a ridge fit of team strengths to the anchored ported-ratings walk-forward's pre-game predicted
+  margins), and a blend of the ported and model ratings with its weight chosen on earlier seasons.
+- **Outcome, applied as written** (seed 42, the rule's input): the blend replaces the ported
+  rating (10.497 against 10.643, -0.146, games [-0.204, -0.088], seasons [-0.194, -0.102], better
+  in 18 of 18 seasons); the composite (10.590) and the model rating (10.678) tie the ported rating.
+  Both seeds averaged give the same outcome (blend -0.151 [-0.208, -0.094]).
+- **Decided here**: the model rating's ridge penalty and week 1 (the previous regular season's
+  fit carried forward by the ported prior's factor), the league home term, the blend's weight
+  grid, the two bootstraps, and the three methods behind the existing setting with the composite
+  still the default (one implementation serves the measurement and production, rule 11).
+- **Seeds**: the two-seed supplement averages each game's predicted margin before the fit, where
+  rule 13 averages per-game loss differences; the reviewer computed both, with the same outcome.
+- **For the user**: whether production switches to the blend (`config/weekly_run.yaml`), and if
+  so where a weekly run reads the model's predictions (the implementer recommends the run's own
+  stage-1 folds plus the floor-sigma reference runs for week 1). The blend's model half comes
+  from the market-anchored model, so a published blend partly carries the betting line.
+
+### The ported quarterback rating as the own Elo's adjustment (`0.57.1`)
+
+Full record: [decisions/elo.md](decisions/elo.md), entries 17 (the rule, committed before any
+score) and 18 (the result), and the generated [ELO_QB_ALT.md](ELO_QB_ALT.md). Review: one
+independent round (verdict "merge after small fixes", fixes in); the reviewer reimplemented the
+method from the brief, matched every game's adjustment to 1e-13 Elo points and reproduced every
+interval.
+
+- **What was measured**: the own Elo's market-free recommended setting with its quarterback
+  adjustment built from the ported rating (each starter's pre-week opponent-adjusted EPA per
+  dropback, else his latest earlier season, else a replacement level; a slow team baseline as in
+  538's model; 25 Elo points per point times the dropbacks per team-game of earlier seasons)
+  against the same setting with 538's VALUE, on 4,943 regular-season games of 2007-2025.
+- **Outcome, applied as written**: VALUE stays. The ported rating's Brier score is worse by
+  +0.00524 [+0.00319, +0.00725] and its log loss by +0.01203 [+0.00736, +0.01667]; half and one
+  and a half times the scale lose too, and VALUE ranks first in every week window.
+- **Changed before any score**: each game reads the leakage-safe pre-week rating the ETL attaches,
+  not the published week-by-week table, which uses the penalty cross-validation chose on the whole
+  season (`src/nfl_predictor/ratings/pre_week.py`). The reviewer confirmed the cause by refitting
+  2010 and 2013 with both penalties; with the table instead, VALUE still stays (+0.00537).
+- **Finding for the user**: the published quarterback week-by-week tables (shown on the web pages,
+  as in `nfl-sos-ratings`' own files) carry that whole-season penalty, a mild look-ahead for past
+  seasons; no feature or evaluation reads them.

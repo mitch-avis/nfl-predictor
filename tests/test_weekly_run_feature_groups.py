@@ -4,9 +4,10 @@
 that stage 1's walk-forward and the final fit both leave out: by default the strength snapshot
 (``strength``) and both presets of this repository's own Elo (``own_elo``, ``own_elo_wt``), so
 production trains on the ported team ratings and the ``qb_elos.csv`` Elo. An explicit empty list
-leaves no group out. The command line takes the comma-separated form ``nfl-predictor backtest``
-takes and overrides the file. An unknown group stops the run when its options are parsed, before
-the data refresh.
+leaves no group out, a config without the key leaves out production's groups, and the key with
+no value is refused, so commenting out every item cannot bring the groups back. The command line
+takes the comma-separated form ``nfl-predictor backtest`` takes and overrides the file. An
+unknown group stops the run when its options are parsed, before the data refresh.
 """
 
 from __future__ import annotations
@@ -121,15 +122,26 @@ def test_the_command_line_overrides_the_config_list(
     assert args.disable_feature_groups == expected
 
 
-def test_a_config_key_with_no_value_leaves_no_group_out(tmp_path: Path) -> None:
+def test_a_config_key_with_no_value_is_refused_with_both_spellings(tmp_path: Path) -> None:
     # Arrange
     path = _write_config(tmp_path, {"disable_feature_groups": None})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="disable_feature_groups has no value") as refused:
+        _parse(["--config", str(path)])
+    assert "[]" in str(refused.value)
+    assert "remove the key" in str(refused.value)
+
+
+def test_a_config_without_the_key_leaves_out_productions_groups(tmp_path: Path) -> None:
+    # Arrange
+    path = _write_config(tmp_path, {})
 
     # Act
     args = _parse(["--config", str(path)])
 
     # Assert
-    assert args.disable_feature_groups == ()
+    assert args.disable_feature_groups == PRODUCTION_GROUPS
 
 
 def test_a_config_string_instead_of_a_list_is_refused(tmp_path: Path) -> None:

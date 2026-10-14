@@ -136,7 +136,9 @@ The rule:
         /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json
     ```
 
-- **Review**: Two independent rounds by a reviewer subagent that did not produce the work,
-  2026-10-10. Round one: merge after fixes. Round two: merge after one doc fix (these script
-  copies). Every number reproduced from the fold checkpoints with the reviewer's own scripts
-  (commands above).
+- **Review**: Two independent rounds by reviewer subagents that did not produce the work,
+  2026-10-10. Round one: merge after fixes. Round two (`agent-a8512322c21aed91f`): merge after
+  one doc fix (these script copies). Every number reproduced from the fold checkpoints with the
+  reviewer's own scripts (commands above). A reviewer subagent re-checked the fix commits
+  `07bd2ca..e9c7a09` on 2026-10-12: approve with findings, one P3 (an infinite sigma passed the
+  positive-sigma check in the report and the weekly run), fixed in `623543c`.

@@ -60,7 +60,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   all 139 cached columns (1,225,182 plays); 111 input files recorded; 0 failures.
 - **How to reverse it.** Run without `--data-dir` (it reads the main checkout's `data/`);
   `port_audit.parse_args`.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 2. A column with two counterparts is matched only when both share its definition
 
@@ -84,9 +84,9 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   are matched and 500 different; the 1,183 with only the port are all matched.
 - **How to reverse it.** For (a), class every ported column `matched` in `mapping.yaml`;
   `inventory.add_port_counterparts` names the port.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
-## 3. Columns the integration made equal are matched on the current aggregates (26)
+## 3. Columns the integration made equal are matched (26; turnovers on downs, 3, on the port only)
 
 - **What differs.** Before the refresh these game-log columns were `different` from this
   repository's play-by-play aggregates; the integration (`0.54.0`) adopted the source's rules for
@@ -103,17 +103,20 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
 - **Decision.** Matched, each `here` pointing at the current column. The stale notes
   (`gl-designed-runs`, `gl-red-zone`, `gl-carries-faced` and every other game-log rule) are
   rewritten for the current code. `gl-carries-faced` now names the opponent's box-score carries
-  (`box_score:rush_attempts`, equal in every team-game), not its designed carries.
-- **Reasoning.** The parity check judges each of these on every team-game of 1999-2025 and finds
-  no mismatch; the pre-week features equal the published week-by-week history of the week before
-  (`ratings/pre_week.py`, module docstring), so a published value after week N is the feature of
-  its team's game in week N + 1.
+  (`box_score[opponent]:rush_attempts`), not its designed carries.
+- **Reasoning.** The parity check judges each game-log column of these on every team-game of
+  1999-2025 and finds no mismatch, the allowed rates and the carries faced (on the opponent's row)
+  included; the pre-week features equal the published week-by-week history of the week before
+  (`tests/test_ratings_pre_week.py`,
+  `test_pre_week_team_ratings_are_the_history_of_the_week_before`), so a published value after
+  week N is the feature of its team's game in week N + 1.
 - **Data.** `PARITY.md`, Judged pairs: `offensive_snaps`, `defensive_snaps`, `designed_carries`,
   `rush_success_count`, the six third-down, fourth-down and two-point pairs, `penalties`,
-  `penalty_yards` and `rush_attempts` each 0 mismatched of 13,928 team-games.
+  `penalty_yards` and `rush_attempts` each 0 mismatched of 13,928 team-games; the four
+  allowed-rate pairs and `carries_faced` are in the same table.
   `phase1_refresh_transitions_output.txt`: different to matched, 26.
 - **How to reverse it.** Set the rules' class back to `different` in `mapping.yaml`.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 4. Columns that were missing are matched on the ported tables (1,180)
 
@@ -134,7 +137,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   `team-prior` 2, `qb-faced-defense` 2, `qb-ratings-volume` 2, `gl-games` 1).
 - **How to reverse it.** Set the rules back to `missing` with a phase (the port guard then fails
   the run, as it should while the port writes them).
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 5. Differences kept on purpose stay different, with their notes refreshed (500)
 
@@ -156,7 +159,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   `early_down_pass_rate` by `null_downs` with `two_point_tries`; `first_downs` by
   `penalty_first_downs`; `fumbles` by `fumbles_on_scrimmage_snaps`.
 - **How to reverse it.** Change a rule's class in `mapping.yaml` once its model input changes.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 6. Scrimmage EPA: two new causes from the designed-carry rule, not a finding
 
@@ -192,7 +195,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   `test_kneels_and_spikes_puts_every_kneel_down_into_rush_epa`.
 - **How to reverse it.** Remove the two causes from `parity.yaml` and `parity_rules.CAUSES`; the
   run then fails on the unexplained team-games.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 7. The ratings name the pre-week rating features; the season values stay different
 
@@ -214,7 +217,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   ratings, `games_played`); `ratings_by_week` 5 matched, 2 different.
 - **How to reverse it.** Point `season-ratings` and `qb-ratings` back at `strength:` in
   `mapping.yaml`.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 8. Data sources: nine reclassified, team colors still missing
 
@@ -232,7 +235,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
 - **Data.** `phase1_refresh_transitions_output.txt`, data sources: missing to matched 8,
   different to matched 1, missing to missing 1.
 - **How to reverse it.** `mapping.yaml`, `sources`.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 9. Web items: 31 of 35 missing ones now name the ported pages
 
@@ -251,7 +254,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
 - **Data.** `phase1_refresh_transitions_output.txt`, web items: missing to different 21, missing
   to matched 10, missing to missing 4.
 - **How to reverse it.** `mapping.yaml`, `web`; `inventory.HERE_COMPONENTS`.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 10. Parity causes the integration closed are removed (9)
 
@@ -271,7 +274,7 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
 - **Data.** `phase1_refresh_causes_output.txt`, first part (commit `a9d4e6b`): each of the nine
   explains 0 team-games and changes 0 team-games on every value it is judged by.
 - **How to reverse it.** Restore them from `a9d4e6b` (`parity.yaml`, `parity_rules.py`).
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
 
 ## 11. The parity check reads the play-by-play as the ETL does
 
@@ -288,4 +291,14 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
 - **Data.** `PARITY.md`, Summary: 27 of 27 seasons equal on all 139 cached columns; 16 games
   repaired, all Jacksonville home games of 2001-2002; judged pairs 28 (29 before).
 - **How to reverse it.** `parity.season_pbp` as it was at `9bba627` read the file directly.
-- **Review.** Not yet reviewed.
+- **Review.** 2026-10-12, approved with findings (Review record, below).
+
+## Review record
+
+- 2026-10-12, independent review of entries 1-11 (approve with findings,
+  `~/scratch/step6_review/audit_refresh_review.md`). Fixed after it: the parity check judges the
+  four allowed rates and `carries_faced` (a pair on the opponent's row, `row: opponent`), and
+  `gl-carries-faced` names `box_score[opponent]:rush_attempts`; the ten web items matched by
+  `decisions/web_pages.md` say so in their notes; an empty cached schedule fails the run instead
+  of raising; the `no_play` EPA sums are rounded to 9 decimals, so `parity.json` is the same at any
+  thread count; entry 3's heading and the `ratings-history` note's citation are corrected.

@@ -245,12 +245,15 @@ web:
     here: '{key}'
     note: >-
       Parts of its detail and range pages, ported under the same names
-      (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13).
+      (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13);
+      matched by the web-pages decision log; not compared file by file.
   - id: trend-chart
     match: 'component WeeklyTrendChart'
     class: matched
     here: component TrendChart
-    note: The weekly line chart of one metric with its metric picker, renamed.
+    note: >-
+      The weekly line chart of one metric with its metric picker, renamed; matched by the
+      web-pages decision log; not compared file by file.
   - id: comparison-panel
     match: 'component ComparisonPanel'
     class: different
@@ -1040,9 +1043,9 @@ columns:
       team_rating: dataset:ratings_team
     note: >-
       The same weekly fit: a team's rating after week N, as published, is the model's pre-week
-      feature on its next game row, from week N + 1 (ratings/pre_week.py: "for a week after the
-      first, the ratings of the teams that have played equal the published week-by-week history
-      of the week before"). The strength snapshot's own weekly ratings stay beside them.
+      feature on its next game row, from week N + 1 (tests/test_ratings_pre_week.py,
+      test_pre_week_team_ratings_are_the_history_of_the_week_before). The strength snapshot's own
+      weekly ratings stay beside them.
   - id: rank-ranges
     expect: 115
     kinds: [rating_ranges, rating_pairs, rating_ranges_by_week, qb_rating_ranges, qb_rating_pairs, qb_rating_ranges_by_week]

@@ -560,9 +560,9 @@ NO, R0, T2, S8, PT; margin MAE S2, QB, R0, NO, S8, T2, PT; pool NO, QB, S2, R0, 
 accuracy S2, NO, R0, T2, QB, S8, PT. The T2 build also moves the `qb_def_adj` values (they read
 the strength snapshot), so a QB-plus-new-`K` combination would differ from what QB measured.
 
-## Adopted-settings reference and market-free baselines (2026-10-09, `models/step4_reference/`)
+## Adopted-settings reference and market-free baselines (2026-10-09, superseded on 2026-10-14)
 
-The current GPU reference from 2026-10-09: `models/step4_reference/adopted_seed42/` and
+The GPU reference from 2026-10-09: `models/step4_reference/adopted_seed42/` and
 `adopted_seed7/`, on code `2522cb6` (`0.44.0`), input `inputs/adopted.csv` (`855a9088...`, the
 verbatim through-2025 cut of the rebuilt `data/`: pick-time lines, no defense-adjusted
 quarterback columns, the next-opponent identity pair pruned), the GPU reference's command
@@ -612,3 +612,61 @@ margin MAE.
   the reference `0.21391`. The reference minus QB Elo `-0.00229` `[-0.00457, -0.00001]`; the run
   without lines `+0.00081` `[-0.00131, +0.00295]` and the one without lines or Elo `+0.00164`
   `[-0.00065, +0.00393]`, both ties with QB Elo.
+
+## Step 6 reference arms (2026-10-12 and 2026-10-13, `models/step6/`)
+
+The reference production adopts on 2026-10-14: `models/step6/ratings_anchored_seed42/` and
+`ratings_anchored_seed7/` (checkpoints `d97fab54e7261f18e349`, `2f7442e89fd6ff3981f4`), the ported
+ratings in place of the strength snapshot with the own Elo off (`--disable-feature-groups
+strength,own_elo,own_elo_wt`, production's default, 449 features). They also supply the floor's
+sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`). Input `models/step6/inputs/candidate.csv`
+(`74b21113d167...`, the through-2025 cut of the step-6 build: the ported ratings, the own Elo and
+the play-by-play corrections), code `d6064eb`, and otherwise the 2026-10-09 reference's command
+(2007-2025 from week 1, 328 folds, 4943 games, market anchor and transform on, 200 trees,
+unweighted, every fold `cuda`). Rules: `HYPOTHESIS.md` there and `nogamelines_wt/HYPOTHESIS.md`;
+second key: `REVIEW.md` in each, by reviewers that did not produce the runs. Two seeds averaged
+per game, 95% intervals, all weeks unless named.
+
+The other reference arms on the same build and code:
+
+- Without betting lines or `qb_elos.csv`, with the own Elo (no line column, no anchor, no
+  transform; `--disable-feature-groups strength,elo,own_elo_wt`, 431 features):
+  `elo_marketfree_seed{42,7}` (`d8462a7de8d460c12491`, `54ec3f119f2d50ad6b14`).
+- Without betting lines or any Elo (`strength,elo,own_elo,own_elo_wt`, 427 features):
+  `ratings_marketfree_seed{42,7}` (`75186da854af9d4eb24c`, `b074c98e1196a1da8af2`).
+
+Results (deterministic Brier and log loss, other columns where an interval excludes zero):
+
+- The ported ratings in place of the strength snapshot, anchored, minus the 2026-10-09 reference:
+  `-0.00084` `[-0.00144, -0.00024]` and `-0.00191` `[-0.00326, -0.00057]`; pool points `+77.5`
+  `[-15.0, +171.0]`; weeks 1 and 2 ties. Adopted.
+- That split by the new build with the strength snapshot (`newref_anchored_seed*`): the
+  play-by-play corrections' share is a tie on every column in every window (Brier `+0.00011`
+  `[-0.00040, +0.00062]`), kept as correctness fixes; the ratings' share wins (`-0.00095`
+  `[-0.00153, -0.00039]`, `-0.00218` `[-0.00349, -0.00092]`, margin MAE `-0.0257`
+  `[-0.0492, -0.0029]`).
+- The ported ratings without betting lines or Elo, minus the 2026-10-09 test bench without them:
+  a tie (`-0.00032` `[-0.00114, +0.00049]`), with a week-1 loss flagged (`+0.00321`
+  `[+0.00045, +0.00596]`).
+- The own Elo in place of the `qb_elos.csv` columns, anchored (`elo_anchored_seed*`): a loss
+  (`+0.00069` `[+0.00017, +0.00122]`, `+0.00154` `[+0.00035, +0.00275]`, pool points `-114.0`
+  `[-199.0, -29.5]`), so `qb_elos.csv` stays and the own Elo is off in production.
+- The own Elo added without betting lines or `qb_elos.csv`: a win (`-0.00093`
+  `[-0.00177, -0.00005]`, `-0.00224` `[-0.00409, -0.00034]`), so that configuration keeps it.
+- Its win-total variant there (`nogamelines_wt/elo_wt_nogamelines_seed*`, `own_elo_wt` in place
+  of `own_elo`): a tie on every column (`-0.00012` `[-0.00080, +0.00055]`, `-0.00030`
+  `[-0.00179, +0.00119]`), so `own_elo` stays.
+- Against the pick-time line on the same rows: production's reference `+0.00021`
+  `[-0.00102, +0.00138]` (the 2026-10-09 reference `+0.00105` `[-0.00014, +0.00223]`), with week 1
+  `+0.00506` `[+0.00001, +0.01012]` and margin MAE `+0.0500` `[+0.0087, +0.0932]` against it; the
+  arm with the own Elo and no lines `+0.00373` `[+0.00161, +0.00580]`; the arm with no lines or
+  Elo `+0.00466` `[+0.00249, +0.00683]`.
+
+**The kickoff starter, a shared convention.** Every quarterback-dependent column (the
+`qb_elos.csv` columns, the ported quarterback rating, the own Elo and the quarterback families)
+rates a completed game for its actual starter from the play-by-play, which is known only at
+kickoff. The weekly run rates upcoming games for the starters the user projects by hand before
+running `../nfeloqb`. Every backtest arm alike therefore knows each past game's starter; the user
+ruled on 2026-10-12 that this is the project's convention, not a caveat on any adoption. Knowing
+only the previous starter costs the own Elo without lines `+0.00101` `[-0.00027, +0.00232]` Brier
+and `+0.00331` `[+0.00035, +0.00631]` log loss (`.agents/sos_port/decisions/elo.md`, entry 15).

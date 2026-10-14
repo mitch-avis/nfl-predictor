@@ -281,9 +281,14 @@ def test_top_decile_takes_the_ceiling_of_a_tenth_by_the_seed_mean_magnitude() ->
 # The whole run, on synthetic fold checkpoints.
 
 
-def _fold_games(season: int, week: int, sigma: float) -> pd.DataFrame:
-    """Return three fold rows whose floor matches their predicted margins."""
-    margins = np.array([3.0, -6.5, 10.0])
+_MARGINS = np.array([3.0, -6.5, 10.0])
+# Seed 7's margins sit this far above seed 42's, so the two seeds' claims differ.
+_SEED_7_SHIFT = 1.0
+
+
+def _fold_games(season: int, week: int, sigma: float, shift: float = 0.0) -> pd.DataFrame:
+    """Return three fold rows whose floor matches their predicted margins, moved by ``shift``."""
+    margins = _MARGINS + shift
     return pd.DataFrame(
         {
             "game_id": [f"{season}_{week:02d}_{name}" for name in ("A_B", "C_D", "E_F")],
@@ -301,7 +306,11 @@ def _fold_games(season: int, week: int, sigma: float) -> pd.DataFrame:
 
 
 def _write_run(
-    directory: Path, seed: int, folds: list[tuple[int, int]], stored_sigma: float = _SIGMA
+    directory: Path,
+    seed: int,
+    folds: list[tuple[int, int]],
+    stored_sigma: float = _SIGMA,
+    shift: float = 0.0,
 ) -> Path:
     """Write a walk-forward's checkpoints: a manifest with its seed and one file per fold.
 
@@ -315,7 +324,7 @@ def _write_run(
         payload = {
             "fingerprint": directory.name,
             "metrics": {"floor_sigma": _SIGMA},
-            "predictions": _fold_games(season, week, stored_sigma),
+            "predictions": _fold_games(season, week, stored_sigma, shift),
         }
         joblib.dump(payload, directory / f"fold_{season}_w{week:02d}.joblib")
     return directory
@@ -335,12 +344,20 @@ def _write_metadata(path: Path, derived: dict[int, int]) -> Path:
     return path
 
 
-def _argv(tmp_path: Path, seed_7_sigma: float = _SIGMA) -> list[str]:
-    """Return the arguments of a run on two synthetic seeds of two folds each."""
+def _argv(
+    tmp_path: Path, seed_7_sigma: float = _SIGMA, derived: dict[int, int] | None = None
+) -> list[str]:
+    """Return the arguments of a run on two synthetic seeds of two folds each.
+
+    By default 2025 is the governing season; ``derived`` replaces the build's per-season counts
+    of map-derived moneylines.
+    """
     folds = [(2021, 1), (2025, 1)]
     first = _write_run(tmp_path / "run42", 42, folds)
-    second = _write_run(tmp_path / "run7", 7, folds, stored_sigma=seed_7_sigma)
-    metadata = _write_metadata(tmp_path / "metadata.json", {2021: 3, 2025: 0})
+    second = _write_run(tmp_path / "run7", 7, folds, stored_sigma=seed_7_sigma, shift=_SEED_7_SHIFT)
+    metadata = _write_metadata(
+        tmp_path / "metadata.json", {2021: 3, 2025: 0} if derived is None else derived
+    )
     earlier = _write_metadata(tmp_path / "earlier.json", {2021: 3, 2025: 0})
     return [
         "--checkpoint-dir",
@@ -400,7 +417,134 @@ def test_main_writes_the_governing_games_and_the_rules_outcome(tmp_path: Path) -
     record = json.loads((tmp_path / "betting_labels.json").read_text(encoding="utf-8"))
     assert record["governing"]["seasons"] == [2025]
     assert record["governing"]["games"] == 3
-    assert record["rule"]["branch"] in {"below zero", "contains zero", "above zero"}
+
+
+def _hand_differences(shift: float) -> np.ndarray:
+    """Return the 2025 games' ``d`` for one seed, computed by hand from the fold rows."""
+    margins = _MARGINS + shift
+    home_raw = np.array([150 / 250, 100 / 320, 400 / 500])
+    away_raw = np.array([100 / 230, 260 / 360, 100 / 420])
+    p_ml = home_raw / (home_raw + away_raw)
+    p_model = norm.cdf(margins / _SIGMA)
+    p_spread = norm.cdf(np.array([3.0, -6.5, 9.5]) / _SIGMA)
+    q_beyond = p_ml + p_model - p_spread
+    outcome = np.array([1.0, 0.0, 0.0])
+    return (q_beyond - outcome) ** 2 - (p_model - outcome) ** 2
+
+
+def test_main_rule_number_is_the_hand_computed_two_seed_mean(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path)
+
+    # Act
+    labels.main(argv)
+
+    # Assert
+    rule = json.loads((tmp_path / "betting_labels.json").read_text(encoding="utf-8"))["rule"]
+    expected = ((_hand_differences(0.0) + _hand_differences(_SEED_7_SHIFT)) / 2).mean()
+    assert rule["games"] == 3
+    assert rule["mean"] == pytest.approx(expected, abs=1e-12)
+
+
+def test_main_hand_computed_games_of_both_signs_contain_zero(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path)
+    per_game = (_hand_differences(0.0) + _hand_differences(_SEED_7_SHIFT)) / 2
+
+    # Act
+    labels.main(argv)
+
+    # Assert
+    rule = json.loads((tmp_path / "betting_labels.json").read_text(encoding="utf-8"))["rule"]
+    assert per_game.min() < 0.0 < per_game.max()
+    assert (rule["branch"], rule["recommend_beyond"]) == ("contains zero", False)
+
+
+def test_main_no_governing_season_stops_the_run(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path, derived={2021: 3, 2025: 3})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="governing"):
+        labels.main(argv)
+
+
+def test_main_no_governing_season_writes_no_report(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path, derived={2021: 3, 2025: 3})
+
+    # Act
+    with pytest.raises(ValueError, match="governing"):
+        labels.main(argv)
+
+    # Assert
+    assert not (tmp_path / "BETTING_LABELS.md").exists()
+
+
+def test_main_real_season_without_scored_games_stops_the_run(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path, derived={2021: 3, 2024: 0, 2025: 3})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="governing"):
+        labels.main(argv)
+
+
+@pytest.mark.parametrize(
+    ("low", "high"), [(float("nan"), 0.01), (-0.01, float("nan")), (-0.01, float("inf"))]
+)
+def test_apply_rule_bound_that_is_not_finite_raises(low: float, high: float) -> None:
+    # Arrange
+    difference = labels.Difference(games=10, mean=0.0, low=low, high=high)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="finite"):
+        labels.apply_rule(difference)
+
+
+def test_main_other_checkpoints_are_not_labeled_as_the_reference_runs(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path)
+
+    # Act
+    labels.main(argv)
+
+    # Assert
+    report = (tmp_path / "BETTING_LABELS.md").read_text(encoding="utf-8")
+    assert "ratings_anchored" not in report
+
+
+def test_main_record_states_the_bootstrap_resamples_games_in_game_id_order(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    argv = _argv(tmp_path)
+
+    # Act
+    labels.main(argv)
+
+    # Assert
+    record = json.loads((tmp_path / "betting_labels.json").read_text(encoding="utf-8"))
+    report = (tmp_path / "BETTING_LABELS.md").read_text(encoding="utf-8")
+    assert record["bootstrap"] == {"resamples": 5_000, "numpy_seed": 0, "game_order": "game_id"}
+    assert "in game-id order" in " ".join(report.split())
+
+
+def test_main_recorded_command_is_the_reproduce_block(tmp_path: Path) -> None:
+    # Arrange
+    argv = _argv(tmp_path)
+
+    # Act
+    labels.main(argv)
+
+    # Assert
+    command = json.loads((tmp_path / "betting_labels.json").read_text(encoding="utf-8"))[
+        "provenance"
+    ]["command"]
+    report = (tmp_path / "BETTING_LABELS.md").read_text(encoding="utf-8")
+    block = report.split("```bash\n", 1)[1].split("\n```", 1)[0]
+    assert " ".join(block.replace("\\\n", " ").split()) == command
+    assert "--earlier-market-lines-metadata" in command
 
 
 def test_main_count_other_than_the_earlier_builds_is_explained_in_the_report(

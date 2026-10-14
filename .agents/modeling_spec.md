@@ -291,9 +291,9 @@ Rules for stat-style features:
   default of the weekly config, `nfl-predictor train` and `nfl-predictor backtest`, so a backtest
   without the option leaves out what production leaves out; a list given replaces it, and an
   empty one (`disable_feature_groups: []`, `--disable-feature-groups ''`) leaves no group out.
-  Leaving out `strength` on a build with the strength snapshot but no ported ratings stops
-  `train` and the weekly run and warns in the backtest
-  (`feature_spec.check_ratings_replace_strength`).
+  Leaving out `strength` on a build with the strength snapshot but no ported ratings (a ratings
+  column null in every row counts as missing) stops `train` and the weekly run, the latter
+  before any work, and warns in the backtest (`feature_spec.check_ratings_replace_strength`).
 
 ## Season and week conventions
 

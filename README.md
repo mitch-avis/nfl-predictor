@@ -802,9 +802,12 @@ the backtest records in its config). `train` and the weekly run check the group 
 data loads. A group that matches no column of the data drops nothing, and every run logs it as a
 warning, so a build without a group's columns does not quietly train differently from the arm.
 Leaving out `strength` on a build that has the strength snapshot but no ported ratings would
-train on neither, so `train` and the weekly run (stage 1 and the final fit) stop there and the
-backtest warns; the message names the two remedies: rebuild the dataset (`nfl-predictor data`),
-or pass a group list that keeps `strength`.
+train on neither. A ratings column null in every row, as a build without play-by-play leaves it,
+counts as missing. `train` stops there; the weekly run stops right after the data refresh or its
+skip, before it creates the run directory (a dry run that would refresh the data first only
+warns), and stage 1 and the final fit check again; the backtest warns. The message names the
+two remedies: rebuild the dataset (`nfl-predictor data`), or pass a group list that keeps
+`strength`.
 
 `--wf-n-estimators` overrides the XGBoost tree budget for the run (every in-season fit runs the full
 budget), which is how the budget itself is measured against the default. The six-season ladder

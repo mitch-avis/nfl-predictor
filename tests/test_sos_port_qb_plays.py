@@ -114,6 +114,32 @@ def test_qb_play_parts_running_back_carry_is_not_charged_to_the_quarterback() ->
     assert (parts["designed_runs"], parts["aborted"], parts["charged_aborted"]) == (1, 1, 0)
 
 
+def test_qb_play_parts_scramble_that_is_a_charged_botched_snap_counts_once() -> None:
+    # Arrange
+    plays = pl.DataFrame(
+        [
+            _play(
+                "run",
+                -1.5,
+                rusher_player_id=_QB,
+                fumbled_1_player_id=_QB,
+                qb_scramble=1.0,
+                rush=1.0,
+                aborted_play=1.0,
+            ),
+            _play("pass", 0.1, passer_player_id=_QB),
+        ],
+        infer_schema_length=None,
+    )
+
+    # Act
+    parts = qb.qb_play_parts(plays).filter(pl.col("qb_id") == _QB).row(0, named=True)
+
+    # Assert
+    assert (parts["scrambles"], parts["scramble_epa"]) == (1, pytest.approx(-1.5))
+    assert (parts["designed_runs"], parts["charged_aborted"]) == (0, 0)
+
+
 def _qb_rows(dropbacks: tuple[int, ...] = (10, 0)) -> pl.DataFrame:
     """Return two quarterback rows of AAA in the test game: the starter and a backup."""
     return pl.DataFrame(

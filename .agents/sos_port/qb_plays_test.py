@@ -132,7 +132,9 @@ def qb_play_parts(plays: pl.DataFrame) -> pl.DataFrame:
     this repository's play-by-play. Runs, scrambles, botched snaps by rusher and kneel-downs go to
     ``rusher_player_id``; spikes to ``passer_player_id``; the botched snaps a candidate counts to
     the player the official scorer charged with the fumble (``fumbled_1_player_id``), whoever ran
-    after it. Rows are keyed ``game_id``, ``team`` (the play's ``posteam``) and ``qb_id``.
+    after it. A botched snap is a carry (a run flagged ``rush`` and not ``qb_scramble``), as in the
+    source's by-rusher part, so a scramble that is also a charged botched snap counts once, as a
+    scramble. Rows are keyed ``game_id``, ``team`` (the play's ``posteam``) and ``qb_id``.
     Two-point tries are counted only in ``two_point_runs``; ``other_runs`` are run plays flagged
     neither ``rush`` nor ``qb_scramble`` (passes and fumbles coded as runs).
     """
@@ -170,7 +172,7 @@ def qb_play_parts(plays: pl.DataFrame) -> pl.DataFrame:
     charged = (
         plays.filter(pl.col("posteam").is_not_null() & pl.col("fumbled_1_player_id").is_not_null())
         .group_by("game_id", "posteam", "fumbled_1_player_id", maintain_order=True)
-        .agg(*_count_and_epa("charged_aborted", run & _flag("rush") & _flag("aborted_play")))
+        .agg(*_count_and_epa("charged_aborted", carry & _flag("aborted_play")))
         .rename({"posteam": "team", "fumbled_1_player_id": "qb_id"})
     )
     return (

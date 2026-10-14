@@ -289,8 +289,8 @@ def _note_kept_market_informed_groups(columns: Sequence[str], selection: Feature
     log.info(
         "No game lines: the model trains without betting-line columns but keeps the preseason "
         "win-total priors in the feature group(s) %s; for a run with no market information at "
-        "all, also pass `--disable-feature-groups %s` (backtest, train) or "
-        "`disable_feature_groups` in the weekly config.",
+        "all, add %s to the groups left out: `--disable-feature-groups` (backtest, train; it "
+        "replaces the default list) or `disable_feature_groups` in the weekly config.",
         list(kept),
         ",".join(kept),
     )

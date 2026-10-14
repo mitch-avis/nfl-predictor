@@ -406,6 +406,23 @@ def test_weekly_warns_only_when_the_market_free_mode_overrides_a_requested_trans
     assert len(overrides) == (1 if warned else 0)
 
 
+def test_the_overridden_transform_warning_says_no_game_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    warnings = _recorded_warnings(monkeypatch)
+    expected = (
+        "--wf-market-mode none overrides --market-transform (or market_transform: true): "
+        "a run with no game lines trains with no market transform."
+    )
+
+    # Act
+    _weekly_args(tmp_path, "--wf-market-mode", "none", "--market-transform")
+
+    # Assert
+    assert warnings == [expected]
+
+
 def _recorded_infos(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record the project logger's info messages."""
     infos: list[str] = []

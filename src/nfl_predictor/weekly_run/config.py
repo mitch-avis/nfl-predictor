@@ -720,11 +720,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _warn_on_an_overridden_transform(args: argparse.Namespace) -> None:
-    """Warn when the market-free mode overrides a requested market transform."""
+    """Warn when the mode with no game lines overrides a requested market transform."""
     if args.wf_market_mode == stage1.MARKET_MODE_NONE and args.market_transform is True:
         log.warning(
             "--wf-market-mode none overrides --market-transform (or market_transform: true): "
-            "a market-free run trains with no market transform."
+            "a run with no game lines trains with no market transform."
         )
 
 

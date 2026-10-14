@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import pandas as pd
+import pytest
 
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import pipeline
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 
 def _sigmas_received(
@@ -82,3 +82,26 @@ def test_weekly_run_with_several_floor_sigmas_passes_no_sigma(
 
     # Assert
     assert received == [None]
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ([0.0, 0.0], None),
+        ([-1.0, -1.0], None),
+        ([math.nan, math.nan], None),
+        ([13.5, 13.6], None),
+        ([13.5, math.nan], 13.5),
+    ],
+)
+def test_report_floor_sigma_keeps_exactly_one_positive_value(
+    values: list[float], expected: float | None
+) -> None:
+    # Arrange
+    predictions = pd.DataFrame({"floor_sigma": values})
+
+    # Act
+    sigma = pipeline._report_floor_sigma(predictions)
+
+    # Assert
+    assert sigma == expected

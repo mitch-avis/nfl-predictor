@@ -176,7 +176,7 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   weekly player stats lost up to 34 columns of `qb_combined`) and the opponent-profile columns of
   `combined` and `qb_combined` in a season where no opponent has played anyone else yet, and give
   `qb_game_logs.week` the play-by-play's `Int32` before the snap counts begin (2013) and `Int64`
-  once they join. `AGENTS.md`'s "Missing Data Rules" ask the ETL for an invariant schema in every
+  once they join. The ETL rules (`.claude/rules/etl.md`) ask for an invariant schema in every
   run, a missing source becoming nulls or defined defaults.
 - **Options**: (a) build the season without the source and warn, naming what is missing; log and
   skip a season before its first game; conform every table built to the columns and types of a

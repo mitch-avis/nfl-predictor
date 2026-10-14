@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.58.0] - 2026-10-14
+
+### Changed
+
+- **Breaking:** the weekly run ranks teams on the even blend of the ported and model ratings by
+  default (`power_rankings_method` unset, `power_rankings_blend_weight: 0.5` in
+  `config/weekly_run.yaml`), as the user chose after the rankings measurement; set
+  `power_rankings_method: composite` to restore the composite, whose report is unchanged. The model
+  rating reads the ranked season from the run's own stage-1 fold checkpoints, and the floor-sigma
+  reference runs, averaged per game, only for week 1's carried-forward fit.
+- A ranking the weekly run cannot build (a missing or short source) is skipped with an error that
+  names what is missing; no other method ranks in its place, the projected standings are still
+  written, and the reports stage stays undone, so `--resume` retries it.
+- The weekly run refuses to start when `--legacy-franchise-fit` meets a ranking method other than
+  Bradley-Terry, and the model rating refuses a fold without a `neutral` column or with it null in
+  every row.
+- A run without the market columns is described as "no game lines" in the CLI help, the docs and
+  its log, which notes the kept win-total groups (`elo`, `own_elo_wt`) at info level instead of
+  warning. The message lives in `ml/`, so every walk-forward checkpoint fingerprint changes.
+
+### Added
+
+- Stage 1 of the weekly run writes `wf_compare/metadata.json` naming its fold checkpoints. A
+  resumed run that reuses stage 1 writes it when missing, from the one fold manifest that records
+  the production configuration and the data's shape, and warns to rerun with `--no-resume` when
+  none or several match.
+
 ## [0.57.4] - 2026-10-14
 
 ### Added

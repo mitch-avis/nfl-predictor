@@ -431,3 +431,23 @@ rating changes.
   the published quarterback ratings by at most 0.0112 EPA per dropback.
 - **User decision** (2026-10-11): none is adopted before step 6 merges; each is a measured change
   after it.
+
+### The weekly run's blend ranking default (`0.58.0`)
+
+Full record: [decisions/power_rankings.md](decisions/power_rankings.md), entry 12. Review: one
+independent round (2026-10-12) and two re-checks of the fix rounds (2026-10-14), all "approve
+with findings"; the reports are in [review/blend_default/](review/blend_default/).
+
+- **User decision** (2026-10-10, after the rankings measurement): the weekly run ranks on the
+  blend at weight `0.5`; the composite stays one setting away.
+- **Prediction source**: the run's own stage-1 fold checkpoints for the ranked season (rule 11),
+  and the floor-sigma reference runs, averaged per game, only for week 1's carried-forward fit.
+- **User decision** (2026-10-12, on the review's findings): a ranking that cannot be built is
+  skipped with an error, keeps the projected standings and leaves the stage undone; no fallback to
+  the composite.
+- **Accepted without asking**: `power_rankings_method` stays commented out in
+  `config/weekly_run.yaml` (unset ranks on the blend, the same report); the docs advise
+  `--no-resume` for an unmatched stage 1 instead of a new flag; a composite skip takes the same
+  error path.
+- **Open (P3)**: check the single manifest match against the run itself; three older skips in
+  `weekly_run/pipeline.py` still log at info level.

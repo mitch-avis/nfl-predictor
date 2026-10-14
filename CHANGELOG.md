@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.59.0] - 2026-10-14
+
+### Changed
+
+- **Breaking:** the weekly run, `nfl-predictor train` and `nfl-predictor backtest` leave out the
+  strength snapshot and both own-Elo presets by default (`strength,own_elo,own_elo_wt`,
+  `constants.PRODUCTION_DISABLED_FEATURE_GROUPS`), so production trains on the ported ratings
+  beside the `qb_elos.csv` columns, as the user decided on 2026-10-12 from the reviewed step-6
+  runs. `--disable-feature-groups ''` (or `[]` in `config/weekly_run.yaml`) leaves no group out,
+  and a list given replaces the default; a backtest recorded before this version reproduces with
+  `--disable-feature-groups ''` added.
+- The floor sigma's reference pool is `models/step6/ratings_anchored_seed42` and
+  `models/step6/ratings_anchored_seed7`, read by the weekly run and `train`, and so by the power
+  rankings' model rating; `backtest` still defaults to none.
+- A `disable_feature_groups` key with no value in the weekly config is refused instead of read as
+  no group; write `[]` to leave no group out.
+- The help and the docs name whole group lists for the stricter configurations (no market
+  information with the own Elo: `strength,elo,own_elo_wt`; no Elo at all:
+  `strength,elo,own_elo,own_elo_wt`), the weekly run's `--wf-market-mode` and
+  `--disable-feature-groups` included, and say that a list replaces the default.
+- `predict --model-in` logs that it ignores the group option only for a list other than the
+  default.
+- Every walk-forward checkpoint fingerprint and the weekly stage hashes change, so the first
+  weekly run after the upgrade retrains stage 1.
+
+### Added
+
+- When the groups left out include `strength` and the data has the strength snapshot but no
+  ported-ratings column with a value (a column null in every row counts as missing), `train` and
+  the weekly run stop and name both remedies: rebuild the data with `nfl-predictor data`, or keep
+  `strength`. The weekly run checks right after the data refresh or its skip, before creating the
+  run directory, and stage 1 and the final fit check again; a dry run that would refresh the data
+  only warns. `backtest` and the web walk-forward job warn and carry on.
+- `.agents/benchmarks.md` records the step-6 reference arms, every step-6 comparison and the
+  kickoff-starter convention.
+
+### Fixed
+
+- The floor's win probability refuses a sigma that is not finite and positive, or more than one
+  number, with `ValueError`, and a text sigma with `TypeError`.
+- The no-game-lines note says a group list replaces the default.
+
 ## [0.58.1] - 2026-10-14
 
 ### Added

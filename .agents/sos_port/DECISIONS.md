@@ -470,3 +470,28 @@ checkpoints, and a re-check of the fixes the same day ("approve"); the reports a
   whole edge, as the user decided on 2026-10-11 for a tie. Nothing in the report changes.
 - **Open for the user** (deciding nothing here): which top-decile ranking a future report uses;
   both reviewers and the implementer recommend the two-seed mean magnitude.
+
+### Production adopts the ported ratings (`0.59.0`)
+
+Full record: the reviewed runs in `models/step6/REVIEW.md` and
+`models/step6/nogamelines_wt/REVIEW.md` (main checkout), restated in `.agents/benchmarks.md`
+("Step 6 reference arms"). Review: one independent round and two re-checks of the fix rounds
+(2026-10-14; "approve with findings" twice, then "approve"); the reports are in
+[review/adoption/](review/adoption/).
+
+- **User decisions** (2026-10-12): replace the strength snapshot with the ported ratings in
+  production; keep the play-by-play corrections (a tie) and the `qb_elos.csv` columns, the own Elo
+  off; the configuration without game lines keeps the own Elo in whichever variant measures
+  stronger, which the win-total runs settled as `own_elo` (a tie, 2026-10-14).
+- **Production equals the benchmark** (rule 11): the weekly run, `train` and `backtest` leave out
+  `strength,own_elo,own_elo_wt` by default, and the floor sigma reads the reference runs
+  `models/step6/ratings_anchored_seed{42,7}`.
+- **User decision** (2026-10-14): `train` and the weekly run stop, and `backtest` warns, when
+  `strength` is left out and the data has strength columns but no ported ratings with a value;
+  the narrower condition (data with neither group passes) is accepted.
+- **Accepted without asking**: `backtest` defaults to production's groups (required by
+  `tests/test_production_settings.py`); a weekly dry run that would refresh the data only warns,
+  since the refresh it skips may add the ratings.
+- **Open (P3)**: group lists are not normalized for order or duplicates; no snapshot pins the
+  default fit's predictions; the weekly refresh writes where `--data-collection-args` say while
+  the run reads `--data-path` (older than this change).

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
+import yaml
 from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor import constants
@@ -234,6 +235,27 @@ def test_check_counterpart_ported_reference_reads_the_columns_own_kind(
 
     # Act
     found = inventory.check_counterpart("ratings:passing_epa", {}, port, kind)
+
+    # Assert
+    assert found is expected
+
+
+@pytest.mark.parametrize(
+    ("ref", "expected"),
+    [
+        ("box_score[opponent]:rush_attempts", True),
+        ("box_score[opponent]:carries_faced", False),
+        ("box_score[home]:rush_attempts", False),
+    ],
+)
+def test_check_counterpart_opponent_row_marker_names_a_column_of_its_catalog(
+    inventory: ModuleType, ref: str, *, expected: bool
+) -> None:
+    # Arrange
+    catalog = {"box_score": ["rush_attempts"]}
+
+    # Act
+    found = inventory.check_counterpart(ref, catalog, {}, "team_game_logs")
 
     # Assert
     assert found is expected
@@ -528,6 +550,114 @@ def test_wiped_out_plays_epa_sums_in_either_summation_order_serialize_identicall
 
     # Assert
     assert written[0] == written[1]
+
+
+def _carries_faced_pair(parity_rules: ModuleType) -> Any:
+    """Return a pair judging its ``carries_faced`` against this repository's opponent row."""
+    return parity_rules.Pair(
+        id="carries_faced",
+        ours=parity_rules.expression("rush_attempts"),
+        theirs=parity_rules.expression("carries_faced"),
+        kind="count",
+        causes=(),
+        null_as_zero=False,
+        row="opponent",
+    )
+
+
+def _one_game(value_column: str, buffalo: float, miami: float) -> pl.DataFrame:
+    """Return Buffalo at Miami as two team-game rows, with ``value_column`` set per team."""
+    return pl.DataFrame(
+        {
+            "week": [1, 1],
+            "team_abbr": ["BUF", "MIA"],
+            "opponent_abbr": ["MIA", "BUF"],
+            "game_id": ["2025_01_BUF_MIA", "2025_01_BUF_MIA"],
+            value_column: [buffalo, miami],
+        }
+    )
+
+
+def test_compare_opponent_row_pair_matches_the_value_on_the_opponents_row(
+    parity: ModuleType, parity_rules: ModuleType
+) -> None:
+    # Arrange
+    ours = _one_game("rush_attempts", 20.0, 30.0)
+    theirs = _one_game("carries_faced", 30.0, 20.0)
+
+    # Act
+    compared = parity.compare(_carries_faced_pair(parity_rules), ours, theirs, 1e-6)
+
+    # Assert
+    assert compared.sort("team_abbr")["match"].to_list() == [True, True]
+
+
+def test_compare_opponent_row_pair_mismatches_the_value_on_the_teams_own_row(
+    parity: ModuleType, parity_rules: ModuleType
+) -> None:
+    # Arrange
+    ours = _one_game("rush_attempts", 20.0, 30.0)
+    theirs = _one_game("carries_faced", 20.0, 30.0)
+
+    # Act
+    compared = parity.compare(_carries_faced_pair(parity_rules), ours, theirs, 1e-6)
+
+    # Assert
+    assert compared.sort("team_abbr")["match"].to_list() == [False, False]
+
+
+def test_load_pairs_unknown_row_fails_the_audit(parity: ModuleType) -> None:
+    # Arrange
+    entry = {"id": "x", "ours": "a", "theirs": "b", "kind": "count", "causes": [], "row": "home"}
+    audit = parity.Audit()
+
+    # Act
+    parity.load_pairs({"pairs": [entry], "causes": {}}, audit)
+
+    # Assert
+    assert ("pair", "x: unknown row home") in [(f.what, f.detail) for f in audit.failures]
+
+
+_RULE_10_PAIRS = {
+    "carries_faced": "opponent",
+    "rush_success_rate_allowed": "own",
+    "third_down_pct_allowed": "own",
+    "fourth_down_pct_allowed": "own",
+    "two_pt_conversion_rate_allowed": "own",
+}
+
+
+def test_load_pairs_reads_the_allowed_rate_and_carries_faced_pairs_from_parity_yaml(
+    parity: ModuleType,
+) -> None:
+    # Arrange
+    rules = yaml.safe_load(parity.RULES.read_text(encoding="utf-8"))
+    audit = parity.Audit()
+
+    # Act
+    pairs = parity.load_pairs(rules, audit)
+
+    # Assert
+    rows = {pair.id: pair.row for pair in pairs if pair.id in _RULE_10_PAIRS}
+    assert rows == _RULE_10_PAIRS
+    assert audit.failures == []
+
+
+def test_pair_table_lists_the_parity_yaml_pairs_with_their_row(parity: ModuleType) -> None:
+    # Arrange
+    rules = yaml.safe_load(parity.RULES.read_text(encoding="utf-8"))
+    pairs = parity.load_pairs(rules, parity.Audit())
+    payload = {"tolerance": 1e-6, "pairs": parity.pair_entries(pairs, {})}
+    lines: list[str] = []
+
+    # Act
+    load_sos_port_script("parity_report")._pairs(payload, lines.append)
+
+    # Assert
+    listed = {line.split(" | ")[0].strip("| `"): line for line in lines if line.startswith("| `")}
+    assert {
+        pair: f" {row} |" in listed[pair] for pair, row in _RULE_10_PAIRS.items()
+    } == dict.fromkeys(_RULE_10_PAIRS, True)
 
 
 def test_check_coverage_empty_schedule_fails_the_audit_instead_of_raising(

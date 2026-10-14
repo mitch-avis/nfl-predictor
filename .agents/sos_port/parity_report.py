@@ -97,16 +97,15 @@ def _pairs(payload: dict[str, Any], w: Any) -> None:
     w("## Judged pairs")
     w("")
     w("`here` is arithmetic over this repository's two play-by-play aggregates, `there` over its")
-    w(
-        "game logs. Counts must be equal; sums and rates within the tolerance "
-        f"({payload['tolerance']})."
-    )
+    w("game logs, on the row `row` names: the team's own, or its opponent's in the same game.")
+    w(f"Counts must be equal; sums and rates within the tolerance ({payload['tolerance']}).")
     w("")
     rows = [
         [
             f"`{p['id']}`",
             f"`{p['ours']}`",
             f"`{p['theirs']}`",
+            p["row"],
             p["kind"],
             p["compared"],
             p["mismatched"],
@@ -120,6 +119,7 @@ def _pairs(payload: dict[str, Any], w: Any) -> None:
         "pair",
         "here",
         "there",
+        "row",
         "kind",
         "compared",
         "mismatched",

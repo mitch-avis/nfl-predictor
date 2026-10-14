@@ -87,6 +87,7 @@ CURRENT_SEASON = SEASONS[-1] + 1
 TEAM_COLUMNS = tuple(constants.PBP_TEAM_COLUMNS)
 ADJUSTABLE = ("ours", "theirs")
 KINDS = ("count", "count_from_rate", "sum", "rate")
+ROWS = ("own", "opponent")
 COUNT_KEYS = ("compared", "mismatched", "explained", "unexplained")
 PBP_MARKERS = {"play_id", "game_id", "qb_scramble", "posteam", "epa", "season"}
 
@@ -98,6 +99,9 @@ def load_pairs(rules: dict[str, Any], audit: Audit) -> list[Pair]:
         causes = tuple(entry["causes"])
         if entry["kind"] not in KINDS:
             audit.fail("pair", f"{entry['id']}: unknown kind {entry['kind']}")
+        row = entry.get("row", "own")
+        if row not in ROWS:
+            audit.fail("pair", f"{entry['id']}: unknown row {row}")
         for cause in causes:
             if cause not in CAUSES or cause not in rules["causes"]:
                 audit.fail("pair", f"{entry['id']}: unknown cause {cause}")
@@ -111,6 +115,7 @@ def load_pairs(rules: dict[str, Any], audit: Audit) -> list[Pair]:
                 kind=entry["kind"],
                 causes=causes,
                 null_as_zero=bool(entry.get("null_as_zero", False)),
+                row=row,
             )
         )
     implemented, described = set(CAUSES), set(rules["causes"])
@@ -255,10 +260,14 @@ def compare(pair: Pair, ours: pl.DataFrame, theirs: pl.DataFrame, tolerance: flo
     """Return one row per team-game on both sides with both values and whether they match.
 
     Both frames are keyed in canonical team codes, so a team-game one source writes ``LA`` lines up.
+    An opponent-row pair reads its value from the opponent's row of the same game: that frame's team
+    and opponent codes swap before the join, so the row keyed by the team holds the opponent's value.
     """
     their_value = pair.theirs.expr
     if pair.null_as_zero:
         their_value = their_value.fill_null(0.0)
+    if pair.row == "opponent":
+        theirs = theirs.rename({"team_abbr": "opponent_abbr", "opponent_abbr": "team_abbr"})
     joined = theirs.select(*KEYS, "game_id", their_value.alias("theirs")).join(
         ours.select(*KEYS, pair.ours.expr.alias("ours")), on=KEYS, how="inner"
     )
@@ -604,17 +613,7 @@ def _run(code: SosCode, data_dir: Path) -> int:
             if column in sources
         },
         "game_log_source_facts": source_facts,
-        "pairs": [
-            {
-                "id": pair.id,
-                "ours": pair.ours.text,
-                "theirs": pair.theirs.text,
-                "kind": pair.kind,
-                "causes": list(pair.causes),
-                **{k: per_pair[pair.id].get(k, 0) for k in COUNT_KEYS},
-            }
-            for pair in pairs
-        ],
+        "pairs": pair_entries(pairs, per_pair),
         "causes": summarize_causes(rules, records, seasons_report, effects),
         "evidence": evidence,
         "seasons": {str(season): report for season, report in seasons_report.items()},
@@ -625,6 +624,22 @@ def _run(code: SosCode, data_dir: Path) -> int:
     OUT_MD.write_text(portable(render(payload, rules, records)), encoding="utf-8")
     log.info("%d mismatching pair values, %d failures", len(records), len(audit.failures))
     return 1 if audit.failures else 0
+
+
+def pair_entries(pairs: list[Pair], per_pair: dict[str, dict[str, int]]) -> list[dict[str, Any]]:
+    """Return the report's entry for each judged pair: its definition, its row and its counts."""
+    return [
+        {
+            "id": pair.id,
+            "ours": pair.ours.text,
+            "theirs": pair.theirs.text,
+            "row": pair.row,
+            "kind": pair.kind,
+            "causes": list(pair.causes),
+            **{k: per_pair.get(pair.id, {}).get(k, 0) for k in COUNT_KEYS},
+        }
+        for pair in pairs
+    ]
 
 
 def _describe(record: dict[str, Any]) -> str:

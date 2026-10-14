@@ -35,7 +35,9 @@
 #   qb_game    - aggregate_qb_game_stats (play-by-play, per quarterback-game)
 #   dataset    - a published game-dataset column, without its home_/away_ side prefix
 #   strength   - the weekly strength snapshot file
-# and arithmetic over names of one catalog (`team_game:pass_epa_sum / dropbacks`). `{column}`,
+# and arithmetic over names of one catalog (`team_game:pass_epa_sum / dropbacks`). `[opponent]`
+# after a per-team-game catalog (`box_score[opponent]:rush_attempts`) names the column on the
+# opponent's row of the same game. `{column}`,
 # `{base}` and `{core}` (the column without its prefix) are filled in per column; in source and
 # web rules `{key}` is the item's own key.
 #
@@ -589,10 +591,10 @@ columns:
     kinds: [team_game_logs]
     columns: [carries_faced]
     class: matched
-    here: box_score:rush_attempts
+    here: box_score[opponent]:rush_attempts
     note: >-
       The opponent's row: its carries, every rush attempt but a two-point try, equal in every
-      team-game of 1999-2025 (PARITY.md, pair rush_attempts).
+      team-game of 1999-2025 (PARITY.md, pair carries_faced).
   - id: gl-defense-rates-same
     kinds: [team_game_logs]
     columns: [rush_success_rate_allowed, third_down_pct_allowed, fourth_down_pct_allowed, two_pt_conversion_rate_allowed]
@@ -602,7 +604,9 @@ columns:
       third_down_pct_allowed: team_game:third_down_conversions_allowed / third_down_attempts_allowed
       fourth_down_pct_allowed: team_game:fourth_down_conversions_allowed / fourth_down_attempts_allowed
       two_pt_conversion_rate_allowed: team_game:two_point_successes_allowed / two_point_attempts_allowed
-    note: The opponent's offense, with the offense judgments above (gl-designed-runs, gl-downs).
+    note: >-
+      The opponent's offense, with the offense judgments above (gl-designed-runs, gl-downs); equal
+      in every team-game of 1999-2025 (PARITY.md, the pair of each column's own name).
   - id: gl-defense-rates
     kinds: [team_game_logs]
     columns: [epa_per_dropback_allowed, epa_per_defensive_snap_allowed, success_rate_allowed, explosive_pass_rate_allowed, explosive_rush_rate_allowed, stuff_rate, red_zone_td_pct_allowed]

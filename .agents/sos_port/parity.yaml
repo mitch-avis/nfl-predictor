@@ -14,8 +14,10 @@
 # {season}_team_game_logs.parquet. `kind` decides the comparison: `count` must be equal, `sum` and
 # `rate` within the tolerance, and `count_from_rate` (a count rebuilt from a rate it publishes
 # times the rate's own published denominator) within the tolerance. `null_as_zero` reads a null
-# rebuilt count as zero (a rate over no plays is null). A pair that names no cause must match in
-# every team-game.
+# rebuilt count as zero (a rate over no plays is null). `row: opponent` reads `theirs` on the
+# opponent's row of the same game (this repository's value for a team against its value for the
+# team's opponent); without it both values are the team's own. A pair that names no cause must
+# match in every team-game.
 #
 # A cause's `effects` names more columns (this repository's for a play-by-play adjustment, its own
 # for an undone repair) on which parity.py reports the adjustment's own effect, beside its pairs.
@@ -172,6 +174,34 @@ pairs:
     ours: penalty_yards
     theirs: penalty_yards
     kind: sum
+    causes: []
+  # The defense's side: rates over the opponent's plays (mapping.yaml, gl-defense-rates-same), and
+  # its carries faced, the opponent's carries (gl-carries-faced).
+  - id: rush_success_rate_allowed
+    ours: rush_success_allowed_count / carries_allowed
+    theirs: rush_success_rate_allowed
+    kind: rate
+    causes: []
+  - id: third_down_pct_allowed
+    ours: third_down_conversions_allowed / third_down_attempts_allowed
+    theirs: third_down_pct_allowed
+    kind: rate
+    causes: []
+  - id: fourth_down_pct_allowed
+    ours: fourth_down_conversions_allowed / fourth_down_attempts_allowed
+    theirs: fourth_down_pct_allowed
+    kind: rate
+    causes: []
+  - id: two_pt_conversion_rate_allowed
+    ours: two_point_successes_allowed / two_point_attempts_allowed
+    theirs: two_pt_conversion_rate_allowed
+    kind: rate
+    causes: []
+  - id: carries_faced
+    ours: rush_attempts
+    theirs: carries_faced
+    kind: count
+    row: opponent
     causes: []
 
 # Every cause below explains team-games or is a check the report runs (team codes, coverage, the

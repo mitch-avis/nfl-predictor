@@ -83,6 +83,8 @@ CLASSES = ("matched", "different", "missing")
 # ``data/ratings/{season}_{kind}.parquet`` (the ported ratings and season statistics): a reference
 # ``ratings:<column>`` names a column of the table of the same kind as the column it describes.
 PORT = "ratings"
+# Marks a counterpart read on the opponent's row of its team-game table (see check_counterpart).
+OPPONENT_ROW = "[opponent]"
 FILE_NAME = re.compile(r"^(\d{4})_(.+)\.parquet$")
 SIDES = ("home_", "away_")
 # A column name inside a counterpart formula: letters, digits and underscores, not only digits.
@@ -301,9 +303,11 @@ def check_counterpart(
     """Return whether ``source:name`` names something that exists in this repository.
 
     A ``ratings:`` reference names columns of the ported table of ``kind``, the file kind of the
-    column it describes.
+    column it describes. ``OPPONENT_ROW`` after a catalog (``box_score[opponent]:rush_attempts``)
+    names the column on the opponent's row of the same team-game table.
     """
     source, _, formula = ref.partition(":")
+    source = source.removesuffix(OPPONENT_ROW)
     names = NAME.findall(formula)
     known = port.get(kind) if source == PORT else catalog.get(source)
     return known is not None and bool(names) and all(part in known for part in names)

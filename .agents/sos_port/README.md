@@ -111,7 +111,9 @@ writes. The others are this repository's own model inputs: its play-by-play aggr
 team stats, quarterback games, game dataset and strength snapshot. The ported tables equal the
 published files cell for cell, Washington's code apart (`SEASON_STATS_ETL_PARITY.md`,
 `RATINGS_PARITY.md`), so a column is `matched` only when every counterpart named shares its
-definition, and `different` when one of this repository's own inputs defines it otherwise.
+definition, and `different` when one of this repository's own inputs defines it otherwise. A
+counterpart on the opponent's row of the same game marks its catalog `[opponent]`
+(`box_score[opponent]:rush_attempts`).
 
 Rules match columns on file kind, name, registry base metric and affixes. A `rest` rule takes the
 columns of its kinds that no other rule matches and states how many (`expect`); any rule may pin
@@ -138,7 +140,9 @@ cache hit through `loaders.load_pbp`, then the Jacksonville 2001-2002 player-tea
 and `aggregate_pbp_team_box_score_stats`, and compares every team-game with
 `{season}_team_game_logs.parquet` on the pairs `parity.yaml` judges to share a definition: counts
 must be equal, sums and rates within `1e-6`. Only game-log columns its own code builds from
-play-by-play can be judged; the report lists every other column with its source. Both sides are
+play-by-play can be judged; the report lists every other column with its source. A pair with
+`row: opponent` compares this repository's value for a team with the game-log value on its
+opponent's row of the same game (`carries_faced`, the carries the defense faced). Both sides are
 keyed in canonical team codes, so a team-game one side writes with the Rams as `LA` is compared
 like any other.
 
@@ -178,9 +182,9 @@ registry.
 
 `parity.py` also fails when a mismatching team-game is unexplained, when a team-game exists on
 one side only, when a played game lacks rows or a listed game without play-by-play has them, when
-a season's cache file is missing or older than the columns the code reads, when a season roster
-the repair needs is not cached, when a season's snapshot file is missing, ambiguous, not in its
-manifest or not equal to the cache row by row, when an evidence pattern in `parity.yaml` no
-longer holds, when a pair names a column that does not exist or a game-log column that does not
-come from play-by-play, or when a cause is described without an implementation or implemented
-without a description.
+a season's cached schedule is empty, when a season's cache file is missing or older than the
+columns the code reads, when a season roster the repair needs is not cached, when a season's
+snapshot file is missing, ambiguous, not in its manifest or not equal to the cache row by row,
+when an evidence pattern in `parity.yaml` no longer holds, when a pair names an unknown kind or
+row, a column that does not exist or a game-log column that does not come from play-by-play, or
+when a cause is described without an implementation or implemented without a description.

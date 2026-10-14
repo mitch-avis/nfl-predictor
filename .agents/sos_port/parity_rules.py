@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from port_audit import SosCode
 
 Kind = Literal["count", "count_from_rate", "sum", "rate"]
+# Which game-log row a pair reads for a team-game: the team's own, or its opponent's in that game.
+Row = Literal["own", "opponent"]
 KEYS = ["week", "team_abbr", "opponent_abbr"]
 _NAME = re.compile(r"[A-Za-z0-9_]*[A-Za-z_][A-Za-z0-9_]*")
 
@@ -77,7 +79,11 @@ def expression(text: str) -> Expression:
 
 @dataclass(frozen=True)
 class Pair:
-    """One judged pair: this repository's value and the other repository's value."""
+    """One judged pair: this repository's value and the other repository's value.
+
+    With ``row`` ``"opponent"`` this repository's value for a team in a game is compared with the
+    other repository's value on its opponent's row of the same game.
+    """
 
     id: str
     ours: Expression
@@ -85,6 +91,7 @@ class Pair:
     kind: Kind
     causes: tuple[str, ...]
     null_as_zero: bool
+    row: Row = "own"
 
 
 def check_evidence(

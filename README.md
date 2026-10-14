@@ -1469,9 +1469,8 @@ games.
   week 2, because a week-2 opponent's only prior game is the one against the subject.
 - The team and quarterback ratings ported from `nfl-sos-ratings`
   (`constants.RATINGS_FEATURE_STATS`, built by `src/nfl_predictor/utils/polars/ratings_build.py`),
-  the `ratings` feature group (`--disable-feature-groups ratings`; every name starts with
-  `ratings_`). Per side with a `_diff` companion: `ratings_offense`, `ratings_defense`,
-  `ratings_special_teams` and `ratings_team` (points per game against an average team on a
+  the `ratings` feature group (every name starts with `ratings_`). Per side with a `_diff`
+  companion: `ratings_offense`, `ratings_defense`, `ratings_special_teams` and `ratings_team` (points per game against an average team on a
   neutral field, from opponent-adjusted EPA) and `ratings_sos` (the mean team rating of the
   opponents played, each rated without the team's games), each fit only on the season's games
   before the row's week with the previous season's penalties and a preseason prior from earlier
@@ -1529,9 +1528,8 @@ games.
   `.agents/sos_port/elo_eval.py`, holds the numbers, including the presets scored with each
   team's previous starter instead of the actual one.
 
-The strength family is ablatable as the `strength` feature group
-(`--disable-feature-groups strength`), which production leaves out by default together with
-both own-Elo groups. Its early-season prior blend weights the in-season solve
+The strength family is ablatable as the `strength` feature group, which production leaves out by
+default together with both own-Elo groups. Its early-season prior blend weights the in-season solve
 `games / (games + K)` against the previous season's final snapshot regressed by
 `constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets `K` (default
 `constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend. Both change

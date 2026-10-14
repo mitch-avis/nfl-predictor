@@ -835,7 +835,8 @@ class RankingOptions:
     walk-forward predictions (model and blend) and the blend weight. With
     ``reference_predictions`` (seeds of one walk-forward, averaged into one source), the seasons
     before the ranked one come from them and the ranked season from ``model_predictions``
-    (`rating_sources.read_split_predictions`).
+    (`rating_sources.read_split_predictions`); only week 1, which fits the previous season,
+    reads them.
     """
 
     method: str = RANKING_METHODS[0]
@@ -1393,6 +1394,9 @@ def _model_week_ratings(
 ) -> dict[str, float]:
     """Return the model rating before ``week`` from the walk-forward predictions.
 
+    Only a week before ``rating_sources.FIRST_FITTED_WEEK`` reads the reference runs (it fits the
+    previous season); a later week fits the season so far from the current run alone.
+
     Raises:
         rating_sources.RatingSourceUnavailableError: If the predictions cannot be read (a missing
             or foreign directory, a half-written or damaged fold file, one without predictions,
@@ -1400,22 +1404,21 @@ def _model_week_ratings(
             the fit reads, or week 1 has no carryover factor; the message names the paths.
 
     """
-    sources = ", ".join(
-        str(path) for path in (*options.model_predictions, *options.reference_predictions)
-    )
+    fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
+    reference = () if fits_this_season else options.reference_predictions
+    sources = ", ".join(str(path) for path in (*options.model_predictions, *reference))
     try:
         predictions = (
             rating_sources.read_split_predictions(
-                options.model_predictions, options.reference_predictions, season=inputs.season
+                options.model_predictions, reference, season=inputs.season
             )
-            if options.reference_predictions
+            if reference
             else rating_sources.read_predictions(list(options.model_predictions))
         )
     except rating_sources.UNREADABLE_PREDICTION_ERRORS as error:
         detail = str(error) or type(error).__name__
         msg = f"cannot read the walk-forward predictions in {sources}: {detail}"
         raise rating_sources.RatingSourceUnavailableError(msg) from error
-    fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
     _check_prediction_coverage(
         predictions,
         inputs.data_schedule,

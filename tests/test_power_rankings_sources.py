@@ -481,3 +481,89 @@ def test_model_method_in_week_one_reads_last_season_from_the_averaged_reference(
 
     # Assert
     assert _ratings_of(result.power_rankings) == pytest.approx(expected)
+
+
+def _split_league(tmp_path: Path) -> tuple[Path, Path, Path, tuple[Path, ...]]:
+    """Write the league, a stage-1 source for 2024 and two reference seeds for 2023."""
+    games_path, ratings_dir, _ = _write_league(tmp_path / "league")
+    current = write_fold_checkpoints(
+        tmp_path / "stage1", [_league_fold(2024, 1), _league_fold(2024, 2)]
+    )
+    seeds = tuple(
+        write_fold_checkpoints(
+            tmp_path / f"seed{index}", [_league_fold(2023, 1), _league_fold(2023, 2)]
+        )
+        for index in range(2)
+    )
+    return games_path, ratings_dir, current, seeds
+
+
+def _rank_split(
+    league: tuple[Path, Path, Path],
+    reference: tuple[Path, ...],
+    *,
+    through_week: int = 2,
+) -> pd.DataFrame:
+    """Rank the split league on the blend, reading ``reference`` for earlier seasons."""
+    games_path, ratings_dir, current = league
+    options = power_rankings.resolve_ranking_options(
+        power_rankings.RankingRequest(
+            method="blend",
+            legacy_franchise_fit=False,
+            ratings_dir=ratings_dir,
+            model_predictions=(current,),
+            reference_predictions=reference,
+            blend_weight=0.5,
+        )
+    )
+    inputs = power_rankings.RankingInputs(
+        data_ml=games_path, data_schedule=games_path, season=2024, through_week=through_week
+    )
+    model = cast("MarginTotalModel", None)
+    return power_rankings.compute_power_rankings(model, inputs, options).power_rankings
+
+
+def test_missing_reference_run_does_not_block_a_mid_season_week(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    games_path, ratings_dir, current, _ = _split_league(tmp_path)
+
+    # Act
+    rankings = _rank_split((games_path, ratings_dir, current), (tmp_path / "no_such_reference",))
+
+    # Assert
+    assert set(rankings["team_abbr"]) == set(TEAMS)
+
+
+def test_mid_season_ranking_is_the_same_without_the_reference_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    games_path, ratings_dir, current, seeds = _split_league(tmp_path)
+    league = (games_path, ratings_dir, current)
+    with_reference = _ratings_of(_rank_split(league, seeds))
+    for seed in seeds:
+        for fold in seed.glob("fold_*.joblib"):
+            fold.unlink()
+
+    # Act
+    without_reference = _ratings_of(_rank_split(league, seeds))
+
+    # Assert
+    assert without_reference == with_reference
+
+
+def test_week_one_with_a_missing_reference_run_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    monkeypatch.setattr(power_rankings, "_predict_future_games", _no_future_games)
+    games_path, ratings_dir, current, _ = _split_league(tmp_path)
+    league = (games_path, ratings_dir, current)
+
+    # Act & Assert
+    with pytest.raises(rating_sources.RatingSourceUnavailableError, match="no_such_reference"):
+        _rank_split(league, (tmp_path / "no_such_reference",), through_week=0)

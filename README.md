@@ -1024,8 +1024,9 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   weight its pre-registered rule picks for 2026 (`.agents/sos_port/decisions/power_rankings.md`,
   decision 12). Without `--power-rankings-model-predictions`, the model rating reads the ranked
   season from the run's own stage-1 fold checkpoints (`wf_compare/`, whose `metadata.json` names
-  them) and earlier seasons, which week 1's carried-forward fit needs, from the
-  `floor_sigma_reference_runs`, averaged per game in the order listed as one source; explicit
+  them) and earlier seasons, which only week 1's carried-forward fit reads, from the
+  `floor_sigma_reference_runs`, averaged per game in the order listed as one source; later weeks
+  read the stage-1 checkpoints alone, so a missing reference run blocks only week 1. Explicit
   paths replace both. `power_rankings_method: composite` restores the composite, and
   `--legacy-franchise-fit` alone still implies Bradley-Terry. It skips the rankings with a warning
   naming what is missing when the snapshot or a rating source for the requested week is missing

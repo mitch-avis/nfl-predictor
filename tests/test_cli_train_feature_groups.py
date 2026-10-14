@@ -3,6 +3,8 @@
 The option takes what ``nfl-predictor backtest --disable-feature-groups`` takes, a
 comma-separated list of the groups in ``constants.FEATURE_GROUP_COLUMN_MARKERS``. It is checked
 when the arguments are parsed, so an unknown group stops the command before any data loads.
+Its default is the weekly run's: the strength snapshot and both own-Elo presets are left out, and
+an empty value leaves no group out.
 The run's ``metadata.json`` records the option in its config and, beside the feature list, the
 groups the model was trained without and the columns they removed. A saved model predicts with
 the columns it was trained on, so ``nfl-predictor predict`` says the option does not apply.
@@ -16,14 +18,18 @@ import sys
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.feature_group_fixture import GROUP_COLUMNS, build_group_fixture
+from tests.feature_group_fixture import GROUP_COLUMNS, RATINGS_COLUMNS, build_group_fixture
 
 from nfl_predictor.cli import train
+from nfl_predictor.weekly_run import config as weekly_config
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Sequence
     from pathlib import Path
+
+# The groups production leaves out: the strength snapshot and both presets of the own Elo.
+PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
 
 
 def _parse(argv: Sequence[str], monkeypatch: pytest.MonkeyPatch) -> argparse.Namespace:
@@ -32,9 +38,30 @@ def _parse(argv: Sequence[str], monkeypatch: pytest.MonkeyPatch) -> argparse.Nam
     return train._parse_args()
 
 
-def test_without_the_option_no_group_is_left_out(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_without_the_option_the_weekly_runs_groups_are_left_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Act
     args = _parse([], monkeypatch)
+
+    # Assert
+    assert args.disable_feature_groups == PRODUCTION_GROUPS
+
+
+def test_the_default_matches_the_weekly_runs_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    weekly = weekly_config.parse_args([])
+
+    # Act
+    args = _parse([], monkeypatch)
+
+    # Assert
+    assert args.disable_feature_groups == weekly.disable_feature_groups
+
+
+def test_an_empty_value_leaves_no_group_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Act
+    args = _parse(["--disable-feature-groups", ""], monkeypatch)
 
     # Assert
     assert args.disable_feature_groups == ()
@@ -98,6 +125,43 @@ def test_the_fit_leaves_the_groups_out_and_the_run_records_them(
     assert metadata["dropped_feature_group_columns"] == dropped
     assert not set(metadata["feature_list"]) & set(dropped)
     assert set(metadata["feature_list"]) >= {*GROUP_COLUMNS["elo"], *GROUP_COLUMNS["own_elo_wt"]}
+
+
+def test_a_default_fit_records_the_weekly_runs_groups_and_keeps_the_ratings_and_the_elo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    paths = build_group_fixture(tmp_path, ratings=True)
+    run_dir = tmp_path / "run"
+    left_out = sorted(column for group in PRODUCTION_GROUPS for column in GROUP_COLUMNS[group])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "nfl-predictor train",
+            "--data-path",
+            str(paths["completed"]),
+            "--holdout-seasons",
+            "0",
+            "--floor-sigma-reference-runs",
+            "--xgb-device",
+            "cpu",
+            "--xgb-n-jobs",
+            "1",
+            "--run-dir",
+            str(run_dir),
+        ],
+    )
+
+    # Act
+    train.main()
+
+    # Assert
+    metadata = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["disabled_feature_groups"] == list(PRODUCTION_GROUPS)
+    assert metadata["dropped_feature_group_columns"] == left_out
+    assert not set(metadata["feature_list"]) & set(left_out)
+    assert set(metadata["feature_list"]) >= {*GROUP_COLUMNS["elo"], *RATINGS_COLUMNS}
 
 
 def test_predicting_with_a_saved_model_says_the_option_does_not_apply(

@@ -590,7 +590,10 @@ columns:
     here_map:
       attempts_faced: box_score[opponent]:pass_attempts
       completions_allowed: box_score[opponent]:pass_completions
-    note: The opponent's row; the same play-by-play definition.
+    note: >-
+      The opponent's row: its pass attempts and completions, the same play-by-play definition,
+      equal in every team-game of 1999-2025 (PARITY.md, pairs attempts_faced and
+      completions_allowed).
   - id: gl-carries-faced
     kinds: [team_game_logs]
     columns: [carries_faced]

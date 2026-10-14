@@ -239,3 +239,30 @@ walk-forward on 100 synthetic windows, the longest. Every report records the SHA
 and of every input file, and the git commit. Two runs of the same code write the same decisions,
 comparisons, scores and integrity checks; the descriptive slopes, spreads and coefficients can
 differ in the last bit of a float.
+
+## The betting report's edges and labels
+
+Two report-only measurements on the betting report (`src/nfl_predictor/reporting/betting_report.py`)
+read walk-forward fold checkpoints under the main checkout's `models/` and the build's market-lines
+metadata, and write only their own reports here. Their rules and outcomes are logged in
+`decisions/betting_edges.md`.
+
+| question | rule | script | writes |
+| --- | --- | --- | --- |
+| how much of the moneyline edge is the model's part beyond the spread | `decisions/betting_edges.md`, entry 1 | `betting_edges.py` | `BETTING_EDGES.md` |
+| should the labels read the model's part instead of the whole edge | `protocols/betting_labels.md` | `betting_labels.py` | `BETTING_LABELS.md`, `betting_labels.json` |
+
+`betting_labels.py` imports `betting_edges.py`'s loading and decomposition and
+`rating_tests_common.py`'s hashing and Markdown wrapping. It reads both seeds of the adopted
+configuration's reference (`--checkpoint-dir` twice, seed 42 then seed 7, each checked against its
+manifest's seed), checks the floor on every fold of both, requires the same games in both, and
+records the SHA-256 of its code and of every input (a checkpoint directory as one digest over its
+files' names and contents). The defaults are the reviewed reference's paths; it takes a few
+seconds:
+
+```bash
+VIRTUAL_ENV="$PWD/.venv" PYTHONDONTWRITEBYTECODE=1 nice -n 10 .venv/bin/python \
+    .agents/sos_port/betting_labels.py
+```
+
+Their tests are `tests/test_sos_port_betting_edges.py` and `tests/test_sos_port_betting_labels.py`.

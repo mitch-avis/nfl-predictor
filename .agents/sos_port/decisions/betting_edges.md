@@ -5,8 +5,9 @@ compares the model's home win probability with the market's no-vig moneyline pro
 the difference into a 1-10 confidence score and an action label (`PASS` to `STRONG`). The open
 follow-up "Betting report edges" (`.agents/TODO.md`) observed that the largest of these edges
 mostly reflect the gap between each game's spread and its moneyline, not anything the model adds.
-Entry 1 is the rule, committed before any game was scored; entry 2 is its outcome. The report
-stays diagnostic and makes no profitability claim.
+Entry 1 is the rule, committed before any game was scored; entry 2 is its outcome; entry 3 is the
+outcome of the pre-registered label test (`../protocols/betting_labels.md`). The report stays
+diagnostic and makes no profitability claim.
 
 ## 1. The decomposition and the rule, written before scoring
 
@@ -147,3 +148,68 @@ The rule:
   `home_win_prob` accepts an infinite sigma, unreachable today) goes with the next change to the
   model code. Both re-check reports are in
   [../review/betting_edges/](../review/betting_edges/).
+
+## 3. The label test: the labels stay on the whole edge
+
+The protocol `../protocols/betting_labels.md` (committed in `5023f45` and `f5ea2a9`, before any
+game was scored) asks whether the confidence score and the action label should read `beyond`
+instead of `edge`. Each edge claims a home probability against the moneyline: `edge` claims
+`p_model`, `beyond` claims `q_beyond = p_ml + beyond`. Per game and seed,
+`d = (q_beyond - y)^2 - (p_model - y)^2`, averaged over the two seeds, then the mean over the
+governing games with a bootstrap over games (5,000 resamples, numpy seed 0, 95% percentile
+interval) that resamples the games in game-id order. Only an interval wholly below zero recommends
+`beyond`.
+
+- **What differs**: three things, none of them the rule.
+  - The protocol does not say how to rank the top decile when `|edge|` and `|beyond|` differ by
+    seed. The report gives both readings: by the two-seed mean magnitude (with the two-seed mean
+    `d`), and by each seed's own magnitude (with that seed's `d`). Both are beside the rule.
+  - To explain a governing-game count other than 815 from the metadata before any score, the
+    script always reads the earlier build's metadata too and tabulates both builds' per-season
+    counts. The count is 815, so the table only confirms it.
+  - The script also checks that each checkpoint directory's `manifest.json` records the seed it
+    is given for (42, then 7).
+- **Options**: (a) keep the confidence score and the action label on the whole edge; (b) base
+  both on `beyond`, the switch held for the user.
+- **Decision**: the interval contains zero, so the labels stay on the whole edge, as the rule
+  states. Nothing in the report changes.
+- **Reasoning**: the rule is applied as written. On the 815 governing games the mean of `d` is
+  `-0.00036` (95% interval `-0.00198` to `+0.00135`). Each seed alone: seed 42 `-0.00036`
+  (`-0.00199` to `+0.00135`), seed 7 `-0.00036` (`-0.00197` to `+0.00135`). No interval reported
+  beside the rule excludes zero: every scored game `-0.00004` (`-0.00078` to `+0.00072`), the
+  other seasons `+0.00003` (`-0.00082` to `+0.00088`), the log loss `-0.00077` (`-0.00485` to
+  `+0.00352`), each top-decile row, and each season of the by-season table. None of them would
+  decide anything either way. Basing the labels on `beyond` would change, on the governing
+  games, 485 action labels, 676 confidence scores and 196 value sides in seed 42, and 506, 667
+  and 178 in seed 7. No `q_beyond` falls outside `[0, 1]` in either seed. The earlier edge
+  measurement had already found the two market baselines tied on the same 815 games (the Brier
+  score of `p_spread` minus that of `p_ml`, `+0.00075`, `-0.00086` to `+0.00237`; the protocol's
+  "Known before writing this").
+- **Data**: `.agents/sos_port/BETTING_LABELS.md` and `.agents/sos_port/betting_labels.json`,
+  written by `.agents/sos_port/betting_labels.py` from the reviewed reference of the adopted
+  configuration (ported ratings, anchored): `models/step6/ratings_anchored_seed42` and
+  `models/step6/ratings_anchored_seed7`, read from their fold checkpoints
+  `models/wf_checkpoints/d97fab54e7261f18e349/` and `models/wf_checkpoints/2f7442e89fd6ff3981f4/`
+  (328 folds and 4,943 game rows each; the floor check's largest difference is `0` in both), and
+  the build's `models/step6/inputs/candidate_market_lines_metadata.json`. The governing games are
+  the 815 in 2022 (271), 2024 (272) and 2025 (272), the same seasons and count as the earlier
+  build. The JSON record holds the SHA-256 of the code and of every input. A second run wrote the
+  same decisions and scores. Command, from the repository root:
+
+  ```bash
+  VIRTUAL_ENV="$PWD/.venv" PYTHONDONTWRITEBYTECODE=1 nice -n 10 .venv/bin/python \
+      .agents/sos_port/betting_labels.py \
+      --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349 \
+      --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4 \
+      --market-lines-metadata \
+      /home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json \
+      --earlier-market-lines-metadata \
+      /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json
+  ```
+
+- **How to reverse it**: nothing changed, so nothing is reversed. A switch of the labels to
+  `beyond` is the user's decision; it would map `edge_beyond_spread_home_prob` through
+  `_edge_to_confidence_1_to_10` and `_edge_to_action` in
+  `src/nfl_predictor/reporting/betting_report.py` (entry 2).
+- **Review**: reviewed 2026-10-14 by an independent reviewer, who rescored with its own script and
+  reproduced the governing number, review `../review/betting_labels/review_2026-10-14.md`.

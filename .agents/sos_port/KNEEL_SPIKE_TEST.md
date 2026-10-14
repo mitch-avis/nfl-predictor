@@ -209,14 +209,14 @@ largest and mean absolute change, points per game):
 
 ## Provenance
 
-- nfl-predictor 0.55.1; code SHA-256: `team_plays_test.py` b453010657c5, `rating_tests_common.py`
-  e92451402822.
+- nfl-predictor 0.57.1 at commit `0fdf79cee44dbaec2554315706071ea1bd88d855`; code SHA-256:
+  `team_plays_test.py` 576a3b3d5bb0, `rating_tests_common.py` 50da9bf186e7.
 - Inputs: 108 files, fingerprint `85783d39e38c710f8f901fa423d2f46713429ab6f12e91a42c64150e7fd35a7a`
   (every file's SHA-256 is in `kneel_spike_test.json`), from
   `/home/mitch/scratch/step6/data/cache/nflreadpy` and `/home/mitch/scratch/step6/data/ratings`,
   read only, downloads blocked.
 - Command: `VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/team_plays_test.py
   kneel-spike --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy --ratings-dir
-  /home/mitch/scratch/step6/data/ratings`; seconds per variant: today's rating (every scrimmage
-  snap) 36, without kneel-downs and spikes 31, without kneel-downs 30, without spikes 34, no play
-  moved (an integrity check) 16.
+  /home/mitch/scratch/step6/data/ratings`; 117 seconds in all; seconds per variant: today's rating
+  (every scrimmage snap) 22, without kneel-downs and spikes 22, without kneel-downs 19, without
+  spikes 17, no play moved (an integrity check) 8.

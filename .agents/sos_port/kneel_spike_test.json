@@ -161,24 +161,24 @@
  },
  "slopes": {
   "today": {
-   "overall": 0.9027279773514835,
-   "weeks 5-7": 0.9111030106688225,
+   "overall": 0.9027279773514837,
+   "weeks 5-7": 0.9111030106688227,
    "weeks 8+": 0.9004286720061794
   },
   "without_kneel_spike": {
    "overall": 0.8583477397128921,
    "weeks 5-7": 0.8672396271358416,
-   "weeks 8+": 0.8559065357789206
+   "weeks 8+": 0.8559065357789207
   },
   "without_kneels": {
    "overall": 0.8567503299791597,
-   "weeks 5-7": 0.8656948796763422,
-   "weeks 8+": 0.8542946679954048
+   "weeks 5-7": 0.8656948796763423,
+   "weeks 8+": 0.8542946679954049
   },
   "without_spikes": {
-   "overall": 0.9044262543897228,
+   "overall": 0.9044262543897229,
    "weeks 5-7": 0.9127470830270108,
-   "weeks 8+": 0.9021418305506599
+   "weeks 8+": 0.90214183055066
   }
  },
  "extras": {
@@ -276,7 +276,7 @@
     {
      "season": 1999,
      "removed": 344,
-     "removed_epa": -155.83895038078845,
+     "removed_epa": -155.83895038078848,
      "added": 0,
      "added_epa": 0.0
     },
@@ -304,21 +304,21 @@
     {
      "season": 2003,
      "removed": 363,
-     "removed_epa": -152.50905512686757,
+     "removed_epa": -152.5090551268676,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2004,
      "removed": 434,
-     "removed_epa": -239.94758534696982,
+     "removed_epa": -239.9475853469698,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2005,
      "removed": 430,
-     "removed_epa": -207.0786046952169,
+     "removed_epa": -207.07860469521688,
      "added": 0,
      "added_epa": 0.0
     },
@@ -353,7 +353,7 @@
     {
      "season": 2010,
      "removed": 426,
-     "removed_epa": -156.93036010129669,
+     "removed_epa": -156.93036010129666,
      "added": 0,
      "added_epa": 0.0
     },
@@ -388,21 +388,21 @@
     {
      "season": 2015,
      "removed": 474,
-     "removed_epa": -234.8804341977862,
+     "removed_epa": -234.88043419778626,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2016,
      "removed": 445,
-     "removed_epa": -219.33297816605887,
+     "removed_epa": -219.3329781660589,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2017,
      "removed": 455,
-     "removed_epa": -204.96527609446662,
+     "removed_epa": -204.96527609446665,
      "added": 0,
      "added_epa": 0.0
     },
@@ -430,14 +430,14 @@
     {
      "season": 2021,
      "removed": 466,
-     "removed_epa": -242.54179313986307,
+     "removed_epa": -242.5417931398631,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2022,
      "removed": 485,
-     "removed_epa": -290.8016844473812,
+     "removed_epa": -290.80168444738126,
      "added": 0,
      "added_epa": 0.0
     },
@@ -451,14 +451,14 @@
     {
      "season": 2024,
      "removed": 480,
-     "removed_epa": -230.68718253769794,
+     "removed_epa": -230.6871825376979,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2025,
      "removed": 515,
-     "removed_epa": -240.73682878836274,
+     "removed_epa": -240.7368287883627,
      "added": 0,
      "added_epa": 0.0
     }
@@ -530,7 +530,7 @@
     {
      "season": 2008,
      "removed": 380,
-     "removed_epa": -220.96349062787093,
+     "removed_epa": -220.9634906278709,
      "added": 0,
      "added_epa": 0.0
     },
@@ -558,7 +558,7 @@
     {
      "season": 2012,
      "removed": 368,
-     "removed_epa": -223.60594742845998,
+     "removed_epa": -223.60594742845996,
      "added": 0,
      "added_epa": 0.0
     },
@@ -593,7 +593,7 @@
     {
      "season": 2017,
      "removed": 398,
-     "removed_epa": -201.680810897896,
+     "removed_epa": -201.68081089789598,
      "added": 0,
      "added_epa": 0.0
     },
@@ -642,7 +642,7 @@
     {
      "season": 2024,
      "removed": 405,
-     "removed_epa": -221.81164663197754,
+     "removed_epa": -221.81164663197757,
      "added": 0,
      "added_epa": 0.0
     },
@@ -756,7 +756,7 @@
     {
      "season": 2013,
      "removed": 59,
-     "removed_epa": -6.4458565986911935,
+     "removed_epa": -6.445856598691192,
      "added": 0,
      "added_epa": 0.0
     },
@@ -770,7 +770,7 @@
     {
      "season": 2015,
      "removed": 52,
-     "removed_epa": -5.327840520224297,
+     "removed_epa": -5.327840520224298,
      "added": 0,
      "added_epa": 0.0
     },
@@ -798,14 +798,14 @@
     {
      "season": 2019,
      "removed": 75,
-     "removed_epa": -6.199039115013762,
+     "removed_epa": -6.199039115013761,
      "added": 0,
      "added_epa": 0.0
     },
     {
      "season": 2020,
      "removed": 85,
-     "removed_epa": -0.7510290209867265,
+     "removed_epa": -0.7510290209867267,
      "added": 0,
      "added_epa": 0.0
     },
@@ -840,7 +840,7 @@
     {
      "season": 2025,
      "removed": 81,
-     "removed_epa": -2.4493947424709064,
+     "removed_epa": -2.449394742470907,
      "added": 0,
      "added_epa": 0.0
     }
@@ -1836,10 +1836,10 @@
   "wiped_sets": []
  },
  "provenance": {
-  "nfl_predictor_version": "0.55.1",
+  "nfl_predictor_version": "0.57.1",
   "code_sha256": {
-   "team_plays_test.py": "b453010657c599b7cb2fd29864c3b18879e5145a852f3d86c6c53232bc3a8bcd",
-   "rating_tests_common.py": "e924514028223ca12a295b551b150654eac5d625b86e6162babd5732277df22e"
+   "team_plays_test.py": "576a3b3d5bb03002656269a6c51ec4fe0723d443727ffc9021bade789767900f",
+   "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516"
   },
   "cache_dir": "/home/mitch/scratch/step6/data/cache/nflreadpy",
   "ratings_dir": "/home/mitch/scratch/step6/data/ratings",
@@ -1953,6 +1953,9 @@
    "/home/mitch/scratch/step6/data/ratings/2024_ratings_by_week.parquet": "3ba50be13747e0d25cd4bb6400f570b9d9b97ca2d6d3fd87b370060022a5a593",
    "/home/mitch/scratch/step6/data/ratings/2025_ratings.parquet": "fd8f3968bd96cdc1b5b8054ae9be60658cdecd77523686436d6128f6c7a7df2c",
    "/home/mitch/scratch/step6/data/ratings/2025_ratings_by_week.parquet": "c5c8167c22996252d8b80acab94544b1819ca8f76c1ee4806067ce8aa6cf7c7b"
-  }
+  },
+  "git_commit": "0fdf79cee44dbaec2554315706071ea1bd88d855",
+  "command": "VIRTUAL_ENV=\"$PWD/.venv\" nice -n 10 .venv/bin/python .agents/sos_port/team_plays_test.py kneel-spike --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy --ratings-dir /home/mitch/scratch/step6/data/ratings",
+  "seconds": 117.47332048999988
  }
 }

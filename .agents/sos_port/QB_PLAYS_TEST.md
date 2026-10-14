@@ -49,7 +49,8 @@ Mean of `|error X| - |error Y|` per team-game; negative favors X.
 7. 100 season penalties equal separate cross-validations of each candidate's previous season.
 8. On 325 weekly snapshots, replacing every later game's values moves no prediction (largest gap
    0.0e+00); every snapshot equals `qb_rating.fit_qb_ratings` on the same rows (largest gap
-   0.0e+00); every calibration used earlier weeks only.
+   0.0e+00); the calibrations of 5,200 candidate-weeks, over every target, were each fit on exactly
+   the rows of the earlier weeks.
 9. Every candidate scores the same team-games; by season below.
 10. Passes and sacks' year-over-year Pearson from the published tables is 0.4551 over 601 pairs (the
     source: 0.455 over 601). The QBR half is not run (no QBR file among the allowed inputs).
@@ -238,12 +239,12 @@ fit behind the `ratings_qb` feature, with the season's identity):
 
 ## Provenance
 
-- nfl-predictor 0.55.1; code SHA-256: `qb_plays_test.py` 7b922206ded0, `rating_tests_common.py`
-  e92451402822.
+- nfl-predictor 0.57.1 at commit `0fdf79cee44dbaec2554315706071ea1bd88d855`; code SHA-256:
+  `qb_plays_test.py` 070baac272c0, `rating_tests_common.py` 50da9bf186e7.
 - Inputs: 179 files, fingerprint `dd46eecd2b1010d053ad8a520ea2e3ede9d3428b914180ce64173b8316871a55`
   (each file's SHA-256 is in `qb_plays_test.json`), read only, downloads blocked.
 - Command: `VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/qb_plays_test.py
   --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy --ratings-dir
   /home/mitch/scratch/step6/data/ratings --schedules-file
   /home/mitch/scratch/nflreadpy_cache_snapshot_20261008/a7d0d7a2405b3d35047e8de4a40035e6.parquet`;
-  1046 seconds.
+  1237 seconds.

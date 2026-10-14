@@ -1345,15 +1345,16 @@
   }
  ],
  "provenance": {
-  "version": "0.55.1",
+  "version": "0.57.1",
   "code": {
-   "botched_snaps.py": "c30261d2bd6c18b3db6b44e39a36f7a5742aec8025033a4e11e898417d5d7c18",
-   "rating_tests_common.py": "e924514028223ca12a295b551b150654eac5d625b86e6162babd5732277df22e"
+   "botched_snaps.py": "4d5b5eaf1c28715652dfcbb25b6809141450e825df090a3f1c6bb40d712abefb",
+   "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516"
   },
   "inputs": 125,
   "fingerprint": "781eaf85ab665ffc8e69c93d20e802c2dfd64681fc29285773f0ab8880ef3a8a",
   "command": "VIRTUAL_ENV=\"$PWD/.venv\" nice -n 10 .venv/bin/python .agents/sos_port/botched_snaps.py --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy",
-  "seconds": 194.1933036699993,
+  "seconds": 159.0527779449999,
+  "git_commit": "0fdf79cee44dbaec2554315706071ea1bd88d855",
   "input_files": {
    "/home/mitch/scratch/step6/data/cache/nflreadpy/players.parquet": "7dd203e2ca845e29a0601c5aa241116607a6ef49e5d49d1f98f1baf6ad3c237a",
    "/home/mitch/scratch/step6/data/cache/nflreadpy/pbp_1999_reg.parquet": "e5e7d95838f97eb8a8c5d4fedbcea52678120c20cd630e86f817e168d27c16a9",

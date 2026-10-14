@@ -131,9 +131,9 @@ season, or no pre-week week measured).
 
 ## Provenance
 
-- nfl-predictor 0.55.1; code SHA-256: `botched_snaps.py` c30261d2bd6c, `rating_tests_common.py`
-  e92451402822.
+- nfl-predictor 0.57.1 at commit `0fdf79cee44dbaec2554315706071ea1bd88d855`; code SHA-256:
+  `botched_snaps.py` 4d5b5eaf1c28, `rating_tests_common.py` 50da9bf186e7.
 - Inputs: 125 files, fingerprint `781eaf85ab665ffc8e69c93d20e802c2dfd64681fc29285773f0ab8880ef3a8a`
   (each file's SHA-256 is in `botched_snaps.json`), read only, downloads blocked.
 - Command: `VIRTUAL_ENV="$PWD/.venv" nice -n 10 .venv/bin/python .agents/sos_port/botched_snaps.py
-  --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy`; 194 seconds.
+  --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy`; 159 seconds.

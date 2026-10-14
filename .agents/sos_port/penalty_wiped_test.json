@@ -189,24 +189,24 @@
  },
  "slopes": {
   "today": {
-   "overall": 0.9027279773514835,
+   "overall": 0.9027279773514838,
    "weeks 5-7": 0.9111030106688227,
-   "weeks 8+": 0.9004286720061793
+   "weeks 8+": 0.9004286720061794
   },
   "every_wiped_snap": {
-   "overall": 0.9017818655217972,
-   "weeks 5-7": 0.9118469130919363,
-   "weeks 8+": 0.8990185788813909
+   "overall": 0.9017818655217973,
+   "weeks 5-7": 0.9118469130919362,
+   "weeks 8+": 0.899018578881391
   },
   "no_wiped_snap": {
-   "overall": 0.8845685843919677,
-   "weeks 5-7": 0.8948620889338165,
-   "weeks 8+": 0.8817425765280966
+   "overall": 0.884568584391968,
+   "weeks 5-7": 0.8948620889338162,
+   "weeks 8+": 0.8817425765280967
   },
   "wiped_passes_only": {
    "overall": 0.8945301120957535,
-   "weeks 5-7": 0.9051488015052434,
-   "weeks 8+": 0.8916148270581625
+   "weeks 5-7": 0.9051488015052431,
+   "weeks 8+": 0.8916148270581626
   }
  },
  "extras": {
@@ -292,14 +292,14 @@
      "removed": 0,
      "removed_epa": 0.0,
      "added": 972,
-     "added_epa": 383.3510271921148
+     "added_epa": 383.35102719211477
     },
     {
      "season": 2003,
      "removed": 0,
      "removed_epa": 0.0,
      "added": 937,
-     "added_epa": 362.69541750934496
+     "added_epa": 362.6954175093449
     },
     {
      "season": 2004,
@@ -320,7 +320,7 @@
      "removed": 0,
      "removed_epa": 0.0,
      "added": 783,
-     "added_epa": 281.4967742308133
+     "added_epa": 281.49677423081334
     },
     {
      "season": 2007,
@@ -355,7 +355,7 @@
      "removed": 0,
      "removed_epa": 0.0,
      "added": 998,
-     "added_epa": 330.81940988729247
+     "added_epa": 330.8194098872925
     },
     {
      "season": 2012,
@@ -397,7 +397,7 @@
      "removed": 0,
      "removed_epa": 0.0,
      "added": 1171,
-     "added_epa": 507.3974538372965
+     "added_epa": 507.39745383729644
     },
     {
      "season": 2018,
@@ -425,7 +425,7 @@
      "removed": 0,
      "removed_epa": 0.0,
      "added": 1164,
-     "added_epa": 499.78326258612856
+     "added_epa": 499.7832625861286
     },
     {
      "season": 2022,
@@ -453,7 +453,7 @@
      "removed": 0,
      "removed_epa": 0.0,
      "added": 1156,
-     "added_epa": 477.02657332502275
+     "added_epa": 477.0265733250227
     }
    ],
    "no_wiped_snap": [
@@ -509,7 +509,7 @@
     {
      "season": 2006,
      "removed": 288,
-     "removed_epa": -140.04992543049366,
+     "removed_epa": -140.04992543049363,
      "added": 0,
      "added_epa": 0.0
     },
@@ -674,14 +674,14 @@
      "removed": 293,
      "removed_epa": -147.9410233045055,
      "added": 972,
-     "added_epa": 383.3510271921148
+     "added_epa": 383.35102719211477
     },
     {
      "season": 2003,
      "removed": 343,
      "removed_epa": -191.712111371044,
      "added": 937,
-     "added_epa": 362.69541750934496
+     "added_epa": 362.6954175093449
     },
     {
      "season": 2004,
@@ -700,9 +700,9 @@
     {
      "season": 2006,
      "removed": 288,
-     "removed_epa": -140.04992543049366,
+     "removed_epa": -140.04992543049363,
      "added": 783,
-     "added_epa": 281.4967742308133
+     "added_epa": 281.49677423081334
     },
     {
      "season": 2007,
@@ -737,7 +737,7 @@
      "removed": 331,
      "removed_epa": -217.30053784244726,
      "added": 998,
-     "added_epa": 330.81940988729247
+     "added_epa": 330.8194098872925
     },
     {
      "season": 2012,
@@ -779,7 +779,7 @@
      "removed": 344,
      "removed_epa": -225.37183868061962,
      "added": 1171,
-     "added_epa": 507.3974538372965
+     "added_epa": 507.39745383729644
     },
     {
      "season": 2018,
@@ -807,7 +807,7 @@
      "removed": 338,
      "removed_epa": -267.125191115843,
      "added": 1164,
-     "added_epa": 499.78326258612856
+     "added_epa": 499.7832625861286
     },
     {
      "season": 2022,
@@ -835,7 +835,7 @@
      "removed": 335,
      "removed_epa": -199.3388622148551,
      "added": 1156,
-     "added_epa": 477.02657332502275
+     "added_epa": 477.0265733250227
     }
    ]
   },
@@ -1912,15 +1912,15 @@
    {
     "set": "wiped passes",
     "plays": 27904,
-    "epa": 11141.297266932452
+    "epa": 11141.29726693245
    }
   ]
  },
  "provenance": {
-  "nfl_predictor_version": "0.55.1",
+  "nfl_predictor_version": "0.57.1",
   "code_sha256": {
-   "team_plays_test.py": "b453010657c599b7cb2fd29864c3b18879e5145a852f3d86c6c53232bc3a8bcd",
-   "rating_tests_common.py": "e924514028223ca12a295b551b150654eac5d625b86e6162babd5732277df22e"
+   "team_plays_test.py": "576a3b3d5bb03002656269a6c51ec4fe0723d443727ffc9021bade789767900f",
+   "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516"
   },
   "cache_dir": "/home/mitch/scratch/step6/data/cache/nflreadpy",
   "ratings_dir": "/home/mitch/scratch/step6/data/ratings",
@@ -2034,6 +2034,9 @@
    "/home/mitch/scratch/step6/data/ratings/2024_ratings_by_week.parquet": "3ba50be13747e0d25cd4bb6400f570b9d9b97ca2d6d3fd87b370060022a5a593",
    "/home/mitch/scratch/step6/data/ratings/2025_ratings.parquet": "fd8f3968bd96cdc1b5b8054ae9be60658cdecd77523686436d6128f6c7a7df2c",
    "/home/mitch/scratch/step6/data/ratings/2025_ratings_by_week.parquet": "c5c8167c22996252d8b80acab94544b1819ca8f76c1ee4806067ce8aa6cf7c7b"
-  }
+  },
+  "git_commit": "0fdf79cee44dbaec2554315706071ea1bd88d855",
+  "command": "VIRTUAL_ENV=\"$PWD/.venv\" nice -n 10 .venv/bin/python .agents/sos_port/team_plays_test.py penalty-wiped --cache-dir /home/mitch/scratch/step6/data/cache/nflreadpy --ratings-dir /home/mitch/scratch/step6/data/ratings",
+  "seconds": 106.5517251289998
  }
 }

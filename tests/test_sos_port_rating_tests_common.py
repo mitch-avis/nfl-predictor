@@ -1,10 +1,16 @@
 """Tests for the shared pieces of the rating-definition tests (``.agents/sos_port``)."""
 
+import json
+from typing import TYPE_CHECKING
+
 import numpy as np
 import polars as pl
 import pytest
 from scipy import stats
 from tests.sos_port_scripts import load_sos_port_script
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 common = load_sos_port_script("rating_tests_common")
 
@@ -189,3 +195,27 @@ def test_bound_text_keeps_a_bound_near_zero_visible(value: float, text: str) -> 
 
     # Assert
     assert formatted == text
+
+
+def test_write_json_record_ends_with_a_newline(tmp_path: Path) -> None:
+    # Arrange
+    path = tmp_path / "record.json"
+
+    # Act
+    common.write_json_record(path, {"value": 1.5, "rows": [1, 2]})
+
+    # Assert
+    text = path.read_text()
+    assert text.endswith("}\n")
+    assert json.loads(text) == {"value": 1.5, "rows": [1, 2]}
+
+
+def test_write_json_record_passes_unwritable_values_to_the_default(tmp_path: Path) -> None:
+    # Arrange
+    path = tmp_path / "record.json"
+
+    # Act
+    common.write_json_record(path, {"pair": ("A", "B"), "path": tmp_path}, default=str)
+
+    # Assert
+    assert json.loads(path.read_text()) == {"pair": ["A", "B"], "path": str(tmp_path)}

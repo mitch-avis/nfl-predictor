@@ -14,6 +14,7 @@ never refreshed, and :func:`block_downloads` makes a cache miss fail instead of 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import textwrap
 from dataclasses import dataclass, field
@@ -29,7 +30,7 @@ from nfl_predictor.ratings.pbp_inputs import SeasonSources
 from nfl_predictor.utils.polars import loaders, nflverse_sources
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     import numpy.typing as npt
@@ -82,6 +83,17 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def write_json_record(
+    path: Path, payload: object, default: Callable[[object], object] | None = None
+) -> None:
+    """Write a report's JSON record, indented by one space and ending with a newline.
+
+    The newline matches what the repository's end-of-file hook commits, so a rerun reproduces
+    the committed bytes. ``default`` converts a value ``json`` cannot write.
+    """
+    path.write_text(json.dumps(payload, indent=1, default=default) + "\n")
 
 
 @dataclass

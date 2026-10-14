@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import sys
 import time
 from collections.abc import Mapping
@@ -2573,7 +2572,7 @@ def run(
         },
         "provenance": {**provenance, "input_files": ledger.files},
     }
-    (out_dir / OUT_JSON).write_text(json.dumps(_json_ready(payload), indent=1) + "\n")
+    common.write_json_record(out_dir / OUT_JSON, _json_ready(payload))
     return 0
 
 

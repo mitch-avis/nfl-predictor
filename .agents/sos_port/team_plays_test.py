@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import itertools
-import json
 import math
 import sys
 import time
@@ -1546,9 +1545,7 @@ def run_test(test: str, cache_dir: Path, ratings_dir: Path, out_dir: Path) -> in
         },
         "provenance": provenance,
     }
-    (out_dir / spec.output_json).write_text(
-        json.dumps(payload, indent=1, default=_json_default) + "\n"
-    )
+    common.write_json_record(out_dir / spec.output_json, payload, _json_default)
     return 0
 
 

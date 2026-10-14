@@ -22,7 +22,6 @@ downloads blocked, and writes only ``BOTCHED_SNAPS.md`` and ``botched_snaps.json
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from dataclasses import dataclass
@@ -592,7 +591,7 @@ def run(cache_dir: Path, out_dir: Path) -> int:
         "plays": plays.to_dicts(),
         "provenance": {**provenance, "input_files": ledger.files},
     }
-    (out_dir / OUT_JSON).write_text(json.dumps(payload, indent=1, default=_json_default) + "\n")
+    common.write_json_record(out_dir / OUT_JSON, payload, _json_default)
     return 0
 
 

@@ -222,3 +222,26 @@ report records the SHA-256 of its code and of every input file. Commands are in 
   dropbacks and `qb_epa` in `ratings/pbp_inputs.quarterback_rows` (the cache carries
   `aborted_play`, `fumbled_1_player_id` and `rusher_player_id` since `0.50.0`; the positions come
   from the players file), then an ETL rebuild and a new reference.
+
+## Review record
+
+- 2026-10-12, independent review (approve with findings,
+  [review_2026-10-12.md](../review/rating_tests/review_2026-10-12.md)): every protocol precedes
+  its script and report, and all four reports reproduce bit for bit. Fixed after it: the
+  quarterback test checks the line it printed unchecked, that each calibration used earlier weeks
+  only; a cycle of wins goes to the user instead of falling back to the first in the order; a
+  charged botched scramble counts once in a quarterback's plays; the information-set checks change
+  every later value; the season t interval names a season without rows; tests pin the reports'
+  tables and intervals, one helper writes every JSON record, and every report records the git
+  commit.
+- 2026-10-14, independent re-check of those fixes (approve with findings, no P0-P2,
+  [recheck_2026-10-14.md](../review/rating_tests/recheck_2026-10-14.md)): with its tests in place,
+  each reverted fix fails them, except the call to the calibration check; all four reports rerun
+  to the same decisions, comparisons, scores and integrity checks (descriptive floats differ in
+  the last bit, at most 4.5e-16 relative). Open P3: the calibration check reads the recorded row
+  count, not the fit, and no test shows `run_integrity_checks` calls it; the information-set
+  change leaves 1.75 and nulls as they were, and the team check does not flip later sites; the
+  recorded commit does not mark uncommitted edits (the code's SHA-256 does); `season_t_interval`
+  returns NaN bounds for a single season.
+- The user's decision (2026-10-11): no outcome here (every wiped snap, every quarterback play, the
+  botched-snap removal) is adopted before step 6 merges; each is a measured change after it.

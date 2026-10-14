@@ -269,3 +269,22 @@ def test_a_weekly_dry_run_stops_before_any_work_on_data_without_the_ported_ratin
     with pytest.raises(ValueError, match="nfl-predictor data"):
         pipeline.main()
     assert not (tmp_path / "run").exists()
+
+
+def test_a_weekly_dry_run_that_would_refresh_the_data_warns_and_carries_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The refresh it would run first may add the ratings, so the old data only warns."""
+    # Arrange
+    caplog.set_level(logging.WARNING)
+    paths = build_group_fixture(tmp_path)
+    overrides = {"dry_run": True, "skip_data_refresh": False}
+    config_path = write_group_weekly_config(tmp_path, paths, overrides)
+    monkeypatch.setattr(sys, "argv", ["nfl-predictor weekly", "--config", str(config_path)])
+
+    # Act
+    exit_code = pipeline.main()
+
+    # Assert
+    assert exit_code == 0
+    assert [r for r in caplog.records if "nfl-predictor data" in r.getMessage()]

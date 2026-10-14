@@ -5,6 +5,8 @@ description: >-
   test first, the change, living docs, scripts/gate.sh green, commits on its worktree branch. Give it
   the task ID and text, the version number to use (or none), and anything already decided with the
   user. Not for walk-forward runs, ETL rebuilds, or anything else AGENTS.md rule 5 makes must-ask.
+effort: medium
+maxTurns: 200
 skills:
   - test-driven-development
   - systematic-debugging
@@ -20,6 +22,9 @@ user; you own the change.
 
 ## Before you edit
 
+- The task text carries the contract: the interface and the cases the tests must cover. If it
+  does not, derive the contract from the task and the spec, write it at the top of your report,
+  and treat it as fixed; add cases you discover, but never drop or weaken a contracted one.
 - The root `AGENTS.md` is already in your context: follow it. Nested `AGENTS.md` files load when you
   work under `web/`, `src/nfl_predictor/api/` or `src/nfl_predictor/ml/`.
 - Read the task's full entry in `.agents/TODO.md` and every `.agents/` doc that it or `AGENTS.md`
@@ -52,7 +57,7 @@ Give your recommendation with each question (`AGENTS.md` rule 15), and stop for:
   them would conflict. When the prompt gives you a version number, write the changelog entry and the
   version bump for it as `AGENTS.md` describes.
 - Keep `README.md` and the other living docs your change affects current.
-- Commit on your worktree branch as `AGENTS.md` ("Changelog and Commit Workflow") and the
+- Commit on your worktree branch as `AGENTS.md` ("Versions, changelog and commits") and the
   committing-code skill describe.
 - Done means `VIRTUAL_ENV="$PWD/.venv" scripts/gate.sh` exits `0` on your final tree, with `--web`
   added when `web/` or `src/nfl_predictor/api/` changed. `--quick` is for iteration only.

@@ -352,6 +352,62 @@
 - A source frame that lacks every requested column keeps its rows (it used to collapse to one), and
   a fractional value bound for a whole-number column is an error instead of being truncated.
 
+## [0.45.4] - 2026-10-11
+
+### Changed
+
+- Delegated work follows the three-role testing standard from the global instructions: the task
+  text carries the contract (interface and test cases), the `implementer` derives and records it
+  when missing and never weakens a contracted case, and the `reviewer` writes adversarial tests
+  against the diff in its own worktree and reports which fail without committing them.
+
+## [0.45.3] - 2026-10-11
+
+### Changed
+
+- Coverage no longer excludes `pragma: no cover` lines: inline suppressions are forbidden and
+  the code has none.
+- The pre-push hook runs the full `scripts/gate.sh`, pytest included, instead of `--quick`, so
+  nothing is pushed with a failing or untested suite.
+
+### Fixed
+
+- The run check in `AGENTS.md` and `.agents/guardrails.md` is
+  `pgrep -af "nfl-predictor (backtest|weekly)"`: runs launch through the CLI, so the old
+  `pgrep -af walk_forward` matched nothing.
+- `src/nfl_predictor/ml/AGENTS.md` states that the preprocessor in `feature_spec.py`
+  median-imputes missing numeric values for every model, XGBoost included, and drops a sparse
+  matrix note that no code path needed; `src/nfl_predictor/api/AGENTS.md` names the `lines` and
+  `build-week` commands that `lines_refresh.py` and `week_builder.py` back; the `implementer`
+  agent and the comments in `.pre-commit-config.yaml` point at the current `AGENTS.md` section
+  names.
+
+## [0.45.2] - 2026-10-11
+
+### Changed
+
+- `AGENTS.md` forbids inline lint and type-checker suppressions (`noqa`, `type: ignore`,
+  `pyright: ignore`, `pragma: no cover`) instead of allowing them when narrowly justified: a
+  genuine false positive goes in `[tool.ruff.lint.per-file-ignores]` with a one-line reason. The
+  code has no inline suppressions today.
+- Every `tests/**` per-file ignore in `pyproject.toml` states its reason: the `DTZ001` reason
+  describes this repo's naive test dates instead of EXIF timestamps, and the `ARG002` ignore,
+  which matched nothing, is gone.
+
+## [0.45.1] - 2026-10-11
+
+### Changed
+
+- `AGENTS.md` is a third of its former length (177 lines): the delegation guardrails are one-line
+  rules there and their definitions moved to `.agents/guardrails.md`; the season and week
+  conventions and the three readiness behaviors moved to `.agents/modeling_spec.md`; the
+  `launch.sh` lessons moved to `.agents/walk_forward_runbook.md`; and the `constants.py`, ETL
+  and model-code rules became path-scoped rules under `.claude/rules/` that load only when those
+  files are touched.
+- The handoff file is injected at session start and after every compaction by a `SessionStart`
+  hook in `.claude/settings.json`, and the `implementer` and `reviewer` subagents run at medium
+  effort with turn caps (200 and 100).
+
 ## [0.45.0] - 2026-10-09
 
 ### Changed

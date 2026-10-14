@@ -9,6 +9,9 @@ around each side's ``power`` from one seeded generator, so every call writes the
 
 ``GROUP_COLUMNS`` names the columns each group owns in this fixture, written out by hand so a
 marker that drifts onto another column, or misses one, fails the tests that use it.
+``build_group_fixture(root, ratings=True)`` also adds ``RATINGS_COLUMNS``, columns of the
+``ratings`` group (the ported team ratings), drawn from a generator of their own after the four
+groups' columns, so the four groups' values are the same either way.
 """
 
 from __future__ import annotations
@@ -53,6 +56,8 @@ GROUP_COLUMNS: dict[str, tuple[str, ...]] = {
         "own_wt_elo_home_win_prob",
     ),
 }
+# Columns of the ``ratings`` group, added only on request.
+RATINGS_COLUMNS = ("away_ratings_team", "home_ratings_team", "ratings_team_diff")
 # Elo points of home field in the fixture's own-Elo win probabilities.
 ELO_HOME_FIELD = 48.0
 
@@ -100,10 +105,25 @@ def _with_group_columns(frame: pd.DataFrame, groups: pd.DataFrame) -> pd.DataFra
     )
 
 
-def build_group_fixture(root: Path) -> dict[str, Path]:
-    """Write the weekly fixture with the group columns added; return its paths."""
+def ratings_columns_frame(games: pd.DataFrame) -> pd.DataFrame:
+    """Return the ``ratings`` group columns for ``games``, keyed by ``game_id``."""
+    rng = np.random.default_rng(20261012)
+    away, home, diff = _sides(rng, games, 0.0, 1.0, 1.0)
+    return pd.DataFrame(
+        {"game_id": games["game_id"], **dict(zip(RATINGS_COLUMNS, (away, home, diff), strict=True))}
+    )
+
+
+def build_group_fixture(root: Path, *, ratings: bool = False) -> dict[str, Path]:
+    """Write the weekly fixture with the group columns added; return its paths.
+
+    With ``ratings`` the ``ratings`` group's columns follow the four groups' columns.
+    """
     paths = build_fixture(root)
-    groups = group_columns_frame(pd.read_csv(paths["all_ml"]))
+    games = pd.read_csv(paths["all_ml"])
+    groups = group_columns_frame(games)
+    if ratings:
+        groups = groups.merge(ratings_columns_frame(games), on="game_id", validate="one_to_one")
     for name in GAMES_FILES:
         frame = pd.read_csv(paths[name])
         _with_group_columns(frame, groups).to_csv(paths[name], index=False)

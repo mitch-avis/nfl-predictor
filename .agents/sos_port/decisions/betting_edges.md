@@ -157,7 +157,8 @@ instead of `edge`. Each edge claims a home probability against the moneyline: `e
 `p_model`, `beyond` claims `q_beyond = p_ml + beyond`. Per game and seed,
 `d = (q_beyond - y)^2 - (p_model - y)^2`, averaged over the two seeds, then the mean over the
 governing games with a bootstrap over games (5,000 resamples, numpy seed 0, 95% percentile
-interval). Only an interval wholly below zero recommends `beyond`.
+interval) that resamples the games in game-id order. Only an interval wholly below zero recommends
+`beyond`.
 
 - **What differs**: three things, none of them the rule.
   - The protocol does not say how to rank the top decile when `|edge|` and `|beyond|` differ by
@@ -180,7 +181,10 @@ interval). Only an interval wholly below zero recommends `beyond`.
   `+0.00352`), each top-decile row, and each season of the by-season table. None of them would
   decide anything either way. Basing the labels on `beyond` would change, on the governing
   games, 485 action labels, 676 confidence scores and 196 value sides in seed 42, and 506, 667
-  and 178 in seed 7. No `q_beyond` falls outside `[0, 1]` in either seed.
+  and 178 in seed 7. No `q_beyond` falls outside `[0, 1]` in either seed. The earlier edge
+  measurement had already found the two market baselines tied on the same 815 games (the Brier
+  score of `p_spread` minus that of `p_ml`, `+0.00075`, `-0.00086` to `+0.00237`; the protocol's
+  "Known before writing this").
 - **Data**: `.agents/sos_port/BETTING_LABELS.md` and `.agents/sos_port/betting_labels.json`,
   written by `.agents/sos_port/betting_labels.py` from the reviewed reference of the adopted
   configuration (ported ratings, anchored): `models/step6/ratings_anchored_seed42` and
@@ -198,11 +202,14 @@ interval). Only an interval wholly below zero recommends `beyond`.
       --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349 \
       --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4 \
       --market-lines-metadata \
-      /home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json
+      /home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json \
+      --earlier-market-lines-metadata \
+      /home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json
   ```
 
 - **How to reverse it**: nothing changed, so nothing is reversed. A switch of the labels to
   `beyond` is the user's decision; it would map `edge_beyond_spread_home_prob` through
   `_edge_to_confidence_1_to_10` and `_edge_to_action` in
   `src/nfl_predictor/reporting/betting_report.py` (entry 2).
-- **Review**: not yet reviewed.
+- **Review**: reviewed 2026-10-14 by an independent reviewer, who rescored with its own script and
+  reproduced the governing number, review `../review/betting_labels/review_2026-10-14.md`.

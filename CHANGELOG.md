@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.57.4] - 2026-10-14
+
+### Added
+
+- Report-only tests of the rating questions `nfl-sos-ratings` left open, each under a protocol
+  committed before anything was scored (`.agents/sos_port/decisions/open_rating_tests.md`,
+  reviewed independently); none changes a rating, and none is adopted before step 6 merges:
+  - kneel-downs and spikes in the team rating (`team_plays_test.py kneel-spike`): leaving them out
+    lowers the next-game margin MAE by 0.021, but the interval reaches +0.0005, so the rule keeps
+    today's rating;
+  - penalty-wiped plays in the team rating (`team_plays_test.py penalty-wiped`): no definition
+    differs from another;
+  - the quarterback rating from all of a quarterback's plays (`qb_plays_test.py`): no candidate
+    beats another;
+  - the botched-snap charge rule (`botched_snaps.py`): removing the 60 snaps charged to a lineman
+    moves the published quarterback ratings by at most 0.0112 EPA per dropback.
+- `.agents/sos_port/rating_tests_common.py` holds what the tests share: the season-cluster and
+  single-game bootstraps, cache-only loaders that cannot download, and a provenance block with the
+  SHA-256 of the code and every input file and the git commit.
+
 ## [0.57.3] - 2026-10-14
 
 ### Changed

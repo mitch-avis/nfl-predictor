@@ -408,3 +408,26 @@ the reports are in [review/audit_refresh/](review/audit_refresh/).
   scrimmage-EPA causes from the designed-carry rule, and nine causes the integration closed
   removed.
 - **Open**: no test covers the run loop's call to `check_opponent_rows` (P3).
+
+### The rating questions the source left open (`0.57.4`)
+
+Full record: [decisions/open_rating_tests.md](decisions/open_rating_tests.md) (4 entries), each
+test under a protocol in [protocols/](protocols/) committed before anything was scored, and the
+generated [KNEEL_SPIKE_TEST.md](KNEEL_SPIKE_TEST.md),
+[PENALTY_WIPED_TEST.md](PENALTY_WIPED_TEST.md), [QB_PLAYS_TEST.md](QB_PLAYS_TEST.md) and
+[BOTCHED_SNAPS.md](BOTCHED_SNAPS.md). Review: one
+independent round (2026-10-12) and a re-check of the fixes (2026-10-14), both "approve with
+findings"; the reports are in [review/rating_tests/](review/rating_tests/). Report-only: no
+rating changes.
+
+- **Kneel-downs and spikes in the team rating**: leaving them out lowers the next-game margin MAE
+  by 0.021 (10.575 to 10.554, 5,297 games), but the interval reaches +0.0005, so the rule keeps
+  today's rating; a near-miss for the user.
+- **Penalty-wiped plays in the team rating**: no definition differs from another; the rule's
+  answer, every wiped snap, rests on the order fixed before scoring.
+- **The quarterback rating from all of a quarterback's plays**: no candidate beats another; the
+  rule's answer, every quarterback play, rests on the user's order alone.
+- **The botched-snap charge rule**: removing the 60 snaps of 2006-2025 charged to a lineman moves
+  the published quarterback ratings by at most 0.0112 EPA per dropback.
+- **User decision** (2026-10-11): none is adopted before step 6 merges; each is a measured change
+  after it.

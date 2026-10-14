@@ -391,6 +391,53 @@ def test_decide_reports_every_interval_excluding_zero_in_either_direction() -> N
     assert decision.wins == (("A", "B"), ("C", "B"))
 
 
+def test_qb_decide_cycle_of_wins_is_not_silently_resolved() -> None:
+    # Arrange: plus scrambles beats passes and sacks, every play beats plus scrambles, and
+    # passes and sacks beats every play, so every candidate is beaten.
+    comparisons = _comparisons(B_A=_LOWER, C_A=_HIGHER, C_B=_LOWER)
+
+    # Act
+    decision = qb.decide(comparisons, qb.ORDER)
+
+    # Assert
+    assert {loser for _, loser in decision.wins} == set(qb.CANDIDATES)
+    assert decision.recommended is None
+
+
+def test_qb_decide_without_wins_recommends_the_first_in_the_users_order() -> None:
+    # Act
+    decision = qb.decide(_comparisons(B_A=_TIE, C_A=_TIE, C_B=_TIE), qb.ORDER)
+
+    # Assert
+    assert decision.wins == ()
+    assert decision.recommended == qb.ORDER[0]
+
+
+def _results_of(decision: Any) -> Any:
+    """Return results whose headline reads ``decision``, the scores and intervals all ties."""
+    comparisons = _comparisons(B_A=_TIE, C_A=_TIE, C_B=_TIE)
+    return qb.Results(
+        integrity={},
+        scores={name: {qb.OVERALL: (100, 0.15, 0.2)} for name in qb.CANDIDATES},
+        comparisons=comparisons,
+        decision=decision,
+        extras={},
+    )
+
+
+def test_headline_cycle_of_wins_goes_to_the_user() -> None:
+    # Arrange
+    decision = qb.decide(_comparisons(B_A=_LOWER, C_A=_HIGHER, C_B=_LOWER), qb.ORDER)
+
+    # Act
+    text = " ".join(qb._headline(_results_of(decision)))
+
+    # Assert
+    assert "between the rule's branches" in text
+    assert "goes to the user" in text
+    assert "The recommendation is" not in text
+
+
 _TEAMS = ("AAA", "BBB", "CCC", "DDD")
 _PAIRINGS = (
     (("AAA", "BBB"), ("CCC", "DDD")),

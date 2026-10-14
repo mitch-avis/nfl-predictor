@@ -302,16 +302,21 @@ class Decision:
     """The rule's outcome: the recommendation, the wins and every interval excluding zero.
 
     ``wins`` holds ``(winner, loser)``; ``excluding_zero`` holds ``(X, Y, band, "better" or
-    "worse")`` for each X - Y interval that excludes zero, read for X.
+    "worse")`` for each X - Y interval that excludes zero, read for X. ``recommended`` is
+    ``None`` when every candidate is beaten (a cycle of wins), which the rule has no branch for.
     """
 
-    recommended: str
+    recommended: str | None
     wins: tuple[tuple[str, str], ...]
     excluding_zero: tuple[tuple[str, str, str, str], ...]
 
 
 def decide(comparisons: Mapping[tuple[str, str], Comparison], order: Sequence[str]) -> Decision:
-    """Apply the rule: the first candidate in ``order`` that no other candidate beats."""
+    """Apply the rule: the first candidate in ``order`` that no other candidate beats.
+
+    When every candidate is beaten, the result lies between the rule's branches: there is no
+    recommendation, and the decision goes to the user.
+    """
     wins: list[tuple[str, str]] = []
     excluding: list[tuple[str, str, str, str]] = []
     for (first, second), comparison in comparisons.items():
@@ -324,7 +329,7 @@ def decide(comparisons: Mapping[tuple[str, str], Comparison], order: Sequence[st
                 direction = "better" if interval.below_zero else "worse"
                 excluding.append((first, second, band, direction))
     beaten = {loser for _, loser in wins}
-    recommended = next((name for name in order if name not in beaten), order[0])
+    recommended = next((name for name in order if name not in beaten), None)
     return Decision(recommended, tuple(wins), tuple(excluding))
 
 
@@ -2033,6 +2038,12 @@ def _headline(results: Results) -> list[str]:
     )
     decision = results.decision
     wins = "; ".join(f"{LABELS[a]} beats {LABELS[b]}" for a, b in decision.wins) or "none"
+    if decision.recommended is None:
+        lines.append(
+            f"- Rule as written: wins: {wins}. Every candidate is beaten, so the result lies "
+            "between the rule's branches: there is no recommendation, and it goes to the user."
+        )
+        return lines
     lines.append(
         f"- Rule as written: wins: {wins}. The recommendation is "
         f"**{LABELS[decision.recommended]}**, the first candidate in the user's order (every "

@@ -65,6 +65,36 @@ def test_resume_is_on_by_default_and_uses_the_shared_checkpoint_dir(
     assert defaults.checkpoint_dir == walk_forward.default_checkpoint_dir()
 
 
+def test_the_default_leaves_out_the_groups_production_leaves_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A walk-forward measures production: the strength snapshot and both own-Elo presets."""
+    # Arrange
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
+
+    # Act
+    defaults = backtest._parse_args()
+
+    # Assert
+    assert options.parse_feature_groups(defaults.disable_feature_groups) == (
+        "strength",
+        "own_elo",
+        "own_elo_wt",
+    )
+
+
+def test_an_empty_group_list_leaves_no_group_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--disable-feature-groups ''`` keeps every feature group."""
+    # Arrange
+    monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py", "--disable-feature-groups", ""])
+
+    # Act
+    args = backtest._parse_args()
+
+    # Assert
+    assert options.parse_feature_groups(args.disable_feature_groups) == ()
+
+
 def test_no_resume_and_another_checkpoint_dir_can_be_asked_for(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

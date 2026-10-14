@@ -188,3 +188,21 @@ def test_predicting_with_a_saved_model_says_the_option_does_not_apply(
 
     # Assert
     assert any("--disable-feature-groups" in message for message in caplog.messages)
+
+
+def test_predicting_without_the_option_says_nothing_about_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    caplog.set_level(logging.INFO)
+    monkeypatch.setattr(train, "load_model_checkpoint", lambda *_args: "model")
+    monkeypatch.setattr(train.artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(
+        sys, "argv", ["nfl-predictor predict", "--model-in", str(tmp_path / "model.joblib")]
+    )
+
+    # Act
+    train.main()
+
+    # Assert
+    assert not any("--disable-feature-groups" in message for message in caplog.messages)

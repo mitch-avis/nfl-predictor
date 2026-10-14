@@ -465,8 +465,9 @@ def test_a_run_without_game_lines_notes_the_win_total_groups_it_keeps(
     expected = (
         "No game lines: the model trains without betting-line columns but keeps the preseason "
         "win-total priors in the feature group(s) ['elo', 'own_elo_wt']; for a run with no "
-        "market information at all, also pass `--disable-feature-groups elo,own_elo_wt` "
-        "(backtest, train) or `disable_feature_groups` in the weekly config."
+        "market information at all, add elo,own_elo_wt to the groups left out: "
+        "`--disable-feature-groups` (backtest, train; it replaces the default list) or "
+        "`disable_feature_groups` in the weekly config."
     )
     assert notes == [expected]
 

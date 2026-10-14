@@ -94,6 +94,14 @@ class PowerRatingsResult:
     projected_division_standings: pd.DataFrame
 
 
+@dataclass(frozen=True)
+class ProjectedStandings:
+    """The league and division projected standings, without a ranking."""
+
+    projected_standings: pd.DataFrame
+    projected_division_standings: pd.DataFrame
+
+
 def _logit(p: np.ndarray) -> np.ndarray:
     p = np.asarray(p, dtype=float)
     return np.log(p / (1.0 - p))
@@ -724,7 +732,6 @@ def build_power_rankings_and_standings(
     season = standings.season
     through_week = standings.through_week
     current_records = standings.current_records
-    future_games_with_probs = standings.future_games_with_probs
     only_snapshot = games_for_ratings is None and team_ratings is None
     only_games = strength_snapshot is None and team_ratings is None
     only_ratings = games_for_ratings is None and strength_snapshot is None
@@ -747,12 +754,26 @@ def build_power_rankings_and_standings(
         )
         raise ValueError(msg)
 
-    projected = compute_projected_standings(
-        current_records=current_records,
-        future_games=future_games_with_probs,
-        season=season,
+    projected = project_standings(standings)
+    return PowerRatingsResult(
+        power_rankings=pr.reset_index(drop=True),
+        projected_standings=projected.projected_standings,
+        projected_division_standings=projected.projected_division_standings,
     )
-    projected["through_week"] = int(through_week)
+
+
+def project_standings(standings: LeagueStandings) -> ProjectedStandings:
+    """Return the league and division projected standings, which no ranking method changes.
+
+    Each team's projection is its current record plus the model's win probabilities for its
+    remaining games (`compute_projected_standings`).
+    """
+    projected = compute_projected_standings(
+        current_records=standings.current_records,
+        future_games=standings.future_games_with_probs,
+        season=standings.season,
+    )
+    projected["through_week"] = int(standings.through_week)
 
     proj_div = projected.copy()
     proj_div["division"] = proj_div["division"].fillna("Unknown")
@@ -765,8 +786,7 @@ def build_power_rankings_and_standings(
         proj_div.groupby("division")["projected_win_pct"].rank(method="dense", ascending=False)
     ).astype(int)
 
-    return PowerRatingsResult(
-        power_rankings=pr.reset_index(drop=True),
+    return ProjectedStandings(
         projected_standings=projected.reset_index(drop=True),
         projected_division_standings=proj_div.reset_index(drop=True),
     )
@@ -832,7 +852,11 @@ class RankingOptions:
 
     Each method reads only its own fields: the Bradley-Terry fields, the snapshot path
     (composite), the ratings directory (ported, and model and blend in week 1), the
-    walk-forward predictions (model and blend) and the blend weight.
+    walk-forward predictions (model and blend) and the blend weight. With
+    ``reference_predictions`` (seeds of one walk-forward, averaged into one source), the seasons
+    before the ranked one come from them and the ranked season from ``model_predictions``
+    (`rating_sources.read_split_predictions`); only week 1, which fits the previous season,
+    reads them.
     """
 
     method: str = RANKING_METHODS[0]
@@ -844,6 +868,7 @@ class RankingOptions:
     strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
     ratings_dir: Path = DEFAULT_RATINGS_DIR
     model_predictions: tuple[Path, ...] = ()
+    reference_predictions: tuple[Path, ...] = ()
     blend_weight: float | None = None
 
 
@@ -1204,6 +1229,7 @@ class RankingRequest:
     strength_snapshots: Path = DEFAULT_STRENGTH_SNAPSHOTS
     ratings_dir: Path = DEFAULT_RATINGS_DIR
     model_predictions: tuple[Path, ...] = ()
+    reference_predictions: tuple[Path, ...] = ()
     blend_weight: float | None = None
 
 
@@ -1247,6 +1273,7 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
     _check_points_method(request)
     ratings_dir = Path(request.ratings_dir)
     model_predictions = tuple(Path(path) for path in request.model_predictions)
+    reference_predictions = tuple(Path(path) for path in request.reference_predictions)
     if request.legacy_franchise_fit:
         if method is not None and method != "bradley_terry":
             msg = (
@@ -1265,6 +1292,7 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
             strength_snapshots=Path(request.strength_snapshots),
             ratings_dir=ratings_dir,
             model_predictions=model_predictions,
+            reference_predictions=reference_predictions,
             blend_weight=request.blend_weight,
         )
     return RankingOptions(
@@ -1277,6 +1305,7 @@ def resolve_ranking_options(request: RankingRequest) -> RankingOptions:
         strength_snapshots=Path(request.strength_snapshots),
         ratings_dir=ratings_dir,
         model_predictions=model_predictions,
+        reference_predictions=reference_predictions,
         blend_weight=request.blend_weight,
     )
 
@@ -1313,14 +1342,8 @@ def compute_power_rankings(
             team_ratings.rating_week,
         )
 
-    current_records = _load_current_records(
-        inputs.data_schedule,
-        season=inputs.season,
-        through_week=inputs.through_week,
-        include_postseason=inputs.include_postseason,
-    )
-    future_games = _predict_future_games(model, inputs)
-    standings = LeagueStandings(inputs.season, inputs.through_week, current_records, future_games)
+    standings = load_league_standings(model, inputs)
+    future_games = standings.future_games_with_probs
 
     if snapshot is not None:
         log.info(
@@ -1337,13 +1360,31 @@ def compute_power_rankings(
     return build_power_rankings_and_standings(standings, games_for_ratings=games_for_ratings)
 
 
+def load_league_standings(
+    model: ml_model_core.MarginTotalModel, inputs: RankingInputs
+) -> LeagueStandings:
+    """Return each team's record through ``inputs.through_week`` and the later games' odds.
+
+    The model predicts the win probability of every later game of the season.
+    """
+    current_records = _load_current_records(
+        inputs.data_schedule,
+        season=inputs.season,
+        through_week=inputs.through_week,
+        include_postseason=inputs.include_postseason,
+    )
+    future_games = _predict_future_games(model, inputs)
+    return LeagueStandings(inputs.season, inputs.through_week, current_records, future_games)
+
+
 def load_team_ratings(inputs: RankingInputs, options: RankingOptions) -> TeamRatings:
     """Return the ported, model or blend rating of every team before the week after the inputs'.
 
     - ported: `rating_sources.ported_ratings_for_week` from ``options.ratings_dir`` and the game
       rows in ``inputs.data_ml``;
     - model: `rating_sources.model_ratings_for_week` from the walk-forward predictions in
-      ``options.model_predictions``, which must cover every completed regular-season game of
+      ``options.model_predictions`` (earlier seasons from ``options.reference_predictions``
+      when given), which must cover every completed regular-season game of
       the season before the week (of the previous season, for week 1, whose carryover factor
       comes from the ported ratings);
     - blend: ``blend_weight * ported + (1 - blend_weight) * model`` for the teams both rate.
@@ -1384,6 +1425,9 @@ def _model_week_ratings(
 ) -> dict[str, float]:
     """Return the model rating before ``week`` from the walk-forward predictions.
 
+    Only a week before ``rating_sources.FIRST_FITTED_WEEK`` reads the reference runs (it fits the
+    previous season); a later week fits the season so far from the current run alone.
+
     Raises:
         rating_sources.RatingSourceUnavailableError: If the predictions cannot be read (a missing
             or foreign directory, a half-written or damaged fold file, one without predictions,
@@ -1391,14 +1435,21 @@ def _model_week_ratings(
             the fit reads, or week 1 has no carryover factor; the message names the paths.
 
     """
-    sources = ", ".join(str(path) for path in options.model_predictions)
+    fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
+    reference = () if fits_this_season else options.reference_predictions
+    sources = ", ".join(str(path) for path in (*options.model_predictions, *reference))
     try:
-        predictions = rating_sources.read_predictions(list(options.model_predictions))
+        predictions = (
+            rating_sources.read_split_predictions(
+                options.model_predictions, reference, season=inputs.season
+            )
+            if reference
+            else rating_sources.read_predictions(list(options.model_predictions))
+        )
     except rating_sources.UNREADABLE_PREDICTION_ERRORS as error:
         detail = str(error) or type(error).__name__
         msg = f"cannot read the walk-forward predictions in {sources}: {detail}"
         raise rating_sources.RatingSourceUnavailableError(msg) from error
-    fits_this_season = week >= rating_sources.FIRST_FITTED_WEEK
     _check_prediction_coverage(
         predictions,
         inputs.data_schedule,
@@ -1492,16 +1543,38 @@ def write_ranking_outputs(
     ``projected_division_standings_`` followed by ``season_<season>_week_<WW>.csv``.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    suffix = f"season_{season}_week_{through_week:02d}"
+    pr_path = out_dir / f"power_rankings_season_{season}_week_{through_week:02d}.csv"
+    result.power_rankings.to_csv(pr_path, index=False)
+    log.info("Wrote %s", pr_path)
+    write_standings_outputs(
+        ProjectedStandings(
+            projected_standings=result.projected_standings,
+            projected_division_standings=result.projected_division_standings,
+        ),
+        out_dir=out_dir,
+        season=season,
+        through_week=through_week,
+    )
 
-    pr_path = out_dir / f"power_rankings_{suffix}.csv"
+
+def write_standings_outputs(
+    standings: ProjectedStandings,
+    *,
+    out_dir: Path,
+    season: int,
+    through_week: int,
+) -> list[Path]:
+    """Write both projected standings tables as CSVs under ``out_dir``; return their paths.
+
+    The files are ``projected_standings_`` and ``projected_division_standings_`` followed by
+    ``season_<season>_week_<WW>.csv``.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"season_{season}_week_{through_week:02d}"
     st_path = out_dir / f"projected_standings_{suffix}.csv"
     div_path = out_dir / f"projected_division_standings_{suffix}.csv"
-
-    result.power_rankings.to_csv(pr_path, index=False)
-    result.projected_standings.to_csv(st_path, index=False)
-    result.projected_division_standings.to_csv(div_path, index=False)
-
-    log.info("Wrote %s", pr_path)
+    standings.projected_standings.to_csv(st_path, index=False)
+    standings.projected_division_standings.to_csv(div_path, index=False)
     log.info("Wrote %s", st_path)
     log.info("Wrote %s", div_path)
+    return [st_path, div_path]

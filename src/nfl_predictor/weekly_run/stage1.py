@@ -10,7 +10,9 @@ unfinished week.
 Each week's floor uses the sigma estimated from the reference runs' out-of-fold errors
 (``floor_sigma_history``) and stage 1's own earlier weeks.
 
-Outputs under ``<run_dir>/wf_compare/``: the fold checkpoints (``wf_folds/``), one evaluation
+Outputs under ``<run_dir>/wf_compare/``: the fold checkpoints (``wf_folds/``) and a
+``metadata.json`` naming their directory, so the power rankings' model rating can read the
+predictions as a walk-forward run's (``predictions_source``), one evaluation
 artifact (``wf_candidate_<key>.json``, with the per-week, per-season and overall metrics and the
 reliability table), the squared margin error of every game stage 1 predicted
 (``wf_margin_errors.csv``, which the final fit's sigma reads for the weeks the reference runs
@@ -47,6 +49,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 PRODUCTION_LABEL = "production"
+# How many characters of the fold checkpoint fingerprint name the walk-forward's checkpoint
+# directory under ``wf_compare/wf_folds/`` (the walk-forward's own naming).
+_FOLD_DIRECTORY_CHARS = 20
 _MARKET_MODE_FLAGS = {
     "features": (True, False),
     "anchor": (False, True),
@@ -80,6 +85,103 @@ def market_mode_flags(mode: str) -> tuple[bool, bool]:
 def _wf_compare_dir(run_dir: Path) -> Path:
     """Return the walk-forward evaluation artifact directory."""
     return run_dir / "wf_compare"
+
+
+def predictions_source(run_dir: Path) -> Path:
+    """Return stage 1's walk-forward as a source of its pre-game predictions.
+
+    ``wf_compare/metadata.json`` names the fold checkpoint directory, as a walk-forward run
+    directory's does (`reporting.run_comparison.resolve_run`).
+    """
+    return _wf_compare_dir(run_dir)
+
+
+def _write_predictions_source(run_dir: Path, checkpoint: object) -> None:
+    """Record the walk-forward's fold checkpoint directory for `predictions_source`."""
+    if isinstance(checkpoint, dict) and checkpoint.get("dir"):
+        pointer = {"config": {"checkpoint": {"dir": str(checkpoint["dir"])}}}
+        _atomic_write_json(predictions_source(run_dir) / "metadata.json", pointer)
+
+
+def has_predictions_source(run_dir: Path) -> bool:
+    """Return whether stage 1 recorded its fold checkpoint directory for `predictions_source`."""
+    return (predictions_source(run_dir) / "metadata.json").is_file()
+
+
+def write_reused_predictions_source(
+    df: pd.DataFrame,
+    options: ProductionOptions,
+    *,
+    run_dir: Path,
+    floor_sigma_history: floor_sigma.ErrorPool,
+) -> None:
+    """Record the fold checkpoint directory of a reused stage 1 that has no pointer yet.
+
+    A run directory whose stage 1 finished before the pointer was written has none, so the
+    power rankings' model rating could not read it. The directory is the one the walk-forward
+    names for these games and settings (`walk_forward.fold_checkpoint_fingerprint`). That name
+    also covers the modelling code and the library versions, which the stage-1 reuse check does
+    not, so a stage 1 run on other code is looked up by its ``manifest.json`` instead: the
+    production configuration and the row and column counts of the games. The pointer is written
+    only when exactly one directory matches; otherwise a warning names the remedy, and the
+    rankings report the source as unavailable.
+    """
+    games = _without_disabled_groups(df, options)
+    config = walk_forward.with_resolved_xgb_device(production_walk_forward_config(options))
+    folds_root = _wf_compare_dir(run_dir) / "wf_folds"
+    fingerprint = walk_forward.fold_checkpoint_fingerprint(games, config, floor_sigma_history)
+    directory = folds_root / fingerprint[:_FOLD_DIRECTORY_CHARS]
+    if directory.is_dir():
+        _write_predictions_source(run_dir, {"dir": str(directory)})
+        return
+    matches = _fold_directories_matching(
+        folds_root, config, rows=len(games), columns=len(games.columns)
+    )
+    if len(matches) != 1:
+        log.warning(
+            "Stage 1 reused, but %d fold checkpoint directories under %s match its production "
+            "configuration and %d rows by %d columns, so the model rating cannot read this "
+            "run's walk-forward; rerun stage 1 with --no-resume",
+            len(matches),
+            folds_root,
+            len(games),
+            len(games.columns),
+        )
+        return
+    log.info("Stage 1 reused: its fold checkpoints are %s, found by their manifest", matches[0])
+    _write_predictions_source(run_dir, {"dir": str(matches[0])})
+
+
+def _fold_directories_matching(
+    folds_root: Path, config: walk_forward.WalkForwardConfig, *, rows: int, columns: int
+) -> list[Path]:
+    """Return the fold checkpoint directories whose manifest records this config and shape."""
+    expected = json.loads(json.dumps(config.to_dict(), sort_keys=True, default=str))
+    matches: list[Path] = []
+    for manifest_path in sorted(folds_root.glob("*/manifest.json")):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except OSError, json.JSONDecodeError:
+            continue
+        if (
+            isinstance(manifest, dict)
+            and manifest.get("config") == expected
+            and manifest.get("rows") == rows
+            and manifest.get("columns") == columns
+        ):
+            matches.append(manifest_path.parent)
+    return matches
+
+
+def _without_disabled_groups(df: pd.DataFrame, options: ProductionOptions) -> pd.DataFrame:
+    """Return the games without the disabled feature groups' columns, as the backtest drops them."""
+    if not options.disabled_feature_groups:
+        return df
+    return df.drop(
+        columns=feature_spec.resolve_feature_group_columns(
+            list(df.columns), options.disabled_feature_groups
+        )
+    )
 
 
 def _candidate_artifact_path(run_dir: Path, candidate_key: str) -> Path:
@@ -283,12 +385,7 @@ def evaluate_production(
     group that matches no column of the data is logged as a warning. The squared margin errors
     of every predicted game are written to ``wf_margin_errors.csv``.
     """
-    if options.disabled_feature_groups:
-        df = df.drop(
-            columns=feature_spec.resolve_feature_group_columns(
-                list(df.columns), options.disabled_feature_groups
-            )
-        )
+    df = _without_disabled_groups(df, options)
     run_dir = run.run_dir
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)
@@ -326,6 +423,7 @@ def evaluate_production(
         floor_sigma_history=run.floor_sigma_history,
     )
     write_margin_errors(run_dir, floor_sigma.margin_errors(out["predictions"]))
+    _write_predictions_source(run_dir, out.get("checkpoint"))
     duration = time.monotonic() - start
     summary_row = _build_summary_row(candidate_key, options.market_mode, out, run, duration)
     _atomic_write_json(

@@ -48,7 +48,10 @@ def _parse_args() -> argparse.Namespace:
         "--exclude-market",
         action="store_false",
         dest="include_market",
-        help="Exclude market columns from the feature set.",
+        help=(
+            "Audit a feature set with no game-line columns. The Elo groups' preseason "
+            "win-total priors (elo, own_elo_wt) stay in it."
+        ),
     )
     parser.add_argument(
         "--market-transform",

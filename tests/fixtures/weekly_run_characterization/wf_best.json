@@ -2,7 +2,7 @@
   "actual_points_avg": 87.0,
   "brier": 0.22196613306056784,
   "candidate_key": "margin_total_fs-away_rest_fe-home_moneyline_mkt-hybrid_quant-off_xgb-n200-md5-lr0.017-devcpu-nj1_4d28bed3",
-  "dataset_fingerprint": "d3a44b4a436dee2b40720ff283f52d5aa82aeb36dcd767847bf60caaa1759ed8",
+  "dataset_fingerprint": "1eed0db91a6ea8796d11b221d6b0edd2ca25eb61fdc4ea840a43f4cce4450b7e",
   "deterministic_brier": 0.22196613306056784,
   "deterministic_brier_vs_market": 0.007977504254094325,
   "deterministic_brier_vs_market_ci_high": 0.03153101273727925,

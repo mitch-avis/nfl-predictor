@@ -210,7 +210,7 @@ def resolve_feature_group_columns(
     return sorted(matched)
 
 
-# The sets of market-informed groups this process has already warned about, each warned once:
+# The sets of market-informed groups this process has already noted, each noted once:
 # every walk-forward fold builds its own spec.
 _WARNED_MARKET_INFORMED: set[tuple[str, ...]] = set()
 
@@ -266,14 +266,15 @@ def _resolve_market_columns(
     return _MarketColumns(feature_range, derived, features, excluded, dropped_raw)
 
 
-def _warn_kept_market_informed_groups(columns: Sequence[str], selection: FeatureSelection) -> None:
-    """Warn when the market columns are left out but a market-informed group stays in.
+def _note_kept_market_informed_groups(columns: Sequence[str], selection: FeatureSelection) -> None:
+    """Note that a run without game lines keeps the Elo groups' preseason win-total priors.
 
-    A run without the market columns (``include_market`` off) still trains on the groups of
-    ``constants.MARKET_INFORMED_FEATURE_GROUPS`` unless it leaves them out too. That is the
-    run's choice, so the warning only names the groups it keeps and how to leave them out, once
-    per set of groups in a process. ``columns`` are the spec's final feature columns, so a group
-    whose columns all dropped out (all null or constant in the training rows) goes unnamed.
+    A run without the market columns (``include_market`` off) means "no game lines": it still
+    trains on the groups of ``constants.MARKET_INFORMED_FEATURE_GROUPS``, whose ratings carry a
+    preseason win-total prior, unless it leaves them out too. That is the run's choice, so an
+    info message names the groups it keeps and how to leave them out, once per set of groups in
+    a process. ``columns`` are the spec's final feature columns, so a group whose columns all
+    dropped out (all null or constant in the training rows) goes unnamed.
     """
     if selection.include_market:
         return
@@ -285,11 +286,11 @@ def _warn_kept_market_informed_groups(columns: Sequence[str], selection: Feature
     if not kept or kept in _WARNED_MARKET_INFORMED:
         return
     _WARNED_MARKET_INFORMED.add(kept)
-    log.warning(
-        "The market columns are left out, but the market-informed feature group(s) %s stay in "
-        "the features; to train with no market information at all, leave them out too with "
-        "--disable-feature-groups %s (backtest, train) or disable_feature_groups in the weekly "
-        "config.",
+    log.info(
+        "No game lines: the model trains without betting-line columns but keeps the preseason "
+        "win-total priors in the feature group(s) %s; for a run with no market information at "
+        "all, also pass `--disable-feature-groups %s` (backtest, train) or "
+        "`disable_feature_groups` in the weekly config.",
         list(kept),
         ",".join(kept),
     )
@@ -378,7 +379,7 @@ def build_feature_spec(df: pd.DataFrame, selection: FeatureSelection) -> Feature
     feature_df, high_cardinality_columns = _drop_high_cardinality_columns(
         feature_df, selection.max_cardinality_ratio
     )
-    _warn_kept_market_informed_groups(feature_df.columns.tolist(), selection)
+    _note_kept_market_informed_groups(feature_df.columns.tolist(), selection)
 
     categorical_columns = feature_df.select_dtypes(include=["object", "category"]).columns.tolist()
     numeric_columns = [col for col in feature_df.columns if col not in categorical_columns]

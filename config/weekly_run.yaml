@@ -54,8 +54,8 @@ wf_start_week: 1
 # whether to include postseason games in walk-forward evaluation (default: false)
 wf_include_postseason: false
 # market mode of the walk-forward and the final fit: market lines as features, the model
-# anchored to them, both, or none, a market-free run with no market feature, anchor or transform
-# (options: features, anchor, hybrid, none, default: hybrid)
+# anchored to them, both, or none, a run with no game lines: no market feature, anchor or
+# transform (options: features, anchor, hybrid, none, default: hybrid)
 wf_market_mode: hybrid
 # feature groups stage 1 and the final fit both leave out, every column of each: the columns
 # `nfl-predictor backtest --disable-feature-groups` drops for the same groups (the groups and their
@@ -124,3 +124,18 @@ score_rounding: none
 # power_rankings_season and power_rankings_through_week are inferred from the prediction input.
 # whether to include postseason games in power rankings (default: false)
 power_rankings_include_postseason: false
+# what the power rankings rank on (options: blend, composite, bradley_terry, ported, model,
+# default: blend): blend averages the ported team rating and the model rating, a fit to the
+# walk-forward's predicted margins. With no power_rankings_model_predictions, the model rating
+# reads this run's stage-1 fold checkpoints for the ranked season and the
+# floor_sigma_reference_runs, averaged as one source, for the seasons before it. The user chose
+# the blend after the rankings measurement (.agents/sos_port/decisions/power_rankings.md,
+# decision 12; models/step6/rankings/REVIEW.md); composite restores the earlier ranking. Left
+# unset, the default applies, and legacy_franchise_fit: true then ranks on bradley_terry; a method
+# set here or on the command line conflicts with legacy_franchise_fit unless it is bradley_terry.
+# power_rankings_method: blend
+# the blend's weight on the ported rating, from 0 to 1 (default: 0.5): the weight
+# the measurement's pre-registered rule chooses for 2026 from the earlier seasons' scored weeks
+# (decisions 7 and 12 of the same file). It applies to every season ranked: the rule gives 0.7
+# for 2008-2009 and 0.6 for 2012-2014, which matters only when one of those is ranked again.
+power_rankings_blend_weight: 0.5

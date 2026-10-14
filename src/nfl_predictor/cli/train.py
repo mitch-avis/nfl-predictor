@@ -63,7 +63,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--exclude-market",
         action="store_true",
-        help="Exclude market features like spreads/totals/moneylines.",
+        help=(
+            "Train with no game-line columns (spreads, totals, moneylines). The Elo groups' "
+            "preseason win-total priors (elo, own_elo_wt) stay unless --disable-feature-groups "
+            "leaves them out."
+        ),
     )
     parser.add_argument(
         "--include-postseason",

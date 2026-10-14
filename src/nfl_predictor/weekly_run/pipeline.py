@@ -165,10 +165,16 @@ def _stage_can_reuse(
     config_hash: str,
     outputs: list[Path],
 ) -> bool:
-    """Check whether a stage marker matches and outputs exist."""
+    """Check whether a stage marker matches, the stage finished, and its outputs exist.
+
+    A marker with ``"complete": false`` records a stage that skipped part of its work (the
+    reports stage when the power rankings were unavailable), so it is never reused.
+    """
     if not marker_path.exists():
         return False
     payload = json.loads(marker_path.read_text(encoding="utf-8"))
+    if payload.get("complete") is False:
+        return False
     if payload.get("dataset_hash") != dataset_hash:
         return False
     if payload.get("config_hash") != config_hash:
@@ -237,6 +243,14 @@ def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> li
         out_dir / f"projected_standings_{suffix}.csv",
         out_dir / f"projected_division_standings_{suffix}.csv",
     ]
+
+
+@dataclass(frozen=True)
+class _RankingOutputs:
+    """The files the rankings step wrote, and why it skipped the ranking when it did."""
+
+    paths: list[Path]
+    skipped: str | None = None
 
 
 @dataclass(frozen=True)
@@ -335,6 +349,13 @@ def _run_stage1(ctx: _RunContext, reference_pool: floor_sigma.ErrorPool) -> dict
     ):
         log.info("Stage 1: reuse %s", wf_best_json)
         wf_summary = json.loads(wf_best_json.read_text(encoding="utf-8"))
+        if not stage1.has_predictions_source(ctx.run_dir):
+            stage1.write_reused_predictions_source(
+                walk_forward.load_games(args.data_path),
+                options,
+                run_dir=ctx.run_dir,
+                floor_sigma_history=reference_pool,
+            )
     else:
         df = walk_forward.load_games(args.data_path)
         run = stage1.Stage1Run(
@@ -495,8 +516,13 @@ def _run_stage3(
 
 def _write_power_rankings(
     ctx: _RunContext, season: int | None, week: int | None, model_path: Path
-) -> list[Path]:
-    """Write the power rankings and projected standings; return the files written."""
+) -> _RankingOutputs:
+    """Write the power rankings and projected standings; return the files written.
+
+    When the configured method's rating source is unavailable, the ranking is skipped with an
+    error and no other method stands in; the projected standings, which no method changes, are
+    still written, and the returned ``skipped`` names the reason.
+    """
     args = ctx.args
     pr_season = args.power_rankings_season or season
     pr_week = args.power_rankings_through_week
@@ -505,37 +531,56 @@ def _write_power_rankings(
 
     if pr_season is None or pr_week is None:
         log.info("Power rankings skipped: unable to infer season/week.")
-        return []
+        return _RankingOutputs([])
     if not args.power_rankings_data_ml.exists():
         log.info("Power rankings skipped: missing %s", args.power_rankings_data_ml)
-        return []
+        return _RankingOutputs([])
     if not args.power_rankings_data_schedule.exists():
         log.info("Power rankings skipped: missing %s", args.power_rankings_data_schedule)
-        return []
+        return _RankingOutputs([])
     pr_out_dir = args.power_rankings_out_dir or ctx.output_dir
     pr_out_dir.mkdir(parents=True, exist_ok=True)
     model = ml_model_core.load_model_checkpoint(model_path, "margin_total")
-    try:
-        ranking_inputs = power_rankings.RankingInputs(
-            data_ml=args.power_rankings_data_ml,
-            data_schedule=args.power_rankings_data_schedule,
-            season=pr_season,
-            through_week=pr_week,
-            include_postseason=bool(args.power_rankings_include_postseason),
-        )
-        result = power_rankings.compute_power_rankings(
-            model, ranking_inputs, config.power_ranking_options(args)
-        )
-    except rating_sources.RatingSourceUnavailableError as exc:
-        log.warning("Power rankings skipped: %s", exc)
-        return []
-    power_rankings.write_ranking_outputs(
-        result,
-        out_dir=pr_out_dir,
+    ranking_inputs = power_rankings.RankingInputs(
+        data_ml=args.power_rankings_data_ml,
+        data_schedule=args.power_rankings_data_schedule,
         season=pr_season,
         through_week=pr_week,
+        include_postseason=bool(args.power_rankings_include_postseason),
     )
-    return _power_rankings_outputs(pr_out_dir, pr_season, pr_week)
+    try:
+        result = power_rankings.compute_power_rankings(
+            model, ranking_inputs, config.power_ranking_options(args, run_dir=ctx.run_dir)
+        )
+    except rating_sources.RatingSourceUnavailableError as exc:
+        skipped = str(exc)
+    else:
+        power_rankings.write_ranking_outputs(
+            result,
+            out_dir=pr_out_dir,
+            season=pr_season,
+            through_week=pr_week,
+        )
+        return _RankingOutputs(_power_rankings_outputs(pr_out_dir, pr_season, pr_week))
+    log.error("Power rankings skipped: %s", skipped)
+    return _RankingOutputs(_write_projected_standings(model, ranking_inputs, pr_out_dir), skipped)
+
+
+def _write_projected_standings(
+    model: ml_model_core.MarginTotalModel,
+    ranking_inputs: power_rankings.RankingInputs,
+    out_dir: Path,
+) -> list[Path]:
+    """Write the projected standings alone, for a week whose ranking was skipped."""
+    standings = power_rankings.project_standings(
+        power_rankings.load_league_standings(model, ranking_inputs)
+    )
+    return power_rankings.write_standings_outputs(
+        standings,
+        out_dir=out_dir,
+        season=ranking_inputs.season,
+        through_week=ranking_inputs.through_week,
+    )
 
 
 def _report_floor_sigma(predictions: pd.DataFrame) -> float | None:
@@ -570,7 +615,7 @@ def _run_stage4(
         "power_rankings_data_schedule": str(args.power_rankings_data_schedule),
         "power_rankings_out_dir": str(pr_out_dir_default),
         "power_rankings_include_postseason": bool(args.power_rankings_include_postseason),
-        **config.power_rankings_report_config(args),
+        **config.power_rankings_report_config(args, run_dir=ctx.run_dir),
     }
     report_hash = artifacts.stable_short_hash(report_config)
     report_marker = _stage_marker_path(ctx.run_dir, "reports")
@@ -594,15 +639,20 @@ def _run_stage4(
         outputs.append(betting_report_path)
         log.info("Wrote betting report to %s", betting_report_path)
 
+    extra: dict[str, Any] = {}
     if not args.skip_power_rankings:
-        outputs.extend(_write_power_rankings(ctx, season, week, model_path))
+        rankings = _write_power_rankings(ctx, season, week, model_path)
+        outputs.extend(rankings.paths)
+        if rankings.skipped is not None:
+            # A resume runs this stage again rather than reusing a run without its rankings.
+            extra = {"complete": False, "power_rankings_skipped": rankings.skipped}
 
     _write_stage_marker(
         report_marker,
         dataset_hash=ctx.dataset_hash,
         config_hash=report_hash,
         stage="reports",
-        extra={"outputs": [str(path) for path in outputs]},
+        extra={"outputs": [str(path) for path in outputs], **extra},
     )
     log.info("Weekly run complete.")
 

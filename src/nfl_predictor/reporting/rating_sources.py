@@ -468,7 +468,16 @@ def read_fold_predictions(path: Path) -> FoldPredictions:
 
 
 def _fold_predictions(path: Path) -> pl.DataFrame:
-    """Return one fold file's predictions with ``PREDICTION_COLUMNS``."""
+    """Return one fold file's predictions with ``PREDICTION_COLUMNS``.
+
+    Raises:
+        TypeError: If the file holds no prediction frame.
+        RatingSourceUnavailableError: If the frame lacks one of ``PREDICTION_COLUMNS``, the
+            ``neutral`` site flag included, or holds games whose ``neutral`` flag is null in
+            every row: such a fold would fit neutral-site games as home games. A partly null
+            flag is kept, a null read as not neutral (`fit_model_ratings`).
+
+    """
     payload = joblib.load(path)
     frame = payload.get("predictions") if isinstance(payload, dict) else None
     if not isinstance(frame, pd.DataFrame):
@@ -477,7 +486,10 @@ def _fold_predictions(path: Path) -> pl.DataFrame:
     missing = [column for column in PREDICTION_COLUMNS if column not in frame.columns]
     if missing:
         msg = f"{path} lacks {missing}"
-        raise ValueError(msg)
+        raise RatingSourceUnavailableError(msg)
+    if len(frame) and pd.to_numeric(frame["neutral"], errors="coerce").isna().all():
+        msg = f"{path} has a null neutral flag in every row"
+        raise RatingSourceUnavailableError(msg)
     return pl.DataFrame(
         {
             "game_id": frame["game_id"].astype(str).tolist(),
@@ -652,6 +664,32 @@ def average_predictions(runs: Sequence[pl.DataFrame]) -> pl.DataFrame:
     )
 
 
+def read_split_predictions(
+    current: Sequence[Path], reference: Sequence[Path], *, season: int
+) -> pl.DataFrame:
+    """Return ``season``'s predictions from ``current`` and earlier seasons' from ``reference``.
+
+    ``reference`` holds seeds of one walk-forward configuration, which predict the same games,
+    so they are one source: each game's margin is averaged over them in the order given
+    (:func:`average_predictions`). Games of ``season`` and later come from ``current`` alone,
+    earlier games from the averaged ``reference`` alone, so a game both predict is no conflict.
+
+    Args:
+        current: Runs or fold checkpoint directories for ``season`` (:func:`read_predictions`).
+        reference: Runs or fold checkpoint directories of the same games, one per seed.
+        season: The first season read from ``current``.
+
+    Raises:
+        ValueError: As :func:`read_predictions` and :func:`average_predictions` do.
+
+    """
+    own = read_predictions(current).filter(pl.col("season") >= season)
+    earlier = average_predictions(
+        [read_fold_predictions(path).predictions for path in reference]
+    ).filter(pl.col("season") < season)
+    return pl.concat([earlier, own]).sort("season", "week", "game_id")
+
+
 def model_ratings_for_week(
     predictions: pl.DataFrame,
     *,
@@ -744,6 +782,7 @@ __all__ = [
     "ported_ratings_from_games",
     "read_fold_predictions",
     "read_predictions",
+    "read_split_predictions",
     "season_ported_ratings",
     "week_one_model_ratings",
 ]

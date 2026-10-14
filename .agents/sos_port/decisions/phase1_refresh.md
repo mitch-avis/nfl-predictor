@@ -289,7 +289,9 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   port as a counterpart, entry 3).
 - **Reasoning.** The parity check judges the model's play-by-play path, which includes the repair.
 - **Data.** `PARITY.md`, Summary: 27 of 27 seasons equal on all 139 cached columns; 16 games
-  repaired, all Jacksonville home games of 2001-2002; judged pairs 28 (29 before).
+  repaired, all Jacksonville home games of 2001-2002; judged pairs 28 (29 before), and 35 after
+  the fix rounds in the Review record below added the four allowed rates and the three pairs
+  read on the opponent's row (`carries_faced`, `attempts_faced`, `completions_allowed`).
 - **How to reverse it.** `parity.season_pbp` as it was at `9bba627` read the file directly.
 - **Review.** 2026-10-12, approved with findings (Review record, below).
 
@@ -302,3 +304,11 @@ Summary of the moves (`phase1_refresh_transitions_output.txt`):
   `decisions/web_pages.md` say so in their notes; an empty cached schedule fails the run instead
   of raising; the `no_play` EPA sums are rounded to 9 decimals, so `parity.json` is the same at any
   thread count; entry 3's heading and the `ratings-history` note's citation are corrected.
+- 2026-10-14, independent re-check of those fixes (approve with findings,
+  `~/scratch/step6_review/audit_refresh_recheck.md`). Fixed after it: the parity check judges
+  `attempts_faced` and `completions_allowed` on the opponent's row too, and `gl-faced` names
+  them `box_score[opponent]:`; the counterparts of `gl-official-allowed`,
+  `gl-first-downs-allowed` and `gl-receiving-allowed` carry `[opponent]` (still `different`);
+  the marker is accepted only on `team_game`, `box_score` and `team_stats`; a team-game
+  without its opponent's row fails the parity check; the `no_play` EPA sums are exact
+  (`math.fsum`) before the rounding.

@@ -261,6 +261,35 @@ def test_check_counterpart_opponent_row_marker_names_a_column_of_its_catalog(
     assert found is expected
 
 
+@pytest.mark.parametrize("catalog", ["team_game", "box_score", "team_stats"])
+def test_check_counterpart_opponent_row_marker_on_a_team_game_catalog_is_accepted(
+    inventory: ModuleType, catalog: str
+) -> None:
+    # Arrange
+    catalogs = {catalog: ["rating"]}
+
+    # Act
+    found = inventory.check_counterpart(f"{catalog}[opponent]:rating", catalogs, {}, "x")
+
+    # Assert
+    assert found is True
+
+
+@pytest.mark.parametrize("catalog", ["ratings", "strength", "dataset", "schedule"])
+def test_check_counterpart_opponent_row_marker_on_a_catalog_without_team_game_rows_fails(
+    inventory: ModuleType, catalog: str
+) -> None:
+    # Arrange
+    catalogs = {catalog: ["rating"]}
+    port = {"x": ["rating"]}
+
+    # Act
+    found = inventory.check_counterpart(f"{catalog}[opponent]:rating", catalogs, port, "x")
+
+    # Assert
+    assert found is False
+
+
 def test_classify_names_the_ported_column_before_the_rules_counterparts(
     inventory: ModuleType,
 ) -> None:

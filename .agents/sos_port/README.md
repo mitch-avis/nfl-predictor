@@ -113,7 +113,8 @@ published files cell for cell, Washington's code apart (`SEASON_STATS_ETL_PARITY
 `RATINGS_PARITY.md`), so a column is `matched` only when every counterpart named shares its
 definition, and `different` when one of this repository's own inputs defines it otherwise. A
 counterpart on the opponent's row of the same game marks its catalog `[opponent]`
-(`box_score[opponent]:rush_attempts`).
+(`box_score[opponent]:rush_attempts`); only `team_game`, `box_score` and `team_stats`, whose rows
+carry a team and its opponent, take the marker, and the inventory fails it on any other catalog.
 
 Rules match columns on file kind, name, registry base metric and affixes. A `rest` rule takes the
 columns of its kinds that no other rule matches and states how many (`expect`); any rule may pin

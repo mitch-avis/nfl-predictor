@@ -85,6 +85,8 @@ CLASSES = ("matched", "different", "missing")
 PORT = "ratings"
 # Marks a counterpart read on the opponent's row of its team-game table (see check_counterpart).
 OPPONENT_ROW = "[opponent]"
+# The catalogs whose rows carry a team and its opponent, the only ones ``OPPONENT_ROW`` may follow.
+TEAM_GAME_CATALOGS = ("team_game", "box_score", "team_stats")
 FILE_NAME = re.compile(r"^(\d{4})_(.+)\.parquet$")
 SIDES = ("home_", "away_")
 # A column name inside a counterpart formula: letters, digits and underscores, not only digits.
@@ -304,10 +306,14 @@ def check_counterpart(
 
     A ``ratings:`` reference names columns of the ported table of ``kind``, the file kind of the
     column it describes. ``OPPONENT_ROW`` after a catalog (``box_score[opponent]:rush_attempts``)
-    names the column on the opponent's row of the same team-game table.
+    names the column on the opponent's row of the same team-game table, so it may follow only the
+    ``TEAM_GAME_CATALOGS``.
     """
     source, _, formula = ref.partition(":")
-    source = source.removesuffix(OPPONENT_ROW)
+    if source.endswith(OPPONENT_ROW):
+        source = source.removesuffix(OPPONENT_ROW)
+        if source not in TEAM_GAME_CATALOGS:
+            return False
     names = NAME.findall(formula)
     known = port.get(kind) if source == PORT else catalog.get(source)
     return known is not None and bool(names) and all(part in known for part in names)

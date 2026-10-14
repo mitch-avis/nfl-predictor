@@ -36,10 +36,11 @@
 #   dataset    - a published game-dataset column, without its home_/away_ side prefix
 #   strength   - the weekly strength snapshot file
 # and arithmetic over names of one catalog (`team_game:pass_epa_sum / dropbacks`). `[opponent]`
-# after a per-team-game catalog (`box_score[opponent]:rush_attempts`) names the column on the
-# opponent's row of the same game. `{column}`,
-# `{base}` and `{core}` (the column without its prefix) are filled in per column; in source and
-# web rules `{key}` is the item's own key.
+# after team_game, box_score or team_stats, the catalogs whose rows carry a team and its opponent
+# (`box_score[opponent]:rush_attempts`), names the column on the opponent's row of the same game;
+# after any other catalog the counterpart fails. `{column}`, `{base}` and `{core}` (the column
+# without its prefix) are filled in per column; in source and web rules `{key}` is the item's own
+# key.
 #
 # The ported tables equal nfl-sos-ratings' published files cell for cell, Washington's code
 # apart (SEASON_STATS_ETL_PARITY.md, RATINGS_PARITY.md, ADAPTER_PARITY.md). So a column's class

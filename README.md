@@ -1028,9 +1028,11 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   `floor_sigma_reference_runs`, averaged per game in the order listed as one source; later weeks
   read the stage-1 checkpoints alone, so a missing reference run blocks only week 1. Explicit
   paths replace both. `power_rankings_method: composite` restores the composite, and
-  `--legacy-franchise-fit` alone still implies Bradley-Terry. It skips the rankings with a warning
-  naming what is missing when the snapshot or a rating source for the requested week is missing
-  or does not cover the games.
+  `--legacy-franchise-fit` alone still implies Bradley-Terry. When the snapshot or a rating
+  source for the requested week is missing or does not cover the games, it skips the rankings
+  with an error naming what is missing, ranks on no other method in their place, and still
+  writes the projected standings; the run still exits `0`, and its reports-stage marker records
+  the skip, so `--resume` runs that stage again.
 
 Model selection hierarchy (default):
 

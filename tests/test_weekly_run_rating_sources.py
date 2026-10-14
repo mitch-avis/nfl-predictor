@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
+from tests import snapshots
 from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
+from tests.test_weekly_run_characterization import (
+    SNAPSHOT_DIR,
+    _run_weekly,
+    _snapshot_outputs,
+    _stable_frame,
+)
+from tests.weekly_fixture import build_fixture, write_weekly_config
 
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import power_rankings, rating_sources
@@ -92,6 +102,11 @@ def test_report_config_of_a_points_method_names_its_sources() -> None:
     assert report["power_rankings_method"] == "ported"
 
 
+def _no_standings(*_args: object, **_kwargs: object) -> list[Path]:
+    """Stand in for the projected standings, which these stub schedules cannot build."""
+    return []
+
+
 def test_weekly_rankings_skip_an_unavailable_rating_source(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -131,13 +146,16 @@ def test_weekly_rankings_skip_an_unavailable_rating_source(
 
     monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
     monkeypatch.setattr(pipeline.power_rankings, "compute_power_rankings", unavailable)
+    monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
     with caplog.at_level(logging.WARNING):
         written = pipeline._write_power_rankings(context, 2024, 4, tmp_path / "model.joblib")
 
     # Assert
-    assert written == []
+    assert written.paths == []
+    assert written.skipped is not None
+    assert "no ported team rating" in written.skipped
     assert "no ported team rating" in caplog.text
 
 
@@ -176,13 +194,14 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
         config_payload={},
     )
     monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+    monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
     with caplog.at_level(logging.WARNING):
         written = pipeline._write_power_rankings(context, 2024, 4, tmp_path / "model.joblib")
 
     # Assert
-    assert written == []
+    assert written.paths == []
     assert "no_such_run" in caplog.text
 
 
@@ -277,13 +296,14 @@ def test_weekly_rankings_skip_without_stage_one_folds(
         config_payload={},
     )
     monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+    monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
     with caplog.at_level(logging.WARNING):
         written = pipeline._write_power_rankings(context, 2024, 4, tmp_path / "model.joblib")
 
     # Assert
-    assert written == []
+    assert written.paths == []
     assert "Power rankings skipped" in caplog.text
     assert str(Path("run") / "wf_compare") in caplog.text
 
@@ -330,3 +350,111 @@ def test_stage_one_records_its_fold_checkpoints_as_a_prediction_source(
     read = rating_sources.read_fold_predictions(stage1.predictions_source(tmp_path / "run"))
     assert read.checkpoint_dir == folds
     assert read.predictions.get_column("game_id").to_list() == ["2024_01_BBB_AAA"]
+
+
+def _weekly_run_without_ported_ratings(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    """Write the weekly fixture with its ported ratings moved away, so the blend is unavailable.
+
+    Returns:
+        The config, the output directory, the ratings directory and where it was moved.
+
+    """
+    paths = build_fixture(tmp_path)
+    output_dir = tmp_path / "out"
+    config_path = write_weekly_config(tmp_path, paths, output_dir)
+    moved = paths["ratings"].rename(tmp_path / "ratings_moved")
+    return config_path, output_dir, paths["ratings"], moved
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_skipped_weekly_ranking_logs_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    config_path, _, _, _ = _weekly_run_without_ported_ratings(tmp_path)
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    skips = [record for record in caplog.records if "Power rankings skipped" in record.message]
+    assert [record.levelno for record in skips] == [logging.ERROR]
+    assert "no ported team rating" in skips[0].message
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_skipped_weekly_ranking_still_writes_the_projected_standings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    config_path, output_dir, _, _ = _weekly_run_without_ported_ratings(tmp_path)
+
+    # Act
+    _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    outputs = _snapshot_outputs(tmp_path, output_dir)
+    for name in ("projected_standings.csv", "projected_division_standings.csv"):
+        snapshots.assert_frames_match(
+            name, _stable_frame(outputs[name]), _stable_frame(SNAPSHOT_DIR / name)
+        )
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_skipped_weekly_ranking_writes_no_other_method_ranking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    config_path, output_dir, _, _ = _weekly_run_without_ported_ratings(tmp_path)
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    assert not list(output_dir.glob("power_rankings_*.csv"))
+    assert "Ranking on the" not in caplog.text
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_skipped_weekly_ranking_leaves_the_reports_marker_not_reusable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    config_path, _, _, _ = _weekly_run_without_ported_ratings(tmp_path)
+    marker = tmp_path / "run" / "reports_state.json"
+
+    # Act
+    _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert "no ported team rating" in payload["power_rankings_skipped"]
+    assert not pipeline._stage_can_reuse(
+        marker, payload["dataset_hash"], payload["config_hash"], []
+    )
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_resume_after_a_skipped_ranking_writes_the_rankings_once_the_source_is_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    config_path, output_dir, ratings_dir, moved = _weekly_run_without_ported_ratings(tmp_path)
+    _run_weekly(config_path, monkeypatch)
+    moved.rename(ratings_dir)
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["resume"] = True
+    config_path.write_text(yaml.safe_dump(config, sort_keys=True), encoding="utf-8")
+
+    # Act
+    _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    written = _snapshot_outputs(tmp_path, output_dir)["power_rankings.csv"]
+    snapshots.assert_frames_match(
+        "power_rankings.csv",
+        _stable_frame(written),
+        _stable_frame(SNAPSHOT_DIR / "power_rankings.csv"),
+    )

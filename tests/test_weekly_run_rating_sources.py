@@ -461,3 +461,53 @@ def test_resume_after_a_skipped_ranking_writes_the_rankings_once_the_source_is_b
         _stable_frame(written),
         _stable_frame(SNAPSHOT_DIR / "power_rankings.csv"),
     )
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_resume_with_a_reused_walk_forward_writes_its_predictions_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    paths = build_fixture(tmp_path)
+    config_path = write_weekly_config(tmp_path, paths, tmp_path / "out")
+    _run_weekly(config_path, monkeypatch)
+    (pointer,) = tmp_path.rglob("wf_compare/metadata.json")
+    written_by_the_walk = json.loads(pointer.read_text(encoding="utf-8"))
+    pointer.unlink()
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["resume"] = True
+    config_path.write_text(yaml.safe_dump(config, sort_keys=True), encoding="utf-8")
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    assert any("Stage 1: reuse" in record.message for record in caplog.records)
+    assert json.loads(pointer.read_text(encoding="utf-8")) == written_by_the_walk
+
+
+@pytest.mark.filterwarnings("ignore::UserWarning")
+def test_resume_with_a_reused_walk_forward_and_no_fold_checkpoints_writes_no_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Arrange
+    paths = build_fixture(tmp_path)
+    config_path = write_weekly_config(tmp_path, paths, tmp_path / "out")
+    _run_weekly(config_path, monkeypatch)
+    (pointer,) = tmp_path.rglob("wf_compare/metadata.json")
+    pointer.unlink()
+    (folds,) = tmp_path.rglob("wf_compare/wf_folds")
+    folds.rename(tmp_path / "wf_folds_moved")
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["resume"] = True
+    config_path.write_text(yaml.safe_dump(config, sort_keys=True), encoding="utf-8")
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        _run_weekly(config_path, monkeypatch)
+
+    # Assert
+    assert not pointer.exists()
+    missing = [record for record in caplog.records if "are missing" in record.message]
+    assert [record.levelno for record in missing] == [logging.WARNING]

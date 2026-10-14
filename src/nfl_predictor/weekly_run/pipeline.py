@@ -348,6 +348,13 @@ def _run_stage1(ctx: _RunContext, reference_pool: floor_sigma.ErrorPool) -> dict
     ):
         log.info("Stage 1: reuse %s", wf_best_json)
         wf_summary = json.loads(wf_best_json.read_text(encoding="utf-8"))
+        if not stage1.has_predictions_source(ctx.run_dir):
+            stage1.write_reused_predictions_source(
+                walk_forward.load_games(args.data_path),
+                options,
+                run_dir=ctx.run_dir,
+                floor_sigma_history=reference_pool,
+            )
     else:
         df = walk_forward.load_games(args.data_path)
         run = stage1.Stage1Run(

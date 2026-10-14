@@ -49,6 +49,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 PRODUCTION_LABEL = "production"
+# How many characters of the fold checkpoint fingerprint name the walk-forward's checkpoint
+# directory under ``wf_compare/wf_folds/`` (the walk-forward's own naming).
+_FOLD_DIRECTORY_CHARS = 20
 _MARKET_MODE_FLAGS = {
     "features": (True, False),
     "anchor": (False, True),
@@ -98,6 +101,51 @@ def _write_predictions_source(run_dir: Path, checkpoint: object) -> None:
     if isinstance(checkpoint, dict) and checkpoint.get("dir"):
         pointer = {"config": {"checkpoint": {"dir": str(checkpoint["dir"])}}}
         _atomic_write_json(predictions_source(run_dir) / "metadata.json", pointer)
+
+
+def has_predictions_source(run_dir: Path) -> bool:
+    """Return whether stage 1 recorded its fold checkpoint directory for `predictions_source`."""
+    return (predictions_source(run_dir) / "metadata.json").is_file()
+
+
+def write_reused_predictions_source(
+    df: pd.DataFrame,
+    options: ProductionOptions,
+    *,
+    run_dir: Path,
+    floor_sigma_history: floor_sigma.ErrorPool,
+) -> None:
+    """Record the fold checkpoint directory of a reused stage 1 that has no pointer yet.
+
+    A run directory whose stage 1 finished before the pointer was written has none, so the
+    power rankings' model rating could not read it. The directory is the one the walk-forward
+    names for these games and settings (`walk_forward.fold_checkpoint_fingerprint`); when it
+    does not exist, nothing is written and the rankings report the source as unavailable.
+    """
+    config = production_walk_forward_config(options)
+    fingerprint = walk_forward.fold_checkpoint_fingerprint(
+        _without_disabled_groups(df, options), config, floor_sigma_history
+    )
+    directory = _wf_compare_dir(run_dir) / "wf_folds" / fingerprint[:_FOLD_DIRECTORY_CHARS]
+    if not directory.is_dir():
+        log.warning(
+            "Stage 1 reused, but its fold checkpoints %s are missing: the model rating cannot "
+            "read this run's walk-forward",
+            directory,
+        )
+        return
+    _write_predictions_source(run_dir, {"dir": str(directory)})
+
+
+def _without_disabled_groups(df: pd.DataFrame, options: ProductionOptions) -> pd.DataFrame:
+    """Return the games without the disabled feature groups' columns, as the backtest drops them."""
+    if not options.disabled_feature_groups:
+        return df
+    return df.drop(
+        columns=feature_spec.resolve_feature_group_columns(
+            list(df.columns), options.disabled_feature_groups
+        )
+    )
 
 
 def _candidate_artifact_path(run_dir: Path, candidate_key: str) -> Path:
@@ -301,12 +349,7 @@ def evaluate_production(
     group that matches no column of the data is logged as a warning. The squared margin errors
     of every predicted game are written to ``wf_margin_errors.csv``.
     """
-    if options.disabled_feature_groups:
-        df = df.drop(
-            columns=feature_spec.resolve_feature_group_columns(
-                list(df.columns), options.disabled_feature_groups
-            )
-        )
+    df = _without_disabled_groups(df, options)
     run_dir = run.run_dir
     wf_dir = _wf_compare_dir(run_dir)
     wf_dir.mkdir(parents=True, exist_ok=True)

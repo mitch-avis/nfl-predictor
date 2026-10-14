@@ -1024,16 +1024,17 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   weight its pre-registered rule picks for 2026 (`.agents/sos_port/decisions/power_rankings.md`,
   decision 12). Without `--power-rankings-model-predictions`, the model rating reads the ranked
   season from the run's own stage-1 fold checkpoints (`wf_compare/`, whose `metadata.json` names
-  them) and earlier seasons, which only week 1's carried-forward fit reads, from the
-  `floor_sigma_reference_runs`, averaged per game in the order listed as one source; later weeks
-  read the stage-1 checkpoints alone, so a missing reference run blocks only week 1. Explicit
-  paths replace both. `power_rankings_method: composite` restores the composite, and
-  `--legacy-franchise-fit` with no method set implies Bradley-Terry; with any other method set, on
-  the command line or in the config, the run refuses to start. When the snapshot or a rating
-  source for the requested week is missing or does not cover the games, it skips the rankings
-  with an error naming what is missing, ranks on no other method in their place, and still
-  writes the projected standings; the run still exits `0`, and its reports-stage marker records
-  the skip, so `--resume` runs that stage again.
+  them; a resumed run that reuses stage 1 writes it when missing) and earlier seasons, which
+  only week 1's carried-forward fit reads, from the `floor_sigma_reference_runs`, averaged per
+  game in the order listed as one source; later weeks read the stage-1 checkpoints alone, so a
+  missing reference run blocks only week 1. Explicit paths replace both.
+  `power_rankings_method: composite` restores the composite, and `--legacy-franchise-fit` with
+  no method set implies Bradley-Terry; with any other method set, on the command line or in the
+  config, the run refuses to start. When the snapshot or a rating source for the requested week
+  is missing or does not cover the games, it skips the rankings with an error naming what is
+  missing, ranks on no other method in their place, and still writes the projected standings;
+  the run still exits `0`, and its reports-stage marker records the skip, so `--resume` runs
+  that stage again.
 
 Model selection hierarchy (default):
 

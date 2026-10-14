@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -121,13 +120,18 @@ def home_win_prob(margin: np.ndarray, sigma: float) -> np.ndarray:
     """Return the floor, ``Phi(margin / sigma)``.
 
     Raises:
-        ValueError: If ``sigma`` is not finite and positive.
+        ValueError: If ``sigma``, or any element of a vector passed as one, is not finite and
+            positive, or if ``sigma`` is more than one number.
 
     """
-    if not (math.isfinite(sigma) and sigma > 0):
+    values = np.asarray(sigma, dtype=float)
+    if not (np.all(np.isfinite(values)) and np.all(values > 0)):
         msg = f"The floor's sigma must be finite and positive, got {sigma!r}."
         raise ValueError(msg)
-    return norm.cdf(margin / float(sigma))
+    if values.size != 1:
+        msg = f"The floor's sigma must be one number, got {values.size} values."
+        raise ValueError(msg)
+    return norm.cdf(margin / float(values.item()))
 
 
 def margin_errors(predictions: pd.DataFrame) -> pd.DataFrame:

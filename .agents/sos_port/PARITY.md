@@ -11,8 +11,8 @@ match, is in `parity_attributions.parquet` (unexplained ones also in `parity.jso
 
 ## Summary
 
-- Seasons: 1999-2025 (27); judged pairs: 28.
-- Pair values compared (team-games times pairs): 389984.
+- Seasons: 1999-2025 (27); judged pairs: 33.
+- Pair values compared (team-games times pairs): 459624.
 - Mismatching pair values: 25564; explained: 25564; unexplained: 0 (in 0 team-games).
 - This repository's play-by-play read from `~/scratch/step6/data/cache/nflreadpy`.
 - Snapshot of the play-by-play it read: 27 of 27 seasons equal to this repository's cache row by row on all 139 cached columns (1225182 plays).
@@ -26,38 +26,44 @@ match, is in `parity_attributions.parquet` (unexplained ones also in `parity.jso
 ## Judged pairs
 
 `here` is arithmetic over this repository's two play-by-play aggregates, `there` over its
-game logs. Counts must be equal; sums and rates within the tolerance (1e-06).
+game logs, on the row `row` names: the team's own, or its opponent's in the same game.
+Counts must be equal; sums and rates within the tolerance (1e-06).
 
-| pair | here | there | kind | compared | mismatched | explained | unexplained | causes allowed |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `offensive_snaps` | `offensive_snaps` | `offensive_snaps` | count | 13928 | 0 | 0 | 0 | - |
-| `defensive_snaps` | `defensive_snaps` | `defensive_snaps` | count | 13928 | 0 | 0 | 0 | - |
-| `dropbacks` | `dropbacks` | `dropbacks` | count | 13928 | 1507 | 1507 | 0 | `two_point_tries` |
-| `pass_epa_sum` | `pass_epa_sum` | `epa_per_dropback * dropbacks` | sum | 13928 | 1507 | 1507 | 0 | `two_point_tries` |
-| `pass_success_count` | `pass_success_count` | `pass_success_rate * dropbacks` | count_from_rate | 13928 | 698 | 698 | 0 | `two_point_tries` |
-| `scrimmage_epa_sum` | `pass_epa_sum + rush_epa_sum` | `offensive_epa` | sum | 13928 | 9220 | 9220 | 0 | `unflagged_rush_attempt_epa`, `two_point_tries`, `kneels_and_spikes`, `wiped_out_run_epa` |
-| `designed_carries` | `carries` | `designed_carries` | count | 13928 | 0 | 0 | 0 | - |
-| `rush_success_count` | `rush_success_count` | `rush_success_rate * designed_carries` | count_from_rate | 13928 | 0 | 0 | 0 | - |
-| `early_down_pass_rate` | `early_down_passes / early_down_plays` | `early_down_pass_rate` | rate | 13928 | 2008 | 2008 | 0 | `two_point_tries`, `null_downs` |
-| `st_epa` | `st_epa_for` | `st_epa` | sum | 13928 | 0 | 0 | 0 | - |
-| `pass_attempts` | `pass_attempts` | `attempts` | count | 13928 | 0 | 0 | 0 | - |
-| `pass_completions` | `pass_completions` | `completions` | count | 13928 | 0 | 0 | 0 | - |
-| `rush_attempts` | `rush_attempts` | `carries` | count | 13928 | 0 | 0 | 0 | - |
-| `offensive_tds` | `pass_touchdowns + rush_touchdowns` | `offensive_tds` | count | 13928 | 0 | 0 | 0 | - |
-| `sacks_from_rate` | `times_sacked` | `sack_rate_per_dropback * dropbacks` | count_from_rate | 13928 | 0 | 0 | 0 | - |
-| `interceptions_from_rate` | `interceptions_thrown` | `int_rate_per_attempt * attempts` | count_from_rate | 13928 | 0 | 0 | 0 | - |
-| `pass_touchdowns_from_rate` | `pass_touchdowns` | `passing_td_rate_per_attempt * attempts` | count_from_rate | 13928 | 0 | 0 | 0 | - |
-| `third_down_conversions` | `third_down_conversions` | `third_down_conversions` | count | 13928 | 0 | 0 | 0 | - |
-| `third_down_attempts` | `third_down_attempts` | `third_down_attempts` | count | 13928 | 0 | 0 | 0 | - |
-| `fourth_down_conversions` | `fourth_down_conversions` | `fourth_down_conversions` | count | 13928 | 0 | 0 | 0 | - |
-| `fourth_down_attempts` | `fourth_down_attempts` | `fourth_down_attempts` | count | 13928 | 0 | 0 | 0 | - |
-| `two_point_attempts` | `two_point_attempts` | `two_pt_attempts` | count | 13928 | 0 | 0 | 0 | - |
-| `two_point_successes` | `two_point_successes` | `two_pt_conversions` | count | 13928 | 0 | 0 | 0 | - |
-| `two_point_conversions_box_score` | `2pt_conversions` | `two_pt_conversions` | count | 13928 | 0 | 0 | 0 | - |
-| `first_downs` | `first_downs` | `first_downs` | count | 13928 | 10587 | 10587 | 0 | `penalty_first_downs` |
-| `fumbles` | `fumbles` | `fumbles` | count | 13928 | 37 | 37 | 0 | `fumbles_on_scrimmage_snaps` |
-| `penalties` | `penalties` | `penalties` | count | 13928 | 0 | 0 | 0 | - |
-| `penalty_yards` | `penalty_yards` | `penalty_yards` | sum | 13928 | 0 | 0 | 0 | - |
+| pair | here | there | row | kind | compared | mismatched | explained | unexplained | causes allowed |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `offensive_snaps` | `offensive_snaps` | `offensive_snaps` | own | count | 13928 | 0 | 0 | 0 | - |
+| `defensive_snaps` | `defensive_snaps` | `defensive_snaps` | own | count | 13928 | 0 | 0 | 0 | - |
+| `dropbacks` | `dropbacks` | `dropbacks` | own | count | 13928 | 1507 | 1507 | 0 | `two_point_tries` |
+| `pass_epa_sum` | `pass_epa_sum` | `epa_per_dropback * dropbacks` | own | sum | 13928 | 1507 | 1507 | 0 | `two_point_tries` |
+| `pass_success_count` | `pass_success_count` | `pass_success_rate * dropbacks` | own | count_from_rate | 13928 | 698 | 698 | 0 | `two_point_tries` |
+| `scrimmage_epa_sum` | `pass_epa_sum + rush_epa_sum` | `offensive_epa` | own | sum | 13928 | 9220 | 9220 | 0 | `unflagged_rush_attempt_epa`, `two_point_tries`, `kneels_and_spikes`, `wiped_out_run_epa` |
+| `designed_carries` | `carries` | `designed_carries` | own | count | 13928 | 0 | 0 | 0 | - |
+| `rush_success_count` | `rush_success_count` | `rush_success_rate * designed_carries` | own | count_from_rate | 13928 | 0 | 0 | 0 | - |
+| `early_down_pass_rate` | `early_down_passes / early_down_plays` | `early_down_pass_rate` | own | rate | 13928 | 2008 | 2008 | 0 | `two_point_tries`, `null_downs` |
+| `st_epa` | `st_epa_for` | `st_epa` | own | sum | 13928 | 0 | 0 | 0 | - |
+| `pass_attempts` | `pass_attempts` | `attempts` | own | count | 13928 | 0 | 0 | 0 | - |
+| `pass_completions` | `pass_completions` | `completions` | own | count | 13928 | 0 | 0 | 0 | - |
+| `rush_attempts` | `rush_attempts` | `carries` | own | count | 13928 | 0 | 0 | 0 | - |
+| `offensive_tds` | `pass_touchdowns + rush_touchdowns` | `offensive_tds` | own | count | 13928 | 0 | 0 | 0 | - |
+| `sacks_from_rate` | `times_sacked` | `sack_rate_per_dropback * dropbacks` | own | count_from_rate | 13928 | 0 | 0 | 0 | - |
+| `interceptions_from_rate` | `interceptions_thrown` | `int_rate_per_attempt * attempts` | own | count_from_rate | 13928 | 0 | 0 | 0 | - |
+| `pass_touchdowns_from_rate` | `pass_touchdowns` | `passing_td_rate_per_attempt * attempts` | own | count_from_rate | 13928 | 0 | 0 | 0 | - |
+| `third_down_conversions` | `third_down_conversions` | `third_down_conversions` | own | count | 13928 | 0 | 0 | 0 | - |
+| `third_down_attempts` | `third_down_attempts` | `third_down_attempts` | own | count | 13928 | 0 | 0 | 0 | - |
+| `fourth_down_conversions` | `fourth_down_conversions` | `fourth_down_conversions` | own | count | 13928 | 0 | 0 | 0 | - |
+| `fourth_down_attempts` | `fourth_down_attempts` | `fourth_down_attempts` | own | count | 13928 | 0 | 0 | 0 | - |
+| `two_point_attempts` | `two_point_attempts` | `two_pt_attempts` | own | count | 13928 | 0 | 0 | 0 | - |
+| `two_point_successes` | `two_point_successes` | `two_pt_conversions` | own | count | 13928 | 0 | 0 | 0 | - |
+| `two_point_conversions_box_score` | `2pt_conversions` | `two_pt_conversions` | own | count | 13928 | 0 | 0 | 0 | - |
+| `first_downs` | `first_downs` | `first_downs` | own | count | 13928 | 10587 | 10587 | 0 | `penalty_first_downs` |
+| `fumbles` | `fumbles` | `fumbles` | own | count | 13928 | 37 | 37 | 0 | `fumbles_on_scrimmage_snaps` |
+| `penalties` | `penalties` | `penalties` | own | count | 13928 | 0 | 0 | 0 | - |
+| `penalty_yards` | `penalty_yards` | `penalty_yards` | own | sum | 13928 | 0 | 0 | 0 | - |
+| `rush_success_rate_allowed` | `rush_success_allowed_count / carries_allowed` | `rush_success_rate_allowed` | own | rate | 13928 | 0 | 0 | 0 | - |
+| `third_down_pct_allowed` | `third_down_conversions_allowed / third_down_attempts_allowed` | `third_down_pct_allowed` | own | rate | 13928 | 0 | 0 | 0 | - |
+| `fourth_down_pct_allowed` | `fourth_down_conversions_allowed / fourth_down_attempts_allowed` | `fourth_down_pct_allowed` | own | rate | 13928 | 0 | 0 | 0 | - |
+| `two_pt_conversion_rate_allowed` | `two_point_successes_allowed / two_point_attempts_allowed` | `two_pt_conversion_rate_allowed` | own | rate | 13928 | 0 | 0 | 0 | - |
+| `carries_faced` | `rush_attempts` | `carries_faced` | opponent | count | 13928 | 0 | 0 | 0 | - |
 
 ## Causes
 
@@ -489,9 +495,9 @@ be judged; the others are listed with their source.
 | `def_sack_yards` | play-by-play | team_stats / team_stats_expanded | - |
 | `def_sack_rate_per_dropback` | play-by-play | team_stats / team_stats_expanded | - |
 | `qb_pressure_events_rate` | play-by-play | team_stats / team_stats_expanded | - |
-| `carries_faced` | play-by-play | team_stats / team_stats_expanded | - |
+| `carries_faced` | play-by-play | team_stats / team_stats_expanded | carries_faced |
 | `yards_per_carry_allowed` | play-by-play | team_stats / team_stats_expanded | - |
-| `rush_success_rate_allowed` | play-by-play | team_stats / team_stats_expanded | - |
+| `rush_success_rate_allowed` | play-by-play | team_stats / team_stats_expanded | rush_success_rate_allowed |
 | `explosive_rush_rate_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `stuff_rate` | play-by-play | team_stats / team_stats_expanded | - |
 | `success_rate_allowed` | play-by-play | team_stats / team_stats_expanded | - |
@@ -500,8 +506,8 @@ be judged; the others are listed with their source.
 | `yards_per_defensive_snap_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `first_downs_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `penalty_first_downs_allowed` | play-by-play | team_stats / team_stats_expanded | - |
-| `third_down_pct_allowed` | play-by-play | team_stats / team_stats_expanded | - |
-| `fourth_down_pct_allowed` | play-by-play | team_stats / team_stats_expanded | - |
+| `third_down_pct_allowed` | play-by-play | team_stats / team_stats_expanded | third_down_pct_allowed |
+| `fourth_down_pct_allowed` | play-by-play | team_stats / team_stats_expanded | fourth_down_pct_allowed |
 | `series_conversion_rate_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `three_and_outs_forced_rate` | play-by-play | team_stats / team_stats_expanded | - |
 | `score_pct_per_drive_allowed` | play-by-play | team_stats / team_stats_expanded | - |
@@ -510,7 +516,7 @@ be judged; the others are listed with their source.
 | `red_zone_td_pct_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `goal_to_go_td_pct_allowed` | play-by-play | team_stats / team_stats_expanded | - |
 | `avg_starting_field_position_allowed` | play-by-play | team_stats / team_stats_expanded | - |
-| `two_pt_conversion_rate_allowed` | play-by-play | team_stats / team_stats_expanded | - |
+| `two_pt_conversion_rate_allowed` | play-by-play | team_stats / team_stats_expanded | two_pt_conversion_rate_allowed |
 | `takeaways` | play-by-play | team_stats / team_stats_expanded | - |
 | `fumble_recovery_opp` | play-by-play | team_stats / team_stats_expanded | - |
 | `takeaway_rate_per_defensive_snap` | play-by-play | team_stats / team_stats_expanded | - |

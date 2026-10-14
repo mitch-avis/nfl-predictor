@@ -59,9 +59,9 @@ Scope: Its package `nfl_sos_ratings/` at the frozen commit, and this repository'
 
 | source | where |
 | --- | --- |
-| `local file all_data.csv` | `src/nfl_predictor/weekly_run/config.py:567` (_add_power_rankings_arguments) |
-| `local file all_data_ml.csv` | `src/nfl_predictor/weekly_run/config.py:560` (_add_power_rankings_arguments) |
-| `local file completed_games_ml.csv` | `src/nfl_predictor/cli/backtest.py:55` (_parse_args); `src/nfl_predictor/cli/train.py:51` (_parse_args); `src/nfl_predictor/weekly_run/config.py:211` (_add_run_arguments) |
+| `local file all_data.csv` | `src/nfl_predictor/weekly_run/config.py:568` (_add_power_rankings_arguments) |
+| `local file all_data_ml.csv` | `src/nfl_predictor/weekly_run/config.py:561` (_add_power_rankings_arguments) |
+| `local file completed_games_ml.csv` | `src/nfl_predictor/cli/backtest.py:55` (_parse_args); `src/nfl_predictor/cli/train.py:51` (_parse_args); `src/nfl_predictor/weekly_run/config.py:212` (_add_run_arguments) |
 | `local file qb_elos.csv` | `src/nfl_predictor/utils/polars/loaders.py:1329` (load_elo_ratings); `src/nfl_predictor/utils/polars/loaders.py:1411` (load_raw_elo_data) |
 | `network fetch` | `src/nfl_predictor/utils/polars/elo_win_totals.py:81` (_download); `src/nfl_predictor/utils/polars/espn_qbr.py:50` (_download_parquet); `src/nfl_predictor/utils/polars/nfelo_lines.py:91` (_download); `src/nfl_predictor/utils/scraping_utils.py:191` (_scrape_tr_table); `src/nfl_predictor/utils/scraping_utils.py:412` (scrape_survivor_grid_spreads) |
 | `nflreadpy.load_pbp` | `src/nfl_predictor/utils/polars/loaders.py:1247` (load_pbp) |
@@ -1627,7 +1627,7 @@ name each.
 | `def_sack_yards` | `def_sack_yards` | play-by-play | different | `ratings:def_sack_yards`, `team_stats:def_sack_yards` | `gl-nflverse-here` |
 | `def_sack_rate_per_dropback` | `def_sack_rate_per_dropback` | play-by-play | matched | `ratings:def_sack_rate_per_dropback` | `gl-rest` |
 | `qb_pressure_events_rate` | `qb_pressure_events_rate` | play-by-play | matched | `ratings:qb_pressure_events_rate` | `gl-rest` |
-| `carries_faced` | `carries_faced` | play-by-play | matched | `ratings:carries_faced`, `box_score:rush_attempts` | `gl-carries-faced` |
+| `carries_faced` | `carries_faced` | play-by-play | matched | `ratings:carries_faced`, `box_score[opponent]:rush_attempts` | `gl-carries-faced` |
 | `yards_per_carry_allowed` | `yards_per_carry_allowed` | play-by-play | matched | `ratings:yards_per_carry_allowed` | `gl-rest` |
 | `rush_success_rate_allowed` | `rush_success_rate_allowed` | play-by-play | matched | `ratings:rush_success_rate_allowed`, `team_game:rush_success_allowed_count / carries_allowed` | `gl-defense-rates-same` |
 | `explosive_rush_rate_allowed` | `explosive_rush_rate_allowed` | play-by-play | different | `ratings:explosive_rush_rate_allowed`, `team_game:explosive_rush_allowed_count / carries_allowed` | `gl-defense-rates` |
@@ -2302,17 +2302,17 @@ Prefix rules: `filtered_`, `qopp_`, `opp_`, `season_delta_`. Suffix rules: `_per
 | `component ComparisonPanel` | different | `component ComparisonPanel` | - | The comparison of up to four rows; here without each row's rank range (web_pages.md entry 19). |
 | `component EntityTable` | different | `component DataTable` | - | Its table component; this app draws every table with its shared DataTable, fed the registry's metadata in its own column format (web_pages.md entry 4), without the rank-range column (entry 19). |
 | `component GameLogTable` | different | `component GameLogTable` | - | The game log; here with the opponent's season ratings and no rank-range chip (web_pages.md entry 6). |
-| `component HeadToHeadCard` | matched | `component HeadToHeadCard` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component MetricSections` | matched | `component MetricSections` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
+| `component HeadToHeadCard` | matched | `component HeadToHeadCard` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component MetricSections` | matched | `component MetricSections` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
 | `component OpponentBreakdownTable` | different | `component RatingsDetail` | - | Its opponents ledger averaged each stat over the games against each opponent; here the detail page's "Opponents faced" card lists one row per opponent with the games, results, average score, season ratings and tier (web_pages.md entry 11). |
-| `component RankHistogram` | matched | `component RankHistogram` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component RankHistoryCard` | matched | `component RankHistoryCard` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component RankInterval` | matched | `component RankInterval` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component RankRangeChart` | matched | `component RankRangeChart` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component RatingSummary` | matched | `component RatingSummary` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component UnitRankRanges` | matched | `component UnitRankRanges` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component ViewControls` | matched | `component ViewControls` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13). |
-| `component WeeklyTrendChart` | matched | `component TrendChart` | - | The weekly line chart of one metric with its metric picker, renamed. |
+| `component RankHistogram` | matched | `component RankHistogram` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component RankHistoryCard` | matched | `component RankHistoryCard` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component RankInterval` | matched | `component RankInterval` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component RankRangeChart` | matched | `component RankRangeChart` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component RatingSummary` | matched | `component RatingSummary` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component UnitRankRanges` | matched | `component UnitRankRanges` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component ViewControls` | matched | `component ViewControls` | - | Parts of its detail and range pages, ported under the same names (web/src/components/ratings/), in this app's palette (web_pages.md entries 5 and 13); matched by the web-pages decision log; not compared file by file. |
+| `component WeeklyTrendChart` | matched | `component TrendChart` | - | The weekly line chart of one metric with its metric picker, renamed; matched by the web-pages decision log; not compared file by file. |
 | `component WpEntityLine` | missing | - | none planned (the garbage-time filter view is not ported, web_pages.md entry 9) | The garbage-time filter controls (exploration only there). |
 | `component WpFilterControl` | missing | - | none planned (the garbage-time filter view is not ported, web_pages.md entry 9) | The garbage-time filter controls (exploration only there). |
 | `component EntityDetailPage` | different | `component RatingsDetail` | - | The detail page of both kinds, with the differences of its pages above. |
@@ -2467,8 +2467,8 @@ or different column its ported tables write names that column first (`ratings:<c
 | `gl-official-team-stats` | different | 4 | - | - | The same official stats, kept here only as totals (first downs; lost fumbles of every kind). |
 | `gl-official-allowed` | different | 10 | - | - | The opponent's row of the same table, with the offense judgments above. |
 | `gl-faced` | matched | 2 | - | - | The opponent's row; the same play-by-play definition. |
-| `gl-carries-faced` | matched | 1 | - | - | The opponent's row: its carries, every rush attempt but a two-point try, equal in every team-game of 1999-2025 (PARITY.md, pair rush_attempts). |
-| `gl-defense-rates-same` | matched | 4 | - | - | The opponent's offense, with the offense judgments above (gl-designed-runs, gl-downs). |
+| `gl-carries-faced` | matched | 1 | - | - | The opponent's row: its carries, every rush attempt but a two-point try, equal in every team-game of 1999-2025 (PARITY.md, pair carries_faced). |
+| `gl-defense-rates-same` | matched | 4 | - | - | The opponent's offense, with the offense judgments above (gl-designed-runs, gl-downs); equal in every team-game of 1999-2025 (PARITY.md, the pair of each column's own name). |
 | `gl-defense-rates` | different | 7 | - | - | The opponent's offense, with the offense judgments above. |
 | `gl-first-downs-allowed` | different | 1 | - | - | The opponent's row; there first downs by penalty count too. |
 | `gl-nflverse-here` | different | 17 | - | - | There from play-by-play (the receiving columns copy the passing ones before the official override); here nflverse's weekly team stats. Fumble recoveries here include the team's own. |
@@ -2505,7 +2505,7 @@ or different column its ported tables write names that column first (`ratings:<c
 | `qb-ratings-plays` | different | 2 | - | - | The attempts or dropbacks behind each rating, as in the ported tables; the model's quarterback games keep only the passer's per-game totals. Counterparts: those of its base metric's column in `qb_game_logs`. |
 | `qb-ratings-volume` | matched | 2 | - | - | The games behind each rating, written only by the ported tables. |
 | `ratings-volume` | different | 2 | - | - | There games through the season or the week, as in the ported tables; the strength snapshot's are the games before the week. |
-| `ratings-history` | matched | 4 | - | - | The same weekly fit: a team's rating after week N, as published, is the model's pre-week feature on its next game row, from week N + 1 (ratings/pre_week.py: "for a week after the first, the ratings of the teams that have played equal the published week-by-week history of the week before"). The strength snapshot's own weekly ratings stay beside them. |
+| `ratings-history` | matched | 4 | - | - | The same weekly fit: a team's rating after week N, as published, is the model's pre-week feature on its next game row, from week N + 1 (tests/test_ratings_pre_week.py, test_pre_week_team_ratings_are_the_history_of_the_week_before). The strength snapshot's own weekly ratings stay beside them. |
 | `rank-ranges` | matched | 115 | 115 | - | Game-bootstrap rank ranges and head-to-head chances, written only by the ported tables. |
 | `team-prior` | matched | 2 | 2 | - | The preseason prior means inside the fit, with each team's head-to-head-excluded refit, written only by the ported tables (the model's pre-week ratings fit with the same prior). |
 | `wp-bins` | matched | 7 | 7 | - | Plays and EPA by win-probability bin, written by the ported season statistics; no page here reads them, since the garbage-time filter view is not ported (decisions/web_pages.md entry 9). |

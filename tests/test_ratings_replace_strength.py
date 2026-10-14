@@ -1,8 +1,10 @@
 """Leaving out the strength snapshot needs the ported ratings in the data.
 
 Production leaves out the strength snapshot (``strength``) because the ported team ratings
-(``ratings``) replace it. A dataset built before the port has no ratings column, so a run
-leaving out ``strength`` there would train on neither. ``nfl-predictor train`` and the weekly run
+(``ratings``) replace it. A dataset built before the port has the strength snapshot but no ratings
+column, so a run leaving out ``strength`` there would train on neither. Data with neither group
+gets no message: leaving ``strength`` out removes nothing there, and no group list would help.
+``nfl-predictor train`` and the weekly run
 (stage 1 and the final fit) stop; ``nfl-predictor backtest``, which runs ablations on purpose,
 warns and carries on (``tests/test_cli_backtest.py``). Both name the two remedies: rebuild the
 dataset with ``nfl-predictor data``, or pass a group list that keeps ``strength``.
@@ -21,9 +23,11 @@ from tests.feature_group_fixture import (
     build_group_fixture,
     write_group_weekly_config,
 )
+from tests.weekly_fixture import CURRENT_SEASON, PREDICT_WEEK
 
 from nfl_predictor.cli import train
 from nfl_predictor.ml import feature_spec
+from nfl_predictor.ml.floor_sigma import ErrorPool
 from nfl_predictor.weekly_run import pipeline
 
 if TYPE_CHECKING:
@@ -34,6 +38,8 @@ PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
 # The columns of a dataset built before the port: the strength snapshot, no ported ratings.
 COLUMNS_WITHOUT_RATINGS = ("season", "week", *GROUP_COLUMNS["strength"], *GROUP_COLUMNS["elo"])
 COLUMNS_WITH_RATINGS = (*COLUMNS_WITHOUT_RATINGS, *RATINGS_COLUMNS)
+# Data with neither group: leaving out `strength` removes nothing and keeping it adds nothing.
+COLUMNS_WITH_NEITHER = ("season", "week", *GROUP_COLUMNS["elo"])
 # Words every message names: both remedies.
 REMEDIES = ("nfl-predictor data", "--disable-feature-groups", "disable_feature_groups")
 
@@ -89,8 +95,9 @@ def test_the_check_warns_with_the_same_remedies_when_asked_to_carry_on(
         (COLUMNS_WITH_RATINGS, PRODUCTION_GROUPS),
         (COLUMNS_WITHOUT_RATINGS, ()),
         (COLUMNS_WITHOUT_RATINGS, ("own_elo", "own_elo_wt")),
+        (COLUMNS_WITH_NEITHER, PRODUCTION_GROUPS),
     ],
-    ids=["ratings present", "no group left out", "strength kept"],
+    ids=["ratings present", "no group left out", "strength kept", "neither group"],
 )
 @pytest.mark.parametrize("stop", [True, False], ids=["stop", "warn"])
 def test_the_check_says_nothing_when_the_ratings_are_there_or_strength_is_kept(
@@ -178,7 +185,12 @@ def test_the_weekly_runs_final_fit_stops_on_data_without_the_ported_ratings(
         """Stand in for a finished stage 1."""
         return {}
 
+    def stage1_sigma(*_args: Any) -> tuple[ErrorPool, tuple[int, int]]:
+        """Stand in for the finished stage 1's error pool."""
+        return ErrorPool(), (CURRENT_SEASON, PREDICT_WEEK)
+
     monkeypatch.setattr(pipeline, "_run_stage1", reused_stage1)
+    monkeypatch.setattr(pipeline, "_production_floor_sigma", stage1_sigma)
 
     # Act & Assert
     with pytest.raises(ValueError, match="nfl-predictor data"):

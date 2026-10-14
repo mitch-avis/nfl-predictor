@@ -473,8 +473,8 @@ def test_check_information_set_catches_a_snapshot_that_reads_later_weeks() -> No
 def test_check_information_set_catches_a_snapshot_reading_later_special_teams_plays() -> None:
     # Arrange
     def leaky(prior_games: pl.DataFrame, season_logs: pl.DataFrame) -> pl.DataFrame:
-        week = int(prior_games.get_column("week").max()) + 1
-        signal = float(season_logs.filter(pl.col("week") >= week).get_column("st_plays").sum())
+        later = season_logs.filter(pl.col("week") > prior_games.get_column("week").max())
+        signal = float(later.get_column("st_plays").sum())
         return pl.DataFrame({"team": ["AAA", "BBB"], "team_rating": [signal, -signal]})
 
     # Act & Assert

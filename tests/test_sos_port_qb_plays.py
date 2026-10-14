@@ -692,6 +692,37 @@ def test_calibrate_fits_each_week_on_earlier_rows_only() -> None:
     assert week_four["training_rows"] == 4
 
 
+def _harness_calibrations() -> dict[str, pl.DataFrame]:
+    """Return each candidate's calibration of the small league's predictions to a target."""
+    with threadpool_limits(limits=1, user_api="blas"):
+        result = qb.run_harness(_harness_inputs(), _SMALL_WINDOW)
+    rows = result.predictions.with_columns((pl.col("p") * 0.5 + pl.col("t")).alias("target"))
+    return qb.calibrated(rows, qb.CANDIDATES, ("p", "t"), "target")
+
+
+def test_check_calibration_rows_passes_calibrate_output_of_the_harness() -> None:
+    # Arrange
+    calibrations = _harness_calibrations()
+
+    # Act
+    weeks = qb.check_calibration_rows(calibrations)
+
+    # Assert
+    assert weeks == len(qb.CANDIDATES) * 2 * 3
+
+
+def test_check_calibration_rows_catches_a_fit_that_includes_its_own_week() -> None:
+    # Arrange
+    calibrations = _harness_calibrations()
+    calibrations["B"] = calibrations["B"].with_columns(
+        pl.col("training_rows") + pl.len().over("season", "week")
+    )
+
+    # Act & Assert
+    with pytest.raises(qb.IntegrityError, match="check 8"):
+        qb.check_calibration_rows(calibrations)
+
+
 def _with_zero(inputs: Any) -> Any:
     """Return harness inputs with the zero-addition candidate, a copy of passes and sacks."""
     frames = dict(inputs.candidate_rows)
@@ -969,7 +1000,12 @@ def _fake_integrity() -> dict[str, Any]:
         "team_term": {"term_gap": 0.0, "history_gap": 0.0, "snapshots": 1.0},
         "zero_addition_gap": 0.0,
         "penalties": 1,
-        "information": {"snapshots": 1, "gap": 0.0, "qb_fit_gap": 0.0},
+        "information": {
+            "snapshots": 1,
+            "gap": 0.0,
+            "qb_fit_gap": 0.0,
+            "calibration_weeks": 1234,
+        },
         "rows": [
             {
                 "season": 2007,
@@ -984,6 +1020,16 @@ def _fake_integrity() -> dict[str, Any]:
         "stability": (0.455, 601),
         "parts_fingerprint": "0" * 64,
     }
+
+
+def test_integrity_lines_report_the_calibration_rows_check() -> None:
+    # Act
+    lines = qb._integrity_lines(_fake_integrity())
+
+    # Assert
+    check = next(line for line in lines if line.startswith("8. "))
+    assert "1,234 candidate-weeks" in check
+    assert "earlier weeks only" not in check
 
 
 def test_evaluate_and_build_report_run_end_to_end_on_a_synthetic_league() -> None:

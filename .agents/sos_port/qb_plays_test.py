@@ -1395,6 +1395,38 @@ def calibrated(
     }
 
 
+def check_calibration_rows(calibrations: Mapping[str, pl.DataFrame]) -> int:
+    """Check 8: each week's calibration was fit on exactly the rows of the earlier weeks.
+
+    For every candidate and (season, week), ``calibrate``'s ``training_rows`` must equal the
+    number of that candidate's rows from earlier (season, week) pairs. Returns the number of
+    candidate-weeks checked.
+
+    Raises:
+        IntegrityError: If a week's calibration trained on any other number of rows.
+
+    """
+    checked = 0
+    for name, rows in calibrations.items():
+        weeks = (
+            rows.group_by("season", "week")
+            .agg(pl.len().alias("rows"), pl.col("training_rows").unique().alias("used"))
+            .sort("season", "week")
+            .with_columns(pl.col("rows").cum_sum().shift(1, fill_value=0).alias("earlier"))
+        )
+        for season, week, used, earlier in weeks.select(
+            "season", "week", "used", "earlier"
+        ).iter_rows():
+            if used != [earlier]:
+                msg = (
+                    f"check 8: {LABELS.get(name, name)}'s calibration of {season} week {week} "
+                    f"trained on {used} rows, not the {earlier} rows of earlier weeks"
+                )
+                raise IntegrityError(msg)
+        checked += weeks.height
+    return checked
+
+
 def scored(rows: pl.DataFrame, window: Window) -> pl.DataFrame:
     """Return the scored rows: the scored seasons, from the start week."""
     return rows.filter(
@@ -2086,7 +2118,9 @@ def _integrity_lines(integrity: Mapping[str, Any]) -> list[str]:
             f"8. On {information['snapshots']:,} weekly snapshots, replacing every later game's "
             f"values moves no prediction (largest gap {information['gap']:.1e}); every snapshot "
             "equals `qb_rating.fit_qb_ratings` on the same rows (largest gap "
-            f"{information['qb_fit_gap']:.1e}); every calibration used earlier weeks only."
+            f"{information['qb_fit_gap']:.1e}); the calibrations of "
+            f"{information['calibration_weeks']:,} candidate-weeks, over every target, were each "
+            "fit on exactly the rows of the earlier weeks."
         ),
         "9. Every candidate scores the same team-games; by season below.",
         (
@@ -2356,6 +2390,11 @@ def build_report(
 # --- the run ---------------------------------------------------------------------------------
 
 
+# Every target a calibration is fit to: the primary target, points scored, and the per-play
+# targets that favor passes and sacks and every quarterback play.
+CALIBRATION_TARGETS = ("target", "points_for", "own_a", "own_c")
+
+
 def run_integrity_checks(
     inputs: QbInputs,
     frames: Mapping[str, Mapping[int, pl.DataFrame]],
@@ -2372,6 +2411,11 @@ def run_integrity_checks(
     if result.audit.qb_fit_gap > INFORMATION_TOLERANCE:
         msg = f"check 8: a snapshot misses qb_rating.fit_qb_ratings by {result.audit.qb_fit_gap}"
         raise IntegrityError(msg)
+    rows = with_targets(result.predictions, all_targets(inputs), own_targets(frames))
+    calibration_weeks = sum(
+        check_calibration_rows(calibrated(rows, SCORED, ("p", "t"), target))
+        for target in CALIBRATION_TARGETS
+    )
     keys = result.predictions.group_by("candidate").agg(pl.struct(_KEYS).sort().alias("_keys"))
     if keys.get_column("_keys").n_unique() != 1:
         msg = "check 9: the candidates do not predict the same team-games"
@@ -2386,6 +2430,7 @@ def run_integrity_checks(
             "snapshots": result.audit.information_snapshots,
             "gap": result.audit.information_gap,
             "qb_fit_gap": result.audit.qb_fit_gap,
+            "calibration_weeks": calibration_weeks,
         },
         "rows": rows_report(
             inputs, schedule_starters(schedules_file, window.predicted_seasons, ledger), window

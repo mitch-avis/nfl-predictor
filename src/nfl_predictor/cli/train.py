@@ -64,9 +64,10 @@ def _parse_args() -> argparse.Namespace:
         "--exclude-market",
         action="store_true",
         help=(
-            "Train with no game-line columns (spreads, totals, moneylines). The Elo groups' "
-            "preseason win-total priors (elo, own_elo_wt) stay unless --disable-feature-groups "
-            "leaves them out."
+            "Train with no game-line columns (spreads, totals, moneylines). The default groups "
+            "keep the elo group's preseason win-total prior; for no market information pass "
+            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
+            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
         ),
     )
     parser.add_argument(
@@ -135,7 +136,7 @@ def _parse_args() -> argparse.Namespace:
         default=0.5,
         help="Drop categorical columns with unique ratio above this threshold.",
     )
-    options.add_feature_group_option(parser)
+    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
     parser.add_argument(
         "--win-prob-calibration",
         choices=["auto", "none"],
@@ -357,7 +358,7 @@ def _predict_from_checkpoint(args: argparse.Namespace, output_path: Path | None)
     """Load ``--model-in`` and predict ``--predict-path`` with it, training nothing."""
     if args.tune:
         log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
-    if args.disable_feature_groups:
+    if args.disable_feature_groups != constants.PRODUCTION_DISABLED_FEATURE_GROUPS:
         log.info(
             "Model checkpoint provided; ignoring --disable-feature-groups: a saved model "
             "predicts with the columns it was trained on."

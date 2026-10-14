@@ -55,10 +55,18 @@ SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for 
 FLOOR_SIGMA_MIN_POOL_SEASONS = 3
 # The walk-forward runs whose out-of-fold errors form the production pool (the weekly run and
 # `nfl-predictor train`), relative to the repository root; their fold checkpoints are only read.
+# Both seeds of the reviewed walk-forward of production's settings: market anchored, with
+# PRODUCTION_DISABLED_FEATURE_GROUPS left out.
 FLOOR_SIGMA_REFERENCE_RUNS = (
-    "models/step4_reference/adopted_seed42",
-    "models/step4_reference/adopted_seed7",
+    "models/step6/ratings_anchored_seed42",
+    "models/step6/ratings_anchored_seed7",
 )
+
+# The feature groups (FEATURE_GROUP_COLUMN_MARKERS) production leaves out: the strength snapshot
+# and both presets of this repository's own Elo, so production trains on the ported team ratings
+# (`ratings`) and the `qb_elos.csv` Elo (`elo`). The default of the weekly run,
+# `nfl-predictor train` and `nfl-predictor backtest`, so a backtest measures production's features.
+PRODUCTION_DISABLED_FEATURE_GROUPS = ("strength", "own_elo", "own_elo_wt")
 
 # URL for SurvivorGrid spreads (future games)
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"

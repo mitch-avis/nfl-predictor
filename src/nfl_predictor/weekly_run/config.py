@@ -141,12 +141,16 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     for key in _FEATURE_GROUP_LIST_KEYS:
         if key not in normalized:
             continue
-        # A key with no value (YAML null) names no group; anything else must be a list.
+        # A key with no value (YAML null, as when every item is commented out) is refused: it
+        # would otherwise read as either no group or the default. Anything else must be a list.
         groups = normalized[key]
-        if groups is None:
-            groups = []
-        elif not isinstance(groups, list):
-            msg = f"Config key {key} must be a list of feature group names."
+        if groups is None or not isinstance(groups, list):
+            msg = (
+                f"Config key {key} has no value: write [] to leave no group out, or remove the "
+                "key for production's default."
+                if groups is None
+                else f"Config key {key} must be a list of feature group names."
+            )
             raise ValueError(msg)
         normalized[key] = tuple(str(name).strip() for name in groups)
     return normalized
@@ -328,19 +332,25 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
             "the model anchored to them, both (hybrid, the default), or none (no game lines: no "
-            "game-line columns, no anchor and no market transform; the Elo groups' preseason "
-            "win-total priors stay unless --disable-feature-groups leaves them out)."
+            "game-line columns, no anchor and no market transform). The default groups keep the "
+            "elo group's preseason win-total prior; for no market information pass "
+            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
+            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
         ),
     )
     parser.add_argument(
         "--disable-feature-groups",
         type=options.parse_feature_groups,
-        default=defaults.get("disable_feature_groups", ()),
+        default=defaults.get(
+            "disable_feature_groups", constants.PRODUCTION_DISABLED_FEATURE_GROUPS
+        ),
         help=(
             "Stage 1 and the final fit: feature groups to leave out, every column of each, "
             "comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a "
-            "list in the config file; default: none). An unknown group stops the run before "
-            "the data refresh."
+            "list in the config file; default: "
+            f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)}; an empty value leaves "
+            "no group out). The list replaces the default rather than adding to it. An unknown "
+            "group stops the run before the data refresh."
         ),
     )
     parser.add_argument(

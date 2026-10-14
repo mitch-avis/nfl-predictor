@@ -6,7 +6,8 @@ games, through the resolver a walk-forward uses, and the result and the saved mo
 ``metadata.json`` record the groups and the columns they removed. The model's feature spec holds
 the columns it trained on, so a saved model predicts without knowing the setting. Every test
 runs on the weekly fixture with four groups' columns added (``tests/feature_group_fixture.py``),
-with a ten-tree budget to stay fast.
+and the ported ratings beside them wherever the strength snapshot is left out, with a ten-tree
+budget to stay fast.
 """
 
 from __future__ import annotations
@@ -72,7 +73,7 @@ def _columns(*groups: str) -> list[str]:
 
 def test_a_disabled_group_leaves_none_of_its_columns_in_the_features(tmp_path: Path) -> None:
     # Arrange
-    paths = build_group_fixture(tmp_path)
+    paths = build_group_fixture(tmp_path, ratings=True)
 
     # Act
     result = _train(paths["completed"], ("strength",))
@@ -118,7 +119,7 @@ def test_an_unknown_group_stops_training_and_names_the_group(tmp_path: Path) -> 
 
 def test_the_saved_metadata_names_the_groups_and_their_columns(tmp_path: Path) -> None:
     # Arrange
-    paths = build_group_fixture(tmp_path)
+    paths = build_group_fixture(tmp_path, ratings=True)
     result = _train(paths["completed"], ("own_elo", "strength"))
     record = ml_model_training.TrainingRecord(
         run_id="groups", created_at="now", dataset_hash="hash", config_payload={}

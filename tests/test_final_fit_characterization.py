@@ -3,9 +3,10 @@
 The model the week's picks come from is trained two ways: by ``nfl-predictor train`` and by the
 weekly run's final fit (its stage 2, after stage 1's walk-forward). Both run here on the weekly
 fixture with columns from four feature groups added (``tests/feature_group_fixture.py``), with
-no feature group left out, and the feature list each records in ``metadata.json``, the
-predictions each writes, and stage 1's summary row are compared with the snapshots under
-``tests/fixtures/final_fit_characterization/``. So the default must keep every group column
+no feature group left out (an explicit empty list, since production's default leaves three
+groups out), and the feature list each records in ``metadata.json``, the predictions each
+writes, and stage 1's summary row are compared with the snapshots under
+``tests/fixtures/final_fit_characterization/``. So an empty list must keep every group column
 and train exactly as before. Runs use the CPU and one thread for determinism, and the fixture's
 reference run for the floor sigma; fields that change on every run (timestamps, durations, and
 the fingerprint that hashes the git commit) are dropped first. Rewrite the snapshots with
@@ -94,6 +95,8 @@ def test_train_keeps_every_group_column_and_predicts_as_before(
         "--output-path",
         str(predictions_path),
         "--no-pretty-output",
+        "--disable-feature-groups",
+        "",
     ]
 
     # Act
@@ -120,7 +123,7 @@ def test_weekly_final_fit_keeps_every_group_column_and_predicts_as_before(
 ) -> None:
     # Arrange
     paths = build_group_fixture(tmp_path)
-    config_path = write_group_weekly_config(tmp_path, paths)
+    config_path = write_group_weekly_config(tmp_path, paths, {"disable_feature_groups": []})
     suffix = f"season_{CURRENT_SEASON}_week_{PREDICT_WEEK:02d}"
 
     # Act

@@ -83,7 +83,12 @@
     "data_path": "<tmp>/completed_games_ml.csv",
     "disable_pruning": false,
     "disable_trend_features": false,
-    "disabled_feature_groups": [],
+    "disabled_feature_groups": [
+      "strength",
+      "own_elo",
+      "own_elo_wt"
+    ],
+    "dropped_feature_group_columns": [],
     "eval_last_n_seasons": 1,
     "eval_seasons": null,
     "eval_window": {

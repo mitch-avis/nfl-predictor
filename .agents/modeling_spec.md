@@ -34,12 +34,15 @@ Direct home/away score regressors are allowed only as secondary ensemble members
   standalone `backtest` unless `--floor-sigma-reference-runs` names runs; the reference runs in
   the weekly run's stage 1), a week the run predicts replacing the history's. The production
   final fit pools the reference runs' fold checkpoints (`floor_sigma_reference_runs`, default
-  the two GPU reference seeds, averaged per game) with the weekly run's stage-1 errors before
-  the predicted week at every `(season, week)` the reference has no rows for (the seasons after
-  it and the predicted season's earlier weeks; the reference keeps its own weeks), estimates
-  sigma for the predicted week, and records it in the saved model; prediction from a saved
-  model uses the recorded value, and a model saved without one uses the constant. A configured
-  reference run that is missing is an error, never a silent fallback.
+  `constants.FLOOR_SIGMA_REFERENCE_RUNS`: both seeds of the reviewed reference walk-forward of
+  production's settings, market anchored with production's feature groups left out,
+  `models/step6/ratings_anchored_seed42` and `ratings_anchored_seed7`, averaged per game) with
+  the weekly run's stage-1 errors before the predicted week at every `(season, week)` the
+  reference has no rows for (the seasons after it and the predicted season's earlier weeks; the
+  reference keeps its own weeks), estimates sigma for the predicted week, and records it in the
+  saved model; prediction from a saved model uses the recorded value, and a model saved without
+  one uses the constant. A configured reference run that is missing is an error, never a silent
+  fallback.
 - Every run type uses it identically: the weekly run, `backtest`, `train` and `predict`. The
   weekly run's stage 1 walks this one production configuration forward to report how it scores;
   it selects nothing.
@@ -74,14 +77,17 @@ When market lines exist, the system produces market-derived features and support
   (`nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`, the weekly
   run's `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
   by the generated inventory in `.agents/market_free/`. It still scores the market yardstick, and
-  it keeps the preseason win-total priors the Elo groups carry: the Elo columns from
-  `data/qb_elos.csv` are not line columns, but `../nfeloqb` pulls each preseason Elo toward a
-  rating built from betting win totals (2003-2023), and the repository's own Elo
-  (`utils/polars/own_elo_build.py`) publishes its win-total preset as the `own_elo_wt` group. The
-  strict variant, the test bench for a run with no market information at all, also leaves out
-  both groups (`--disable-feature-groups elo,own_elo_wt` on `backtest` or `train`,
-  `disable_feature_groups: [elo, own_elo_wt]` in the weekly config) and keeps the market-free
-  `own_elo`. Leaving the market columns out does not leave these groups out
+  with no group option it leaves out production's groups (`strength,own_elo,own_elo_wt`) and
+  keeps the ported ratings and the `elo` group with its preseason win-total prior: the Elo
+  columns from `data/qb_elos.csv` are not line columns, but `../nfeloqb` pulls each preseason Elo
+  toward a rating built from betting win totals (2003-2023), and the repository's own Elo
+  (`utils/polars/own_elo_build.py`) publishes its win-total preset as the `own_elo_wt` group. A
+  group list replaces the default, so the two stricter variants name the whole list: no market
+  information with the market-free own Elo is `--disable-feature-groups strength,elo,own_elo_wt`
+  (`[strength, elo, own_elo_wt]` in the weekly config; reference runs
+  `models/step6/elo_marketfree_seed{42,7}`), and no market information and no Elo at all is
+  `strength,elo,own_elo,own_elo_wt` (reference runs `models/step6/ratings_marketfree_seed{42,7}`).
+  Leaving the market columns out does not leave these groups out
   (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps either of them logs a "No game
   lines" info message naming it (`ml/feature_spec.build_feature_spec`).
 
@@ -277,8 +283,17 @@ Rules for stat-style features:
 - Every fit that leaves feature groups out (a backtest's folds, `nfl-predictor train`, the weekly
   run's stage 1 and final fit) removes the columns `feature_spec.resolve_feature_group_columns`
   names for them. An arm measured with `--disable-feature-groups` is adopted by listing the same
-  groups in `config/weekly_run.yaml` (`disable_feature_groups`, empty by default); that changes
-  what a weekly run produces, so it is the user's decision.
+  groups in `config/weekly_run.yaml` (`disable_feature_groups`); that changes what a weekly run
+  produces, so it is the user's decision.
+- Production leaves out the strength snapshot (`strength`) and both presets of the repository's
+  own Elo (`own_elo`, `own_elo_wt`), so it trains on the ported team ratings (`ratings`) and the
+  `qb_elos.csv` Elo (`elo`). That list (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`) is the
+  default of the weekly config, `nfl-predictor train` and `nfl-predictor backtest`, so a backtest
+  without the option leaves out what production leaves out; a list given replaces it, and an
+  empty one (`disable_feature_groups: []`, `--disable-feature-groups ''`) leaves no group out.
+  Leaving out `strength` on a build with the strength snapshot but no ported ratings (a ratings
+  column null in every row counts as missing) stops `train` and the weekly run, the latter
+  before any work, and warns in the backtest (`feature_spec.check_ratings_replace_strength`).
 
 ## Season and week conventions
 

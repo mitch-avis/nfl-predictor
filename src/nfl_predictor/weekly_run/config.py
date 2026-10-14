@@ -141,12 +141,16 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     for key in _FEATURE_GROUP_LIST_KEYS:
         if key not in normalized:
             continue
-        # A key with no value (YAML null) names no group; anything else must be a list.
+        # A key with no value (YAML null, as when every item is commented out) is refused: it
+        # would otherwise read as either no group or the default. Anything else must be a list.
         groups = normalized[key]
-        if groups is None:
-            groups = []
-        elif not isinstance(groups, list):
-            msg = f"Config key {key} must be a list of feature group names."
+        if groups is None or not isinstance(groups, list):
+            msg = (
+                f"Config key {key} has no value: write [] to leave no group out, or remove the "
+                "key for production's default."
+                if groups is None
+                else f"Config key {key} must be a list of feature group names."
+            )
             raise ValueError(msg)
         normalized[key] = tuple(str(name).strip() for name in groups)
     return normalized

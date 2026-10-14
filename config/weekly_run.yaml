@@ -62,10 +62,11 @@ wf_market_mode: hybrid
 # `nfl-predictor backtest --disable-feature-groups` drops for the same groups (the groups and their
 # column markers are constants.FEATURE_GROUP_COLUMN_MARKERS). Production leaves out the strength
 # snapshot (strength) and both presets of this repository's own Elo (own_elo, own_elo_wt), so it
-# trains on the ported team ratings (ratings) and the qb_elos.csv Elo (elo); an empty list ([])
-# leaves no group out. The saved model records them. An unknown group stops the run before the
-# data refresh, and --disable-feature-groups on the command line takes them comma-separated, an
-# empty value for none (default: [strength, own_elo, own_elo_wt])
+# trains on the ported team ratings (ratings) and the qb_elos.csv Elo (elo); leaving out strength
+# on data without the ported ratings stops the run. An empty list ([]) leaves no group out, and
+# the key with no value is refused. The saved model records them. An unknown group stops the run
+# before the data refresh, and --disable-feature-groups on the command line takes them
+# comma-separated, an empty value for none (default: [strength, own_elo, own_elo_wt])
 disable_feature_groups:
   - strength
   - own_elo

@@ -6,12 +6,13 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 any walk-forward, and this file. The main checkout's `.agents/ultracode_session_audit_2026-10-10.md`
 (on `main` only) is the audit of the unattended session that built this branch.
 
-## State (written 2026-10-12, after the review session)
+## State (written 2026-10-14, during the integration session)
 
-- This branch, `feat/step6-sos-port`, is at `0.57.1` (worktree `~/scratch/step6`), 520 commits
-  ahead of `main` and 30 behind it. `main` is at `0.45.4` (`667cc2e`, not pushed): the
-  instruction-file restructure, no inline lint suppressions, the prompt-audit fixes and the
-  three-role testing standard are not on this branch yet. The main checkout stays on `main`.
+- This branch, `feat/step6-sos-port`, is at `0.57.3` (worktree `~/scratch/step6`). `main`
+  (`0.45.4` plus the handoff merges, up to `5087a5c`, not pushed) is merged in (`d288907`,
+  `1d9f84c`), so the instruction-file restructure, the suppression rule and the three-role testing
+  standard apply here. The main checkout stays on `main`; its handoff still reads 2026-10-12 and
+  points here.
 - Phase 4 is fully reviewed. `models/step6/REVIEW.md` (main checkout; `models/` is not in git)
   now holds three reviews, each by a reviewer that did not produce the runs, each with its
   scripts embedded:
@@ -30,58 +31,44 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
     for the starter known only at kickoff; the previous starter costs it +0.00101 Brier, about
     the size of that win.
   - The user decided on these on 2026-10-12 (below); nothing is adopted on the branch yet.
-- Four agent branches, each reviewed on 2026-10-12 in a detached scratch worktree with the gate
-  re-run (all exit `0`). Each verdict is "approve with findings", no P0 or P1. Full reports, gate
-  logs and the reviewers' uncommitted adversarial tests are in `~/scratch/step6_review/`
-  (`<name>_review.md`, `<name>/`); the review worktrees are `~/scratch/review_<name>`.
-  - Phase-1 audit refresh, `worktree-agent-ab92fdaea474da115`, tip `74641b8` (forked at
-    `0.56.0`, 6 commits). Reports reproduce byte for byte (two diagnostic floats differ in the
-    last digit); columns 30/526/1,180 to 1,236/500/0 and parity mismatches 40,694 to 25,564,
-    none unexplained, verified. P2 (rule 10): the four allowed rates in `gl-defense-rates-same`
-    and the opponent-side `gl-carries-faced` are judged "matched" without script output (the
-    reviewer's scripts show 0 mismatches over 13,928 team-games each); the 10 web items in
-    `same-components` and `trend-chart` are "matched" only by the decision log's silence. P3:
-    `mapping.yaml:592` names the team's own column, `parity.py:438` raises `IndexError` on an
-    empty schedule, float sums unstable across thread counts, wording in
-    `decisions/phase1_refresh.md`, tests to the tip's shared loader `tests/sos_port_scripts.py`.
-    No later step-6 commit makes the reports stale; rerun them (2 minutes) after the merge and
-    after any `data/` rebuild. No file overlap with this branch.
-  - Open rating-definition tests, `worktree-agent-a5c5909054257aa73`, tip `a668e7f` (forked at
-    `0.55.1`, 19 commits). Every protocol precedes its script and report; all four reports
-    reproduce bit for bit (about 25 minutes); outcomes follow the protocols. P2: the quarterback
-    test prints "every calibration used earlier weeks only" without checking it
-    (`qb_plays_test.py:2087`); three formatting fixes (`983bdb2`, `fe36d58`, `d368845`) have no
-    test. P3: a cycle of wins falls back silently to the first in the order
-    (`qb_plays_test.py:326`; rule 12 says ask), a play can count twice in "every quarterback
-    play" (0 such plays today), the information-set checks leave some later-game columns
-    untouched, a bare `KeyError` in `rating_tests_common.py:317`, the JSON lacks the commit
-    (and, for the team tests, the command and runtime). Only `tests/sos_port_scripts.py`
-    overlaps, the same blob on both sides.
-  - Betting-edge split, `worktree-agent-aa56c16b91074022f`, tip `e9c7a09` (not `00f2d02`; forked
-    at `0.57.0`, 23 commits). The fix range `07bd2ca..e9c7a09` addresses every round-two finding
-    and nothing else; the three columns carry the approved names; no label column changes in the
-    snapshot. P3: an infinite sigma passes the positive-sigma check
-    (`reporting/betting_report.py:143`, `weekly_run/pipeline.py:550`: use
-    `math.isfinite(sigma) and sigma > 0`, test first); the decision log's Review line should
-    name the reviewers and this re-check.
-  - Blend ranking default and "no game lines" wording, `worktree-agent-a2071e4c492dbbdda`, tip
-    `5aa5c74` (forked at `0.57.0`, 9 commits, all present). The weekly blend is the measured
-    blend (rule 11) apart from the prediction source the user approved; `composite` restores the
-    old snapshot byte for byte; `5284db2` changes only a log level and message but changes every
-    checkpoint fingerprint. P2: a missing or damaged reference run blocks the rankings every
-    week, though only week 1 needs it (`reporting/power_rankings.py:1406-1413`,
-    `reporting/rating_sources.py:661-684`); a skipped ranking also drops the projected standings,
-    logs only a warning, exits `0` and marks the stage done so `--resume` never retries
-    (`weekly_run/pipeline.py:528-530`, `:584`). P3: a fold without `neutral` is read as home games
-    (`rating_sources.py:481-482`); `--power-rankings-method blend --legacy-franchise-fit` silently
-    ranks on Bradley-Terry (`weekly_run/config.py:891-894`); the fixed 0.5 weight for re-ranked
-    early seasons is undocumented; stale "market-free" wording (`config/weekly_run.yaml:56-57`,
-    `weekly_run/config.py:719-723`); no stage-1 pointer on a resumed old run (`stage1.py:347`); a
-    weak info-level test. Overlap: `README.md` conflicts with the betting-edge branch near the
-    weekly-rankings bullet (keep this branch's bullet, the betting branch's two paragraphs after
-    it, and its removal of the old Totals paragraph); `pipeline.py` should merge cleanly.
+- Integration progress, 2026-10-14. Each agent branch got one implementer fix round on its
+  findings (test first) and a fresh reviewer's re-check; the audit refresh and the blend default
+  each needed a second round. Re-check reports are in `~/scratch/step6_review/`
+  (`<name>_recheck.md`, `<name>_recheck2.md`; adversarial tests in `<name>/`).
+  - Betting-edge split: merged (`91e3eb8`), released as `0.57.2` (`9435542`), gate `0`; reports
+    in `.agents/sos_port/review/betting_edges/`. Open P3 for the adoption chunk:
+    `floor_sigma.home_win_prob` (`ml/floor_sigma.py:126`) accepts an infinite sigma
+    (unreachable today; test first).
+  - Phase-1 audit refresh: merged (`d6c9489`), released as `0.57.3` (`db13ae1`), gate `0` (3,357
+    tests); 35 judged pairs; reports in `.agents/sos_port/review/audit_refresh/`. Open P3: no test
+    covers the run loop's call to `check_opponent_rows` (`.agents/sos_port/parity.py:577-578`).
+  - Open rating-definition tests, `worktree-agent-a5c5909054257aa73`, tip `8df3932` (fix worktree
+    `~/scratch/fix_rating_tests`, `1d9f84c` merged in as `2589b68`): fix round done; re-check
+    running in `~/scratch/review_rating_tests`. Next: merge as `0.57.4` with a `DECISIONS.md`
+    index entry and its reports under `.agents/sos_port/review/rating_tests/`.
+  - Blend ranking default, `worktree-agent-a2071e4c492dbbdda`, tip `085211d` (fix worktree
+    `~/scratch/fix_blend_default`, `1d9f84c` merged in as `6197f58`): two fix rounds, both
+    re-checks "approve with findings"; the user's failure handling is in (reference runs read in
+    week 1 only; a skip logs an error, keeps the standings and leaves the stage undone). Accepted
+    without asking, to report at the check-in: `power_rankings_method` stays commented out in
+    `config/weekly_run.yaml` (the same report hash), the docs advise `--no-resume` instead of a
+    new flag, and a `composite` skip takes the same error path. Follow-ups: check the single
+    manifest match against the run itself (`wf_best.json` weeks or `created_at`); three older
+    info-level skips (`weekly_run/pipeline.py:532-539`); "market-free" wording in
+    `stage1.py:63,68` (docs close-out). Merge last as `0.58.0`; `README.md` conflicts with the
+    betting merge near the weekly-rankings bullet (keep this branch's bullet, the betting
+    branch's two paragraphs after it and its removal of the old Totals paragraph), then rerun
+    `tests/test_weekly_run_characterization.py`.
+- The win-total runs (approved 2026-10-12) launched on 2026-10-14 from
+  `models/step6/nogamelines_wt/launch.sh d6064eb` (`launch_record.txt`). Seed 42 finished
+  (`end elo_wt_nogamelines_seed42 exit 0 seconds 3122`); seed 7 started at 14:23. Once its `end`
+  line is in `driver.log`, an independent `reviewer` rescores the pair from the fold checkpoints
+  into `models/step6/nogamelines_wt/REVIEW.md`, under the rule in `HYPOTHESIS.md`.
 - Worktrees: `~/scratch/step6` (this branch), `~/scratch/step6_runs` (detached at `d6064eb`, the
-  runs' code), the four `~/scratch/review_*` (detached, disposable once their branches merge).
+  runs' code), `~/scratch/fix_*` and `~/scratch/review_*` for the two unmerged branches (remove
+  each pair once its branch merges, after copying the review worktree's untracked tests into
+  `~/scratch/step6_review/<name>/`). The `.claude/worktrees/agent-*` worktrees are the harness's;
+  leave them.
 - The `/tmp` copies of the power-ranking evaluation (`RANKINGS_EVAL.md`) are snapshotted in
   `~/scratch/step6_review/tmp_rankings_eval_snapshot/`.
 
@@ -132,43 +119,36 @@ any walk-forward, and this file. The main checkout's `.agents/ultracode_session_
    (`nfeloqb/Resources/elo.py:120-142`) applies the win-total pull only for seasons in its local
    `Manual Data/wt_ratings.csv`, which ends at 2023, so 2024-2026 get plain regression. The
    upstream `nfelosrs` file covers 2003-2026; switching changes `qb_elos.csv` for 2024-2026 and
-   needs a build and a walk-forward.
+   needs a build and a walk-forward. Asked on 2026-10-14 with the recommendation to run
+   `../nfeloqb` unchanged for week 6 and decide after the step-6 merge.
+2. The approval and merge session: proposed for Tuesday 2026-10-20 to Wednesday 2026-10-21,
+   between game weeks 6 and 7 (asked 2026-10-14).
 
-## Next: the win-total runs, then the integration session on this branch
+## Next: finish the integration session on this branch
 
-The win-total runs come first, once the GPU is free (`nvidia-smi` shows no other job, and
-`pgrep -af "nfl-predictor (backtest|weekly|data)"` is empty): `uptime`, check the hypothesis
-(`sha256sum --check models/step6/nogamelines_wt/HYPOTHESIS.md.sha256` from the main checkout),
-then `models/step6/nogamelines_wt/launch.sh d6064eb` and note the launch in a `launch_record.txt`
-beside it. The driver waits for GPU memory and other jobs, but not for another project's job
-that holds the GPU with little memory, so the check is by hand. Watch `driver.log` with a
-Monitor until both `end` lines arrive; then an independent `reviewer` rescores the pair from the
-fold checkpoints into `models/step6/nogamelines_wt/REVIEW.md` and a check-in follows (rule 7).
-The integration session need not wait for them: the runs read `~/scratch/step6_runs`, not
-this worktree.
-
-1. Bring `main` (`0.45.1`-`0.45.4`) into this branch first and run the gate: the new
-   instructions, the reviewer and implementer definitions and the suppression rule then apply to
-   everything after.
-2. Merge the four branches in this order, each after one implementer fix round on its findings
-   (test first) and a reviewer re-check, each as its own version with a `CHANGELOG.md` entry and
-   its review report committed under `.agents/sos_port/review/` (lint the report first; two of
-   the four fail markdownlint as written): the audit refresh (patch; add the missing parity
-   pairs, regenerate the reports on the merged tip), the rating tests (patch; with a
-   `DECISIONS.md` index entry), the betting edges (patch), the blend default (minor; its fix
-   round includes the failure handling the user approved). Delete each agent branch once merged.
-3. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
+1. When the rating-tests re-check approves: merge `worktree-agent-a5c5909054257aa73` with
+   `--no-ff`, commit its reports under `.agents/sos_port/review/rating_tests/` (lint them first),
+   add the `DECISIONS.md` index entry, release `0.57.4` (`CHANGELOG.md`, `pyproject.toml`,
+   `uv lock`, the CUDA sync), run the gate, delete the branch and its two worktrees.
+2. Merge the blend default the same way as `0.58.0` (minor), resolving the `README.md` conflict
+   as above.
+3. When seed 7 ends: the independent rescore into `models/step6/nogamelines_wt/REVIEW.md`, then a
+   check-in (rule 7) with the rule's verdict, and tell the user the GPU is free.
+4. The adoption chunk (rule 11), grouped with `5284db2`'s fingerprint change (rule 14), per the
    2026-10-12 decisions: `disable_feature_groups: [strength, own_elo, own_elo_wt]` and
    `floor_sigma_reference_runs: models/step6/ratings_anchored_seed{42,7}` in
    `config/weekly_run.yaml`; the configuration without game lines (with the own Elo variant the
-   reviewed win-total runs select) and the reference arms in `.agents/benchmarks.md`.
-4. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
+   reviewed win-total runs select); the finite-sigma guard in `floor_sigma.home_win_prob` (test
+   first); the reference arms and the kickoff-starter convention in `.agents/benchmarks.md`.
+5. Pre-register and run the betting-label test on the 815 real-moneyline games (a tie keeps
    today's labels).
-5. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, refresh the stale "Review:"
-   fields in `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums into git, record
-   the 2026-10-11 and 2026-10-12 decisions in `step6_plan.md` and `TODO.md`, and build the
-   approvals list and the user's final HTML report.
-6. `scripts/gate.sh --web` on the final tree.
+6. Regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/`, rename "market-free" to "no game
+   lines" where it means the configuration with Elo (including `stage1.py`), refresh the stale
+   "Review:" fields in `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums into
+   git, record the 2026-10-11, 2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and
+   `TODO.md`, list the follow-ups above, and build the approvals list and the user's final HTML
+   report.
+7. `scripts/gate.sh --web` on the final tree.
 
 Then the approval and merge session with the user, between game weeks: the merge to `main`, the
 `data/` rebuild with a backup, the CUDA sync, a browser look at the new pages, the 2026 roof

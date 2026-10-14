@@ -287,6 +287,17 @@ def _interval(lower: float, upper: float) -> Any:
     return common.Interval(estimate=(lower + upper) / 2.0, lower=lower, upper=upper)
 
 
+def test_interval_text_keeps_a_difference_of_order_1e_5_visible() -> None:
+    # Arrange
+    interval = common.Interval(estimate=1e-5, lower=-2e-5, upper=4e-5)
+
+    # Act
+    text = qb._interval_text(interval)
+
+    # Assert
+    assert text == "+1.00e-05 (-2.00e-05 to +4.00e-05)"
+
+
 _TIE = (-0.01, 0.01)
 _LOWER = (-0.03, -0.01)
 _HIGHER = (0.01, 0.03)

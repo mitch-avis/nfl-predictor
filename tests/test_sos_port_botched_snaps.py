@@ -191,3 +191,38 @@ def test_rating_movement_reports_the_moved_passer_and_the_penalty() -> None:
         "rank_changes",
         "largest_rank_change",
     }
+
+
+def test_season_table_writes_a_dash_for_a_part_the_season_lacks() -> None:
+    # Arrange
+    row = {"season": 2001, "plays": 0, "epa": 0.0, "qb_epa": 0.0, "pre_week_largest": None}
+
+    # Act
+    lines = botched._season_table([row])
+
+    # Assert
+    cells = [cell.strip() for cell in lines[-1].strip("|").split("|")]
+    assert cells[:4] == ["2001", "0", "+0.00", "+0.00"]
+    assert cells[4:] == ["-"] * 9
+
+
+def test_plays_table_strips_the_play_text_and_replaces_pipes() -> None:
+    # Arrange
+    plays = pl.DataFrame(
+        {
+            "season": [2010],
+            "game_id": [_GAME],
+            "play_id": [55.0],
+            "passer_player_id": [_QB],
+            "fumbled_1_player_id": [_CENTER],
+            "epa": [-1.25],
+            "qb_epa": [-1.0],
+            "desc": ["  (Shotgun) C.Center fumbles | recovered  "],
+        }
+    )
+
+    # Act
+    lines = botched._plays_table(plays)
+
+    # Assert
+    assert lines[-1].endswith("| (Shotgun) C.Center fumbles / recovered |")

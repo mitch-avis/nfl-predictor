@@ -1,0 +1,52 @@
+# The causes as they stood before the refresh (commit a9d4e6b), on the candidate build:
+# parity.py --data-dir ~/scratch/step6/data at a9d4e6b, then this script on its parity.json.
+generated_by: PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py --data-dir ~/scratch/step6/data
+pair: mismatched, explained, unexplained
+  dropbacks: 1507, 1507, 0
+  pass_epa_sum: 1507, 1507, 0
+  pass_success_count: 698, 698, 0
+  scrimmage_epa_sum: 9220, 2773, 6447
+  early_down_pass_rate: 2008, 2008, 0
+  first_downs: 10587, 10587, 0
+  fumbles: 37, 37, 0
+cause: team-games explained; team-games its adjustment alone changes, per value
+  scramble_dropbacks: 0; {'defensive_snaps (here)': 0, 'dropbacks (here)': 0, 'early_down_pass_rate (here)': 0, 'offensive_snaps (here)': 0, 'pass_epa_sum (here)': 0, 'pass_success_count (here)': 0, 'scrimmage_epa_sum (here)': 0}
+  scrambles_coded_as_runs: 0; {'designed_carries (here)': 0, 'rush_epa_sum': 0, 'rush_success_count (here)': 0, 'scrimmage_epa_sum (here)': 0}
+  dropback_and_carry: 0; {'rush_epa_sum': 0, 'scrimmage_epa_sum (here)': 0}
+  spike_rush_attempts: 0; {'designed_carries (here)': 0, 'rush_success_count (here)': 0}
+  two_point_tries: 1787; {'dropbacks (here)': 1507, 'early_down_pass_rate (here)': 0, 'pass_epa_sum (here)': 1507, 'pass_success_count (here)': 698, 'scrimmage_epa_sum (here)': 2013}
+  kneels_and_spikes: 1942; {'pass_epa_sum': 1557, 'rush_epa_sum': 2315, 'scrimmage_epa_sum (here)': 3705}
+  wiped_out_runs: 0; {'designed_carries (here)': 0, 'rush_epa_sum': 0, 'rush_success_count (here)': 0}
+  unflagged_rush_attempts: 0; {'designed_carries (here)': 0, 'rush_success_count (here)': 0}
+  null_downs: 2008; {'early_down_pass_rate (here)': 2012}
+  every_play_type: 0; {'fourth_down_attempts (here)': 0, 'fourth_down_conversions (here)': 0, 'third_down_attempts (here)': 0, 'third_down_conversions (here)': 0, 'two_point_attempts (here)': 0, 'two_point_successes (here)': 0}
+  both_conversion_flags: 0; {'fourth_down_attempts (here)': 0, 'third_down_attempts (here)': 0}
+  penalty_first_downs: 10587; {'first_downs (here)': 10587}
+  fumbles_on_scrimmage_snaps: 37; {'fumbles (here)': 37}
+  jacksonville_player_teams: 0; {'penalties (there)': 0, 'penalty_yards (there)': 0}
+  rams_written_la: 0; -
+  games_without_play_by_play: 6; -
+  release_difference: 0; -
+
+# The causes as refreshed, on the same build: parity.py --data-dir ~/scratch/step6/data, then
+# this script on its parity.json.
+generated_by: PYTHONDONTWRITEBYTECODE=1 .venv/bin/python .agents/sos_port/parity.py --data-dir ~/scratch/step6/data
+pair: mismatched, explained, unexplained
+  dropbacks: 1507, 1507, 0
+  pass_epa_sum: 1507, 1507, 0
+  pass_success_count: 698, 698, 0
+  scrimmage_epa_sum: 9220, 9220, 0
+  early_down_pass_rate: 2008, 2008, 0
+  first_downs: 10587, 10587, 0
+  fumbles: 37, 37, 0
+cause: team-games explained; team-games its adjustment alone changes, per value
+  unflagged_rush_attempt_epa: 55; {'rush_epa_sum': 53, 'scrimmage_epa_sum (here)': 53}
+  two_point_tries: 2010; {'dropbacks (here)': 1507, 'early_down_pass_rate (here)': 0, 'pass_epa_sum (here)': 1507, 'pass_success_count (here)': 698, 'scrimmage_epa_sum (here)': 2013}
+  kneels_and_spikes: 3721; {'pass_epa_sum': 1557, 'rush_epa_sum': 2332, 'scrimmage_epa_sum (here)': 3721}
+  wiped_out_run_epa: 6397; {'rush_epa_sum': 6398, 'scrimmage_epa_sum (here)': 6398}
+  null_downs: 2008; {'early_down_pass_rate (here)': 2012}
+  penalty_first_downs: 10587; {'first_downs (here)': 10587}
+  fumbles_on_scrimmage_snaps: 37; {'fumbles (here)': 37}
+  rams_written_la: 0; -
+  games_without_play_by_play: 6; -
+  release_difference: 0; -

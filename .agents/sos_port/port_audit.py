@@ -6,7 +6,8 @@ things, read-only, and record where each came from:
 - `nfl-sos-ratings` at its frozen commit: code through ``git show`` (never the working tree) and
   its generated Parquet outputs in its checkout's ``data/``, which must sit at that commit;
 - this repository's data, from the main checkout (the first entry of ``git worktree list``), so a
-  run from a linked worktree reads the same files as a run from the main checkout;
+  run from a linked worktree reads the same files as a run from the main checkout, or from the
+  data directory ``--data-dir`` names (``parse_args``), such as a candidate build;
 - this repository's code, from the checkout that runs the script.
 
 Nothing here writes anywhere except the temporary copy of the frozen commit that ``SosCode``
@@ -15,6 +16,7 @@ extracts under ``~/scratch`` and removes again.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import io
 import re
@@ -30,7 +32,7 @@ from nfl_predictor.constants import normalize_team_abbr
 from nfl_predictor.utils.logger import log
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -81,6 +83,27 @@ MAIN = main_checkout()
 DATA = MAIN / "data"
 SOS_REPO = (MAIN.parent / "nfl-sos-ratings").resolve()
 SOS_DATA = SOS_REPO / "data"
+
+
+def parse_args(description: str, argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse the options both audit scripts take.
+
+    ``--data-dir`` is the data directory of this repository to read (default: the main
+    checkout's ``data/``), so a candidate build outside the main checkout can be audited; it must
+    exist and is returned resolved.
+    """
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DATA,
+        help="this repository's data directory to read (default: the main checkout's data/)",
+    )
+    args = parser.parse_args(argv)
+    args.data_dir = args.data_dir.expanduser().resolve()
+    if not args.data_dir.is_dir():
+        parser.error(f"--data-dir {args.data_dir} is not a directory")
+    return args
 
 
 @dataclass

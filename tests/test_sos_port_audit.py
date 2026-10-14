@@ -1,48 +1,43 @@
 """The port audit scripts beside ``.agents/sos_port/README.md``: inventory and parity check.
 
-The scripts run from their own directory and import each other by file name, so each test puts
-that directory on ``sys.path`` and imports the module it needs. Every input here is built in a
-temporary directory; nothing reads the checkout's ``data/`` or the network.
+The scripts run from their own directory and import each other by file name, so each test imports
+the module it needs through the shared loader (``tests/sos_port_scripts.py``). Every input here is
+built in a temporary directory; nothing reads the checkout's ``data/`` or the network.
 """
 
 from __future__ import annotations
 
-import importlib
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
+from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders, pbp
 from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from types import ModuleType
 
-AUDIT_DIR = Path(__file__).resolve().parents[1] / ".agents" / "sos_port"
-
 
 @pytest.fixture
-def port_audit(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def port_audit() -> ModuleType:
     """Return the audit scripts' shared module, imported from their directory."""
-    monkeypatch.syspath_prepend(str(AUDIT_DIR))
-    return importlib.import_module("port_audit")
+    return load_sos_port_script("port_audit")
 
 
 @pytest.fixture
-def inventory(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def inventory() -> ModuleType:
     """Return the inventory script, imported from its directory."""
-    monkeypatch.syspath_prepend(str(AUDIT_DIR))
-    return importlib.import_module("inventory")
+    return load_sos_port_script("inventory")
 
 
 @pytest.fixture
-def parity(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def parity() -> ModuleType:
     """Return the parity check, imported from its directory."""
-    monkeypatch.syspath_prepend(str(AUDIT_DIR))
-    return importlib.import_module("parity")
+    return load_sos_port_script("parity")
 
 
 # Two plays of one game as nflverse publishes them, in the columns the parity check needs.
@@ -85,10 +80,9 @@ def _snapshot_and_cache(tmp_path: Path, *, cache_epa: float = 0.25, stale: bool 
 
 
 @pytest.fixture
-def parity_rules(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+def parity_rules() -> ModuleType:
     """Return the parity check's cause adjustments, imported from their directory."""
-    monkeypatch.syspath_prepend(str(AUDIT_DIR))
-    return importlib.import_module("parity_rules")
+    return load_sos_port_script("parity_rules")
 
 
 def _plays(**flags: list[float]) -> pl.DataFrame:

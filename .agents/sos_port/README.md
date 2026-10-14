@@ -177,7 +177,9 @@ None changes a rating definition: adoption is the user's decision.
 `rating_tests_common.py` holds what they share: the season-cluster bootstrap and its t-interval
 sensitivity, the single-game bootstrap, the cache-only loaders (every season treated as historical
 and nflreadpy's loaders replaced by ones that raise, so a cache miss cannot download), the ledger
-that hashes every input file, and the Markdown wrapping the linter needs. Their tests are
+that hashes every input file, the provenance block and the JSON record writer, the change to every
+numeric value of the later games that the information-set checks make, and the Markdown wrapping
+the linter needs. Their tests are
 `tests/test_sos_port_*.py`, which import the scripts through `tests/sos_port_scripts.py`.
 
 Run them from the repository root without `-I` (each imports `rating_tests_common` from this
@@ -202,4 +204,6 @@ snapshot of the source's nflreadpy cache for the starter cross-check
 (`--schedules-file`, by default `~/scratch/nflreadpy_cache_snapshot_20261008/a7d0d7a2...parquet`).
 Each team test takes about three minutes; the quarterback test, whose power estimate runs the whole
 walk-forward on 100 synthetic windows, the longest. Every report records the SHA-256 of its code
-and of every input file, and two runs of the same code write the same numbers.
+and of every input file, and the git commit. Two runs of the same code write the same decisions,
+comparisons, scores and integrity checks; the descriptive slopes, spreads and coefficients can
+differ in the last bit of a float.

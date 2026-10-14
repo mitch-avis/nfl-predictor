@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.57.2] - 2026-10-14
+
+### Added
+
+- The betting report splits each game's moneyline edge at the spread, with three diagnostic
+  columns: `market_home_prob_spread`, the floor's curve at the market's margin
+  (`Phi(-home_spread / sigma)` at the week's floor sigma); `edge_beyond_spread_home_prob`, what
+  the model adds beyond the spread; and `spread_moneyline_gap_home_prob`, the gap between the
+  spread and the moneyline, which carries nothing from the model. The two parts sum to the edge.
+  The columns are empty for a game without a spread or a report built without a sigma; the report
+  rejects a sigma that is not finite and positive, and the weekly run then passes none. The
+  confidence score and the action label still read the whole edge: under the rule written before
+  scoring, the gap outweighs the model's part in 14.3% of the largest tenth of edges over
+  2007-2025, not in more than half (reviewed independently).
+- `.agents/sos_port/betting_edges.py` writes that measurement (`.agents/sos_port/BETTING_EDGES.md`)
+  from a walk-forward's fold checkpoints.
+
 ## [0.57.1] - 2026-10-10
 
 ### Added

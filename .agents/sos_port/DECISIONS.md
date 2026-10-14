@@ -364,3 +364,29 @@ interval.
 - **Finding for the user**: the published quarterback week-by-week tables (shown on the web pages,
   as in `nfl-sos-ratings`' own files) carry that whole-season penalty, a mild look-ahead for past
   seasons; no feature or evaluation reads them.
+
+### The betting report's moneyline edge split at the spread (`0.57.2`)
+
+Full record: [decisions/betting_edges.md](decisions/betting_edges.md), entries 1 (the rule,
+committed before any game was scored) and 2 (the outcome), and the generated
+[BETTING_EDGES.md](BETTING_EDGES.md). Review: two independent rounds (2026-10-10; "merge after
+fixes", then "merge after one doc fix") and two re-checks of the fix commits (2026-10-12 and
+2026-10-14, both "approve with findings"); the reviewers' scripts reproduce every number from the
+fold checkpoints, and the scripts and re-check reports are in
+[review/betting_edges/](review/betting_edges/).
+
+- **What was measured**: each game's moneyline edge (the floor's home win probability minus the
+  no-vig moneyline probability) split into what the model adds beyond the spread and the
+  spread-moneyline gap, on the 4,943 regular-season games of 2007-2025 in the adopted-settings
+  reference, seed 42.
+- **Outcome, applied as written**: the three columns are added and the labels stay on the whole
+  edge. The gap outweighs the model's part in 14.3% of the largest tenth of edges (495 games),
+  against the rule's more than half. On the 815 games with real moneyline pairs it does in 18.3%,
+  and on 2025 alone in 32.1% (28 games); these groups decide nothing.
+- **Decided here**: the weekly run passes the report the single `floor_sigma` behind its
+  predictions, and none when the column is missing, holds several values, or is not finite and
+  positive; the report itself rejects such a sigma. Most seasons' moneylines are derived from the
+  spread through the fitted map, so on those games the gap is a function of the spread and sigma.
+- **User decision** (2026-10-11): the three columns and the sigma check are approved, the labels
+  unchanged. Still open: a label test on the 815 real-moneyline games, written before it is
+  scored, in step 6's integration; a tie keeps today's labels, and any change goes to the user.

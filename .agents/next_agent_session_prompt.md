@@ -156,8 +156,12 @@ Answered on 2026-10-14 (record in DECISIONS.md and `step6_plan.md` at the docs c
   replaced; the old copies, hashes and checks are in `~/scratch/data_backups/2026-10-14_pre_week6/`
   (record in `.agents/benchmarks.md`, end of "Step 6 reference arms"). Week 6 swaps: `TB,2` only;
   Baltimore (Lamar) is the toss-up to recheck after Friday's injury report.
-- The preliminary Week 6 run on `main` (`0.45.4`): launched 2026-10-14 17:51 MDT by
-  `~/scratch/week06_prelim/launch.sh` (log `run.log` beside it).
+- The preliminary Week 6 run on `main` (`0.45.4`): `~/scratch/week06_prelim/launch.sh` (log
+  `run.log` beside it), exit `0` at 17:55 MDT, run directory
+  `models/weekly_20261014_235354_01c52e35`. All 41 walk-forward weeks retrained (none restored),
+  14 games, unique ranks 1..14, every pick on the market favorite's side. Against the 2026-10-08
+  run on the 608 shared games (one seed each, a diagnostic only, not for the docs): Brier
+  `+0.0015` [−0.0019, 0.0049], margin MAE 9.62 to 9.73, pick accuracy unchanged.
 
 Still open:
 

@@ -1,0 +1,321 @@
+{
+ "protocol": ".agents/sos_port/protocols/betting_labels.md",
+ "seeds": [
+  42,
+  7
+ ],
+ "runs": [
+  {
+   "seed": 42,
+   "checkpoint_dir": "/home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349",
+   "folds": 328,
+   "rows": 4943,
+   "scored_games": 4943,
+   "floor_difference": 0.0
+  },
+  {
+   "seed": 7,
+   "checkpoint_dir": "/home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4",
+   "folds": 328,
+   "rows": 4943,
+   "scored_games": 4943,
+   "floor_difference": 0.0
+  }
+ ],
+ "governing": {
+  "seasons": [
+   2022,
+   2024,
+   2025
+  ],
+  "games": 815,
+  "earlier_build_games": 815,
+  "count_comparison": [
+   {
+    "season": 2022,
+    "real_here": true,
+    "real_earlier": true,
+    "metadata_games_here": 284,
+    "metadata_games_earlier": 284,
+    "derived_here": 0,
+    "derived_earlier": 0,
+    "scored_games": 271,
+    "governing_games": 271
+   },
+   {
+    "season": 2024,
+    "real_here": true,
+    "real_earlier": true,
+    "metadata_games_here": 285,
+    "metadata_games_earlier": 285,
+    "derived_here": 0,
+    "derived_earlier": 0,
+    "scored_games": 272,
+    "governing_games": 272
+   },
+   {
+    "season": 2025,
+    "real_here": true,
+    "real_earlier": true,
+    "metadata_games_here": 285,
+    "metadata_games_earlier": 285,
+    "derived_here": 0,
+    "derived_earlier": 0,
+    "scored_games": 272,
+    "governing_games": 272
+   }
+  ]
+ },
+ "rule": {
+  "games": 815,
+  "mean": -0.00035707954292499565,
+  "low": -0.0019834568612795826,
+  "high": 0.0013497310230151432,
+  "branch": "contains zero",
+  "recommend_beyond": false,
+  "recommendation": "the labels stay on the whole edge"
+ },
+ "claims": {
+  "brier_q_beyond": 0.20833820025541633,
+  "brier_p_model": 0.20869527979834132,
+  "log_loss_q_beyond": 0.6041574381748153,
+  "log_loss_p_model": 0.6049282655796854
+ },
+ "beside": {
+  "Seed 42 alone, governing games": {
+   "games": 815,
+   "mean": -0.0003584724104895724,
+   "low": -0.001989855214222415,
+   "high": 0.0013474482114624506,
+   "excludes_zero": false
+  },
+  "Seed 7 alone, governing games": {
+   "games": 815,
+   "mean": -0.00035568667536041903,
+   "low": -0.0019694319990234744,
+   "high": 0.0013459981729350705,
+   "excludes_zero": false
+  },
+  "Every scored game": {
+   "games": 4943,
+   "mean": -3.511079650845629e-05,
+   "low": -0.0007830000733050118,
+   "high": 0.0007205491521069571,
+   "excludes_zero": false
+  },
+  "Games of the other seasons": {
+   "games": 4128,
+   "mean": 2.8456191943452597e-05,
+   "low": -0.0008188016944148274,
+   "high": 0.0008751766532659814,
+   "excludes_zero": false
+  },
+  "Log loss, governing games": {
+   "games": 815,
+   "mean": -0.0007708274048701087,
+   "low": -0.004849848703651469,
+   "high": 0.0035213503971483263,
+   "excludes_zero": false
+  },
+  "Top decile of `|edge|` (two-seed mean), governing games": {
+   "games": 82,
+   "mean": -0.0009493032228055781,
+   "low": -0.006680618139552394,
+   "high": 0.005111018699117615,
+   "excludes_zero": false
+  },
+  "Top decile of `|beyond|` (two-seed mean), governing games": {
+   "games": 82,
+   "mean": -0.00016653420456353517,
+   "low": -0.004571327687973599,
+   "high": 0.004442383199040149,
+   "excludes_zero": false
+  },
+  "Top decile of `|edge|` in seed 42, governing games": {
+   "games": 82,
+   "mean": -0.0018086039133678009,
+   "low": -0.0072901964734576,
+   "high": 0.003825802774838322,
+   "excludes_zero": false
+  },
+  "Top decile of `|edge|` in seed 7, governing games": {
+   "games": 82,
+   "mean": -0.002293132413804235,
+   "low": -0.007652808955287571,
+   "high": 0.0030963347268686695,
+   "excludes_zero": false
+  },
+  "Top decile of `|beyond|` in seed 42, governing games": {
+   "games": 82,
+   "mean": 5.931723191559661e-05,
+   "low": -0.004782964304280956,
+   "high": 0.005041701464141148,
+   "excludes_zero": false
+  },
+  "Top decile of `|beyond|` in seed 7, governing games": {
+   "games": 82,
+   "mean": 0.0014538006800245678,
+   "low": -0.002959368459089309,
+   "high": 0.006389427912109447,
+   "excludes_zero": false
+  }
+ },
+ "by_season": {
+  "2007": {
+   "games": 256,
+   "mean": 0.00036219873317038485,
+   "low": -0.0037151810955143388,
+   "high": 0.004510159694783073
+  },
+  "2008": {
+   "games": 256,
+   "mean": -0.00020574823992543115,
+   "low": -0.004293392888530454,
+   "high": 0.004274124603912343
+  },
+  "2009": {
+   "games": 256,
+   "mean": 0.0008876259307943987,
+   "low": -0.003154191704936536,
+   "high": 0.00511152218093506
+  },
+  "2010": {
+   "games": 256,
+   "mean": 0.0018198308260885987,
+   "low": -0.0016247992382230746,
+   "high": 0.00535323284578965
+  },
+  "2011": {
+   "games": 256,
+   "mean": -0.0006675597496087174,
+   "low": -0.004004284090428561,
+   "high": 0.0028179985040502698
+  },
+  "2012": {
+   "games": 256,
+   "mean": -0.0007364072348726437,
+   "low": -0.004183651708919482,
+   "high": 0.0028478042677690845
+  },
+  "2013": {
+   "games": 256,
+   "mean": -0.0011629932079160763,
+   "low": -0.004424808857536533,
+   "high": 0.0021596447781880137
+  },
+  "2014": {
+   "games": 256,
+   "mean": -0.0007425984475093312,
+   "low": -0.004065097176168515,
+   "high": 0.0028733154090731018
+  },
+  "2015": {
+   "games": 256,
+   "mean": 0.0008985884617227508,
+   "low": -0.002494156101297684,
+   "high": 0.004474199320191493
+  },
+  "2016": {
+   "games": 256,
+   "mean": 0.0005901144148492149,
+   "low": -0.0026789287042151403,
+   "high": 0.0037985358666699455
+  },
+  "2017": {
+   "games": 256,
+   "mean": -0.0008537099317919767,
+   "low": -0.003908029463281472,
+   "high": 0.002353843933045468
+  },
+  "2018": {
+   "games": 256,
+   "mean": -0.0009525062800005393,
+   "low": -0.004001649347907025,
+   "high": 0.0021943519739644163
+  },
+  "2019": {
+   "games": 256,
+   "mean": 0.0012045031687651228,
+   "low": -0.0017238584474619696,
+   "high": 0.004286969280741101
+  },
+  "2020": {
+   "games": 256,
+   "mean": -0.0011977845971481208,
+   "low": -0.0040203681823065985,
+   "high": 0.0017977730521939234
+  },
+  "2021": {
+   "games": 272,
+   "mean": 0.00047534422507936833,
+   "low": -0.0022609122751658783,
+   "high": 0.0034624502498063277
+  },
+  "2022": {
+   "games": 271,
+   "mean": -0.00041613219243258765,
+   "low": -0.002711105784043369,
+   "high": 0.0020489488297400506
+  },
+  "2023": {
+   "games": 272,
+   "mean": 0.0006684696558340787,
+   "low": -0.0018620408145183633,
+   "high": 0.003207925403390321
+  },
+  "2024": {
+   "games": 272,
+   "mean": -0.0012346311025543304,
+   "low": -0.003739774731687045,
+   "high": 0.0013434170359140668
+  },
+  "2025": {
+   "games": 272,
+   "mean": 0.0005793075608828595,
+   "low": -0.0026323433918300243,
+   "high": 0.0040103460671032055
+  }
+ },
+ "label_changes": {
+  "42": {
+   "games": 815,
+   "action": 485,
+   "confidence": 676,
+   "side": 196
+  },
+  "7": {
+   "games": 815,
+   "action": 506,
+   "confidence": 667,
+   "side": 178
+  }
+ },
+ "out_of_range": {
+  "42": {
+   "governing": 0,
+   "every_scored_game": 0
+  },
+  "7": {
+   "governing": 0,
+   "every_scored_game": 0
+  }
+ },
+ "provenance": {
+  "version": "0.58.0",
+  "code": {
+   "betting_labels.py": "37f59d19db674ee5834365a17a6ae0b067c3dfa348684c4d123868f610dc29f2",
+   "betting_edges.py": "f68d0918cf34a5f384750355d2c2d420b3cb5a4c83a6e3403fe8214164644c8e",
+   "rating_tests_common.py": "50da9bf186e71e962d48a3da5ed0b81983908b755ed62d09b9dd997414f89516",
+   "betting_report.py": "fe3a177d10545a23896dd8835464b05bc29722352d6a84346b2ed25cde436e60"
+  },
+  "inputs": {
+   "/home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349": "751aef7fef57b297794d7a0f6f0269d49917e24b10bb01b9fef3ca077176f31b",
+   "/home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4": "db8807687c8360efe25284718c6535f8d25188f1b12612d4f0a460d935b2f83c",
+   "/home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json": "0b867908bb39c9218e93cd986f6ebcf48597d8d017fcea08379037cf7cf5b9bf",
+   "/home/mitch/workspace/nfl-predictor/models/step4_reference/inputs/adopted_market_lines_metadata.json": "c6d5e1ab6690fa9aa6e2b178677f847e0f6331188d0e3aee3db18b735f9cb9f5"
+  },
+  "git_commit": "a0d1903fb7662ca960075956695567733e6a2baa",
+  "command": ".agents/sos_port/betting_labels.py --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/d97fab54e7261f18e349 --checkpoint-dir /home/mitch/workspace/nfl-predictor/models/wf_checkpoints/2f7442e89fd6ff3981f4 --market-lines-metadata /home/mitch/workspace/nfl-predictor/models/step6/inputs/candidate_market_lines_metadata.json",
+  "seconds": 5.730207303999123
+ }
+}

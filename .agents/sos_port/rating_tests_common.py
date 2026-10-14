@@ -274,6 +274,14 @@ def _tail(confidence: float) -> float:
     return (1.0 - confidence) / 2.0
 
 
+def _require_every_season(counts: dict[int, int], seasons: Sequence[int]) -> None:
+    """Raise a ``ValueError`` naming each season of ``seasons`` with no row in ``counts``."""
+    empty = [season for season in seasons if counts.get(season, 0) == 0]
+    if empty:
+        msg = f"seasons without a paired difference: {', '.join(map(str, empty))}"
+        raise ValueError(msg)
+
+
 def season_bootstrap(
     differences: pl.DataFrame,
     seasons: Sequence[int],
@@ -298,10 +306,7 @@ def season_bootstrap(
     """
     totals = dict(differences.group_by("season").agg(pl.col("difference").sum()).iter_rows())
     counts = dict(differences.group_by("season").len().iter_rows())
-    empty = [season for season in seasons if counts.get(season, 0) == 0]
-    if empty:
-        msg = f"seasons without a paired difference: {', '.join(map(str, empty))}"
-        raise ValueError(msg)
+    _require_every_season(counts, seasons)
     sums = np.array([totals[season] for season in seasons], dtype=np.float64)
     games = np.array([counts[season] for season in seasons], dtype=np.float64)
     resampled = sums[draws].sum(axis=1) / games[draws].sum(axis=1)
@@ -313,7 +318,13 @@ def season_bootstrap(
 def season_t_interval(
     differences: pl.DataFrame, seasons: Sequence[int], confidence: float
 ) -> Interval:
-    """Return the mean of the season means and its Student-t interval (seasons - 1 df)."""
+    """Return the mean of the season means and its Student-t interval (seasons - 1 df).
+
+    Raises:
+        ValueError: If a season of ``seasons`` has no row.
+
+    """
+    _require_every_season(dict(differences.group_by("season").len().iter_rows()), seasons)
     means = dict(differences.group_by("season").agg(pl.col("difference").mean()).iter_rows())
     values = np.array([means[season] for season in seasons], dtype=np.float64)
     center = float(values.mean())

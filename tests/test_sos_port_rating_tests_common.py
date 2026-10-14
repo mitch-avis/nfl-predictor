@@ -99,6 +99,15 @@ def test_season_t_interval_uses_season_means_and_student_t() -> None:
     assert interval.upper == pytest.approx(1.0 + half)
 
 
+def test_season_t_interval_season_without_rows_raises_a_value_error() -> None:
+    # Arrange
+    differences = pl.DataFrame({"season": [2000, 2000], "difference": [0.1, -0.1]})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="2001"):
+        common.season_t_interval(differences, [2000, 2001], 0.95)
+
+
 def test_game_bootstrap_same_seed_is_reproducible() -> None:
     # Arrange
     values = np.linspace(-1.0, 2.0, 37)

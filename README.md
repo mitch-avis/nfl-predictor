@@ -448,8 +448,9 @@ Primary sources:
 - nfelo's market-lines file (`greerreNFL/nfelomarket_data`) for the default
   `--line-source pick_time`.
 - Local cached CSVs under `data/` for Elo/market data when present.
-- `data/qb_elos.csv` (copied from `../nfeloqb`) for the Elo columns. A week the copy does not list
-  yet takes each team's latest listed rating, a team Elo trend of 0.0 and no quarterback trends;
+- `data/qb_elos.csv` (copied from `../nfeloqb`) for the Elo columns and the quarterback
+  adjustment (`qb1_adj`/`qb2_adj`). A week the copy does not list yet takes each team's latest
+  listed rating and adjustment, a team Elo trend of 0.0 and no quarterback trends;
   the ETL warns when that week is the one being predicted, so refresh the copy before a weekly run.
 - `data/meta_data.csv` (copied from `../nfeloqb`) for the quarterback name-to-id bridge. A name
   missing from it falls back to the play-by-play passer name (`F.Last`) when that is unique; a
@@ -537,12 +538,12 @@ nfl-predictor train \
   --holdout-seasons 1
 ```
 
-`--disable-feature-groups` leaves feature groups out of the fit, exactly the columns the
-backtest's option of the same name drops (see "Backtesting"), and the model's `metadata.json`
-records the groups and those columns. Its default is the weekly run's,
-`strength,own_elo,own_elo_wt` (see "Backtesting"); an empty value (`--disable-feature-groups ''`)
-leaves no group out. A saved model predicts with the columns it was trained on, so
-`nfl-predictor predict` ignores an option given and logs that it does.
+`--disable-feature-groups` leaves feature groups out of the fit, exactly the columns the backtest's
+option of the same name drops (see "Backtesting"), and the model's `metadata.json` records the
+groups and those columns. Its default is the weekly run's, `strength,own_elo,own_elo_wt,qb_adj` (see
+"Backtesting"); an empty value (`--disable-feature-groups ''`) leaves no group out. A saved model
+predicts with the columns it was trained on, so `nfl-predictor predict` ignores an option given and
+logs that it does.
 
 ## Modeling approach
 
@@ -625,7 +626,7 @@ model in every walk-forward as the yardstick; it never enters the submitted prob
 
 The stats-only mode means "no game lines", not "no market information". It comes with two
 stricter variants kept as test benches. A group list given replaces the default
-(`strength,own_elo,own_elo_wt`), so each variant names the whole list:
+(`strength,own_elo,own_elo_wt,qb_adj`), so each variant names the whole list:
 
 - No game lines (the mode):
   `nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`. No line
@@ -635,16 +636,17 @@ stricter variants kept as test benches. A group list given replaces the default
   production's groups and keeps the ported ratings and the `elo` group, with its preseason
   win-total prior.
 - No market information, with the own Elo: the same options plus
-  `--disable-feature-groups strength,elo,own_elo_wt` (`[strength, elo, own_elo_wt]` in the weekly
-  config). It keeps the market-free own Elo (`own_elo`); the reference runs are
+  `--disable-feature-groups strength,elo,own_elo_wt,qb_adj` (`[strength, elo, own_elo_wt, qb_adj]`
+  in the weekly config). It keeps the market-free own Elo (`own_elo`); the reference runs are
   `models/step6/elo_marketfree_seed42` and `models/step6/elo_marketfree_seed7`.
 - No market information and no Elo at all: the same options plus
-  `--disable-feature-groups strength,elo,own_elo,own_elo_wt`, the default list plus `elo`; the
+  `--disable-feature-groups strength,elo,own_elo,own_elo_wt,qb_adj`, the default list plus `elo`; the
   reference runs are `models/step6/ratings_marketfree_seed42` and
   `models/step6/ratings_marketfree_seed7`.
 
-The `elo` group is every column built from `data/qb_elos.csv` (18: the team Elo, quarterback Elo
-and quarterback value, each side and their difference, and their four-week trends).
+The `elo` group is every column built from `data/qb_elos.csv` but the quarterback adjustment (18:
+the team Elo, quarterback Elo and quarterback value, each side and their difference, and their
+four-week trends).
 `../nfeloqb` pulls each team's preseason Elo toward a rating built from betting win totals
 (2003-2023 in its `wt_ratings.csv`), and the own Elo's win-total preset (`own_elo_wt`, 4 columns)
 pulls toward nfelosrs's win-total ratings, so those columns carry preseason win-total priors.
@@ -780,21 +782,22 @@ in the run's metrics report. The list replaces the default, so an ablation next 
 backtest names the default groups too:
 
 ```bash
-nfl-predictor backtest --disable-feature-groups strength,own_elo,own_elo_wt,pbp
+nfl-predictor backtest --disable-feature-groups strength,own_elo,own_elo_wt,qb_adj,pbp
 ```
 
 Production leaves groups out the same way, so an arm that disables groups can be adopted without
-a gap between the benchmark and production: `nfl-predictor train --disable-feature-groups` takes
-the same list, and the weekly run reads `disable_feature_groups` from `config/weekly_run.yaml` (a
-list; `--disable-feature-groups` on `nfl-predictor weekly` overrides it) for both its stage-1
-walk-forward and its final fit. Production leaves out the strength snapshot (`strength`) and both
-presets of this repository's own Elo (`own_elo`, `own_elo_wt`), so it trains on the ported team
-ratings (`ratings`) and the `qb_elos.csv` Elo (`elo`): that is the default of the weekly config,
-`train` and the backtest alike (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`), so a backtest
-without the option leaves out what production leaves out. An empty list
-(`disable_feature_groups: []`, or `--disable-feature-groups ''`) leaves no group out, and a list
-given replaces the default rather than adding to it (`--disable-feature-groups pbp` keeps the
-strength and own-Elo columns). Every one of them turns groups into columns through one function
+a gap between the benchmark and production: `nfl-predictor train --disable-feature-groups` takes the
+same list, and the weekly run reads `disable_feature_groups` from `config/weekly_run.yaml` (a list;
+`--disable-feature-groups` on `nfl-predictor weekly` overrides it) for both its stage-1 walk-forward
+and its final fit. Production leaves out the strength snapshot (`strength`), both presets of this
+repository's own Elo (`own_elo`, `own_elo_wt`) and the `qb_elos.csv` quarterback adjustment
+(`qb_adj`, not yet measured), so it trains on the ported team ratings (`ratings`) and the
+`qb_elos.csv` Elo (`elo`): that is the default of the weekly config, `train` and the backtest alike
+(`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`), so a backtest without the option leaves out what
+production leaves out. An empty list (`disable_feature_groups: []`, or
+`--disable-feature-groups ''`) leaves no group out, and a list given replaces the default rather
+than adding to it (`--disable-feature-groups pbp` keeps the strength, own-Elo and
+quarterback-adjustment columns). Every one of them turns groups into columns through one function
 (`feature_spec.resolve_feature_group_columns`), so the same groups remove the same columns
 everywhere, and each saved model's `metadata.json` names the groups it was trained without
 (`disabled_feature_groups`) and the columns they removed (`dropped_feature_group_columns`, the key
@@ -918,12 +921,12 @@ Notes:
   budget, depth and learning rate) train both stage 1 and the final fit, so stage 1 measures the
   model the weekly run submits. With `--tune`, the tuned values replace them in the final fit.
 - `disable_feature_groups` in the config (`--disable-feature-groups`, comma-separated, on the
-  command line) names the feature groups that stage 1 and the final fit both leave out, removing
-  the columns `nfl-predictor backtest --disable-feature-groups` removes for those groups (see
-  "Backtesting"). It defaults to `[strength, own_elo, own_elo_wt]`, the strength snapshot and
-  both own-Elo presets, and an empty list (`[]`, or `--disable-feature-groups ''`) leaves no
-  group out. An unknown group stops the run before the data refresh, and the model's
-  `metadata.json` records the groups and the columns they removed.
+  command line) names the feature groups that stage 1 and the final fit both leave out, removing the
+  columns `nfl-predictor backtest --disable-feature-groups` removes for those groups (see
+  "Backtesting"). It defaults to `[strength, own_elo, own_elo_wt, qb_adj]`, the strength snapshot,
+  both own-Elo presets and the quarterback adjustment, and an empty list (`[]`, or
+  `--disable-feature-groups ''`) leaves no group out. An unknown group stops the run before the data
+  refresh, and the model's `metadata.json` records the groups and the columns they removed.
 - `--train-*` flags control the **final training** fit that produces the weekly outputs.
 - `--xgb-*` flags control XGBoost runtime and apply to both the walk-forward and final training.
   `--xgb-device` (`xgb_device` in the config) defaults to `auto`: the GPU when one is usable, else
@@ -1533,17 +1536,21 @@ games.
   team's previous starter instead of the actual one.
 
 The strength family is ablatable as the `strength` feature group, which production leaves out by
-default together with both own-Elo groups. Its early-season prior blend weights the in-season solve
-`games / (games + K)` against the previous season's final snapshot regressed by
-`constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets `K` (default
-`constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend. Both change
-feature values and the strength snapshot file behind the composite power rankings, so compare them
-with two dataset builds. The quarterback family is the `qb` group, and the 18 Elo columns from
-`data/qb_elos.csv` are the `elo` group (market-informed, see "Market integration"). The own Elo's
-market-free columns are the `own_elo` group and its win-total columns the `own_elo_wt` group,
-which is market-informed too and left out by default; a run with no market information also
-leaves out `elo` (`--disable-feature-groups strength,elo,own_elo_wt`, or
-`strength,elo,own_elo,own_elo_wt` for no Elo at all). The three are disjoint, so one build
+default together with both own-Elo groups and the `qb_adj` group. Its early-season prior blend
+weights the in-season solve `games / (games + K)` against the previous season's final snapshot
+regressed by `constants.WEEK1_REGRESSION_FACTOR`; at ETL time `--strength-prior-blend-games` sets
+`K` (default `constants.PRIOR_BLEND_GAMES`, `4`) and `--no-strength-prior-blend` ablates the blend.
+Both change feature values and the strength snapshot file behind the composite power rankings, so
+compare them with two dataset builds. The quarterback family is the `qb` group, and the 18 Elo
+columns from `data/qb_elos.csv` are the `elo` group (market-informed, see "Market integration"). The
+file's quarterback adjustment (`qb1_adj`/`qb2_adj`: the starter's quarterback value minus the team's
+usual one, in Elo points, from box-score quarterback values with no betting data) is the `qb_adj`
+group (`away_qb_adj`, `home_qb_adj` and the away-minus-home `qb_adj_diff`), left out by default
+until a walk-forward measures it. The own Elo's market-free columns are the `own_elo` group and its
+win-total columns the `own_elo_wt` group, which is market-informed too and left out by default; a
+run with no market information also leaves out `elo`
+(`--disable-feature-groups strength,elo,own_elo_wt,qb_adj`, or
+`strength,elo,own_elo,own_elo_wt,qb_adj` for no Elo at all). The four are disjoint, so one build
 carries all of them. The rare-event noise family is the `rare_events` group (`special_teams_tds`,
 `def_fumbles`, `fumble_recovery_tds`, `2pt_conversions`, `def_safeties`, `def_tds`). The
 `next_opponent_identity` group drops only the `away_next_opponent_abbr` and

@@ -241,8 +241,8 @@ def check_ratings_replace_strength(
         "no column of the ported ratings (ratings) with a value, so the model would train on "
         "neither. "
         "Rebuild the dataset with the ported ratings (`nfl-predictor data`), or pass a group "
-        "list that keeps strength: `--disable-feature-groups own_elo,own_elo_wt`, or "
-        "`disable_feature_groups: [own_elo, own_elo_wt]` in the weekly config."
+        "list that keeps strength: `--disable-feature-groups own_elo,own_elo_wt,qb_adj`, or "
+        "`disable_feature_groups: [own_elo, own_elo_wt, qb_adj]` in the weekly config."
     )
     if stop:
         raise ValueError(msg)

@@ -98,6 +98,7 @@ Sources: `nfl-sos-ratings/nfl_sos_ratings/team_stats.py`, `team_stats_expanded.p
 | Season-level `diff_*` comparison surfaces | no | yes (descriptive UI views) | do not port; display only |
 | SRS (point-margin simultaneous) | no | yes (`solve_srs`) | cheap companion to the ridge snapshot |
 | Team Elo | yes (`elo_pre`, `qb_elo_pre` from `nfeloqb`) | external baseline only | present |
+| QB adjustment (starter value minus the team's usual, `qb1_adj`/`qb2_adj` from `nfeloqb`) | yes (`qb_adj` group, left out in production until measured) | no | present |
 | QB per-dropback EPA, CPOE, sack rate, ANY/A, TD-INT rate | no (only `qb_value_pre`, `qb_elo_pre`) | yes (`qb_*` game logs) | port, high, needs identity bridge |
 | QB opponent-adjusted EPA/dropback (`QSaOR`) and faced-defense lens (`QSoS`) | no | yes (dropback-weighted ridge) | phase 2 after raw QB families |
 | QB designed rush / scramble split | no | yes | defer |

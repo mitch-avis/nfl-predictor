@@ -138,7 +138,8 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
         elo_df: Raw ELO DataFrame with qb1, qb2, team1, team2 columns
 
     Returns:
-        DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre
+        DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre, qb_adj (null
+        when the file lacks the quarterback adjustment)
 
     """
     required_cols = ["qb1", "qb2", "team1", "team2"]
@@ -153,6 +154,11 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
         ]
     )
 
+    def qb_adj(column: str) -> pl.Expr:
+        if column in elo_df.columns:
+            return pl.col(column).cast(pl.Float64).alias("qb_adj")
+        return pl.lit(None, dtype=pl.Float64).alias("qb_adj")
+
     # Get home team QBs (team1 = home, qb1 = home QB)
     home_qbs = elo_df.filter(pl.col("qb1").is_not_null() & (pl.col("qb1") != "")).select(
         [
@@ -161,6 +167,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
             pl.col("qb1").alias("qb_name"),
             pl.col("qb1_value_pre").alias("qb_value_pre"),
             pl.col("qbelo1_pre").alias("qb_elo_pre"),
+            qb_adj("qb1_adj"),
         ]
     )
 
@@ -172,6 +179,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
             pl.col("qb2").alias("qb_name"),
             pl.col("qb2_value_pre").alias("qb_value_pre"),
             pl.col("qbelo2_pre").alias("qb_elo_pre"),
+            qb_adj("qb2_adj"),
         ]
     )
 
@@ -185,6 +193,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
             pl.col("qb_name").first(),
             pl.col("qb_value_pre").first(),
             pl.col("qb_elo_pre").first(),
+            pl.col("qb_adj").first(),
         ]
     )
 
@@ -278,6 +287,7 @@ def fill_future_qb_data(
             "qb_name": row["qb_name"],
             "qb_value_pre": row["qb_value_pre"],
             "qb_elo_pre": row["qb_elo_pre"],
+            "qb_adj": row["qb_adj"],
         }
 
     if null_away.height > 0:
@@ -309,7 +319,7 @@ def _fill_side_qb(
         .alias(qb_col),
     ]
     # Only fill ELO values if columns exist and are null
-    for key in ("qb_value_pre", "qb_elo_pre"):
+    for key in ("qb_value_pre", "qb_elo_pre", "qb_adj"):
         column = f"{side}_{key}"
         if column in df.columns:
             new_cols.append(

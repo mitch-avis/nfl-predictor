@@ -33,7 +33,7 @@ REFERENCE_POOL = floor_sigma.ErrorPool()
 PRODUCTION_POOL = floor_sigma.ErrorPool(sources=("stage1",))
 # The shipped configuration's stage-1 and final-fit marker hashes, which a run directory
 # resumes from.
-DEFAULT_HASHES = ["e50d0fc8", "25ef09c0"]
+DEFAULT_HASHES = ["c2202144", "1c8c4003"]
 # The same with an empty group list, which leaves no feature group out: an empty list stays out
 # of both hashes, so a run directory that left no group out resumes.
 NO_GROUP_HASHES = ["ca6a81c8", "082f6915"]
@@ -135,7 +135,7 @@ def test_default_weekly_settings_and_hashes(
         "include_quantiles": False,
         "market_transform": None,
         "max_cardinality_ratio": 0.5,
-        "disabled_feature_groups": ("strength", "own_elo", "own_elo_wt"),
+        "disabled_feature_groups": ("strength", "own_elo", "own_elo_wt", "qb_adj"),
     }
     optuna_config = captured["train"].pop("optuna_config")
     assert optuna_config == ml_model_core.OptunaConfig(
@@ -166,7 +166,7 @@ def test_default_weekly_settings_and_hashes(
         "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
         "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
         "xgb_params_overrides": {"n_estimators": 200, "max_depth": 5, "learning_rate": 0.0165},
-        "disabled_feature_groups": ("strength", "own_elo", "own_elo_wt"),
+        "disabled_feature_groups": ("strength", "own_elo", "own_elo_wt", "qb_adj"),
     }
     # Both markers cover the floor sigma's inputs (the reference errors and the final fit's
     # pool and week), so a run directory from before them retrains instead of resuming. The
@@ -252,7 +252,7 @@ def test_overridden_weekly_settings_and_hashes(
         captured["train"]["market_anchor"],
     ) == (False, False, True)
     # The final fit's hash covers the Optuna storage path, which names the temporary directory.
-    assert captured["hashes"][0] == "c2ac2868"
+    assert captured["hashes"][0] == "b08afac6"
 
 
 def test_config_tree_settings_reach_stage1_and_the_final_fit(

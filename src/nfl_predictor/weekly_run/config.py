@@ -334,8 +334,8 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
             "the model anchored to them, both (hybrid, the default), or none (no game lines: no "
             "game-line columns, no anchor and no market transform). The default groups keep the "
             "elo group's preseason win-total prior; for no market information pass "
-            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
-            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
+            "--disable-feature-groups strength,elo,own_elo_wt,qb_adj (keeps the market-free own "
+            "Elo) or strength,elo,own_elo,own_elo_wt,qb_adj (no Elo at all)."
         ),
     )
     parser.add_argument(

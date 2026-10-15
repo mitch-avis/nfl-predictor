@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 SECTION = production_settings.SECTION_KEY
 # The feature groups production leaves out by default.
-PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
+PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt", "qb_adj")
 
 
 def _games() -> pd.DataFrame:
@@ -256,7 +256,7 @@ def test_xgboost_and_market_overrides_are_named_setting_by_setting(
             {
                 "setting": "disabled_feature_groups",
                 "run": ["pbp"],
-                "production": ["own_elo", "own_elo_wt", "strength"],
+                "production": ["own_elo", "own_elo_wt", "qb_adj", "strength"],
             },
         ),
         (

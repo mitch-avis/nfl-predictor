@@ -121,6 +121,33 @@ def test_attach_own_elo_publishes_both_families_on_every_game_row(
     assert json.loads(json.dumps(record))["win_total_file"]["sha256"] == "f00d"
 
 
+def test_attach_own_elo_keeps_the_published_qb_elos_quarterback_adjustment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The own Elo's internal ``home_qb_adj``/``away_qb_adj`` never reach the published ones."""
+    # Arrange
+    schedule = _schedule((2019, 2020))
+    _patch_inputs(monkeypatch, win_total_seasons=(2019, 2020))
+    published = pl.DataFrame(
+        {
+            "game_id": schedule.get_column("game_id"),
+            "away_qb_adj": [-30.0, 12.5, None, 4.25],
+            "home_qb_adj": [7.5, -3.0, 0.5, None],
+        }
+    )
+    games = _games(schedule).join(published, on="game_id", how="left", maintain_order="left")
+
+    # Act
+    out = data_collection._attach_own_elo(
+        games, _sources(schedule), _empty_history(), max_season=2020, metadata={}
+    )
+
+    # Assert
+    assert out.select(published.columns).equals(published)
+    assert not [column for column in out.columns if column.endswith("_right")]
+    assert out.select(constants.OWN_ELO_COLUMNS).null_count().row(0) == (0,) * 4
+
+
 def test_attach_own_elo_without_the_schedule_columns_it_reads_changes_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

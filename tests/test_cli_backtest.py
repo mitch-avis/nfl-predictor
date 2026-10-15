@@ -68,7 +68,7 @@ def test_resume_is_on_by_default_and_uses_the_shared_checkpoint_dir(
 def test_the_default_leaves_out_the_groups_production_leaves_out(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A walk-forward measures production: the strength snapshot and both own-Elo presets."""
+    """A walk-forward measures production: it leaves out the groups production leaves out."""
     # Arrange
     monkeypatch.setattr(sys, "argv", ["walk_forward_backtest.py"])
 
@@ -80,6 +80,7 @@ def test_the_default_leaves_out_the_groups_production_leaves_out(
         "strength",
         "own_elo",
         "own_elo_wt",
+        "qb_adj",
     )
 
 

@@ -311,6 +311,7 @@ def _merge_elo(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
                     "elo_pre": f"{side}_elo_pre",
                     "qb_value_pre": f"{side}_qb_value_pre",
                     "qb_elo_pre": f"{side}_qb_elo_pre",
+                    "qb_adj": f"{side}_qb_adj",
                 }
             )
             merged = merged.join(side_elo, on=f"{side}_abbr", how="left")

@@ -2,12 +2,13 @@
 
 ``config/weekly_run.yaml`` lists the feature groups (``constants.FEATURE_GROUP_COLUMN_MARKERS``)
 that stage 1's walk-forward and the final fit both leave out: by default the strength snapshot
-(``strength``) and both presets of this repository's own Elo (``own_elo``, ``own_elo_wt``), so
-production trains on the ported team ratings and the ``qb_elos.csv`` Elo. An explicit empty list
-leaves no group out, a config without the key leaves out production's groups, and the key with
-no value is refused, so commenting out every item cannot bring the groups back. The command line
-takes the comma-separated form ``nfl-predictor backtest`` takes and overrides the file. An
-unknown group stops the run when its options are parsed, before the data refresh.
+(``strength``), both presets of this repository's own Elo (``own_elo``, ``own_elo_wt``) and the
+``qb_elos.csv`` quarterback adjustment (``qb_adj``), so production trains on the ported team ratings
+and the ``qb_elos.csv`` Elo. An explicit empty list leaves no group out, a config without the key
+leaves out production's groups, and the key with no value is refused, so commenting out every item
+cannot bring the groups back. The command line takes the comma-separated form
+``nfl-predictor backtest`` takes and overrides the file. An unknown group stops the run when its
+options are parsed, before the data refresh.
 """
 
 from __future__ import annotations
@@ -35,8 +36,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-# The groups production leaves out: the strength snapshot and both presets of the own Elo.
-PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
+# The groups production leaves out: the strength snapshot, both presets of the own Elo and the
+# qb_elos.csv quarterback adjustment.
+PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt", "qb_adj")
 TEST_BOOTSTRAP_SAMPLES = 50
 
 
@@ -52,7 +54,7 @@ def _parse(argv: Sequence[str]) -> Any:
     return config.parse_args(argv)
 
 
-def test_the_shipped_config_leaves_out_the_strength_snapshot_and_both_own_elo_presets() -> None:
+def test_the_shipped_config_leaves_out_productions_groups() -> None:
     # Act
     args = _parse([])
 
@@ -246,7 +248,13 @@ def test_a_default_weekly_run_trains_on_the_ratings_and_the_elo_without_the_left
     config_path = write_group_weekly_config(tmp_path, paths)
     monkeypatch.setattr(walk_forward, "BOOTSTRAP_SAMPLES", TEST_BOOTSTRAP_SAMPLES)
     monkeypatch.setattr(sys, "argv", ["nfl-predictor weekly", "--config", str(config_path)])
-    left_out = {column for group in PRODUCTION_GROUPS for column in GROUP_COLUMNS[group]}
+    # The fixture carries no column of the quarterback adjustment group, so it drops none.
+    left_out = {
+        column
+        for group in PRODUCTION_GROUPS
+        if group in GROUP_COLUMNS
+        for column in GROUP_COLUMNS[group]
+    }
     kept = {*GROUP_COLUMNS["elo"], *RATINGS_COLUMNS}
 
     # Act

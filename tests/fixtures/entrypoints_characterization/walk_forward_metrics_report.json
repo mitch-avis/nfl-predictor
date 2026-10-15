@@ -86,7 +86,8 @@
     "disabled_feature_groups": [
       "strength",
       "own_elo",
-      "own_elo_wt"
+      "own_elo_wt",
+      "qb_adj"
     ],
     "dropped_feature_group_columns": [],
     "eval_last_n_seasons": 1,

@@ -624,9 +624,10 @@ If spreads/totals/moneylines are present, you can:
 The market-implied home win probability (no-vig moneylines, else the spread) is scored beside the
 model in every walk-forward as the yardstick; it never enters the submitted probability.
 
-The stats-only mode means "no game lines": no line column and no anchor. By default it also leaves
-out every feature group with market information, and two other group lists are kept as test
-benches. A group list given replaces the default, so each variant names the whole list:
+The stats-only mode means "no game lines": no line column, no anchor and no market transform. By
+default it also leaves out every feature group with market information, and two other group lists
+are kept as test benches. A group list given replaces the default, so each variant names the
+whole list:
 
 - No game lines (the mode):
   `nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`. No line

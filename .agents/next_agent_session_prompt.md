@@ -6,34 +6,34 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 and `models/qb_elos_measure/HYPOTHESIS.md` (main checkout; `models/` is not in git) before reading
 the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 06:05 MDT; the user asleep until about 09:30)
+## State (written 2026-10-15, 14:25 MDT)
 
-- `main` is at `0.59.0` plus docs commits (not pushed): the step-6 port, adopted in production.
+- `main` is at `659199b` (not pushed): the step-6 port (`0.59.0`, adopted in production) plus
+  the merged `chore/pyproject-standards` (`0.59.1`).
   `data/` was rebuilt on 2026-10-14 (record in `.agents/benchmarks.md`, "Data state and ETL
   rebuild records"; backups in `~/scratch/data_backups/2026-10-14_pre_step6_merge/` and
   `2026-10-14_pre_week6/`). The Week 6 run is `models/weekly_20261015_022416_9a4c092c`.
 - The user submits Week 6 picks before SEA@DEN (2026-10-15 20:15 ET). Production-changing merges
-  land after the Monday game (2026-10-19), with the user's approval (rule 14). Nothing is merged
-  tonight.
-- The user's web server runs on `:8001` from the main checkout (no `--reload`, the `0.45.4` code
-  it loaded, the old `web/dist/`). Never stop or restart it, and don't build `web/dist/` on `main`
-  while it runs; `scripts/gate.sh --web` and a browser look at the new pages wait until the user
-  restarts it.
+  land after the Monday game (2026-10-19), with the user's approval (rule 14); the user waived that
+  wait for the Python-infrastructure branches only (2026-10-15).
+- No web server was listening at 14:21 MDT (`ss -ltnp`); check again before a merge or a
+  `web/dist/` build, and never stop or restart one the user started.
 - `../nfeloqb` fork `main` is at `9bf32f2` (pushed): next-week projections now find a team stored
   under a legacy code (`OAK` for Las Vegas), which had inflated Las Vegas's `qb_adj` to `+160`.
   nfeloqb was not rerun; the user runs it each week (memory `nfeloqb-weekly-process`).
-- **`chore/pyproject-standards` (`0.59.1`, `1bc21d3`, the main checkout, off `main`, not merged)**
-  holds the user's `pyproject.toml` review: strict pytest with warnings as errors, coverage of
-  `src/` and `tests/` plus the gate's `src coverage` step, PEP 639 metadata, ruff/ty/pyright on
-  the configured roots, `update_requirements.sh` rewritten with `update_requirements.hooks.sh`,
-  and `weekly_run/config.py` at 100% coverage (contract tests, loader errors as `ValueError`
-  naming the file, relative single paths from the root; reviewed independently, findings fixed).
-  The gate fails only on pyright: the user switched it to strict, about 3,150 errors in `src/`
-  and `tests/`, a separate cleanup the user will start. `ml/feature_spec.py` changed (the `str`
-  dtype), so the branch invalidates every checkpoint: merge it with other such changes (rule 14).
-  The shared files also live in the new Copier template `~/workspace/python-template` (its own
-  git repo, gate green), whose `update_requirements.sh` and update tests are identical to this
-  repo's; adopting the template here (`copier copy`, its README's "Existing project") is open.
+- **`chore/pyproject-standards` merged into `main`** at `659199b` (user-approved 2026-10-15,
+  `--no-ff`). `ml/feature_spec.py` changed (the `str` dtype), so every walk-forward checkpoint is
+  invalid; the user accepted that and will rerun everything.
+- **`chore/adopt-python-template` (`0.59.3`, the main checkout, off `main`, not merged)** adopts
+  the Copier template `~/workspace/python-template` at its tag `0.1.2` (`.copier-answers.yml`,
+  `has_cli=false`): the template's `scripts/gate.sh`, pre-commit, markdownlint-cli2, CI and
+  Dependabot files, with this repo's own steps in `scripts/gate.hooks.sh` (the CUDA sync flags,
+  the front-door commands' `--help`, `--web`). The gate uses the checkout's own `.venv`, so
+  worktrees need no `VIRTUAL_ENV`. `0.59.3` fixes the weekly config's paths: the power rankings
+  read relative entries of the two path lists from the repository root (as `ml/floor_sigma.py`
+  already did), a leading `~` is the home directory, and a comma-separated feature-group string
+  in a config file is refused with the list to write. The gate fails only on pyright (strict,
+  about 3,150 errors), the user's separate cleanup; every other step passes.
 - **The `qb_adj` review is done.** `feat/qb-adj-features` (`0.60.0`, `c637fc0`, harness worktree
   `.claude/worktrees/agent-afad3cf465d5bcba7`) passed an independent review against
   `.agents/qb_adj_task.md` with minor findings, all docs and tests. They are fixed on
@@ -172,16 +172,9 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Open for the user
 
-- `chore/pyproject-standards`: approve the merge (with the checkpoint-invalidating group), and
-  whether to adopt the python-template here now. Two config questions from its review:
-  - path lists in a weekly config file (`floor_sigma_reference_runs`,
-    `power_rankings_model_predictions`) stay relative to the working directory in
-    `reporting/rating_sources.py:430` and `run_comparison.py:136`, against
-    `config/weekly_run.yaml:37` ("relative to the repository root"); the blend ranking fails when
-    `nfl-predictor weekly` starts outside the root. Recommended: resolve them from the root at
-    read time; it changes recorded config strings and reruns the reports stage once;
-  - config files accept feature-group lists only, not comma strings. Recommended: keep it;
-  - `~` in a config path is not expanded (`~/x` becomes `<root>/~/x`).
+- Approve merging `chore/adopt-python-template` (`0.59.3`) into `main`; it changes CI
+  (`validation.yml` from the template) and the gate script, not a weekly run's outputs, except
+  that a weekly run directory started before `0.59.3` reruns its reports stage once.
 - Approve fast-forwarding `feat/qb-adj-features` to `6bacd5e`, together with its merge after the
   Monday game.
 - Step 3's list includes `qb_adj` (`strength,elo,own_elo_wt,qb_adj`), where the 2026-10-14

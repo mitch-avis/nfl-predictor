@@ -239,7 +239,8 @@ def _checkpoint_dir(run_path: Path) -> Path:
     metadata_path = run_path / "metadata.json"
     if metadata_path.is_file():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        checkpoint = (metadata.get("config") or {}).get("checkpoint") or {}
+        config: dict[str, Any] = metadata.get("config") or {}
+        checkpoint: dict[str, Any] = config.get("checkpoint") or {}
         if not checkpoint.get("dir"):
             msg = f"{metadata_path} names no walk-forward checkpoint directory"
             raise FileNotFoundError(msg)

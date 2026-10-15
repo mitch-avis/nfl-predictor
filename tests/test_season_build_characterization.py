@@ -247,7 +247,16 @@ def _schema(frame: pl.DataFrame) -> dict[str, str]:
 
 def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
     """Guard the fixture: the pinned rows carry real values for every family."""
+    # Arrange
     games = build.games
+
+    # Act
+    played = games.select("season", "week").unique()
+    unplayed_elo = games.filter(
+        (pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])
+    ).get_column("away_elo_pre")
+
+    # Assert
     for column in (
         "away_pass_yards",
         "home_wins",
@@ -269,19 +278,16 @@ def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
         "home_division_rank",
     ):
         assert games.get_column(column).drop_nulls().n_unique() > 1, column
-    played = games.select("season", "week").unique()
     assert played.filter(pl.col("week") == _PLAYOFF_WEEK).height == 1
     assert (
         played.filter((pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])).height
         == 1
     )
-    unplayed_elo = games.filter(
-        (pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])
-    ).get_column("away_elo_pre")
     assert unplayed_elo.null_count() == 0, "the unplayed week takes each team's latest ELO"
 
 
 def test_season_build_rows_match_snapshots(build: _Build) -> None:
+    # Act & Assert
     snapshots.check_csv("games.csv", _as_pandas(build.games), SNAPSHOT_DIR / "games.csv")
     snapshots.check_json(
         "games_schema.json", _schema(build.games), SNAPSHOT_DIR / "games_schema.json"

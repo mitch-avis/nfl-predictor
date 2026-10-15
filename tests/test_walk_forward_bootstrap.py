@@ -68,8 +68,10 @@ def _games(n_rows: int, seed: int) -> pd.DataFrame:
 @pytest.mark.parametrize(("n_rows", "seed"), [(48, 0), (720, 7), (1615, 42)])
 def test_bootstrap_matches_the_per_resample_metric_calls(n_rows: int, seed: int) -> None:
     """Same draws, same metrics: every interval bound equals the reference to 1e-12."""
+    # Arrange
     frame = _games(n_rows, seed)
 
+    # Act
     actual = walk_forward._bootstrap_probability_differences(
         frame,
         model_column="model",
@@ -78,33 +80,35 @@ def test_bootstrap_matches_the_per_resample_metric_calls(n_rows: int, seed: int)
         resampling=walk_forward.Resampling(400, seed),
     )
 
+    # Assert
     expected = _reference_bootstrap(frame, prefix="deterministic", n_samples=400, seed=seed)
     assert actual.keys() == expected.keys()
     for key, value in expected.items():
         assert actual[key] == pytest.approx(value, rel=1e-12, abs=1e-15), key
 
 
-def test_bootstrap_returns_nothing_without_samples_or_columns() -> None:
+@pytest.mark.parametrize(
+    ("market_column", "n_samples", "blank_market"),
+    [
+        pytest.param("market", 0, False, id="no_resamples"),
+        pytest.param("absent", 10, False, id="missing_column"),
+        pytest.param("market", 10, True, id="no_valid_row"),
+    ],
+)
+def test_bootstrap_returns_nothing_without_samples_or_columns(
+    market_column: str, n_samples: int, *, blank_market: bool
+) -> None:
     """No resamples, a missing column or no valid row gives an empty result."""
+    # Arrange
     frame = _games(20, 1)
-    no_draws = walk_forward.Resampling(0, 0)
-    ten_draws = walk_forward.Resampling(10, 0)
-    assert (
-        walk_forward._bootstrap_probability_differences(
-            frame, model_column="model", market_column="market", prefix="p", resampling=no_draws
-        )
-        == {}
+    if blank_market:
+        frame["market"] = np.nan
+    resampling = walk_forward.Resampling(n_samples, 0)
+
+    # Act
+    result = walk_forward._bootstrap_probability_differences(
+        frame, model_column="model", market_column=market_column, prefix="p", resampling=resampling
     )
-    assert (
-        walk_forward._bootstrap_probability_differences(
-            frame, model_column="model", market_column="absent", prefix="p", resampling=ten_draws
-        )
-        == {}
-    )
-    frame["market"] = np.nan
-    assert (
-        walk_forward._bootstrap_probability_differences(
-            frame, model_column="model", market_column="market", prefix="p", resampling=ten_draws
-        )
-        == {}
-    )
+
+    # Assert
+    assert result == {}

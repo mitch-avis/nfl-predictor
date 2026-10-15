@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants, lines_refresh
-from nfl_predictor.utils import game_utils
+from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.polars import moneyline_map, nfelo_lines
 
 if TYPE_CHECKING:
@@ -143,7 +143,7 @@ SURVIVOR_GRID = {"SEA": {WEEK: -2.5}}
 
 def _dataset_rows() -> list[dict[str, object]]:
     """Return the build's rows: every game present, its lines from an earlier build."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for game in SCHEDULE:
         row = {key: game[key] for key in ("game_id", "season", "week", "away_abbr", "home_abbr")}
         row.update(
@@ -195,8 +195,8 @@ def nfelo_calls(monkeypatch: pytest.MonkeyPatch) -> list[int]:
         frame = pl.DataFrame(NFELO, schema=_NFELO_SCHEMA)
         return nfelo_lines.NfeloLinesSnapshot(frame, "url", "download", "abc123", None)
 
-    monkeypatch.setattr(lines_refresh.polars_utils, "load_schedule", load_schedule)
-    monkeypatch.setattr(lines_refresh.nfelo_lines, "load_nfelo_lines", load_nfelo)
+    monkeypatch.setattr(polars_utils, "load_schedule", load_schedule)
+    monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", load_nfelo)
     monkeypatch.setattr(game_utils, "scrape_survivor_grid_spreads", lambda: SURVIVOR_GRID)
     return calls
 
@@ -364,7 +364,7 @@ def test_pick_time_record_without_the_seasons_map_stops_the_refresh(
         schedule_loads.append(1)
         return pl.DataFrame(SCHEDULE, schema=_SCHEDULE_SCHEMA)
 
-    monkeypatch.setattr(lines_refresh.polars_utils, "load_schedule", load_schedule)
+    monkeypatch.setattr(polars_utils, "load_schedule", load_schedule)
 
     # Act & Assert
     with pytest.raises(ValueError, match="2026"):

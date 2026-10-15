@@ -12,10 +12,11 @@ from tests.api.factories import RunSpec, make_run_dir
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
 
-def _make_two_runs(project_root: Path, app) -> None:
+def _make_two_runs(project_root: Path, app: FastAPI) -> None:
     """Write a weekly and a training run and refresh the run index."""
     models = project_root / "models"
     make_run_dir(models, "weekly_a", RunSpec(created_at="2026-09-01T00:00:00+00:00"))
@@ -28,7 +29,7 @@ def _make_two_runs(project_root: Path, app) -> None:
 def test_list_detail_activate_and_download(
     project_root: Path,
     admin_client: TestClient,
-    app,
+    app: FastAPI,
 ) -> None:
     """The run list marks the active run."""
     # Arrange
@@ -44,7 +45,9 @@ def test_list_detail_activate_and_download(
     assert listed["runs"][1]["is_active"] is True
 
 
-def test_list_runs_filters_by_kind(project_root: Path, admin_client: TestClient, app) -> None:
+def test_list_runs_filters_by_kind(
+    project_root: Path, admin_client: TestClient, app: FastAPI
+) -> None:
     """The run list filters on the run kind."""
     # Arrange
     _make_two_runs(project_root, app)
@@ -56,7 +59,9 @@ def test_list_runs_filters_by_kind(project_root: Path, admin_client: TestClient,
     assert [r["run_id"] for r in only_training["runs"]] == ["train_b"]
 
 
-def test_run_detail_exposes_config(project_root: Path, admin_client: TestClient, app) -> None:
+def test_run_detail_exposes_config(
+    project_root: Path, admin_client: TestClient, app: FastAPI
+) -> None:
     """Run details expose the config and the feature count."""
     # Arrange
     _make_two_runs(project_root, app)
@@ -80,7 +85,7 @@ def test_run_detail_exposes_config(project_root: Path, admin_client: TestClient,
     ],
 )
 def test_unknown_run_or_file_is_404(
-    project_root: Path, admin_client: TestClient, app, method: str, url: str
+    project_root: Path, admin_client: TestClient, app: FastAPI, method: str, url: str
 ) -> None:
     """Unknown runs and missing run files return 404."""
     # Arrange
@@ -93,7 +98,9 @@ def test_unknown_run_or_file_is_404(
     assert response.status_code == 404
 
 
-def test_activate_run_returns_active_run(project_root: Path, admin_client: TestClient, app) -> None:
+def test_activate_run_returns_active_run(
+    project_root: Path, admin_client: TestClient, app: FastAPI
+) -> None:
     """Activating a run marks it active in the response."""
     # Arrange
     _make_two_runs(project_root, app)
@@ -106,7 +113,7 @@ def test_activate_run_returns_active_run(project_root: Path, admin_client: TestC
 
 
 def test_activate_run_pins_it_in_the_list(
-    project_root: Path, admin_client: TestClient, app
+    project_root: Path, admin_client: TestClient, app: FastAPI
 ) -> None:
     """After activation the run list reports the run as active and pinned."""
     # Arrange
@@ -121,7 +128,9 @@ def test_activate_run_pins_it_in_the_list(
     assert listed["pinned_run_id"] == "train_b"
 
 
-def test_delete_active_unpins_run(project_root: Path, admin_client: TestClient, app) -> None:
+def test_delete_active_unpins_run(
+    project_root: Path, admin_client: TestClient, app: FastAPI
+) -> None:
     """Deleting the active pin returns 204 and clears the pinned run."""
     # Arrange
     _make_two_runs(project_root, app)
@@ -135,7 +144,7 @@ def test_delete_active_unpins_run(project_root: Path, admin_client: TestClient, 
     assert admin_client.get("/api/runs").json()["pinned_run_id"] is None
 
 
-def test_download_run_metadata(project_root: Path, admin_client: TestClient, app) -> None:
+def test_download_run_metadata(project_root: Path, admin_client: TestClient, app: FastAPI) -> None:
     """The metadata file downloads as an attachment named after the run."""
     # Arrange
     _make_two_runs(project_root, app)
@@ -160,7 +169,7 @@ def test_download_run_metadata(project_root: Path, admin_client: TestClient, app
 def test_viewer_cannot_activate(
     project_root: Path,
     viewer_client: TestClient,
-    app,
+    app: FastAPI,
     request_and_status: tuple[str, str, int],
 ) -> None:
     """Activation is admin-only, but viewers can read runs."""

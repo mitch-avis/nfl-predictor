@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 import joblib
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from scipy.stats import norm
 
@@ -194,17 +195,17 @@ def estimate(
     errors: pd.DataFrame, season: int, week: int, *, sources: Sequence[str] = ()
 ) -> FloorSigma:
     """Return the sigma for games in ``(season, week)`` from errors strictly before it."""
-    seasons = errors["season"].to_numpy(dtype=int)
-    weeks = errors["week"].to_numpy(dtype=int)
-    before = (seasons < season) | ((seasons == season) & (weeks < week))
+    seasons: npt.NDArray[np.int64] = errors["season"].to_numpy(dtype=int)
+    weeks: npt.NDArray[np.int64] = errors["week"].to_numpy(dtype=int)
+    before: npt.NDArray[np.bool_] = (seasons < season) | ((seasons == season) & (weeks < week))
     pool = errors.loc[before].sort_values("game_id", kind="mergesort")
-    pool_seasons = tuple(sorted(int(value) for value in pool["season"].unique()))
+    observed: npt.NDArray[np.int64] = pool["season"].unique()
+    pool_seasons = tuple(sorted(int(value) for value in observed))
     earlier_seasons = sum(1 for value in pool_seasons if value < season)
     fallback = earlier_seasons < constants.FLOOR_SIGMA_MIN_POOL_SEASONS
+    squared_errors: npt.NDArray[np.float64] = pool["squared_error"].to_numpy(dtype=float)
     sigma = (
-        float(constants.SCORE_DIFF_STD_DEV)
-        if fallback
-        else float(np.sqrt(pool["squared_error"].to_numpy(dtype=float).mean()))
+        float(constants.SCORE_DIFF_STD_DEV) if fallback else float(np.sqrt(squared_errors.mean()))
     )
     return FloorSigma(
         sigma=sigma,

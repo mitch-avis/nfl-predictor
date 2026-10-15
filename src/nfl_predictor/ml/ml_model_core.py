@@ -13,10 +13,11 @@ import os
 import time
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, SupportsIndex
 
 import joblib
 import numpy as np
+import numpy.typing as npt
 import optuna
 import pandas as pd
 import xgboost as xgb
@@ -453,7 +454,8 @@ def _evaluate_margin_total_predictions(
     actual_winner = np.where(home_true > away_true, "home", "away")
     pred_winner = np.where(pred_margin > 0, "home", "away")
     is_tie = home_true == away_true
-    metrics["winner_accuracy"] = float(np.mean((pred_winner == actual_winner) & ~is_tie))
+    correct_winner: npt.NDArray[np.bool_] = (pred_winner == actual_winner) & ~is_tie
+    metrics["winner_accuracy"] = float(np.mean(correct_winner))
 
     if home_win_prob is not None:
         actual_home_win = (home_true > away_true).astype(int)
@@ -866,7 +868,7 @@ def _boosted_rounds(estimator: object) -> int | None:
         return None
     num_boosted_rounds = getattr(get_booster(), "num_boosted_rounds", None)
     rounds = num_boosted_rounds() if callable(num_boosted_rounds) else None
-    return int(rounds) if isinstance(rounds, int | np.integer) else None
+    return int(rounds) if isinstance(rounds, SupportsIndex) else None
 
 
 def _estimator_iteration_info(prefix: str, estimator: object) -> dict[str, Any]:

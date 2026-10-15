@@ -152,10 +152,10 @@ class CollectionRecords:
 
     """
 
-    strength_snapshots: list[pl.DataFrame] = field(default_factory=list)
-    market_lines_metadata: dict[str, object] = field(default_factory=dict)
-    own_elo_metadata: dict[str, object] = field(default_factory=dict)
-    rating_tables: dict[str, pl.DataFrame] = field(default_factory=dict)
+    strength_snapshots: list[pl.DataFrame] = field(default_factory=list[pl.DataFrame])
+    market_lines_metadata: dict[str, object] = field(default_factory=dict[str, object])
+    own_elo_metadata: dict[str, object] = field(default_factory=dict[str, object])
+    rating_tables: dict[str, pl.DataFrame] = field(default_factory=dict[str, pl.DataFrame])
 
 
 def _configure_logging(*, enable_debug: bool) -> None:
@@ -526,7 +526,7 @@ def _quarterback_history(
     run already loaded, else loaded per season (``nflverse_sources.load_season_qb_identity``).
     """
     seasons = list(range(constants.NFLREADPY_MIN_SEASON, max_season + 1))
-    loaded = (
+    loaded: set[int] = (
         set(pbp_df.get_column("season").unique(maintain_order=True).to_list())
         if "season" in pbp_df
         else set()
@@ -990,7 +990,7 @@ def _combine_seasons(frames: list[pl.DataFrame]) -> pl.DataFrame:
 
 def _own_elo_earlier_schedule(sources: _EtlSources, max_season: int) -> pl.DataFrame:
     """Return the schedules of the seasons from 1999 that the run does not build, from cache."""
-    built = (
+    built: set[int] = (
         set(sources.schedule_df.get_column("season").unique(maintain_order=True).to_list())
         if "season" in sources.schedule_df.columns
         else set()
@@ -1278,7 +1278,7 @@ def collect_all_data(
     rankings = _TeamRankingsLoader(min_season, sources, enable_timing=config.enable_timing)
     cache = _open_season_cache(config, sources, min_season)
 
-    all_seasons_data = []
+    all_seasons_data: list[pl.DataFrame] = []
     for season in seasons:
         log.info("Processing season %d...", season)
         inputs = SeasonInputs(
@@ -1488,7 +1488,7 @@ def process_season(
     weeks = sorted(season_schedule.select("week").unique(maintain_order=True).to_series().to_list())
 
     # Process each week
-    weekly_data = []
+    weekly_data: list[pl.DataFrame] = []
     for week in weeks:
         week_data = process_week(season, week, season_schedule, team_stats_df, inputs)
         if week_data.height > 0:

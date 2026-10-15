@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build>=0.13"]
+requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [project]
@@ -8,13 +8,14 @@ version = "0.59.0"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
 keywords = ["stats", "sports", "football", "machine learning"]
 classifiers = [
     "Programming Language :: Python :: 3.14",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
+    "Private :: Do Not Upload",
 ]
 dependencies = [
     "argon2-cffi>=25.1",
@@ -42,56 +43,37 @@ dependencies = [
     "xgboost>=3.4",
 ]
 
+[project.scripts]
+nfl-lightgbm-cuda-install = "nfl_predictor.lightgbm_cuda:main"
+nfl-predictor = "nfl_predictor.cli.main:main"
+
 [dependency-groups]
 dev = [
-    "colorama>=0.4",
-    "httpx2>=2.13",
+    "httpx2>=2.13", # FastAPI's TestClient
     "pandas-stubs>=3.0",
     "pre-commit>=4.7",
-    "pyright>=1.1",
+    "pyright>=1.1.414",
     "pytest-cov>=7.1",
-    "pytest-html>=4.2",
-    "pytest-metadata>=3.1",
     "pytest-sugar>=1.1",
     "pytest-xdist>=3.8",
     "pytest>=9.1",
     "ruff>=0.17",
     "scikit-build-core>=1.1",
+    "scipy-stubs>=1.18",
     "ty>=0.0.88",
 ]
 
-[project.scripts]
-nfl-lightgbm-cuda-install = "nfl_predictor.lightgbm_cuda:main"
-nfl-predictor = "nfl_predictor.cli.main:main"
-
 [tool.uv]
-default-groups = ["dev"]
 required-version = ">=0.13"
 no-build-isolation-package = ["lightgbm"]
-
-[tool.uv.extra-build-dependencies]
-lightgbm = ["scikit-build-core"]
 
 # --------------------------------------------------------------------------------------------
 # Ruff: format + lint (strict)
 # --------------------------------------------------------------------------------------------
 [tool.ruff]
-target-version = "py314"
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = [
-    ".venv",
-    ".git",
-    "__pycache__",
-    ".pytest_cache",
-    ".ruff_cache",
-    "build",
-    "dist",
-    "web",
-    # Audit scripts under .agents/ are frozen records whose output the docs quote, so they
-    # stay as they ran rather than being rewritten to the current lint rules.
-    ".agents",
-]
+extend-exclude = [".agents", "build", "web"]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -104,10 +86,7 @@ logger-objects = ["nfl_predictor.utils.logger.log"]
 # The Greek sigma in user-facing text names the standard deviation on purpose.
 allowed-confusables = ["σ"]
 ignore = [
-    "D203",   # Conflicts with D211 (no-blank-line-before-class)
-    "D213",   # Conflicts with D212 (multi-line-summary-first-line)
     "COM812", # Conflicts with `ruff format`, which owns trailing commas
-    "ISC001", # Conflicts with `ruff format`, which joins implicit concatenations
     "CPY001", # The license is declared once in pyproject.toml, not per file
 ]
 
@@ -186,7 +165,6 @@ extend-allowed-calls = ["polars.lit"]
 [tool.ty.environment]
 # Pin ty to the repo venv so local and CI checks resolve the same interpreter.
 python = ".venv"
-python-version = "3.14"
 
 [tool.ty.src]
 # Limit ty to the checked-in source roots we validate in CI.
@@ -198,34 +176,35 @@ typeCheckingMode = "strict"
 pythonPlatform = "Linux"
 venvPath = "."
 venv = ".venv"
-executionEnvironments = [{ root = "." }]
 include = ["src", "tests"]
 
 # --------------------------------------------------------------------------------------------
 # Tests and coverage
 # --------------------------------------------------------------------------------------------
-[tool.pytest.ini_options]
+[tool.pytest]
 minversion = "9.0"
 testpaths = ["tests"]
 # Tests import shared helpers as `tests.*`; the package itself is imported from src/ via the
 # editable install, so bare `pytest` and `python -m pytest` resolve the same modules.
 pythonpath = ["."]
+# strict_config, strict_markers, strict_xfail and strict_parametrization_ids.
+strict = true
 addopts = [
     "-ra",                       # show extra summary for (s)kipped, (x)failed
-    "--strict-markers",
     "-n=auto",                   # pytest-xdist: one worker per core; `-n 0` runs in-process
-    "--cov=nfl_predictor",
+    "--cov",                     # measure the paths in [tool.coverage.run] source
     "--cov-report=term-missing",
 ]
-filterwarnings = ["ignore::DeprecationWarning"]
+# Every warning fails the test that raised it; a third-party warning that can't be fixed here
+# gets its own narrow "ignore:<message>:<category>" entry with the reason beside it.
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["nfl_predictor"]
-omit = ["config.py", "config-*.py", "*/config.py", "*/config-*.py"]
+source = ["src", "tests"]
 
 [tool.coverage.report]
 fail_under = 90
 show_missing = true
 skip_empty = true
-exclude_lines = ["if __name__ == \"__main__\":"]
+exclude_also = ["if __name__ == \"__main__\":", "if TYPE_CHECKING:"]

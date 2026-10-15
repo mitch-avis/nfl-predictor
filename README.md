@@ -806,11 +806,12 @@ without the option leaves out what production leaves out. A run without game lin
 given replaces the default rather than adding to it (`--disable-feature-groups pbp` keeps the
 strength, own-Elo and quarterback-adjustment columns). Every one of them turns groups into
 columns through one function (`feature_spec.resolve_feature_group_columns`), so the same groups
-remove the same columns everywhere, and each saved model's `metadata.json` names the groups it was trained without
-(`disabled_feature_groups`) and the columns they removed (`dropped_feature_group_columns`, the key
-the backtest records in its config). `train` and the weekly run check the group names before any
-data loads. A group that matches no column of the data drops nothing, and every run logs it as a
-warning, so a build without a group's columns does not quietly train differently from the arm.
+remove the same columns everywhere, and each saved model's `metadata.json` names the groups it
+was trained without (`disabled_feature_groups`) and the columns they removed
+(`dropped_feature_group_columns`, the key the backtest records in its config). `train` and the
+weekly run check the group names before any data loads. A group that matches no column of the
+data drops nothing, and every run logs it as a warning, so a build without a group's columns does
+not quietly train differently from the arm.
 Leaving out `strength` on a build that has the strength snapshot but no ported ratings would
 train on neither. A ratings column null in every row, as a build without play-by-play leaves it,
 counts as missing. `train` stops there; the weekly run stops right after the data refresh or its

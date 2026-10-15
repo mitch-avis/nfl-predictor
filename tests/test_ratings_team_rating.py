@@ -21,6 +21,7 @@ from nfl_predictor.ratings.team_rating import (
     special_teams_rows,
     team_ratings_from_unit_fits,
 )
+from tests.fakes import returning
 
 # The first four teams have mean-zero effects, so a round-robin among them recovers them exactly.
 _OFFENSE = {"AAA": 0.10, "BBB": 0.05, "CCC": -0.05, "DDD": -0.10, "EEE": 0.03, "FFF": -0.02}
@@ -659,7 +660,7 @@ def test_compute_team_schedule_strength_sums_opponents_in_the_ratings_order(
     game_logs = _game_logs((("AAA", "DDD"), ("AAA", "BBB"), ("AAA", "CCC")))
     fit = fit_team_ratings(game_logs, scrimmage_lambda=10.0, special_teams_lambda=10.0)
     opponents = pl.DataFrame({"team": ["BBB", "CCC", "DDD"], "team_rating": [1e16, -1e16, 1.0]})
-    monkeypatch.setattr(team_rating, "_ratings_without", lambda *_args: opponents)
+    monkeypatch.setattr(team_rating, "_ratings_without", returning(opponents))
     expected = float(np.mean(np.array([1e16, -1e16, 1.0])))
 
     # Act

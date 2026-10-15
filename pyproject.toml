@@ -161,6 +161,9 @@ extend-allowed-calls = ["polars.lit"]
 "typings/joblib.pyi" = [
     "ANN401", # joblib.load unpickles an object of any type, as typeshed types pickle.load
 ]
+"typings/threadpoolctl.pyi" = [
+    "N801", # the stub keeps the library's own lowercase class name, threadpool_limits
+]
 
 # --------------------------------------------------------------------------------------------
 # Type checking: ty and pyright (strict)

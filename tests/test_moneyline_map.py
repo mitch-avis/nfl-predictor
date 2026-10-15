@@ -47,91 +47,143 @@ def _fit(
     return fitted
 
 
-def test_probability_to_moneyline_uses_the_american_convention() -> None:
+@pytest.mark.parametrize(("prob", "expected"), [(0.75, -300), (0.25, 300), (0.5, 100)])
+def test_probability_to_moneyline_uses_the_american_convention(prob: float, expected: int) -> None:
     """A favorite's price is negative, an underdog's positive, and even odds is +100."""
-    assert moneyline_map.probability_to_moneyline(0.75) == -300
-    assert moneyline_map.probability_to_moneyline(0.25) == 300
-    assert moneyline_map.probability_to_moneyline(0.5) == 100
+    # Act
+    moneyline = moneyline_map.probability_to_moneyline(prob)
+
+    # Assert
+    assert moneyline == expected
 
 
-def test_implied_probability_inverts_the_moneyline() -> None:
+@pytest.mark.parametrize(("moneyline", "expected"), [(-300, 0.75), (300, 0.25)])
+def test_implied_probability_inverts_the_moneyline(moneyline: int, expected: float) -> None:
     """The implied probability of a price includes the vig, as quoted."""
-    assert moneyline_map.implied_probability(-300) == pytest.approx(0.75)
-    assert moneyline_map.implied_probability(300) == pytest.approx(0.25)
+    # Act
+    prob = moneyline_map.implied_probability(moneyline)
+
+    # Assert
+    assert prob == pytest.approx(expected)
 
 
 def test_the_map_keeps_the_jump_at_the_key_number_three() -> None:
     """Each half point keeps the market's own price, so crossing 3 moves more than 2 to 2.5."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
 
+    # Act
     favorite = {spread: fitted.implied_probabilities(-spread)[0] for spread in (2.0, 2.5, 3.0)}
 
+    # Assert
     assert favorite[3.0] == pytest.approx(0.62, abs=0.002)
     assert favorite[3.0] - favorite[2.5] > 2 * (favorite[2.5] - favorite[2.0])
 
 
 def test_the_map_gives_the_underdog_the_mirrored_prices() -> None:
     """A home underdog by 3 gets the prices of an away favorite by 3."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
-
     home_favorite = fitted.implied_probabilities(-3.0)
+
+    # Act
     home_underdog = fitted.implied_probabilities(3.0)
 
+    # Assert
     assert home_underdog == pytest.approx((home_favorite[1], home_favorite[0]))
 
 
 def test_a_pick_em_prices_both_sides_alike() -> None:
     """With no favorite, both sides get the same price."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
 
+    # Act
     home, away = fitted.implied_probabilities(0.0)
 
+    # Assert
     assert home == pytest.approx(away)
     assert 0.46 < home < 0.55
 
 
 def test_the_map_interpolates_between_half_points_and_holds_beyond_the_last() -> None:
-    """Unseen spreads interpolate linearly between fitted ones and hold past the largest."""
+    """Unseen spreads interpolate linearly between fitted ones."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
 
+    # Act
     between = fitted.implied_probabilities(-5.25)[0]
+
+    # Assert
+    assert between == pytest.approx((0.65 + 0.76) / 2, abs=0.002)
+
+
+def test_the_map_holds_beyond_the_largest_fitted_spread() -> None:
+    """Unseen spreads past the largest fitted one hold its price."""
+    # Arrange
+    fitted = _fit(_KEY_NUMBER_ROWS)
+
+    # Act
     beyond = fitted.implied_probabilities(-14.0)[0]
 
-    assert between == pytest.approx((0.65 + 0.76) / 2, abs=0.002)
+    # Assert
     assert beyond == pytest.approx(fitted.implied_probabilities(-7.0)[0])
 
 
 def test_the_map_is_monotone_where_the_prices_are_noisy() -> None:
     """A sparse spread priced against the trend is pooled with its neighbor."""
+    # Arrange
     rows = [*_KEY_NUMBER_ROWS, (-8.0, 0.80, 0.24), (-8.5, 0.78, 0.26)]
 
+    # Act
     fitted = _fit(rows)
-    favorite = [fitted.implied_probabilities(-spread)[0] for spread in (7.0, 8.0, 8.5)]
 
+    # Assert
+    favorite = [fitted.implied_probabilities(-spread)[0] for spread in (7.0, 8.0, 8.5)]
     assert favorite == sorted(favorite)
     assert favorite[1] == pytest.approx(favorite[2])
 
 
 def test_the_map_returns_moneylines_for_both_sides() -> None:
     """The fitted prices convert back to a moneyline pair, favorite negative."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
 
+    # Act
     home, away = fitted.moneylines(-7.0)
 
+    # Assert
     assert home == _moneyline(0.76)
     assert away == _moneyline(0.27)
 
 
 def test_too_few_games_fits_no_map() -> None:
     """Below the minimum game count the fit returns None."""
+    # Arrange
     pairs = _pairs(_KEY_NUMBER_ROWS, copies=1)
 
-    assert moneyline_map.fit_spread_moneyline_map(pairs, min_games=pairs.height + 1) is None
-    assert moneyline_map.fit_spread_moneyline_map(pairs.clear(), min_games=1) is None
+    # Act
+    fitted = moneyline_map.fit_spread_moneyline_map(pairs, min_games=pairs.height + 1)
+
+    # Assert
+    assert fitted is None
+
+
+def test_no_games_fits_no_map() -> None:
+    """With no price pairs at all the fit returns None."""
+    # Arrange
+    pairs = _pairs(_KEY_NUMBER_ROWS, copies=1)
+
+    # Act
+    fitted = moneyline_map.fit_spread_moneyline_map(pairs.clear(), min_games=1)
+
+    # Assert
+    assert fitted is None
 
 
 def test_price_pairs_keep_only_games_with_a_spread_and_both_moneylines() -> None:
     """A game missing its spread or either moneyline is not a price pair."""
+    # Arrange
     schedule = pl.DataFrame(
         {
             "season": [2010, 2010, 2010, 2010],
@@ -142,22 +194,27 @@ def test_price_pairs_keep_only_games_with_a_spread_and_both_moneylines() -> None
         }
     )
 
+    # Act
     pairs = moneyline_map.price_pairs(schedule)
 
+    # Assert
     assert pairs.columns == ["season", "home_spread", "home_moneyline", "away_moneyline"]
     assert pairs.height == 1
 
 
 def test_a_season_map_is_fitted_only_on_earlier_seasons() -> None:
     """The map for a season never sees that season's or any later season's prices."""
+    # Arrange
     early = _pairs(_KEY_NUMBER_ROWS, copies=10, season=2008)
     middle = _pairs(_KEY_NUMBER_ROWS, copies=10, season=2009)
     shifted = [(spread, home - 0.05, away + 0.05) for spread, home, away in _KEY_NUMBER_ROWS]
     late = _pairs(shifted, copies=10, season=2010)
     history = pl.concat([early, middle, late])
 
+    # Act
     maps = moneyline_map.fit_season_maps(history, [2008, 2009, 2010, 2011], min_games=40)
 
+    # Assert
     assert maps[2008] is None
     assert maps[2009] is not None
     assert maps[2009].seasons == (2008,)
@@ -170,10 +227,13 @@ def test_a_season_map_is_fitted_only_on_earlier_seasons() -> None:
 
 def test_the_map_record_lists_its_seasons_games_and_prices() -> None:
     """The metadata record carries enough to rebuild the map."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS, copies=2)
 
+    # Act
     record = fitted.to_dict()
 
+    # Assert
     assert fitted.spreads[0] == 0.0
     assert record == {
         "games": 10,
@@ -186,6 +246,7 @@ def test_the_map_record_lists_its_seasons_games_and_prices() -> None:
 
 def test_filling_uses_the_season_map_and_the_fixed_conversion_without_one() -> None:
     """A season with a map gets fitted prices; one without keeps the fixed conversion."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
     games = pl.DataFrame(
         {
@@ -197,8 +258,10 @@ def test_filling_uses_the_season_map_and_the_fixed_conversion_without_one() -> N
         }
     )
 
+    # Act
     filled = moneyline_map.fill_moneylines_from_maps(games, {2010: fitted, 2005: None})
 
+    # Assert
     assert filled.schema["home_moneyline"] == pl.Int64
     assert filled.select("home_moneyline", "away_moneyline").rows() == [
         fitted.moneylines(-7.0),
@@ -210,6 +273,7 @@ def test_filling_uses_the_season_map_and_the_fixed_conversion_without_one() -> N
 
 def test_filling_keeps_a_real_side_and_derives_only_the_missing_one() -> None:
     """Like the fixed fill, each side is filled only where it is missing."""
+    # Arrange
     fitted = _fit(_KEY_NUMBER_ROWS)
     games = pl.DataFrame(
         {
@@ -221,16 +285,33 @@ def test_filling_keeps_a_real_side_and_derives_only_the_missing_one() -> None:
         }
     )
 
+    # Act
     filled = moneyline_map.fill_moneylines_from_maps(games, {2010: fitted})
 
+    # Assert
     assert filled.row(0, named=True)["home_moneyline"] == -400
     assert filled.row(0, named=True)["away_moneyline"] == fitted.moneylines(-7.0)[1]
 
 
 def test_the_default_minimum_comes_from_the_constants() -> None:
-    """Without an explicit minimum the fit needs MONEYLINE_MAP_MIN_GAMES games."""
+    """Without an explicit minimum, too few games fit no map."""
+    # Arrange
     short = _pairs(_KEY_NUMBER_ROWS, copies=1)
+
+    # Act
+    fitted = moneyline_map.fit_spread_moneyline_map(short)
+
+    # Assert
+    assert fitted is None
+
+
+def test_the_default_minimum_is_met_by_enough_games() -> None:
+    """Without an explicit minimum the fit succeeds with MONEYLINE_MAP_MIN_GAMES copies."""
+    # Arrange
     enough = _pairs(_KEY_NUMBER_ROWS, copies=constants.MONEYLINE_MAP_MIN_GAMES)
 
-    assert moneyline_map.fit_spread_moneyline_map(short) is None
-    assert moneyline_map.fit_spread_moneyline_map(enough) is not None
+    # Act
+    fitted = moneyline_map.fit_spread_moneyline_map(enough)
+
+    # Assert
+    assert fitted is not None

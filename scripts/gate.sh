@@ -117,10 +117,10 @@ if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then
 	mapfile -t LIGHTGBM_CUDA_ARGS < <(.venv/bin/nfl-lightgbm-cuda-install uv-args 2>/dev/null)
 fi
 run_step "uv sync --check --active" uv sync --check --active "${LIGHTGBM_CUDA_ARGS[@]}"
-run_step "ruff format --check" .venv/bin/ruff format --check .
-run_step "ruff check" .venv/bin/ruff check .
-run_step "ty check" .venv/bin/ty check .
-run_step "pyright" .venv/bin/pyright .
+run_step "ruff format --check" .venv/bin/ruff format --check
+run_step "ruff check" .venv/bin/ruff check
+run_step "ty check" .venv/bin/ty check
+run_step "pyright" .venv/bin/pyright
 if [ "$RUN_TESTS" -eq 1 ]; then
 	run_step "pytest" .venv/bin/python -m pytest -q -p no:cacheprovider
 fi

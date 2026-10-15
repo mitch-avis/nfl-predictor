@@ -1272,10 +1272,10 @@ It runs the steps below and reports every one before exiting non-zero:
 ```bash
 uv lock --check
 uv sync --check --active
-ruff format --check .
-ruff check .
-ty check .
-pyright .
+ruff format --check
+ruff check
+ty check                      # src/ and tests/, from [tool.ty.src]
+pyright                       # src/ and tests/, from [tool.pyright]
 python -m pytest
 markdownlint .
 nfl-predictor --help          # then every command's --help, listed by the front door

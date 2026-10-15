@@ -468,8 +468,9 @@ checkpoints, and a re-check of the fixes the same day ("approve"); the reports a
 - **Outcome, applied as written**: the Brier score of the beyond-the-spread claim minus the
   model's is `-0.00036` (95% interval `-0.00198` to `+0.00135`), a tie, so the labels stay on the
   whole edge, as the user decided on 2026-10-11 for a tie. Nothing in the report changes.
-- **Open for the user** (deciding nothing here): which top-decile ranking a future report uses;
-  both reviewers and the implementer recommend the two-seed mean magnitude.
+- **Top-decile ranking** (decided by the user on 2026-10-14): a future report ranks its top
+  decile by the two-seed mean magnitude, one list, as both reviewers and the implementer
+  recommended. Per-seed lists are not the headline.
 
 ### Production adopts the ported ratings (`0.59.0`)
 

@@ -165,13 +165,18 @@ Answered on 2026-10-14 (record in DECISIONS.md and `step6_plan.md` at the docs c
 
 Still open:
 
-1. The top-decile ranking for future label reports (decides nothing now): explained on
-   2026-10-14 as (a) one list ranked by the two-seed mean edge, recommended as the headline, or
-   (b) one list per seed; the user leaned to (b) on reading the more negative numbers as stronger,
-   and was told those numbers measure the labels, not the ranking. Not chosen yet.
-2. A pre-existing `../nfeloqb` quirk (not from the merge, not read by this repo): next-week
-   projections inflate Las Vegas's `qb1_adj` (Cousins `+160` for Week 6 and `+158` for Week 5,
-   against `+36` once Week 5 was played), likely an `OAK`/`LV` lookup in the starter values.
+1. A pre-existing `../nfeloqb` bug (not from the merge, not read by this repo today): next-week
+   projections look up the QB model's team objects under `LV`, but the model keys the Raiders
+   as `OAK` (nfelodcm's code), so a fresh team at the default baseline (`25` VALUE) inflates
+   Las Vegas's `qb_adj` (`+160` for Week 6 against `+36` played). Every other Week 5 projection
+   matched its played value (BAL off by `0.8`, the backup first-start rule). Recommended to the
+   user: fix it test-first, then measure adopting `qb1_adj`/`qb2_adj` as features, since the
+   upstream fix moved the QB adjustment out of `qbelo1_pre` (old minus new `qbelo` difference
+   tracks the `qb_adj` difference: correlation `0.94`, slope `1.1`, 919 played 2023+ games).
+   Awaiting the user's call.
+
+Decided on 2026-10-14: the top-decile ranking is the two-seed mean (recorded in
+`.agents/sos_port/DECISIONS.md`).
 
 ## Next: the user's review, the merge, then the close-out
 

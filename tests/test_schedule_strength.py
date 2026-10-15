@@ -140,10 +140,12 @@ def _played_raw(result: pl.DataFrame, team: str) -> float | None:
 
 def test_played_adjusted_matches_hand_computed_opponent_rating_mean() -> None:
     """Played strength averages the ratings of the unique opponents already faced."""
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=4
     )
 
+    # Assert
     # BUF faced MIA (w1, w3) and NYJ (w2): mean(2.0, 3.0).
     assert _played_adj(result, "BUF") == pytest.approx((2.0 + 3.0) / 2)
     # MIA faced BUF (w1, w3) and KC (w2): mean(1.0, 5.0).
@@ -160,10 +162,12 @@ def test_played_adjusted_matches_hand_computed_opponent_rating_mean() -> None:
 
 def test_remaining_adjusted_matches_hand_computed_opponent_rating_mean() -> None:
     """Remaining strength averages the ratings of the unique opponents still to face."""
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=4
     )
 
+    # Assert
     # BUF still faces KC (w4) and NYJ (w5): mean(5.0, 3.0).
     assert _remaining_adj(result, "BUF") == pytest.approx((5.0 + 3.0) / 2)
     # MIA still faces NE twice: 4.0.
@@ -180,10 +184,12 @@ def test_remaining_adjusted_matches_hand_computed_opponent_rating_mean() -> None
 
 def test_week_one_has_null_played_strength_and_full_remaining_schedule() -> None:
     """Before any game is played the played side is null and everything remains."""
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=1
     )
 
+    # Assert
     assert result["sos_played_adj"].null_count() == result.height
     # BUF's full slate is MIA, NYJ, KC: mean(2.0, 3.0, 5.0).
     assert _remaining_adj(result, "BUF") == pytest.approx((2.0 + 3.0 + 5.0) / 3)
@@ -195,10 +201,12 @@ def test_week_one_has_null_played_strength_and_full_remaining_schedule() -> None
 
 def test_bye_week_team_gets_correct_means_and_no_phantom_opponent() -> None:
     """A team idle in a week keeps correct means and gains no invented opponent."""
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=4
     )
 
+    # Assert
     # NYJ and DEN are idle in week 4, so only their week 5 game remains.
     assert _remaining_adj(result, "NYJ") == pytest.approx(1.0)
     assert _remaining_adj(result, "DEN") == pytest.approx(5.0)
@@ -210,10 +218,12 @@ def test_bye_week_team_gets_correct_means_and_no_phantom_opponent() -> None:
 
 def test_opponent_faced_twice_counts_once_on_both_sides() -> None:
     """A repeat opponent carries equal weight with a single-meeting opponent."""
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=4
     )
 
+    # Assert
     # BUF met MIA in weeks 1 and 3; weighting per game would give (2 + 3 + 2) / 3.
     assert _played_adj(result, "BUF") == pytest.approx(2.5)
     assert _played_adj(result, "BUF") != pytest.approx((2.0 + 3.0 + 2.0) / 3)
@@ -223,10 +233,12 @@ def test_opponent_faced_twice_counts_once_on_both_sides() -> None:
 
 def test_unrated_opponents_are_excluded_and_all_unrated_yields_null() -> None:
     """Opponents without a rating drop out of the mean instead of biasing it."""
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame({"NYJ": 3.0}), season=2024, week=4
     )
 
+    # Assert
     # BUF faced MIA and NYJ; only NYJ is rated, so the mean is NYJ's rating.
     assert _played_adj(result, "BUF") == pytest.approx(3.0)
     # MIA faced BUF and KC, neither rated.
@@ -235,6 +247,7 @@ def test_unrated_opponents_are_excluded_and_all_unrated_yields_null() -> None:
 
 def test_adjusted_ignores_other_seasons() -> None:
     """A decoy row from another season never reaches the requested season's means."""
+    # Arrange
     decoy = pl.DataFrame(
         {
             "season": pl.Series([2023], dtype=pl.Int64),
@@ -244,19 +257,22 @@ def test_adjusted_ignores_other_seasons() -> None:
         }
     )
     schedule = pl.concat([_schedule_frame(), decoy], how="vertical")
-
-    result = schedule_strength.compute_schedule_strength_adjusted(
-        schedule, _ratings_frame(), season=2024, week=4
-    )
     baseline = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=4
     )
 
+    # Act
+    result = schedule_strength.compute_schedule_strength_adjusted(
+        schedule, _ratings_frame(), season=2024, week=4
+    )
+
+    # Assert
     assert_frame_equal(result, baseline)
 
 
 def test_adjusted_played_side_excludes_current_and_postseason_weeks() -> None:
     """Games at or after the requested week, postseason included, stay off the played side."""
+    # Arrange
     postseason = pl.DataFrame(
         {
             "season": pl.Series([2024], dtype=pl.Int64),
@@ -267,10 +283,12 @@ def test_adjusted_played_side_excludes_current_and_postseason_weeks() -> None:
     )
     schedule = pl.concat([_schedule_frame(), postseason], how="vertical")
 
+    # Act
     result = schedule_strength.compute_schedule_strength_adjusted(
         schedule, _ratings_frame(), season=2024, week=4
     )
 
+    # Assert
     # BUF's played mean stays mean(MIA, NYJ) even though weeks 4, 5 and 20 exist.
     assert _played_adj(result, "BUF") == pytest.approx((2.0 + 3.0) / 2)
     # The postseason meeting only shows up on the remaining side: KC, NYJ, DEN.
@@ -284,10 +302,12 @@ def test_adjusted_played_side_excludes_current_and_postseason_weeks() -> None:
 
 def test_raw_played_matches_hand_computed_head_to_head_excluded_mean() -> None:
     """Each opponent profile drops its games against the subject before averaging."""
+    # Act
     result = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(), season=2024, week=4
     )
 
+    # Assert
     # BUF faced MIA and NYJ.
     #   MIA without BUF: {+0.50}                -> 0.50
     #   NYJ without BUF: {+0.20, +0.90}         -> 0.55
@@ -318,31 +338,47 @@ def test_raw_played_matches_hand_computed_head_to_head_excluded_mean() -> None:
     assert _played_raw(result, "DEN") == pytest.approx((-0.65 + 0.30 - 0.10) / 3)
 
 
-def test_raw_played_ignores_head_to_head_games_but_tracks_third_party_games() -> None:
-    """Head-to-head games cannot move the subject's value while third-party games can."""
+def test_raw_played_ignores_head_to_head_games() -> None:
+    """Head-to-head games cannot move the subject's value."""
+    # Arrange
     baseline = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(), season=2024, week=4
     )
     baseline_buf = _played_raw(baseline, "BUF")
-
     # Perturb BUF's own week 3 meeting with MIA on both mirror rows.
     head_to_head = [
         (week, away, home, -5.0 if (week, away, home) == (3, "MIA", "BUF") else margin)
         for week, away, home, margin in _TEAM_GAME_MARGINS
     ]
+
+    # Act
     unchanged = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(head_to_head), season=2024, week=4
     )
+
+    # Assert
     assert _played_raw(unchanged, "BUF") == pytest.approx(baseline_buf)
 
+
+def test_raw_played_tracks_third_party_games() -> None:
+    """Third-party games move the subject's value."""
+    # Arrange
+    baseline = schedule_strength.compute_schedule_strength_raw(
+        _team_games_frame(), season=2024, week=4
+    )
+    baseline_buf = _played_raw(baseline, "BUF")
     # Perturb MIA's week 2 game against KC, a third team.
     third_party = [
         (week, away, home, 2.0 if (week, away, home) == (2, "MIA", "KC") else margin)
         for week, away, home, margin in _TEAM_GAME_MARGINS
     ]
+
+    # Act
     changed = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(third_party), season=2024, week=4
     )
+
+    # Assert
     # MIA without BUF is now {+2.00}; NYJ without BUF is unchanged at 0.55.
     assert _played_raw(changed, "BUF") == pytest.approx((2.00 + 0.55) / 2)
     assert _played_raw(changed, "BUF") != pytest.approx(baseline_buf)
@@ -350,64 +386,82 @@ def test_raw_played_ignores_head_to_head_games_but_tracks_third_party_games() ->
 
 def test_raw_drops_opponents_left_with_no_games_after_the_exclusion() -> None:
     """An opponent whose only prior game was the head-to-head contributes nothing."""
+    # Arrange
     margins = [
         (1, "BUF", "MIA", 0.10),
         (1, "NYJ", "NE", 0.20),
         (2, "BUF", "NYJ", 0.40),
     ]
+
+    # Act
     result = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(margins), season=2024, week=3
     )
 
+    # Assert
     # BUF faced MIA and NYJ; MIA has played only BUF, so only NYJ survives: {+0.20}.
     assert _played_raw(result, "BUF") == pytest.approx(0.20)
 
+
+def test_raw_is_null_when_the_only_prior_game_is_the_head_to_head() -> None:
+    """With one game played, each side's lone opponent has no other games to profile."""
+    # Act
     lone_game = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame([(1, "BUF", "MIA", 0.10)]), season=2024, week=2
     )
+
+    # Assert
     assert _played_raw(lone_game, "BUF") is None
     assert _played_raw(lone_game, "MIA") is None
 
 
 def test_raw_is_null_before_any_games_are_played() -> None:
     """Week 1 leaves nothing to profile, so every team's value is null."""
+    # Act
     result = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(), season=2024, week=1
     )
 
+    # Assert
     assert result.height == 6
     assert result["sos_played_raw"].null_count() == 6
 
 
 def test_raw_ignores_other_seasons() -> None:
     """A decoy team-game from another season never reaches the requested season."""
+    # Arrange
     decoy = _team_games_frame([(1, "BUF", "DEN", 9.0)], season=2023)
     team_games = pl.concat([_team_games_frame(), decoy], how="vertical")
-
-    result = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
     baseline = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(), season=2024, week=4
     )
 
+    # Act
+    result = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
+
+    # Assert
     assert_frame_equal(result, baseline)
 
 
 def test_raw_played_side_excludes_current_and_later_weeks() -> None:
     """Team-games at or after the requested week never leak into the played side."""
+    # Arrange
     future = _team_games_frame([(4, "BUF", "DEN", 9.0), (20, "BUF", "KC", -9.0)])
     team_games = pl.concat([_team_games_frame(), future], how="vertical")
-
-    result = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
     baseline = schedule_strength.compute_schedule_strength_raw(
         _team_games_frame(), season=2024, week=4
     )
 
+    # Act
+    result = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
+
+    # Assert
     assert_frame_equal(result, baseline)
 
 
-def test_raw_uses_ratio_of_sums_when_numerator_and_denominator_are_supplied() -> None:
-    """Summed numerator over summed denominator differs from the mean of per-game rates."""
-    team_games = pl.DataFrame(
+def _summed_team_games() -> pl.DataFrame:
+    """Return team-games whose per-game rates and summed totals average differently."""
+    return pl.DataFrame(
         {
             "season": pl.Series([2024] * 10, dtype=pl.Int64),
             "week": pl.Series([1, 1, 1, 1, 2, 2, 2, 2, 3, 3], dtype=pl.Int64),
@@ -431,6 +485,14 @@ def test_raw_uses_ratio_of_sums_when_numerator_and_denominator_are_supplied() ->
         (pl.col("epa_margin_sum") / pl.col("total_play_count")).alias("epa_margin_per_play")
     )
 
+
+def test_raw_uses_ratio_of_sums_when_numerator_and_denominator_are_supplied() -> None:
+    """Summed numerator over summed denominator differs from the mean of per-game rates."""
+    # Arrange
+    team_games = _summed_team_games()
+    rates = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
+
+    # Act
     sums = schedule_strength.compute_schedule_strength_raw(
         team_games,
         season=2024,
@@ -439,18 +501,29 @@ def test_raw_uses_ratio_of_sums_when_numerator_and_denominator_are_supplied() ->
             numerator="epa_margin_sum", denominator="total_play_count"
         ),
     )
-    rates = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
 
+    # Assert
     # BUF faced MIA (w1) and NE (w2).
     #   MIA without BUF: (30 + 10) / (50 + 150) = 0.20 by sums,
     #                    mean(30 / 50, 10 / 150) = 1 / 3 by rates.
     #   NE without BUF:  (-4 + -10) / (50 + 150) = -0.07 by sums,
     #                    mean(-4 / 50, -10 / 150) by rates.
     assert _played_raw(sums, "BUF") == pytest.approx((0.20 - 0.07) / 2)
+    assert _played_raw(sums, "BUF") != pytest.approx(_played_raw(rates, "BUF"))
+
+
+def test_raw_without_a_margin_source_averages_per_game_rates() -> None:
+    """Without a numerator and denominator, each opponent's per-game rates are averaged."""
+    # Arrange
+    team_games = _summed_team_games()
+
+    # Act
+    rates = schedule_strength.compute_schedule_strength_raw(team_games, season=2024, week=4)
+
+    # Assert
     assert _played_raw(rates, "BUF") == pytest.approx(
         ((30.0 / 50.0 + 10.0 / 150.0) / 2 + (-4.0 / 50.0 + -10.0 / 150.0) / 2) / 2
     )
-    assert _played_raw(sums, "BUF") != pytest.approx(_played_raw(rates, "BUF"))
 
 
 # --------------------------------------------------------------------------------------
@@ -460,6 +533,7 @@ def test_raw_uses_ratio_of_sums_when_numerator_and_denominator_are_supplied() ->
 
 def test_empty_inputs_return_typed_empty_frames() -> None:
     """Empty inputs produce empty frames carrying the full documented schema."""
+    # Arrange
     empty_schedule = pl.DataFrame(
         schema={
             "season": pl.Int64,
@@ -469,9 +543,13 @@ def test_empty_inputs_return_typed_empty_frames() -> None:
         }
     )
     empty_ratings = pl.DataFrame(schema={"team_abbr": pl.Utf8, "rating": pl.Float64})
+
+    # Act
     adjusted = schedule_strength.compute_schedule_strength_adjusted(
         empty_schedule, empty_ratings, season=2024, week=4
     )
+
+    # Assert
     assert adjusted.height == 0
     assert adjusted.schema == pl.Schema(
         {
@@ -481,6 +559,10 @@ def test_empty_inputs_return_typed_empty_frames() -> None:
         }
     )
 
+
+def test_empty_team_games_return_a_typed_empty_raw_frame() -> None:
+    """Empty team-games produce an empty raw frame carrying the full documented schema."""
+    # Arrange
     empty_team_games = pl.DataFrame(
         schema={
             "season": pl.Int64,
@@ -490,38 +572,62 @@ def test_empty_inputs_return_typed_empty_frames() -> None:
             "epa_margin_per_play": pl.Float64,
         }
     )
+
+    # Act
     raw = schedule_strength.compute_schedule_strength_raw(empty_team_games, season=2024, week=4)
+
+    # Assert
     assert raw.height == 0
     assert raw.schema == pl.Schema({"team_abbr": pl.Utf8, "sos_played_raw": pl.Float64})
 
 
 def test_populated_results_are_sorted_and_float64() -> None:
-    """Both helpers return team-sorted frames with Float64 value columns."""
+    """The adjusted helper returns a team-sorted frame with Float64 value columns."""
+    # Act
     adjusted = schedule_strength.compute_schedule_strength_adjusted(
         _schedule_frame(), _ratings_frame(), season=2024, week=4
     )
+
+    # Assert
     assert adjusted["team_abbr"].to_list() == sorted(_RATING_VALUES)
     assert adjusted.schema["sos_played_adj"] == pl.Float64
     assert adjusted.schema["sos_remaining_adj"] == pl.Float64
 
+
+def test_populated_raw_results_are_sorted_and_float64() -> None:
+    """The raw helper returns a team-sorted frame with a Float64 value column."""
+    # Act
     raw = schedule_strength.compute_schedule_strength_raw(_team_games_frame(), season=2024, week=4)
+
+    # Assert
     assert raw["team_abbr"].to_list() == sorted(_RATING_VALUES)
     assert raw.schema["sos_played_raw"] == pl.Float64
 
 
 def test_invalid_inputs_raise_value_errors() -> None:
-    """Missing columns, duplicate ratings, and half-supplied sums are rejected."""
+    """Missing columns are rejected."""
+    # Act & Assert
     with pytest.raises(ValueError, match="missing required columns"):
         schedule_strength.compute_schedule_strength_adjusted(
             _schedule_frame().drop("home_abbr"), _ratings_frame(), season=2024, week=4
         )
 
+
+def test_duplicate_ratings_raise_a_value_error() -> None:
+    """Duplicate ratings are rejected."""
+    # Arrange
     duplicated = pl.concat([_ratings_frame(), _ratings_frame().head(1)], how="vertical")
+
+    # Act & Assert
     with pytest.raises(ValueError, match="one rating per team"):
         schedule_strength.compute_schedule_strength_adjusted(
             _schedule_frame(), duplicated, season=2024, week=4
         )
 
+
+def test_half_supplied_sums_raise_a_value_error() -> None:
+    """A numerator without a denominator is rejected."""
+    # Act & Assert
     with pytest.raises(ValueError, match="numerator_col and denominator_col"):
         schedule_strength.compute_schedule_strength_raw(
             _team_games_frame(),

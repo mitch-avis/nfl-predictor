@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from nfl_predictor import constants
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import power_rankings, rating_sources
 from nfl_predictor.weekly_run import config as run_config
@@ -27,6 +28,11 @@ from tests.weekly_fixture import build_fixture, write_weekly_config
 
 def _args(argv: list[str]):
     return run_config._build_parser().parse_args(argv)
+
+
+def _from_root(*parts: str) -> Path:
+    """Return the repository-root path the rankings read for a relative entry."""
+    return Path(constants.ROOT_DIR).joinpath(*parts)
 
 
 def test_weekly_rating_source_flags_reach_the_ranking_options() -> None:
@@ -51,7 +57,7 @@ def test_weekly_rating_source_flags_reach_the_ranking_options() -> None:
     # Assert
     assert options.method == "blend"
     assert options.ratings_dir == Path("ratings")
-    assert options.model_predictions == (Path("runs/a"), Path("runs/b"))
+    assert options.model_predictions == (_from_root("runs/a"), _from_root("runs/b"))
     assert options.blend_weight == pytest.approx(0.4)
 
 
@@ -216,6 +222,22 @@ DEFAULT_SOURCE_FLAGS = [
 ]
 
 
+def test_the_rankings_read_relative_prediction_sources_from_the_repository_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run started outside the repo root still finds the predictions a config names."""
+    # Arrange
+    absolute = tmp_path / "abs_run"
+    args = _args(["--power-rankings-model-predictions", "runs/a", str(absolute)])
+    monkeypatch.chdir(tmp_path)
+
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
+    # Assert
+    assert options.model_predictions == (_from_root("runs/a"), absolute)
+
+
 def test_weekly_points_method_defaults_to_stage_one_folds_and_reference_runs() -> None:
     # Arrange
     args = _args(DEFAULT_SOURCE_FLAGS)
@@ -225,7 +247,10 @@ def test_weekly_points_method_defaults_to_stage_one_folds_and_reference_runs() -
 
     # Assert
     assert options.model_predictions == (Path("run/wf_compare"),)
-    assert options.reference_predictions == (Path("ref/seed42"), Path("ref/seed7"))
+    assert options.reference_predictions == (
+        _from_root("ref/seed42"),
+        _from_root("ref/seed7"),
+    )
 
 
 def test_explicit_model_predictions_override_the_weekly_default() -> None:
@@ -236,7 +261,7 @@ def test_explicit_model_predictions_override_the_weekly_default() -> None:
     options = run_config.power_ranking_options(args, run_dir=Path("run"))
 
     # Assert
-    assert options.model_predictions == (Path("runs/a"),)
+    assert options.model_predictions == (_from_root("runs/a"),)
     assert options.reference_predictions == ()
 
 
@@ -249,7 +274,10 @@ def test_report_config_of_the_default_blend_names_its_resolved_sources() -> None
 
     # Assert
     assert report["power_rankings_model_predictions"] == [str(Path("run/wf_compare"))]
-    assert report["power_rankings_reference_predictions"] == ["ref/seed42", "ref/seed7"]
+    assert report["power_rankings_reference_predictions"] == [
+        str(_from_root("ref/seed42")),
+        str(_from_root("ref/seed7")),
+    ]
     assert report["power_rankings_blend_weight"] == pytest.approx(0.5)
 
 

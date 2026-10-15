@@ -253,21 +253,17 @@ def test_a_relative_config_path_is_read_from_the_working_directory(
 
 
 @pytest.mark.parametrize("key", PATH_LIST_KEYS)
-def test_a_path_list_resolves_relative_paths_against_the_repository_root_in_order(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str
-) -> None:
+def test_a_path_list_keeps_its_paths_as_written_in_order(tmp_path: Path, key: str) -> None:
+    """Whatever reads the list takes a relative entry from the repository root."""
     # Arrange
     absolute = tmp_path / "abs_run"
     path = _write(tmp_path / "weekly.json", json.dumps({key: ["runs/a", str(absolute)]}))
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    monkeypatch.chdir(elsewhere)
 
     # Act
     args = _parse_with(path)
 
     # Assert
-    assert list(getattr(args, key)) == [Path(constants.ROOT_DIR) / "runs" / "a", absolute]
+    assert list(getattr(args, key)) == [Path("runs/a"), absolute]
 
 
 @pytest.mark.parametrize("key", SCALAR_PATH_KEYS)

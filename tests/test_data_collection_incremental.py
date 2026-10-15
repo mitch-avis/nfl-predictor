@@ -27,8 +27,10 @@ from polars.testing import assert_frame_equal
 from nfl_predictor import constants, data_collection
 from nfl_predictor.ratings.season import BootstrapSettings
 from nfl_predictor.season_stats.sources import OFFICIAL_TEAM_STATS
-from nfl_predictor.utils import clock, polars_utils, season_cache
+from nfl_predictor.utils import clock, game_utils, polars_utils, season_cache
 from nfl_predictor.utils.polars import nflverse_sources, ratings_build, season_stats_build
+from nfl_predictor.utils.polars.strength_table import combine_strength_snapshots
+from tests.fakes import returning
 from tests.ratings_league import (
     plays_for,
     rewritten_plays,
@@ -74,7 +76,7 @@ class _World:
     ratings_schedule: pl.DataFrame
     # The players file: each team's starter.
     players: pl.DataFrame
-    rankings: dict[int, pl.DataFrame] = field(default_factory=dict)
+    rankings: dict[int, pl.DataFrame] = field(default_factory=dict[int, pl.DataFrame])
 
 
 def _world(seed: int = 7, *, played_through: int = _CURRENT_WEEK - 1) -> _World:
@@ -250,8 +252,8 @@ class _Run:
     """The world one ETL run reads, the seasons it built and what it returned."""
 
     world: _World
-    built: list[int] = field(default_factory=list)
-    rated: list[int] = field(default_factory=list)
+    built: list[int] = field(default_factory=list[int])
+    rated: list[int] = field(default_factory=list[int])
     games: pl.DataFrame | None = None
     snapshots: pl.DataFrame | None = None
 
@@ -309,24 +311,27 @@ def _install(monkeypatch: pytest.MonkeyPatch, run: _Run) -> None:
         records: data_collection.CollectionRecords,
     ) -> pl.DataFrame:
         run.games = collect_all_data(seasons, config=config, records=records)
-        run.snapshots = data_collection.combine_strength_snapshots(records.strength_snapshots)
+        run.snapshots = combine_strength_snapshots(records.strength_snapshots)
         return run.games
 
     monkeypatch.setattr(data_collection, "_load_sources", load_sources)
     monkeypatch.setattr(data_collection, "process_season", counting_process_season)
     monkeypatch.setattr(ratings_build.RatingsBuild, "build", counting_build_ratings)
     monkeypatch.setattr(data_collection, "collect_all_data", recording_collect_all_data)
-    monkeypatch.setattr(
-        polars_utils,
-        "load_team_rankings",
-        lambda season, *_args, **_kwargs: run.world.rankings[season],
-    )
+
+    def world_team_rankings(season: int, *_args: object, **_kwargs: object) -> pl.DataFrame:
+        return run.world.rankings[season]
+
+    def games_unchanged(games: pl.DataFrame, *_args: object, **_kwargs: object) -> pl.DataFrame:
+        return games
+
+    monkeypatch.setattr(polars_utils, "load_team_rankings", world_team_rankings)
     # The world has no play-by-play: no quarterback history, so no quarterback join.
-    monkeypatch.setattr(data_collection, "_quarterback_history", lambda *_a, **_k: None)
-    monkeypatch.setattr(data_collection, "_attach_qb_features", lambda games, *_a, **_k: games)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
+    monkeypatch.setattr(data_collection, "_quarterback_history", returning(None))
+    monkeypatch.setattr(data_collection, "_attach_qb_features", games_unchanged)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", games_unchanged)
     monkeypatch.setattr(clock, "local_today", lambda: date(_CURRENT_SEASON, 9, 22))
-    monkeypatch.setattr(clock, "nfl_week", lambda _today: _CURRENT_WEEK)
+    monkeypatch.setattr(clock, "nfl_week", returning(_CURRENT_WEEK))
 
 
 # The fixture stubs the stored-line fills; the pick-time source would download nfelo's lines.
@@ -771,10 +776,8 @@ def _season_keys(
 
 
 def _incremental_config(**changes: object) -> data_collection.DataCollectionConfig:
-    config = data_collection.replace(
-        data_collection._default_config(list(_SEASONS)), incremental=True
-    )
-    return data_collection.replace(config, **changes)
+    config = dataclasses.replace(data_collection._default_config(list(_SEASONS)), incremental=True)
+    return dataclasses.replace(config, **changes)
 
 
 @pytest.mark.parametrize("source", ["schedule", "team_stats", "elo", "rankings", "plays"])
@@ -991,7 +994,7 @@ def test_a_season_without_a_key_is_rebuilt_and_not_cached(
     baseline: _Baseline, etl: _Run, warm_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(season_cache.SeasonKeys, "key", lambda *_args: None)
+    monkeypatch.setattr(season_cache.SeasonKeys, "key", returning(None))
     stamps = _stamps(_cache_dir(warm_dir))
 
     # Act

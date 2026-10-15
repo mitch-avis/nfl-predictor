@@ -17,9 +17,12 @@ import polars as pl
 from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.utils import polars_utils
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 def _minimal_frame() -> pl.DataFrame:
@@ -77,7 +80,9 @@ def test_select_final_columns_richer_input_keeps_the_same_schema() -> None:
     assert out_rich.columns == final_order
 
 
-def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypatch) -> None:
+def test_training_report_includes_missing_data_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Training report includes missing-data prevalence summary."""
     # Arrange
     # Minimal training CSV that includes the default feature range endpoints.
@@ -115,9 +120,7 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
             market_columns=[],
         )
 
-    monkeypatch.setattr(
-        ml_model_training, "train_margin_total_model", lambda _options: _DummyModel()
-    )
+    monkeypatch.setattr(ml_model_training, "train_margin_total_model", returning(_DummyModel()))
 
     optuna = ml_model.OptunaConfig(
         enabled=False,

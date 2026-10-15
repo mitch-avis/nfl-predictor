@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from nfl_predictor.cli import train
+from nfl_predictor.ml import artifacts
 from nfl_predictor.weekly_run import config as weekly_config
+from tests.fakes import returning
 from tests.feature_group_fixture import GROUP_COLUMNS, RATINGS_COLUMNS, build_group_fixture
 
 if TYPE_CHECKING:
@@ -169,8 +171,8 @@ def test_predicting_with_a_saved_model_says_the_option_does_not_apply(
 ) -> None:
     # Arrange
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(train, "load_model_checkpoint", lambda *_args: "model")
-    monkeypatch.setattr(train.artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(train, "load_model_checkpoint", returning("model"))
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(
         sys,
         "argv",
@@ -195,8 +197,8 @@ def test_predicting_without_the_option_says_nothing_about_it(
 ) -> None:
     # Arrange
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(train, "load_model_checkpoint", lambda *_args: "model")
-    monkeypatch.setattr(train.artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(train, "load_model_checkpoint", returning("model"))
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(
         sys, "argv", ["nfl-predictor predict", "--model-in", str(tmp_path / "model.joblib")]
     )

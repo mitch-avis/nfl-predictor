@@ -1,16 +1,21 @@
 [build-system]
-requires = ["uv_build>=0.12,<0.13"]
+requires = ["uv_build>=0.13"]
 build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
 version = "0.59.0"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
-keywords = ["stats", "sports", "football", "machine learning"]
 readme = "README.md"
-authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
 requires-python = ">=3.14"
-license = "MIT"
+license = { file = "LICENSE" }
+authors = [{ name = "Mitch Avis", email = "mitchavis@gmail.com" }]
+keywords = ["stats", "sports", "football", "machine learning"]
+classifiers = [
+    "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+]
 dependencies = [
     "argon2-cffi>=25.1",
     "beautifulsoup4>=4.15",
@@ -24,7 +29,7 @@ dependencies = [
     "optuna>=5.0",
     "pandas>=3.0",
     "polars>=2.0",
-    "pydantic-settings>=2.15",
+    "pydantic-settings>=2.16",
     "pyjwt>=2.15",
     "python-multipart>=0.0.32",
     "pyyaml>=6.0",
@@ -36,39 +41,32 @@ dependencies = [
     "uvicorn[standard]>=0.54",
     "xgboost>=3.4",
 ]
-classifiers = [
-    "Programming Language :: Python :: 3.14",
-    "Operating System :: POSIX :: Linux",
-]
-
-[project.scripts]
-nfl-lightgbm-cuda-install = "nfl_predictor.lightgbm_cuda:main"
-nfl-predictor = "nfl_predictor.cli.main:main"
-
-[project.urls]
-Homepage = "https://github.com/mitch-avis/nfl-predictor"
 
 [dependency-groups]
 dev = [
     "colorama>=0.4",
     "httpx2>=2.13",
     "pandas-stubs>=3.0",
-    "pre-commit>=4.6",
+    "pre-commit>=4.7",
     "pyright>=1.1",
-    "pytest>=9.1",
     "pytest-cov>=7.1",
     "pytest-html>=4.2",
     "pytest-metadata>=3.1",
     "pytest-sugar>=1.1",
     "pytest-xdist>=3.8",
-    "ruff>=0.16",
+    "pytest>=9.1",
+    "ruff>=0.17",
     "scikit-build-core>=1.1",
-    "ty>=0.0.85",
+    "ty>=0.0.88",
 ]
+
+[project.scripts]
+nfl-lightgbm-cuda-install = "nfl_predictor.lightgbm_cuda:main"
+nfl-predictor = "nfl_predictor.cli.main:main"
 
 [tool.uv]
 default-groups = ["dev"]
-required-version = ">=0.12"
+required-version = ">=0.13"
 no-build-isolation-package = ["lightgbm"]
 
 [tool.uv.extra-build-dependencies]
@@ -78,15 +76,15 @@ lightgbm = ["scikit-build-core"]
 # Ruff: format + lint (strict)
 # --------------------------------------------------------------------------------------------
 [tool.ruff]
-line-length = 100
 target-version = "py314"
+line-length = 100
 src = ["src", "tests"]
 extend-exclude = [
     ".venv",
     ".git",
     "__pycache__",
     ".pytest_cache",
-    ".mypy_cache",
+    ".ruff_cache",
     "build",
     "dist",
     "web",
@@ -97,9 +95,6 @@ extend-exclude = [
 
 [tool.ruff.format]
 docstring-code-format = true
-
-[tool.ruff.lint.isort]
-known-first-party = ["nfl_predictor"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -115,6 +110,9 @@ ignore = [
     "ISC001", # Conflicts with `ruff format`, which joins implicit concatenations
     "CPY001", # The license is declared once in pyproject.toml, not per file
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nfl_predictor", "tests"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -182,6 +180,9 @@ extend-allowed-calls = ["polars.lit"]
     "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
 ]
 
+# --------------------------------------------------------------------------------------------
+# Type checking: ty and pyright (strict)
+# --------------------------------------------------------------------------------------------
 [tool.ty.environment]
 # Pin ty to the repo venv so local and CI checks resolve the same interpreter.
 python = ".venv"
@@ -189,55 +190,20 @@ python-version = "3.14"
 
 [tool.ty.src]
 # Limit ty to the checked-in source roots we validate in CI.
-include = ["src", "scripts", "tests"]
+include = ["src", "tests"]
 
 [tool.pyright]
 pythonVersion = "3.14"
-# Keep pyright on the repo's stable standard-mode baseline, then promote the specific diagnostics we
-# rely on in CI and Pylance.
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
+pythonPlatform = "Linux"
 venvPath = "."
 venv = ".venv"
-pythonPlatform = "Linux"
-stubPath = "stubs"
 executionEnvironments = [{ root = "." }]
-exclude = [
-    "**/__pycache__",
-    "**/.*",
-    ".venv",
-    "**/node_modules",
-    # `nfl-sos-ratings` is a gitignored symlink to the read-only reference repo; it is not part
-    # of this project's type-check surface. `models/` holds gitignored run directories whose review
-    # scripts are frozen records of the code they ran against, so CI never sees them either. The
-    # rest of the list restores pyright's defaults.
-    "nfl-sos-ratings",
-    "models",
-    "web",
-]
-# --- Standard-mode diagnostics promoted to errors (also surfaced by Pylance) ----------
-reportMissingImports = "error"
-reportMissingModuleSource = "warning"
-reportAttributeAccessIssue = "error"
-reportAssignmentType = "error"
-reportArgumentType = "error"
-reportReturnType = "error"
-reportCallIssue = "error"
-reportIndexIssue = "error"
-reportOperatorIssue = "error"
-reportOptionalSubscript = "error"
-reportOptionalMemberAccess = "error"
-reportOptionalCall = "error"
-reportOptionalIterable = "error"
-reportOptionalContextManager = "error"
-reportOptionalOperand = "error"
-reportGeneralTypeIssues = "error"
-reportMissingTypeStubs = false
-reportUnknownVariableType = "none"
-reportUnknownMemberType = "none"
-reportUnknownArgumentType = "none"
-reportUnknownParameterType = "none"
-reportUnknownLambdaType = "none"
+include = ["src", "tests"]
 
+# --------------------------------------------------------------------------------------------
+# Tests and coverage
+# --------------------------------------------------------------------------------------------
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]

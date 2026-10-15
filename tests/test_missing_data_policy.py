@@ -22,12 +22,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_select_final_columns_enforces_invariant_schema() -> None:
-    """select_final_columns always produces the full expected schema."""
-    final_order = polars_utils.build_final_column_order()
-
-    # Minimal input missing most columns.
-    df_min = pl.DataFrame(
+def _minimal_frame() -> pl.DataFrame:
+    """Return an input frame missing most of the final columns."""
+    return pl.DataFrame(
         {
             "game_id": ["2020_01_BUF_KC"],
             "season": [2020],
@@ -38,14 +35,20 @@ def test_select_final_columns_enforces_invariant_schema() -> None:
         }
     )
 
-    # Richer input includes a market field.
-    df_rich = df_min.with_columns([pl.lit(None).alias("home_moneyline")])
 
+def test_select_final_columns_enforces_invariant_schema() -> None:
+    """select_final_columns always produces the full expected schema."""
+    # Arrange
+    final_order = polars_utils.build_final_column_order()
+
+    # Minimal input missing most columns.
+    df_min = _minimal_frame()
+
+    # Act
     out_min = polars_utils.select_final_columns(df_min)
-    out_rich = polars_utils.select_final_columns(df_rich)
 
+    # Assert
     assert out_min.columns == final_order
-    assert out_rich.columns == final_order
 
     # Spot-check that key output groups are always present.
     required_cols = {
@@ -59,8 +62,24 @@ def test_select_final_columns_enforces_invariant_schema() -> None:
     assert out_min.select(pl.col("home_moneyline").is_null().all()).item() is True
 
 
+def test_select_final_columns_richer_input_keeps_the_same_schema() -> None:
+    """An input that already carries a market field gets the same full schema."""
+    # Arrange
+    final_order = polars_utils.build_final_column_order()
+
+    # Richer input includes a market field.
+    df_rich = _minimal_frame().with_columns([pl.lit(None).alias("home_moneyline")])
+
+    # Act
+    out_rich = polars_utils.select_final_columns(df_rich)
+
+    # Assert
+    assert out_rich.columns == final_order
+
+
 def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypatch) -> None:
     """Training report includes missing-data prevalence summary."""
+    # Arrange
     # Minimal training CSV that includes the default feature range endpoints.
     # We leave market fields entirely null to simulate historical missing coverage.
     df = pd.DataFrame(
@@ -115,6 +134,7 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
         xgb_n_jobs=1,
     )
 
+    # Act
     result = ml_model.train_margin_total_model_with_report(
         ml_model_training.TrainingOptions(
             data_path=data_path,
@@ -127,6 +147,7 @@ def test_training_report_includes_missing_data_summary(tmp_path: Path, monkeypat
         )
     )
 
+    # Assert
     missing = result.metrics_report["missing_data"]
     assert missing["total_rows"] == 3
     assert missing["groups"]["lines"]["columns_all_null"] is not None

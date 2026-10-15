@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -31,7 +31,7 @@ def store(runner: JobRunner) -> JobStore:
     return runner.store
 
 
-def _run_validate_offline(admin_client: TestClient, runner: JobRunner) -> dict[str, object]:
+def _run_validate_offline(admin_client: TestClient, runner: JobRunner) -> dict[str, Any]:
     """Submit the registered ``validate_offline`` job and wait for it to succeed."""
     job = admin_client.post(
         "/api/jobs", json={"template_id": "validate_offline", "params": {}}
@@ -40,7 +40,7 @@ def _run_validate_offline(admin_client: TestClient, runner: JobRunner) -> dict[s
     return job
 
 
-def _start_sleeping_job(admin_client: TestClient, runner: JobRunner) -> dict[str, object]:
+def _start_sleeping_job(admin_client: TestClient, runner: JobRunner) -> dict[str, Any]:
     """Submit the registered sleeping ``validate_offline`` job and wait for its first line."""
     job = admin_client.post(
         "/api/jobs", json={"template_id": "validate_offline", "params": {}}

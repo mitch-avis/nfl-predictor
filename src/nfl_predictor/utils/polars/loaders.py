@@ -8,7 +8,7 @@ import functools
 import json
 import operator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeGuard
 
 import nflreadpy as nfl
 import polars as pl
@@ -25,6 +25,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from polars.datatypes import DataType
+
+    from nfl_predictor.ml.artifacts import JsonValue
 
 NUMERIC_DTYPES = {
     pl.Int8,
@@ -131,10 +133,10 @@ _SKELETON_SCHEMA = pl.Schema(
 
 def _is_numeric_dtype(dtype: DataType) -> bool:
     """Return True if dtype is numeric."""
-    return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
+    return isinstance(dtype, (pl.Decimal, *NUMERIC_DTYPES))
 
 
-def _resolve_cache_dir(cache_dir: os.PathLike | str | None) -> Path:
+def _resolve_cache_dir(cache_dir: os.PathLike[str] | str | None) -> Path:
     """Resolve the nflreadpy cache directory and ensure it exists."""
     resolved = Path(cache_dir) if cache_dir is not None else constants.NFLREADPY_CACHE_DIR
     resolved.mkdir(parents=True, exist_ok=True)
@@ -166,6 +168,11 @@ def _pbp_cache_path(cache_dir: Path, season: int, *, regular_season_only: bool) 
     return cache_dir / f"pbp_{season}_{suffix}.parquet"
 
 
+def _all_names(values: list[JsonValue]) -> TypeGuard[list[str]]:
+    """Return True when every value of a parsed JSON list is a column name (a string)."""
+    return all(isinstance(value, str) for value in values)
+
+
 def _recorded_requested_columns(path: Path) -> frozenset[str]:
     """Return the columns requested when a cache file was written, or none if not recorded.
 
@@ -176,8 +183,8 @@ def _recorded_requested_columns(path: Path) -> frozenset[str]:
     recorded = pl.read_parquet_metadata(path).get(_REQUESTED_COLUMNS_METADATA_KEY)
     if recorded is None:
         return frozenset()
-    columns = json.loads(recorded)
-    if not isinstance(columns, list) or not all(isinstance(c, str) for c in columns):
+    columns: JsonValue = json.loads(recorded)
+    if not isinstance(columns, list) or not _all_names(columns):
         msg = f"recorded requested columns are not a list of names: {recorded[:80]}"
         raise ValueError(msg)
     return frozenset(columns)
@@ -275,7 +282,7 @@ def _warn_about_unlisted_venues(stadium_ids: pl.Series) -> None:
     without_id = stadium_ids.null_count()
     if unlisted.is_empty() and not without_id:
         return
-    parts = []
+    parts: list[str] = []
     if not unlisted.is_empty():
         venues = sorted(unlisted.unique(maintain_order=True).to_list())
         parts.append(f"venue ids {venues} ({_plural(unlisted.len(), 'game')})")
@@ -510,7 +517,7 @@ def _team_stats_requested_columns() -> tuple[str, ...]:
 def load_schedule(
     seasons: list[int],
     *,
-    cache_dir: os.PathLike | str | None = None,
+    cache_dir: os.PathLike[str] | str | None = None,
     force_refresh: bool = False,
     current_season: int | None = None,
 ) -> pl.DataFrame:
@@ -605,7 +612,7 @@ def load_team_stats(
     seasons: list[int],
     *,
     regular_season_only: bool = True,
-    cache_dir: os.PathLike | str | None = None,
+    cache_dir: os.PathLike[str] | str | None = None,
     force_refresh: bool = False,
     current_season: int | None = None,
 ) -> pl.DataFrame:
@@ -1163,7 +1170,7 @@ def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.Da
 def load_pbp(
     seasons: list[int],
     *,
-    cache_dir: os.PathLike | str | None = None,
+    cache_dir: os.PathLike[str] | str | None = None,
     force_refresh: bool = False,
     current_season: int | None = None,
     regular_season_only: bool = True,

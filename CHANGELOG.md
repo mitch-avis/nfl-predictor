@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.59.5] - 2026-10-15
+
+### Removed
+
+- Remove the changelog release-notes helper (`nfl_predictor.utils.changelog`) and its tests, used
+  only by the deleted release workflow.
+
 ## [0.59.4] - 2026-10-15
 
 ### Removed

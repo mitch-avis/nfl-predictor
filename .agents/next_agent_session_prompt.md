@@ -116,6 +116,18 @@ builds. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hold step 6'
 - The roadmap: steps 7 (the Elo inputs) and 8 (the feature ideas, explored quickly, then
   accepted or dropped) go before the re-tune, now step 9 (`TODO.md`, "Roadmap Status").
 - Week 6: the top-decile ranking is the two-seed mean (2026-10-14, in DECISIONS.md).
+- Overnight session rules (2026-10-15, 01:20 MDT, the user asleep for about eight hours):
+  - a review finding that needs the user holds the measurement only if its answer could change
+    the `qb_adj` column values, the default feature groups or the backtest command; anything
+    else goes on the morning question list and the runs proceed;
+  - if the build check finds old-file/new-file differences beyond the 2023-2025 rows of the
+    `elo` and `qb_adj` columns, an amendment to `HYPOTHESIS.md` (new checksum) proceeds when
+    every extra difference traces to `qb_elos.csv`; anything unrelated (pre-2023 rows, market
+    lines, non-Elo stats) holds;
+  - step 3 (the "no game lines" groups change) may start during the runs, stacked on
+    `feat/qb-adj-features`, pytest capped at `-n 8`, nothing merged;
+  - the production-settings difference with the floor-sigma reference runs is recorded as
+    harmless in `.agents/benchmarks.md` until the reference is replaced (rule 11 approved).
 
 ## Open for the user
 

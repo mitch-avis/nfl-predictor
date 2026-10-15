@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from typing import cast
 
 import pandas as pd
 
 from nfl_predictor import constants
 from nfl_predictor.cli import backtest
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 
 GROUP = "ratings"
@@ -35,7 +36,7 @@ def _constant_names() -> set[str]:
     for value in vars(constants).values():
         items: list[object] = []
         if isinstance(value, list | tuple | set | frozenset):
-            items = list(value)
+            items = list(cast("Iterable[object]", value))
         elif isinstance(value, Mapping):
             items = [*value.keys(), *value.values()]
         names.update(item for item in items if isinstance(item, str))
@@ -63,7 +64,7 @@ def test_ratings_group_resolves_to_exactly_the_rating_columns() -> None:
     columns = build_final_column_order()
 
     # Act
-    resolved = walk_forward.resolve_feature_group_columns(columns, [GROUP])
+    resolved = resolve_feature_group_columns(columns, [GROUP])
 
     # Assert
     assert resolved == RATINGS_FAMILY
@@ -76,8 +77,7 @@ def test_ratings_group_is_disjoint_from_every_other_group() -> None:
 
     # Act
     overlaps = {
-        other: set(walk_forward.resolve_feature_group_columns(columns, [other]))
-        & set(RATINGS_FAMILY)
+        other: set(resolve_feature_group_columns(columns, [other])) & set(RATINGS_FAMILY)
         for other in others
     }
 

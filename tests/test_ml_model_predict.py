@@ -51,6 +51,7 @@ def _feature_spec() -> FeatureSpec:
 
 def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch) -> None:
     """Core margin/total prediction helper preserves market-anchor post-processing."""
+    # Arrange
     games_df = pd.DataFrame({"feat1": [1.0, 2.0]})
     preprocessor = _DummyPreprocessor()
     margin_model = cast("xgb.XGBRegressor", object())
@@ -87,8 +88,10 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
         tuned_cv_summary=None,
     )
 
+    # Act
     pred_margin, pred_total = ml_model_core._predict_margin_total_from_model(model, games_df)
 
+    # Assert
     assert np.allclose(pred_margin, np.array([4.0, 4.5]))
     assert np.allclose(pred_total, np.array([42.0, 43.0]))
     assert len(preprocessor.frames) == 1
@@ -99,6 +102,7 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
     monkeypatch,
 ) -> None:
     """Core quantile prediction helper preserves market-anchor post-processing."""
+    # Arrange
     games_df = pd.DataFrame({"feat1": [1.0]})
     preprocessor = _DummyPreprocessor()
     margin_low = cast("xgb.XGBRegressor", object())
@@ -139,10 +143,12 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
         tuned_cv_summary=None,
     )
 
+    # Act
     margin_preds, total_preds = ml_model_core._predict_margin_total_quantiles_from_model(
         model, games_df
     )
 
+    # Assert
     assert np.allclose(margin_preds[0.1], np.array([1.5]))
     assert np.allclose(margin_preds[0.9], np.array([5.5]))
     assert np.allclose(total_preds[0.1], np.array([41.5]))
@@ -153,6 +159,7 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
 
 def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -> None:
     """Predict week margin/total adds quantile predictions when models are present."""
+    # Arrange
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -204,6 +211,8 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     )
 
     output_path = tmp_path / "mt_preds.csv"
+
+    # Act
     output_df = ml_model_predict.predict_week_margin_total(
         model,
         tmp_path / "games.csv",
@@ -211,6 +220,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
         pretty_output=False,
     )
 
+    # Assert
     assert output_path.exists()
     assert "predicted_margin_p25" in output_df.columns
     assert "predicted_margin_p75" in output_df.columns
@@ -224,6 +234,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
 
 def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
     """Predict week margin/total pretty-prints output when requested."""
+    # Arrange
     games_df = pd.DataFrame(
         {
             "game_id": [1],
@@ -278,6 +289,7 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
         tuned_cv_summary=None,
     )
 
+    # Act
     output_df = ml_model_predict.predict_week_margin_total(
         model,
         Path("games.csv"),
@@ -285,4 +297,5 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
         pretty_output=True,
     )
 
+    # Assert
     assert captured["df"].equals(output_df)

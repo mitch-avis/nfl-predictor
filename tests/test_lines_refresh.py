@@ -155,8 +155,10 @@ def _read(path: Path) -> pl.DataFrame:
 
 def test_refresh_lines_updates_only_line_columns(data_dir: Path, fake_schedule: list) -> None:
     """Line columns take the schedule's values; every other column and the row order survive."""
+    # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     frame = _read(data_dir / "all_data_ml.csv")
     assert frame.columns == DATASET_COLUMNS
     assert frame["game_id"].to_list() == [row["game_id"] for row in DATASET_ROWS]
@@ -171,8 +173,10 @@ def test_refresh_lines_fills_missing_moneylines_from_spreads(
     data_dir: Path, fake_schedule: list
 ) -> None:
     """A schedule row with spreads but no moneylines is completed before the write."""
+    # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     row = _read(data_dir / "all_data_ml.csv").row(1, named=True)
     assert row["home_spread"] == 6.5
     assert row["home_moneyline"] is not None
@@ -182,8 +186,10 @@ def test_refresh_lines_fills_missing_moneylines_from_spreads(
 
 def test_refresh_lines_leaves_unmatched_rows_alone(data_dir: Path, fake_schedule: list) -> None:
     """Rows the schedule does not cover, and rows from another season, keep their lines."""
+    # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     frame = _read(data_dir / "all_data_ml.csv")
     other_week = frame.filter(pl.col("game_id") == "2026_03_GB_MIN").row(0, named=True)
     assert other_week["total_line"] == 46.5
@@ -194,9 +200,13 @@ def test_refresh_lines_leaves_unmatched_rows_alone(data_dir: Path, fake_schedule
 
 def test_refresh_lines_touches_every_target_file(data_dir: Path, fake_schedule: list) -> None:
     """The week file and both all-data datasets are refreshed; completed games are not."""
+    # Arrange
     before = (data_dir / "completed_games_ml.csv").read_text(encoding="utf-8")
+
+    # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     assert {path.name for path in result.written_paths} == {
         "all_data_ml.csv",
         "all_data.csv",
@@ -208,8 +218,10 @@ def test_refresh_lines_touches_every_target_file(data_dir: Path, fake_schedule: 
 
 def test_refresh_lines_reports_per_file_counts(data_dir: Path, fake_schedule: list) -> None:
     """The result carries matched and changed row counts per file."""
+    # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     assert result.season == 2026
     assert result.week == 2
     assert result.schedule_games == 2
@@ -224,6 +236,7 @@ def test_refresh_lines_rewrites_nothing_when_lines_are_unchanged(
     data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A schedule matching the datasets leaves every file byte-identical."""
+    # Arrange
     unchanged = (
         _dataset_frame()
         .filter(pl.col("season") == 2026)
@@ -234,8 +247,10 @@ def test_refresh_lines_rewrites_nothing_when_lines_are_unchanged(
     )
     before = (data_dir / "all_data_ml.csv").read_text(encoding="utf-8")
 
+    # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     assert result.changed_rows == 0
     assert result.written_paths == ()
     assert (data_dir / "all_data_ml.csv").read_text(encoding="utf-8") == before
@@ -243,10 +258,13 @@ def test_refresh_lines_rewrites_nothing_when_lines_are_unchanged(
 
 def test_refresh_lines_skips_files_that_do_not_exist(tmp_path: Path, fake_schedule: list) -> None:
     """Missing datasets are reported as skipped rather than raising."""
+    # Arrange
     _dataset_frame().write_csv(tmp_path / "all_data.csv")
 
+    # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=tmp_path)
 
+    # Assert
     by_name = {refresh.path.name: refresh for refresh in result.files}
     assert by_name["all_data_ml.csv"].exists is False
     assert by_name["all_data.csv"].exists is True
@@ -254,8 +272,10 @@ def test_refresh_lines_skips_files_that_do_not_exist(tmp_path: Path, fake_schedu
 
 def test_refresh_lines_forces_a_schedule_refresh(data_dir: Path, fake_schedule: list) -> None:
     """The schedule is re-fetched for the target season rather than read from the cache."""
+    # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir, cache_dir=data_dir / "cache")
 
+    # Assert
     assert fake_schedule == [
         {
             "seasons": [2026],
@@ -270,10 +290,12 @@ def test_refresh_lines_raises_when_the_schedule_has_no_games(
     data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An empty schedule is an error, not a silent no-op."""
+    # Arrange
     monkeypatch.setattr(
         lines_refresh.polars_utils, "load_schedule", lambda seasons, **kwargs: pl.DataFrame()
     )
 
+    # Act & Assert
     with pytest.raises(ValueError, match="no games"):
         lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
@@ -282,8 +304,10 @@ def test_main_refreshes_the_requested_week(
     data_dir: Path, fake_schedule: list, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The CLI passes its arguments through to :func:`refresh_lines`."""
+    # Act
     exit_code = lines_refresh.main(["--season", "2026", "--week", "2", "--data-dir", str(data_dir)])
 
+    # Assert
     assert exit_code == 0
     assert _read(data_dir / "all_data_ml.csv")["total_line"][0] == 45.5
 
@@ -292,32 +316,54 @@ def test_main_defaults_to_the_current_season_and_week(
     data_dir: Path, fake_schedule: list, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without ``--season``/``--week`` the CLI uses the project's NFL calendar."""
+    # Arrange
     monkeypatch.setattr(lines_refresh.polars_utils, "get_current_nfl_week", lambda: (2026, 2))
     monkeypatch.setattr(lines_refresh, "DEFAULT_DATA_DIR", data_dir)
 
-    assert lines_refresh.main([]) == 0
+    # Act
+    exit_code = lines_refresh.main([])
+
+    # Assert
+    assert exit_code == 0
     assert _read(data_dir / "all_data_ml.csv")["total_line"][0] == 45.5
 
 
-def test_join_keys_prefers_game_id_then_the_matchup() -> None:
+@pytest.mark.parametrize(
+    ("dataset", "expected"),
+    [
+        pytest.param(_dataset_frame(), ["game_id"], id="game_id"),
+        pytest.param(
+            _dataset_frame().drop("game_id"), list(lines_refresh.MATCHUP_COLUMNS), id="matchup"
+        ),
+        pytest.param(_dataset_frame().drop("game_id", "away_abbr"), [], id="no_key"),
+    ],
+)
+def test_join_keys_prefers_game_id_then_the_matchup(
+    dataset: pl.DataFrame, expected: list[str]
+) -> None:
     """``game_id`` wins when both sides have it; otherwise the season/week/team key is used."""
+    # Arrange
     lines = _schedule_frame()
-    with_id = _dataset_frame()
-    assert lines_refresh.join_keys(with_id, lines) == ["game_id"]
-    without_id = with_id.drop("game_id")
-    assert lines_refresh.join_keys(without_id, lines) == list(lines_refresh.MATCHUP_COLUMNS)
-    assert lines_refresh.join_keys(without_id.drop("away_abbr"), lines) == []
+
+    # Act
+    keys = lines_refresh.join_keys(dataset, lines)
+
+    # Assert
+    assert keys == expected
 
 
 def test_refresh_lines_matches_week_files_that_have_no_game_id(
     data_dir: Path, fake_schedule: list
 ) -> None:
     """The weekly games-to-predict files are keyed by season, week, and both teams."""
+    # Arrange
     week_file = data_dir / "predict" / "week_02_games_to_predict.csv"
     _read(week_file).drop("game_id").write_csv(week_file)
 
+    # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     by_name = {refresh.path.name: refresh for refresh in result.files}
     assert by_name["week_02_games_to_predict.csv"].matched_rows == 2
     frame = _read(week_file)
@@ -327,11 +373,14 @@ def test_refresh_lines_matches_week_files_that_have_no_game_id(
 
 def test_refresh_lines_skips_a_file_it_cannot_key(data_dir: Path, fake_schedule: list) -> None:
     """A dataset without a usable key is reported as unchanged rather than guessed at."""
+    # Arrange
     week_file = data_dir / "predict" / "week_02_games_to_predict.csv"
     _read(week_file).drop("game_id", "away_abbr").write_csv(week_file)
 
+    # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
 
+    # Assert
     by_name = {refresh.path.name: refresh for refresh in result.files}
     assert by_name["week_02_games_to_predict.csv"].changed_rows == 0
     assert by_name["week_02_games_to_predict.csv"].exists is True

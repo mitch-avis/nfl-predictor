@@ -17,6 +17,7 @@ from nfl_predictor.reporting.power_rankings import (
 
 def test_cli_exposes_the_method_and_snapshot_path() -> None:
     """The script parses the ranking method and the snapshot file location."""
+    # Act
     args = rankings._parse_args(
         [
             "--model-in",
@@ -31,12 +32,20 @@ def test_cli_exposes_the_method_and_snapshot_path() -> None:
             "snapshots.csv",
         ]
     )
+
+    # Assert
+    assert args.method == "bradley_terry"
+    assert args.strength_snapshots == Path("snapshots.csv")
+
+
+def test_cli_method_and_snapshot_path_defaults() -> None:
+    """Without the options the method is unset and the snapshots use the default file."""
+    # Act
     defaults = rankings._parse_args(
         ["--model-in", "model.joblib", "--season", "2024", "--through-week", "3"]
     )
 
-    assert args.method == "bradley_terry"
-    assert args.strength_snapshots == Path("snapshots.csv")
+    # Assert
     assert defaults.method is None
     assert defaults.strength_snapshots == DEFAULT_STRENGTH_SNAPSHOTS
 
@@ -65,6 +74,7 @@ def _base_args(tmp_path: Path) -> list[str]:
 
 def test_main_ranks_and_writes_the_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The command loads the model, ranks through the week, and writes the three tables."""
+    # Arrange
     computed: list[tuple[object, RankingInputs, RankingOptions]] = []
     written: list[tuple[object, dict[str, Any]]] = []
     monkeypatch.setattr(
@@ -83,8 +93,13 @@ def test_main_ranks_and_writes_the_outputs(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(rankings, "compute_power_rankings", fake_compute)
     monkeypatch.setattr(rankings, "write_ranking_outputs", fake_write)
 
-    assert rankings.main(_base_args(tmp_path)) == 0
+    args = _base_args(tmp_path)
 
+    # Act
+    code = rankings.main(args)
+
+    # Assert
+    assert code == 0
     [(model, inputs, options)] = computed
     assert model == ("model", tmp_path / "model.joblib", "margin_total")
     assert inputs.season == 2024
@@ -104,16 +119,20 @@ def test_main_ranks_and_writes_the_outputs(tmp_path: Path, monkeypatch: pytest.M
 )
 def test_main_names_the_missing_input(tmp_path: Path, missing: str, message: str) -> None:
     """Each required input is checked before any model is loaded."""
+    # Arrange
     args = _base_args(tmp_path)
     (tmp_path / missing).unlink()
 
+    # Act & Assert
     with pytest.raises(FileNotFoundError, match=message):
         rankings.main(args)
 
 
 def test_main_rejects_the_legacy_fit_with_the_composite(tmp_path: Path) -> None:
     """An inconsistent ranking method is a usage error, not a traceback."""
+    # Arrange
     args = [*_base_args(tmp_path), "--method", "composite", "--legacy-franchise-fit"]
 
+    # Act & Assert
     with pytest.raises(SystemExit, match="legacy-franchise-fit"):
         rankings.main(args)

@@ -11,7 +11,7 @@ from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 
 
-def _schedule_rows(*rows: dict) -> pl.DataFrame:
+def _schedule_rows(*rows: dict[str, object]) -> pl.DataFrame:
     """Create a minimal schedule DataFrame for standings computation."""
     return pl.DataFrame(list(rows)).with_columns(
         [

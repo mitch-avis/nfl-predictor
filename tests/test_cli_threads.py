@@ -8,6 +8,7 @@ import pytest
 
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.cli import threads
+from tests.fakes import returning
 
 
 def test_prefer_one_polars_thread_defaults_to_one() -> None:
@@ -45,7 +46,7 @@ def test_every_command_runs_polars_on_one_thread_when_unset(
     def resolve(_command: front_door.Command) -> object:
         """Record the setting when the command module would load, and return a no-op entry."""
         seen["threads"] = os.environ.get("POLARS_MAX_THREADS")
-        return lambda *_args: 0
+        return returning(0)
 
     monkeypatch.setattr(front_door, "_resolve", resolve)
 
@@ -61,7 +62,7 @@ def test_the_front_door_keeps_an_explicit_polars_thread_setting(
 ) -> None:
     # Arrange
     monkeypatch.setenv("POLARS_MAX_THREADS", "24")
-    monkeypatch.setattr(front_door, "_resolve", lambda _command: lambda *_args: 0)
+    monkeypatch.setattr(front_door, "_resolve", returning(returning(0)))
 
     # Act
     front_door.main(["data"])

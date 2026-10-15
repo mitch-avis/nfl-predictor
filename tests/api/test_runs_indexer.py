@@ -6,12 +6,12 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.api.factories import RunSpec, make_run_dir
 
 from nfl_predictor.api.errors import ConflictError, NotFoundError
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.runs.files import resolve_run_files
 from nfl_predictor.api.runs.indexer import RunIndex, scan_runs, summarize_run
+from tests.api.factories import RunSpec, make_run_dir
 
 if TYPE_CHECKING:
     from pathlib import Path

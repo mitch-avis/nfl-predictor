@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import joblib
 import pytest
-from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 from nfl_predictor.cli import rankings
 from nfl_predictor.reporting import rating_sources
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 if TYPE_CHECKING:
     from collections.abc import Callable

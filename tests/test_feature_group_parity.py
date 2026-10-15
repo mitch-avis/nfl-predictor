@@ -21,18 +21,18 @@ from typing import TYPE_CHECKING, Any
 
 import joblib
 import pytest
-from tests.feature_group_fixture import (
-    GROUP_COLUMNS,
-    build_group_fixture,
-    write_group_weekly_config,
-)
-from tests.weekly_fixture import CURRENT_SEASON
 
 from nfl_predictor.cli import backtest, train
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import production_settings
 from nfl_predictor.weekly_run import config as weekly_config
 from nfl_predictor.weekly_run import pipeline
+from tests.feature_group_fixture import (
+    GROUP_COLUMNS,
+    build_group_fixture,
+    write_group_weekly_config,
+)
+from tests.weekly_fixture import CURRENT_SEASON
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -9,6 +9,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import yaml
+
+from nfl_predictor.ml import walk_forward
+from nfl_predictor.reporting import power_rankings, rating_sources
+from nfl_predictor.weekly_run import config as run_config
+from nfl_predictor.weekly_run import pipeline, stage1
 from tests import snapshots
 from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 from tests.test_weekly_run_characterization import (
@@ -18,11 +23,6 @@ from tests.test_weekly_run_characterization import (
     _stable_frame,
 )
 from tests.weekly_fixture import build_fixture, write_weekly_config
-
-from nfl_predictor.ml import walk_forward
-from nfl_predictor.reporting import power_rankings, rating_sources
-from nfl_predictor.weekly_run import config as run_config
-from nfl_predictor.weekly_run import pipeline, stage1
 
 
 def _args(argv: list[str]):

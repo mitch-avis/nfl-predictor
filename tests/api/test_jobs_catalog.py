@@ -7,8 +7,6 @@ import shlex
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.api import factories
-from tests.cli_parsing import parse_command
 
 from nfl_predictor import constants
 from nfl_predictor.api.errors import ConflictError, UnprocessableEntityError
@@ -16,6 +14,8 @@ from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.catalog import JobContext
 from nfl_predictor.api.runs.indexer import RunSummary, summarize_run
 from nfl_predictor.weekly_run import config as run_config
+from tests.api import factories
+from tests.cli_parsing import parse_command
 
 if TYPE_CHECKING:
     import argparse

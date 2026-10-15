@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 import xgboost as xgb
-from tests.test_walk_forward import _base_config, _fixture_df
 
 from nfl_predictor.ml import ml_model_core as core
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
 from nfl_predictor.ml import walk_forward
+from tests.test_walk_forward import _base_config, _fixture_df
 
 if TYPE_CHECKING:
     from pathlib import Path

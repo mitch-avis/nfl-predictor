@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
-from tests.api.conftest import ADMIN_PASSWORD, CSRF_HEADERS, TEST_SECRET
 
 from nfl_predictor.api.auth.ratelimit import LoginRateLimiter
 from nfl_predictor.api.auth.tokens import issue_token, read_token
 from nfl_predictor.api.settings import COOKIE_NAME
+from tests.api.conftest import ADMIN_PASSWORD, CSRF_HEADERS, TEST_SECRET
 
 if TYPE_CHECKING:
     from nfl_predictor.api.db import Database

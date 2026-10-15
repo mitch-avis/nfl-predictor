@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 import threadpoolctl
 import xgboost
-from tests import data_isolation
-from tests.conftest import THREAD_VARIABLES, DataIsolation, limit_threads
 
 import nfl_predictor
 from nfl_predictor import constants, lines_refresh, week_builder
 from nfl_predictor.api.settings import Settings
 from nfl_predictor.reporting import power_rankings
+from tests import data_isolation
+from tests.conftest import THREAD_VARIABLES, DataIsolation, limit_threads
 
 if TYPE_CHECKING:
     from types import ModuleType

@@ -20,13 +20,13 @@ import numpy as np
 import pandas as pd
 import pytest
 from scipy.stats import norm
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor import constants
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.cli import backtest, train
 from nfl_predictor.ml import ml_model_core, ml_model_predict, ml_model_training, walk_forward
 from nfl_predictor.ml.ml_model_core import MarginTotalModel, OptunaConfig
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     from pathlib import Path

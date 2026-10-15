@@ -8,6 +8,7 @@ import numpy as np
 import polars as pl
 import pytest
 from scipy import stats
+
 from tests.sos_port_scripts import load_sos_port_script
 
 if TYPE_CHECKING:

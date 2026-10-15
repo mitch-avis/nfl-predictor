@@ -18,12 +18,12 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
-from tests.feature_group_fixture import GROUP_COLUMNS, build_group_fixture
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.ml import ml_model_core, ml_model_training
 from nfl_predictor.ml.ml_model_core import OptunaConfig
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
+from tests.feature_group_fixture import GROUP_COLUMNS, build_group_fixture
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     from pathlib import Path

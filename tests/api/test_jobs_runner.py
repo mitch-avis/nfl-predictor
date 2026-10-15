@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.api.jobs_support import fake_template, wait_for, wait_for_log, wait_for_status
 
 from nfl_predictor.api.errors import ConflictError
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs import runner as runner_module
 from nfl_predictor.api.jobs.catalog import JobContext, JobTemplate
 from nfl_predictor.api.jobs.runner import JobRunner, Submission
+from tests.api.jobs_support import fake_template, wait_for, wait_for_log, wait_for_status
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

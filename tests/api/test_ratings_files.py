@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from tests.api import ratings_factories as factories
 
 from nfl_predictor.api.ratings import files
 from nfl_predictor.api.readers import cache
+from tests.api import ratings_factories as factories
 
 if TYPE_CHECKING:
     from pathlib import Path

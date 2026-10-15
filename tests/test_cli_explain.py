@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, cast
 
 import joblib
 import pytest
-from tests.test_feature_importance import _fit_rest_opp_model
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core
+from tests.test_feature_importance import _fit_rest_opp_model
 
 if TYPE_CHECKING:
     from pathlib import Path

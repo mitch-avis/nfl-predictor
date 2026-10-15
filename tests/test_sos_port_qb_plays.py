@@ -5,11 +5,11 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pytest
-from tests.sos_port_scripts import load_sos_port_script
 from threadpoolctl import threadpool_limits
 
 from nfl_predictor.ratings.ridge import UnitFit
 from nfl_predictor.ratings.team_rating import fit_team_ratings
+from tests.sos_port_scripts import load_sos_port_script
 
 qb = load_sos_port_script("qb_plays_test")
 common = load_sos_port_script("rating_tests_common")

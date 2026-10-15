@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import pytest
 import yaml
-from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders, pbp
 from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
+from tests.sos_port_scripts import load_sos_port_script
 
 if TYPE_CHECKING:
     from pathlib import Path

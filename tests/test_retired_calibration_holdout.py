@@ -13,14 +13,14 @@ import sys
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from tests.api import factories
-from tests.test_walk_forward import _base_config, _fixture_df
 
 from nfl_predictor.api.readers import model as model_reader
 from nfl_predictor.api.runs.files import resolve_run_files
 from nfl_predictor.cli import backtest, train
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.weekly_run import config as run_config
+from tests.api import factories
+from tests.test_walk_forward import _base_config, _fixture_df
 
 if TYPE_CHECKING:
     from pathlib import Path

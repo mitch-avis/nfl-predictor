@@ -9,10 +9,10 @@ import numpy as np
 import pandas as pd
 import pytest
 import xgboost as xgb
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.ml import ml_model_training
 from nfl_predictor.ml.ml_model_core import FeatureSpec, MarginTotalModel, OptunaConfig
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     from sklearn.compose import ColumnTransformer

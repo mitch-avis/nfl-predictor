@@ -13,13 +13,13 @@ import sys
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.feature_group_fixture import build_group_fixture, write_group_weekly_config
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor import constants
 from nfl_predictor.cli import backtest
 from nfl_predictor.ml import feature_spec, walk_forward
 from nfl_predictor.weekly_run import pipeline
+from tests.feature_group_fixture import build_group_fixture, write_group_weekly_config
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     from pathlib import Path

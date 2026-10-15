@@ -15,12 +15,12 @@ from pathlib import Path
 
 import joblib
 import pytest
-from tests import snapshots
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core, ml_model_training
 from nfl_predictor.ml.ml_model_core import OptunaConfig
+from tests import snapshots
+from tests.weekly_fixture import build_fixture
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "shap_analysis_characterization"
 OPTUNA_OFF = OptunaConfig(

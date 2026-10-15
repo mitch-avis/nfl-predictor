@@ -18,10 +18,10 @@ import sys
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.feature_group_fixture import GROUP_COLUMNS, RATINGS_COLUMNS, build_group_fixture
 
 from nfl_predictor.cli import train
 from nfl_predictor.weekly_run import config as weekly_config
+from tests.feature_group_fixture import GROUP_COLUMNS, RATINGS_COLUMNS, build_group_fixture
 
 if TYPE_CHECKING:
     import argparse

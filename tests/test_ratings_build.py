@@ -11,6 +11,14 @@ import numpy as np
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
+from threadpoolctl import threadpool_info, threadpool_limits
+
+from nfl_predictor import constants
+from nfl_predictor.ratings.pbp_inputs import quarterback_rows
+from nfl_predictor.ratings.pre_week import RatingsHistory
+from nfl_predictor.ratings.qb_rating import QUALIFIER_ATTEMPTS_PER_TEAM_GAME
+from nfl_predictor.ratings.season import BootstrapSettings, TeamSeasonRatings
+from nfl_predictor.utils.polars import qb_starters, ratings_build
 from tests.ratings_league import (
     BACKUP_FROM_WEEK,
     BACKUP_ID,
@@ -28,14 +36,6 @@ from tests.ratings_league import (
     with_backup_starting,
     with_player_sources,
 )
-from threadpoolctl import threadpool_info, threadpool_limits
-
-from nfl_predictor import constants
-from nfl_predictor.ratings.pbp_inputs import quarterback_rows
-from nfl_predictor.ratings.pre_week import RatingsHistory
-from nfl_predictor.ratings.qb_rating import QUALIFIER_ATTEMPTS_PER_TEAM_GAME
-from nfl_predictor.ratings.season import BootstrapSettings, TeamSeasonRatings
-from nfl_predictor.utils.polars import qb_starters, ratings_build
 
 _FAST = BootstrapSettings(resamples=20, seed=0)
 _LAST = SEASONS[-1]

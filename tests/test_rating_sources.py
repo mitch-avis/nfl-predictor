@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 from nfl_predictor import constants
 from nfl_predictor.ratings.team_rating import TEAM_RATING_COLUMNS
 from nfl_predictor.reporting import rating_sources
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -28,10 +28,10 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
-from tests import snapshots
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders, pbp, qb_stats
+from tests import snapshots
 
 if TYPE_CHECKING:
     from polars.datatypes import DataType

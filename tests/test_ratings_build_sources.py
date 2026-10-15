@@ -7,11 +7,11 @@ from typing import Any
 
 import polars as pl
 import pytest
-from tests.ratings_league import league
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.polars import nflverse_sources, ratings_build
+from tests.ratings_league import league
 
 _FIRST = constants.NFLREADPY_MIN_SEASON
 

@@ -16,12 +16,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from tests import snapshots
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import backtest, leakage_audit
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import production_settings
+from tests import snapshots
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     import pytest

@@ -13,16 +13,6 @@ import polars as pl
 import pytest
 from nflreadpy.downloader import get_downloader
 from polars.testing import assert_frame_equal
-from tests.ratings_league import (
-    BACKUP_ID,
-    SEASONS,
-    TEAMS,
-    League,
-    league,
-    starter_id,
-    with_player_sources,
-    with_season_stats_columns,
-)
 
 from nfl_predictor import constants
 from nfl_predictor.ratings.season import BootstrapSettings, build_qb_season
@@ -35,6 +25,16 @@ from nfl_predictor.utils.polars import (
     ratings_build,
     season_stats_build,
     season_stats_schema,
+)
+from tests.ratings_league import (
+    BACKUP_ID,
+    SEASONS,
+    TEAMS,
+    League,
+    league,
+    starter_id,
+    with_player_sources,
+    with_season_stats_columns,
 )
 
 if TYPE_CHECKING:

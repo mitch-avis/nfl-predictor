@@ -6,10 +6,10 @@ import json
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.api.jobs_support import fake_template, wait_for, wait_for_status
 
 from nfl_predictor.api.jobs import catalog
 from nfl_predictor.api.jobs.store import JobStore, LogLine
+from tests.api.jobs_support import fake_template, wait_for, wait_for_status
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
-from tests.api import factories
 
 from nfl_predictor.api.routers import resolve
+from tests.api import factories
 
 if TYPE_CHECKING:
     from pathlib import Path

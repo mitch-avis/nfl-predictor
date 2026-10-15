@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING, Any
 import joblib
 import pandas as pd
 import pytest
+
+from nfl_predictor.ml import artifacts, walk_forward
+from nfl_predictor.ml.floor_sigma import ErrorPool
+from nfl_predictor.weekly_run import config, pipeline, stage1
 from tests.feature_group_fixture import (
     GROUP_COLUMNS,
     RATINGS_COLUMNS,
@@ -26,10 +30,6 @@ from tests.feature_group_fixture import (
     write_group_weekly_config,
 )
 from tests.weekly_fixture import CURRENT_SEASON
-
-from nfl_predictor.ml import artifacts, walk_forward
-from nfl_predictor.ml.floor_sigma import ErrorPool
-from nfl_predictor.weekly_run import config, pipeline, stage1
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

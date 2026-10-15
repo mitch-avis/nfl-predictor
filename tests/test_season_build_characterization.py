@@ -24,9 +24,9 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
-from tests import snapshots
 
 from nfl_predictor import constants, data_collection
+from tests import snapshots
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "season_build_characterization"
 

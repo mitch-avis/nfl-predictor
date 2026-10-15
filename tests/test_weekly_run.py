@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import pytest
 import xgboost as xgb
-from tests.api import factories
 
 from nfl_predictor import data_collection
 from nfl_predictor.api.readers import cache as api_cache
@@ -31,6 +30,7 @@ from nfl_predictor.ml import (
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
+from tests.api import factories
 
 if TYPE_CHECKING:
     import argparse

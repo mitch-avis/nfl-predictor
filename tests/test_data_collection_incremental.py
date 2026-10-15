@@ -23,18 +23,18 @@ import numpy as np
 import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
-from tests.ratings_league import (
-    plays_for,
-    rewritten_plays,
-    starter_id,
-    with_season_stats_play_columns,
-)
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.ratings.season import BootstrapSettings
 from nfl_predictor.season_stats.sources import OFFICIAL_TEAM_STATS
 from nfl_predictor.utils import clock, polars_utils, season_cache
 from nfl_predictor.utils.polars import nflverse_sources, ratings_build, season_stats_build
+from tests.ratings_league import (
+    plays_for,
+    rewritten_plays,
+    starter_id,
+    with_season_stats_play_columns,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

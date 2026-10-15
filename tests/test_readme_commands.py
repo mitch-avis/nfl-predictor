@@ -14,10 +14,10 @@ import shlex
 from pathlib import Path
 
 import pytest
-from tests.cli_parsing import parse_command
 
 from nfl_predictor import constants
 from nfl_predictor.cli import main as front_door
+from tests.cli_parsing import parse_command
 
 README = Path(constants.ROOT_DIR) / "README.md"
 FENCE = re.compile(r"^\s*```(?:bash|sh)?\s*$\n(.*?)^\s*```\s*$", re.MULTILINE | re.DOTALL)

@@ -15,14 +15,14 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
-from tests import test_run_comparison
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import backtest
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.ml import ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.reporting import production_settings
 from nfl_predictor.weekly_run import config as weekly_config
+from tests import test_run_comparison
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     from pathlib import Path

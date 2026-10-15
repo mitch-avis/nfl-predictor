@@ -98,7 +98,7 @@ def test_walk_forward_stops_instead_of_checkpointing_a_week_trained_on_the_wrong
     # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
-    # Act & Assert
+    # Act
     with pytest.raises(RuntimeError, match="cuda"):
         walk_forward.run_walk_forward_backtest(
             _fixture_df(), _base_config(), checkpoints=walk_forward.FoldCheckpoints(tmp_path)

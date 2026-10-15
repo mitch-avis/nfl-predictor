@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pandas.testing as pdt
 import pytest
@@ -13,6 +14,7 @@ from scipy.stats import norm
 
 from nfl_predictor import constants
 from nfl_predictor.ml import floor_sigma, walk_forward
+from nfl_predictor.utils.narrowing import as_list
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,7 +27,7 @@ WEEKS = (1, 2, 3)
 def _fixture_df() -> pd.DataFrame:
     """Four games a week over six short seasons, with seeded noise in the scores."""
     rng = np.random.default_rng(11)
-    rows = []
+    rows: list[dict[str, object]] = []
     for season in SEASONS:
         for week in WEEKS:
             for game in range(4):
@@ -111,9 +113,10 @@ def test_a_standalone_run_reproduces_the_measured_expanding_sigma(
     np.testing.assert_array_equal(frame.loc[scored, "floor_sigma"].to_numpy(), expected[scored])
     assert not frame.loc[scored, "floor_sigma_fallback"].any()
     for _, week in frame[scored].groupby(["season", "week"]):
+        week_margins: npt.NDArray[np.float64] = week["predicted_margin"].to_numpy()
         np.testing.assert_array_equal(
             week["deterministic_home_win_prob"].to_numpy(),
-            norm.cdf(week["predicted_margin"].to_numpy() / float(week["floor_sigma"].iloc[0])),
+            norm.cdf(week_margins / float(week["floor_sigma"].iloc[0])),
         )
 
 
@@ -128,9 +131,10 @@ def test_the_first_three_seasons_use_the_constant(standalone: dict[str, object])
 
     assert early["floor_sigma_fallback"].all()
     assert (early["floor_sigma"] == constants.SCORE_DIFF_STD_DEV).all()
+    early_margins: npt.NDArray[np.float64] = early["predicted_margin"].to_numpy()
     np.testing.assert_array_equal(
         early["deterministic_home_win_prob"].to_numpy(),
-        norm.cdf(early["predicted_margin"].to_numpy() / constants.SCORE_DIFF_STD_DEV),
+        norm.cdf(early_margins / constants.SCORE_DIFF_STD_DEV),
     )
 
 
@@ -140,8 +144,9 @@ def test_every_week_records_its_sigma(standalone: dict[str, object]) -> None:
     per_week = standalone["per_week"]
 
     # Assert
-    assert isinstance(per_week, list)
-    first, last = per_week[0], per_week[-1]
+    weeks = as_list(per_week)
+    assert weeks is not None
+    first, last = weeks[0], weeks[-1]
 
     assert first["floor_sigma_fallback"] is True
     assert first["floor_sigma_pool_games"] == 0

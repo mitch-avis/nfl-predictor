@@ -70,7 +70,7 @@ def _rank(ids: Iterable[str]) -> dict[str, int]:
 
 def combined(games_played: int) -> pl.DataFrame:
     """Return a team season table: record, per-game stats, opponent profiles and ratings."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for index, team in enumerate(TEAMS):
         rating = TEAM_RATINGS[team]
         wins = 3 - index
@@ -178,7 +178,7 @@ def _game_id(season: int, week: int, away: str, home: str) -> str:
 
 def team_game_logs(season: int) -> pl.DataFrame:
     """Return every team-game of the schedule: the home team wins by the rating gap."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for week, away, home in SCHEDULE:
         margin = round(TEAM_RATINGS[home] - TEAM_RATINGS[away] + 2)
         for team, opponent, is_home in ((home, away, True), (away, home, False)):
@@ -315,7 +315,7 @@ def rating_ranges() -> pl.DataFrame:
     """Return every team's rank range with its units', by published rank."""
     ranks = _rank(TEAMS)
     count = len(TEAMS)
-    rows = []
+    rows: list[dict[str, object]] = []
     for team in TEAMS:
         rank = ranks[team]
         row: dict[str, object] = {"team": team, "team_rank": rank}
@@ -338,7 +338,7 @@ def rating_ranges() -> pl.DataFrame:
 def qb_rating_ranges() -> pl.DataFrame:
     """Return every qualifier's rank range, by published rank."""
     count = len(QBS)
-    rows = []
+    rows: list[dict[str, object]] = []
     for index, (qb_id, name, team) in enumerate(QBS):
         rank = index + 1
         row: dict[str, object] = {"qb_id": qb_id, "qb_name": name, "team": team, "qb_rank": rank}
@@ -356,7 +356,7 @@ def qb_rating_ranges() -> pl.DataFrame:
 
 def rating_pairs() -> pl.DataFrame:
     """Return every ordered pair of teams: the better-rated one is above in 80% of redraws."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for team in TEAMS:
         for other in TEAMS:
             if other == team:
@@ -378,7 +378,7 @@ def rating_pairs() -> pl.DataFrame:
 
 def qb_rating_pairs() -> pl.DataFrame:
     """Return every ordered pair of qualifiers; the later pair appears in 90% of redraws."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for index, (qb_id, _name, _team) in enumerate(QBS):
         for other_index, (other_id, _other_name, _other_team) in enumerate(QBS):
             if other_id == qb_id:
@@ -401,7 +401,7 @@ def qb_rating_pairs() -> pl.DataFrame:
 def rating_ranges_by_week(weeks: int = 6) -> pl.DataFrame:
     """Return every team's rank range after each week of a season in progress."""
     ranks = _rank(TEAMS)
-    rows = []
+    rows: list[dict[str, object]] = []
     for team in TEAMS:
         for week in range(1, weeks + 1):
             row: dict[str, object] = {"week": week, "team": team, "team_rank": ranks[team]}
@@ -417,7 +417,7 @@ def rating_ranges_by_week(weeks: int = 6) -> pl.DataFrame:
 
 def qb_rating_ranges_by_week(weeks: int = 6) -> pl.DataFrame:
     """Return every qualifier's rank range after each week of a season in progress."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for index, (qb_id, _name, _team) in enumerate(QBS):
         for week in range(1, weeks + 1):
             row: dict[str, object] = {"week": week, "qb_id": qb_id, "qb_rank": index + 1}

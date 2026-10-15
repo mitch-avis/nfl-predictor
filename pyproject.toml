@@ -49,6 +49,7 @@ nfl-predictor = "nfl_predictor.cli.main:main"
 
 [dependency-groups]
 dev = [
+    "cryptography>=50.0.2",
     "httpx2>=2.13", # FastAPI's TestClient
     "pandas-stubs>=3.0",
     "pre-commit>=4.7",

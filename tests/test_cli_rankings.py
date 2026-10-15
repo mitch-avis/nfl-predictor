@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from nfl_predictor.cli import rankings
+from nfl_predictor.ml import ml_model_core
 from nfl_predictor.reporting.power_rankings import (
     DEFAULT_STRENGTH_SNAPSHOTS,
     RankingInputs,
@@ -77,9 +78,11 @@ def test_main_ranks_and_writes_the_outputs(tmp_path: Path, monkeypatch: pytest.M
     # Arrange
     computed: list[tuple[object, RankingInputs, RankingOptions]] = []
     written: list[tuple[object, dict[str, Any]]] = []
-    monkeypatch.setattr(
-        rankings.ml_model_core, "load_model_checkpoint", lambda path, kind: ("model", path, kind)
-    )
+
+    def fake_load(path: Path, kind: str) -> tuple[str, Path, str]:
+        return ("model", path, kind)
+
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", fake_load)
 
     def fake_compute(model: object, inputs: RankingInputs, options: RankingOptions) -> str:
         """Record the ranking request."""

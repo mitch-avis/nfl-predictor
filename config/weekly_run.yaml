@@ -64,7 +64,8 @@ wf_market_mode: hybrid
 # snapshot (strength), both presets of this repository's own Elo (own_elo, own_elo_wt) and the
 # qb_elos.csv quarterback adjustment (qb_adj), so it trains on the ported team ratings (ratings)
 # and the qb_elos.csv Elo (elo); leaving out strength on data without the ported ratings stops
-# the run. An empty list ([]) leaves no group out, and the key with no value is refused. The saved model records them. An unknown group stops the run
+# the run. An empty list ([]) leaves no group out, and the key with no value is refused.
+# The saved model records them. An unknown group stops the run
 # before the data refresh, and --disable-feature-groups on the command line takes them
 # comma-separated, an empty value for none (default: [strength, own_elo, own_elo_wt, qb_adj])
 disable_feature_groups:

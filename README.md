@@ -640,8 +640,8 @@ stricter variants kept as test benches. A group list given replaces the default
   in the weekly config). It keeps the market-free own Elo (`own_elo`); the reference runs are
   `models/step6/elo_marketfree_seed42` and `models/step6/elo_marketfree_seed7`.
 - No market information and no Elo at all: the same options plus
-  `--disable-feature-groups strength,elo,own_elo,own_elo_wt,qb_adj`, the default list plus `elo`; the
-  reference runs are `models/step6/ratings_marketfree_seed42` and
+  `--disable-feature-groups strength,elo,own_elo,own_elo_wt,qb_adj`, the default list plus
+  `elo`; the reference runs are `models/step6/ratings_marketfree_seed42` and
   `models/step6/ratings_marketfree_seed7`.
 
 The `elo` group is every column built from `data/qb_elos.csv` but the quarterback adjustment (18:

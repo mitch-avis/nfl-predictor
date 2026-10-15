@@ -86,7 +86,8 @@ When market lines exist, the system produces market-derived features and support
   information with the market-free own Elo is
   `--disable-feature-groups strength,elo,own_elo_wt,qb_adj` (`[strength, elo, own_elo_wt, qb_adj]`
   in the weekly config; reference runs `models/step6/elo_marketfree_seed{42,7}`), and no market
-  information and no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj` (reference runs `models/step6/ratings_marketfree_seed{42,7}`).
+  information and no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj` (reference runs
+  `models/step6/ratings_marketfree_seed{42,7}`).
   Leaving the market columns out does not leave these groups out
   (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps either of them logs a "No game
   lines" info message naming it (`ml/feature_spec.build_feature_spec`).

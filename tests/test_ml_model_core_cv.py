@@ -15,6 +15,7 @@ from nfl_predictor.ml import ml_model_core as core
 def test_score_margin_total_fold_with_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Scores a fold end-to-end using stubbed preprocess/training/prediction."""
 
+    # Arrange
     class _DummyPreprocessor:
         def fit_transform(self, x: pd.DataFrame) -> np.ndarray:
             return np.ones((len(x), 2), dtype=float)
@@ -75,6 +76,7 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: pytest.MonkeyPatch) -> 
     )
     df_val = pd.DataFrame({"feat1": [3.0], "away_score": [17.0], "home_score": [21.0]})
 
+    # Act
     score = core._score_margin_total_fold(
         df_train,
         df_val,
@@ -83,11 +85,13 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: pytest.MonkeyPatch) -> 
         _optuna_config(objective="combined_mae"),
     )
 
+    # Assert
     assert score == 5.0
 
 
 def test_evaluate_margin_total_cv_summary_aggregates_folds(monkeypatch: pytest.MonkeyPatch) -> None:
     """Aggregates fold scores and returns mean/std summary."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -115,10 +119,12 @@ def test_evaluate_margin_total_cv_summary_aggregates_folds(monkeypatch: pytest.M
     scores = iter([1.0, 3.0])
     monkeypatch.setattr(core, "_score_margin_total_fold", lambda *_args: next(scores))
 
+    # Act
     summary = core._evaluate_margin_total_cv_summary(
         df, _fold_setup(), {"n_estimators": 1}, _optuna_config(objective="margin_mae")
     )
 
+    # Assert
     assert summary["cv_splits"] == 2
     assert summary["fold_scores"] == [1.0, 3.0]
     assert summary["mean"] == 2.0
@@ -127,6 +133,7 @@ def test_evaluate_margin_total_cv_summary_aggregates_folds(monkeypatch: pytest.M
 
 def test_evaluate_margin_total_cv_returns_mean(monkeypatch: pytest.MonkeyPatch) -> None:
     """Returns the mean of fold scores for the objective."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2024, 2024, 2024],
@@ -146,15 +153,18 @@ def test_evaluate_margin_total_cv_returns_mean(monkeypatch: pytest.MonkeyPatch) 
     scores = iter([2.0, 4.0])
     monkeypatch.setattr(core, "_score_margin_total_fold", lambda *_args: next(scores))
 
+    # Act
     mean = core._evaluate_margin_total_cv(
         df, _fold_setup(), {"n_estimators": 1}, _optuna_config(objective="margin_mae")
     )
 
+    # Assert
     assert mean == 3.0
 
 
 def test_run_optuna_search_rejects_holdout_seasons(monkeypatch: pytest.MonkeyPatch) -> None:
     """Reject Optuna tuning when holdout seasons are present."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -179,6 +189,7 @@ def test_run_optuna_search_rejects_holdout_seasons(monkeypatch: pytest.MonkeyPat
         xgb_n_jobs=None,
     )
 
+    # Act & Assert
     with pytest.raises(ValueError, match="holdout seasons"):
         core._run_optuna_search(df, _fold_setup(), optuna_config, holdout_seasons=[2024])
 

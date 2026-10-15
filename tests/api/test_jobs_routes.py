@@ -14,13 +14,14 @@ from tests.api.jobs_support import fake_template, wait_for, wait_for_status
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
     from nfl_predictor.api.jobs.runner import JobRunner
 
 
 @pytest.fixture
-def runner(app) -> JobRunner:
+def runner(app: FastAPI) -> JobRunner:
     """Return the runner the application built."""
     return app.state.job_runner
 

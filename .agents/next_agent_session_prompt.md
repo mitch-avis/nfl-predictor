@@ -170,17 +170,36 @@ Answered on 2026-10-14 (record in DECISIONS.md and `step6_plan.md` at the docs c
   run on the 608 shared games (one seed each, a diagnostic only, not for the docs): Brier
   `+0.0015` [−0.0019, 0.0049], margin MAE 9.62 to 9.73, pick accuracy unchanged.
 
-Still open:
+Decided on 2026-10-15 (the user):
 
-1. A pre-existing `../nfeloqb` bug (not from the merge, not read by this repo today): next-week
-   projections look up the QB model's team objects under `LV`, but the model keys the Raiders
-   as `OAK` (nfelodcm's code), so a fresh team at the default baseline (`25` VALUE) inflates
-   Las Vegas's `qb_adj` (`+160` for Week 6 against `+36` played). Every other Week 5 projection
-   matched its played value (BAL off by `0.8`, the backup first-start rule). Recommended to the
-   user: fix it test-first, then measure adopting `qb1_adj`/`qb2_adj` as features, since the
-   upstream fix moved the QB adjustment out of `qbelo1_pre` (old minus new `qbelo` difference
-   tracks the `qb_adj` difference: correlation `0.94`, slope `1.1`, 919 played 2023+ games).
-   Awaiting the user's call.
+- Fix the `../nfeloqb` Las Vegas bug: done, fork `main` at `9bf32f2` (pushed). Next-week
+  projections looked up the QB model's team under `LV`, but the model keys the Raiders as `OAK`
+  (nfelodcm's code), so a fresh team at the `25` VALUE baseline inflated Las Vegas's `qb_adj`
+  (`+160` for Week 6 against `+36` played). `_stored_team_code` in
+  `nfeloqb/Resources/elo_file_constructor.py` now looks a team up under its modern code, else
+  a legacy alias; two tests in `tests/test_elo_qb_adjustment.py` (the legacy one failed first
+  with `45.0`), 18 tests and the fork's gates pass. Only next-week rows change; nfeloqb was not
+  rerun (this repo reads no next-week `qb_adj` yet).
+- Adopt `qb1_adj`/`qb2_adj` as features: in progress through an implementer on
+  `feat/qb-adj-features` (`0.60.0`): `away_qb_adj`, `home_qb_adj`, `qb_adj_diff`, group
+  `qb_adj`, market-free, left out by default (in `PRODUCTION_DISABLED_FEATURE_GROUPS`) until
+  measured. A reviewer follows; no merge before the Week 6 games end (rule 14) and the user's
+  approval.
+- Group the measurement: the new file against the old, the `qb_adj` arm and decision 1's ratings
+  swap on the new file. Draft rules in `models/qb_elos_measure/HYPOTHESIS.md` (main checkout):
+  two builds from the reviewed `0.60.0` commit, eight runs (four arms, seeds `42` and `7`), the
+  step-6 instrument. The ladder waits for the user's acceptance (GPU time).
+
+Still open for the user:
+
+1. nfeloqb's next-week projection rates a backup's first start with the quarterback's
+   `current_value`, while the played row uses `get_value(team)`, which applies the backup rule
+   (Baltimore's Week 5 projection was off by `0.8`). It changes the upcoming `qb_value_pre` this
+   repo reads, slightly. Raised 2026-10-15, not decided.
+2. The fork's win-total file (`nfeloqb/Manual Data/wt_ratings.csv`) ends at 2023, so the
+   QB-adjusted Elo has had no win-total pull since 2024. Measuring a fresh file needs a fork
+   change and a third build; kept out of the ladder above. Raised 2026-10-15, not decided.
+3. The roadmap review (below, "After the picks"): raised 2026-10-15, not decided.
 
 Decided on 2026-10-14: the top-decile ranking is the two-seed mean (recorded in
 `.agents/sos_port/DECISIONS.md`).
@@ -203,10 +222,9 @@ Jackson's Thursday practice report.
 After the picks, on a fresh branch off `main`:
 
 1. The "no game lines" groups change, test first through an implementer and a reviewer.
-2. Measure the `qb_elos.csv` fix and the stale win-total file with two dataset builds (a
-   hypothesis and decision rule first; walk-forwards are must-ask beyond one per hypothesis).
-   Recommended to the user, not yet decided: group it with the `qb1_adj`/`qb2_adj` adoption
-   arm and with decision 1's ratings swap on the new file, given the diagnostic above.
+2. The grouped measurement (`models/qb_elos_measure/HYPOTHESIS.md`), once the `qb_adj` branch is
+   reviewed and the user accepts the ladder; then an independent rescore (rule 3) before any
+   number reaches the docs.
 3. The docs close-out: regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/`
    write: ask), rename "market-free" to "no game lines" where it means the configuration with Elo
    (including `stage1.py:63,68`), refresh the stale "Review:" fields in

@@ -728,7 +728,7 @@ class TemplateView:
     chain_template_id: str | None
     writes_datasets: bool
     needs_active_run: bool
-    params: list[dict[str, Any]] = field(default_factory=list)
+    params: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
 
 
 def describe(template: JobTemplate) -> TemplateView:

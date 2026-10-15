@@ -22,6 +22,18 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 - `../nfeloqb` fork `main` is at `9bf32f2` (pushed): next-week projections now find a team stored
   under a legacy code (`OAK` for Las Vegas), which had inflated Las Vegas's `qb_adj` to `+160`.
   nfeloqb was not rerun; the user runs it each week (memory `nfeloqb-weekly-process`).
+- **`chore/pyproject-standards` (`0.59.1`, `1bc21d3`, the main checkout, off `main`, not merged)**
+  holds the user's `pyproject.toml` review: strict pytest with warnings as errors, coverage of
+  `src/` and `tests/` plus the gate's `src coverage` step, PEP 639 metadata, ruff/ty/pyright on
+  the configured roots, `update_requirements.sh` rewritten with `update_requirements.hooks.sh`,
+  and `weekly_run/config.py` at 100% coverage (contract tests, loader errors as `ValueError`
+  naming the file, relative single paths from the root; reviewed independently, findings fixed).
+  The gate fails only on pyright: the user switched it to strict, about 3,150 errors in `src/`
+  and `tests/`, a separate cleanup the user will start. `ml/feature_spec.py` changed (the `str`
+  dtype), so the branch invalidates every checkpoint: merge it with other such changes (rule 14).
+  The shared files also live in the new Copier template `~/workspace/python-template` (its own
+  git repo, gate green), whose `update_requirements.sh` and update tests are identical to this
+  repo's; adopting the template here (`copier copy`, its README's "Existing project") is open.
 - **The `qb_adj` review is done.** `feat/qb-adj-features` (`0.60.0`, `c637fc0`, harness worktree
   `.claude/worktrees/agent-afad3cf465d5bcba7`) passed an independent review against
   `.agents/qb_adj_task.md` with minor findings, all docs and tests. They are fixed on
@@ -160,6 +172,16 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Open for the user
 
+- `chore/pyproject-standards`: approve the merge (with the checkpoint-invalidating group), and
+  whether to adopt the python-template here now. Two config questions from its review:
+  - path lists in a weekly config file (`floor_sigma_reference_runs`,
+    `power_rankings_model_predictions`) stay relative to the working directory in
+    `reporting/rating_sources.py:430` and `run_comparison.py:136`, against
+    `config/weekly_run.yaml:37` ("relative to the repository root"); the blend ranking fails when
+    `nfl-predictor weekly` starts outside the root. Recommended: resolve them from the root at
+    read time; it changes recorded config strings and reruns the reports stage once;
+  - config files accept feature-group lists only, not comma strings. Recommended: keep it;
+  - `~` in a config path is not expanded (`~/x` becomes `<root>/~/x`).
 - Approve fast-forwarding `feat/qb-adj-features` to `6bacd5e`, together with its merge after the
   Monday game.
 - Step 3's list includes `qb_adj` (`strength,elo,own_elo_wt,qb_adj`), where the 2026-10-14

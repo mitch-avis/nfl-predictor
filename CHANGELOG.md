@@ -18,9 +18,8 @@
   in Elo points) as `away_qb_adj`, `home_qb_adj` and the away-minus-home `qb_adj_diff`
   (`constants.QB_ADJ_COLUMNS`). Upcoming weeks carry the file's next-week values, else each
   team's latest value, else the latest starter row's, as `qb_value_pre` does; a copy of the file
-  without the columns still loads and leaves them null, and the season build's characterization
-  test carries a value through to the final rows. The own Elo's internal adjustment never reaches
-  them.
+  without the columns still loads and leaves them null. The own Elo's internal adjustment never
+  reaches them.
 - The `qb_adj` feature group owns the three columns. It is not market-informed (box-score
   quarterback values, no betting data) and is left out by default
   (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`, `config/weekly_run.yaml`) until a two-seed

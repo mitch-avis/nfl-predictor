@@ -6,7 +6,7 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 and `models/qb_elos_measure/HYPOTHESIS.md` (main checkout; `models/` is not in git) before reading
 the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 02:00 MDT; the user asleep until about 09:30)
+## State (written 2026-10-15, 06:05 MDT; the user asleep until about 09:30)
 
 - `main` is at `0.59.0` plus docs commits (not pushed): the step-6 port, adopted in production.
   `data/` was rebuilt on 2026-10-14 (record in `.agents/benchmarks.md`, "Data state and ETL
@@ -47,10 +47,10 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   - One: `week_rows._merge_elo` leaves `_right` duplicates when the frame already carries the
     columns. Its only call site (`utils/polars/week_rows.py:552`) never passes them, and the Elo
     columns behave the same way: no action proposed.
-- **The grouped measurement finished; its rule-3 review is running** (`models/qb_elos_measure/`:
-  `build.sh`, `check_cuts.py`, `driver.sh`, `launch.sh`, `build_record.txt`,
-  `launch_record.txt`). Worktree `~/scratch/qb_measure` is detached at `c637fc0` with its own venv
-  and `data/`; the main checkout's `data/` was only read.
+- **The grouped measurement is finished and reviewed** (`models/qb_elos_measure/`: `build.sh`,
+  `check_cuts.py`, `driver.sh`, `launch.sh`, `build_record.txt`, `launch_record.txt`,
+  `REVIEW.md`). Worktree `~/scratch/qb_measure` is detached at `c637fc0` with its own venv and
+  `data/`; the main checkout's `data/` was only read.
   - Builds: new cut `b9772e3e...`, old cut `b59366e2...`, 7,261 rows and 544 columns each,
     leakage audits ok. `inputs/cut_diff.json` is ok: 12 `elo` columns differ, only in 2023-2025
     rows (from 2023-09-07); the `qb_adj` columns are identical in the two builds. The hypothesis
@@ -59,8 +59,22 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
     `models/qb_elos_measure/<arm>_seed<seed>/`. The producer's two-seed `compare` outputs (not
     yet reviewed numbers) are in `checkins/` (`new_file_vs_old_file`, `qb_adj_vs_new_file`,
     `strength_vs_new_file`, `_two_seeds.{md,json}`).
-  - An independent `reviewer` is rescoring from the fold checkpoints and writing `REVIEW.md`
-    (rule 3); no measured number goes into a doc before it.
+  - `REVIEW.md` (independent reviewer, 2026-10-15 05:58): provenance OK (each candidate differs
+    from its reference only in the input or the groups; old-file runs reproduce
+    `models/step6/ratings_anchored_seed{42,7}` bit for bit), all three rules apply cleanly, two
+    seeds, 10,000 resamples:
+    - the new file against the old (seasons 2023-2025, 816 games): Brier `-0.00026`
+      `[-0.00082, +0.00030]`, log loss `-0.00070` `[-0.00195, +0.00055]`: no loss, the new file
+      stays (nothing changes);
+    - `qb_adj` against the new file (all weeks): Brier `+0.00025` `[-0.00026, +0.00076]`, log
+      loss `+0.00056` `[-0.00056, +0.00170]`: a tie, `qb_adj` stays off; the seeds disagree, and
+      weeks 3-18 pool points lose (`-82.0` `[-156.5, -8.0]`);
+    - the strength snapshot against the ported ratings (all weeks): Brier `+0.00102`
+      `[+0.00045, +0.00159]`, log loss `+0.00238` `[+0.00111, +0.00366]`: the snapshot loses, the
+      ported ratings stay (also losing pool points and margin MAE, both seeds);
+    - no arm beats the pick-time line anywhere; week 1 and week 2 show nothing to flag.
+    `compare` and the producer's check-ins agree with the rescore; `compare` cannot produce the
+    2023-2025 window, which comes only from `REVIEW.md`.
   - The transition watcher grepped a relative `driver.log` from the wrong directory, so it never
     matched; the check-in the user asked for at the first run-to-run transition (02:09) did not
     happen. Watchers poll the PID and use absolute paths.
@@ -83,21 +97,15 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Next, in order
 
-1. **The measurement's review:** when `REVIEW.md` lands, read it, then the check-in (rule 7)
-   with the three comparisons below and the user's decisions.
+1. **The user's decisions on the measurement** (below): the floor-sigma reference, then a
+   `.agents/benchmarks.md` record of the three outcomes from `REVIEW.md` (restating reviewed
+   numbers), and `TODO.md` follow-ups that concern only the strength snapshot (closure is the
+   user's call).
 2. **Step 3** waits for the user's answers below and the merge after the Monday game. The
    older roadmap labels the re-check found outside the branch (`README.md:897` "task 55.8",
    `README.md:1067` and `config/weekly_run.yaml:144` "decision 12") go with the step-6 docs
    close-out.
-3. **The three comparisons** of `HYPOTHESIS.md`, applied as written (rule 12), from `REVIEW.md`:
-   - the new file against the old (seasons 2023-2025, all weeks): no Brier or log-loss loss keeps
-     it;
-   - the `qb_adj` group against the new file (all weeks): a Brier win with no log-loss loss
-     recommends turning it on (the user's call, between game weeks);
-   - the strength snapshot against the ported ratings (all weeks): a Brier or log-loss win for
-     the snapshot goes to the user.
-   Every interval that excludes zero, with each arm's rank on every column (rule 9).
-4. **`../nfeloqb`, a backup's first start** (approved 2026-10-15, test first): the next-week
+3. **`../nfeloqb`, a backup's first start** (approved 2026-10-15, test first): the next-week
    projection rates the starter with `current_value`, while the played row uses
    `get_value(team)`, which applies the backup rule (Baltimore's Week 5 projection was off by
    `0.8`). Read `get_value` first and confirm it uses only pre-game information; then a failing
@@ -105,11 +113,11 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
    gates (`.venv/bin/ruff format .`, `ruff check .`, `ty check .`, `pyright .`,
    `markdownlint-cli2 "**/*.md" "#.venv"`, `.venv/bin/python -m pytest`), a `fix:` commit, and a
    push to the fork (`GUARD_OK=1`). Before the user's next nfeloqb run (Week 7).
-5. **The fork's win-total file** (approved 2026-10-15 as its own measurement after the grouped
+4. **The fork's win-total file** (approved 2026-10-15 as its own measurement after the grouped
    one, landing between game weeks): `nfeloqb/Manual Data/wt_ratings.csv` ends at 2023, so the
    QB-adjusted Elo has had no win-total pull since 2024 (`elo.py` line ~136). Hypothesis and
    rule first, a fork change, a third build against the grouped measurement's new-file build.
-6. **The step-6 docs close-out and the roadmap tidy** (approved 2026-10-15):
+5. **The step-6 docs close-out and the roadmap tidy** (approved 2026-10-15):
    - regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/` write: ask);
    - rename "market-free" to "no game lines" where it means the configuration with Elo,
      including `weekly_run/stage1.py:63,68`;
@@ -123,7 +131,7 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
      phases done; retire the follow-ups that concern only the strength snapshot if the grouped
      measurement keeps the ported ratings (rule 5: the user approves each closure);
    - build the approvals list and the user's final HTML report for step 6.
-7. `scripts/gate.sh --web` on `main` and a browser look once the user restarts the server; the
+6. `scripts/gate.sh --web` on `main` and a browser look once the user restarts the server; the
    2026 roof recheck before the Paris game on 2026-10-25
    (`.agents/sos_port/decisions/pbp_columns.md`).
 
@@ -170,8 +178,14 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   test (`cli/options.py:115`, one line plus tests; moderately-to-highly sure); the weekly run and
   `train` are unaffected either way. Your call, since the contract named all three.
 - The inherited `_fill_side_qb` behaviour (above): a fix changes upcoming-week feature values.
-- After the measurement: replace the floor-sigma reference runs (a default change, per
-  `HYPOTHESIS.md`).
+- The floor-sigma reference (`HYPOTHESIS.md`'s closing paragraph, triggered): make
+  `models/qb_elos_measure/new_file_seed{42,7}` the reference (`constants.FLOOR_SIGMA_REFERENCE_RUNS`
+  and `config/weekly_run.yaml`), since production trains on the new file but takes its sigma
+  from the old-file step-6 runs. The reviewer recommends yes, between game weeks, recorded in
+  `.agents/benchmarks.md`; the sigma barely moves (`13.3184`/`13.3182` from `13.3195`/`13.3227`),
+  and the `constants.py` edit invalidates every checkpoint, so it groups with other such changes
+  (rule 14). If the win-total file measurement (item 4 of "Next, in order") will rebuild the
+  reference soon, swap once, after it.
 - The stats-only model: proposed 2026-10-15, not decided. A named track rather than one more
   step at the end, in three parts:
   - in step 8, measure each feature idea on the configuration without game lines as well as on

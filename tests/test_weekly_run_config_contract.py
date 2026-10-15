@@ -12,6 +12,7 @@ the code default rather than the shipped value. Every config-file problem stops 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,13 @@ def _parse_with(path: Path, *argv: str) -> argparse.Namespace:
     return config.parse_args(["--config", str(path), *argv])
 
 
+def _code_defaults(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
+    """Return every option's code default: the parse with no config file to read."""
+    with monkeypatch.context() as patch:
+        patch.setattr(config, "DEFAULT_CONFIG_PATH", tmp_path / "no_shipped_config.yaml")
+        return vars(config.parse_args([]))
+
+
 # Config files
 
 
@@ -73,6 +81,89 @@ def test_a_mapping_file_sets_its_options(tmp_path: Path, name: str, text: str) -
 
     # Assert
     assert (args.wf_eval_last_n_seasons, args.tune) == (4, True)
+
+
+@pytest.mark.parametrize("text", ["", "# nothing set\n"], ids=["empty", "comments-only"])
+def test_an_empty_yaml_config_leaves_every_option_at_its_code_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, text: str
+) -> None:
+    # Arrange
+    path = _write(tmp_path / "weekly.yaml", text)
+    code_defaults = _code_defaults(tmp_path, monkeypatch)
+
+    # Act
+    args = _parse_with(path)
+
+    # Assert
+    assert {key: value for key, value in vars(args).items() if key != "config"} == {
+        key: value for key, value in code_defaults.items() if key != "config"
+    }
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("weekly.yaml", "- wf_eval_last_n_seasons\n- 4\n"),
+        ("weekly.yaml", "just a string\n"),
+        ("weekly.yml", "4\n"),
+        ("weekly.json", "[1, 2]"),
+        ("weekly.json", '"wf_eval_last_n_seasons"'),
+        ("weekly.json", "null"),
+    ],
+    ids=["yaml-list", "yaml-string", "yml-number", "json-list", "json-string", "json-null"],
+)
+def test_a_file_whose_top_level_is_not_a_mapping_is_rejected(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    # Arrange
+    path = _write(tmp_path / name, text)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as rejected:
+        _parse_with(path)
+    assert "mapping" in str(rejected.value)
+
+
+@pytest.mark.parametrize("name", ["weekly.toml", "weekly.txt", "weekly"])
+def test_an_unsupported_extension_is_rejected_naming_the_supported_formats(
+    tmp_path: Path, name: str
+) -> None:
+    # Arrange
+    path = _write(tmp_path / name, "wf_eval_last_n_seasons = 4\n")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as rejected:
+        _parse_with(path)
+    message = str(rejected.value).lower()
+    assert "json" in message
+    assert "yaml" in message
+
+
+def test_a_missing_config_file_is_rejected_naming_the_path(tmp_path: Path) -> None:
+    # Arrange
+    path = tmp_path / "no_such_dir" / "weekly.yaml"
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))):
+        _parse_with(path)
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("weekly.json", '{"wf_eval_last_n_seasons": 4,'),
+        ("weekly.yaml", "wf_eval_last_n_seasons: [4\n"),
+        ("weekly.yml", "a: b: c\n"),
+    ],
+    ids=["json", "yaml", "yml"],
+)
+def test_a_malformed_file_is_rejected_naming_the_file(tmp_path: Path, name: str, text: str) -> None:
+    # Arrange
+    path = _write(tmp_path / name, text)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))):
+        _parse_with(path)
 
 
 # Normalization

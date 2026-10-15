@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import yaml
 
@@ -50,6 +50,9 @@ DEFAULT_POWER_RANKINGS_BLEND_WEIGHT = 0.5
 # Config keys that list feature groups; the command line takes them comma-separated.
 _FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}
 
+
+# The config file extensions the weekly run reads: JSON, and YAML under either extension.
+_CONFIG_SUFFIXES = frozenset({".json", ".yaml", ".yml"})
 
 # The configuration a weekly run reads when no --config is given.
 DEFAULT_CONFIG_PATH = Path(constants.ROOT_DIR) / "config" / "weekly_run.yaml"
@@ -106,24 +109,38 @@ def _rename_config_keys(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_config(path: Path) -> dict[str, Any]:
-    """Load a JSON or YAML config file into a dict."""
-    if not path.exists():
-        msg = f"Missing config file: {path}"
-        raise FileNotFoundError(msg)
+    """Load a JSON or YAML config file into a dict; an empty YAML file sets nothing.
 
+    Raises:
+        ValueError: If the file is missing, has an extension other than ``.json``, ``.yaml``
+            or ``.yml``, does not parse, or holds something other than a mapping. Every
+            message names the file, as the config's other errors are ``ValueError`` too.
+
+    """
     suffix = path.suffix.lower()
-    if suffix == ".json":
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    elif suffix in {".yaml", ".yml"}:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    else:
-        msg = f"Unsupported config extension: {path.suffix}"
+    if suffix not in _CONFIG_SUFFIXES:
+        msg = (
+            f"Config file {path} has an unsupported extension {path.suffix!r}: use JSON (.json) "
+            "or YAML (.yaml, .yml)."
+        )
+        raise ValueError(msg)
+    if not path.is_file():
+        msg = f"Missing config file: {path}"
         raise ValueError(msg)
 
-    if not isinstance(payload, dict):
-        msg = "Config file must parse to a JSON/YAML object."
-        raise TypeError(msg)
-    return payload
+    text = path.read_text(encoding="utf-8")
+    try:
+        payload = json.loads(text) if suffix == ".json" else yaml.safe_load(text)
+    except (json.JSONDecodeError, yaml.YAMLError) as error:
+        msg = f"Config file {path} does not parse: {error}"
+        raise ValueError(msg) from error
+
+    if payload is None and suffix != ".json":
+        return {}
+    if isinstance(payload, dict):
+        return cast("dict[str, Any]", payload)
+    msg = f"Config file {path} must hold a mapping of settings, not {type(payload).__name__}."
+    raise ValueError(msg)
 
 
 def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:

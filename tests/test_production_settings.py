@@ -800,12 +800,12 @@ def test_a_real_backtests_metadata_round_trips_with_nothing_retired_or_unrecorde
         assert written == production_settings.RECORDED_CONFIG_EXTRAS
 
 
-def test_a_config_that_is_not_an_object_is_a_type_error(tmp_path: Path) -> None:
-    """A config file must hold a mapping; a list is refused as the wrong type."""
+def test_a_config_that_is_not_an_object_is_refused(tmp_path: Path) -> None:
+    """A config file must hold a mapping; a list is refused."""
     # Arrange
     path = tmp_path / "weekly_run.json"
     path.write_text(json.dumps([1, 2]), encoding="utf-8")
 
     # Act & Assert
-    with pytest.raises(TypeError, match="must parse to a JSON/YAML object"):
+    with pytest.raises(ValueError, match="must hold a mapping"):
         weekly_config._load_config(path)

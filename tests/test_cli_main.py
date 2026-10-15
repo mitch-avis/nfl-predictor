@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from nfl_predictor.cli import main as front_door
+from tests.fakes import returning
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -77,7 +78,7 @@ def _fake_command(monkeypatch: pytest.MonkeyPatch, *, takes_argv: bool) -> Simpl
         "validate", "data", "test", "unused", takes_argv=takes_argv, function="entry"
     )
     monkeypatch.setitem(front_door.COMMANDS_BY_NAME, "validate", command)
-    monkeypatch.setattr(front_door, "_resolve", lambda _command: entry)
+    monkeypatch.setattr(front_door, "_resolve", returning(entry))
     return seen
 
 
@@ -110,7 +111,7 @@ def test_sys_argv_is_restored_when_the_command_fails(monkeypatch: pytest.MonkeyP
         msg = "boom"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(front_door, "_resolve", lambda _command: boom)
+    monkeypatch.setattr(front_door, "_resolve", returning(boom))
 
     # Act & Assert
     with pytest.raises(RuntimeError, match="boom"):
@@ -123,7 +124,7 @@ def test_predict_requires_a_saved_model(
 ) -> None:
     """``predict`` without ``--model-in`` is refused before any model code runs."""
     # Arrange
-    monkeypatch.setattr(front_door, "_resolve", lambda _command: pytest.fail)
+    monkeypatch.setattr(front_door, "_resolve", returning(pytest.fail))
 
     # Act
     with pytest.raises(SystemExit) as exit_info:
@@ -143,7 +144,7 @@ def test_predict_accepts_a_saved_model_or_a_help_request(
 ) -> None:
     """Either spelling of ``--model-in``, or a help request, reaches the model command."""
     # Arrange
-    monkeypatch.setattr(front_door, "_resolve", lambda _command: lambda: None)
+    monkeypatch.setattr(front_door, "_resolve", returning(lambda: None))
 
     # Act
     code = front_door.main(args)
@@ -181,7 +182,7 @@ def test_walk_forward_commands_default_to_the_passive_openmp_policy(
     def resolve(_command: front_door.Command) -> object:
         """Record the policy at import time and return a no-op entry point."""
         seen["policy"] = os.environ.get("OMP_WAIT_POLICY")
-        return lambda *_args: 0
+        return returning(0)
 
     monkeypatch.setattr(front_door, "_resolve", resolve)
 
@@ -199,7 +200,7 @@ def test_an_operator_chosen_openmp_policy_is_kept(
     """A policy already in the environment wins, including an empty value (library default)."""
     # Arrange
     monkeypatch.setenv("OMP_WAIT_POLICY", value)
-    monkeypatch.setattr(front_door, "_resolve", lambda _command: lambda *_args: 0)
+    monkeypatch.setattr(front_door, "_resolve", returning(returning(0)))
 
     # Act
     front_door.main(["backtest"])

@@ -6,7 +6,7 @@ import importlib
 import sys
 import types
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import pandas as pd
 import pytest
@@ -15,8 +15,11 @@ import xgboost as xgb
 from nfl_predictor import constants
 from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils
 from nfl_predictor.ml.ml_model_core import OptunaConfig, TrainingResult
+from tests.fakes import returning
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 REFERENCE_POOL = floor_sigma.ErrorPool(
@@ -38,9 +41,18 @@ def reference_pool_requests(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     return requests
 
 
-def _import_ml_model_cli(monkeypatch):
+def _failing(message: str) -> Callable[..., NoReturn]:
+    """Return a stub that fails the test with ``message`` whenever it is called."""
+
+    def stub(*_args: object, **_kwargs: object) -> NoReturn:
+        raise AssertionError(message)
+
+    return stub
+
+
+def _import_ml_model_cli(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     stub = types.SimpleNamespace(
-        train_margin_total_model=lambda _options: None,
+        train_margin_total_model=returning(None),
     )
     monkeypatch.setitem(sys.modules, "nfl_predictor.ml_model", stub)
     monkeypatch.delitem(sys.modules, "nfl_predictor.cli.train", raising=False)
@@ -48,7 +60,7 @@ def _import_ml_model_cli(monkeypatch):
     return importlib.import_module("nfl_predictor.cli.train")
 
 
-def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
+def test_main_model_in_no_predict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Loading model without prediction works and skips prediction steps."""
     # Arrange
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -61,7 +73,7 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
         return "model"
 
     monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", fake_load_model_checkpoint)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fail_predict(*_args: object, **_kwargs: object) -> None:
@@ -80,7 +92,9 @@ def test_main_model_in_no_predict(monkeypatch, tmp_path: Path) -> None:
     assert calls["model"] == (model_path, "margin_total")
 
 
-def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> None:
+def test_main_model_in_predict_defaults_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Loading model with prediction runs prediction with expected args and output path."""
     # Arrange
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -113,7 +127,7 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
 
     monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", fake_load_model_checkpoint)
     monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", fake_predict)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     monkeypatch.setattr(
@@ -139,7 +153,9 @@ def test_main_model_in_predict_defaults_output(monkeypatch, tmp_path: Path) -> N
     assert calls["model"] == (model_path, "margin_total")
 
 
-def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path: Path) -> None:
+def test_main_training_writes_artifacts_and_defaults_study(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Training run writes artifacts and defaults Optuna study name and storage."""
     # Arrange
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -179,7 +195,7 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     )
     monkeypatch.setattr(ml_model_cli.artifacts, "save_model", fake_save_model)
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     monkeypatch.setattr(
@@ -212,7 +228,7 @@ def test_main_training_writes_artifacts_and_defaults_study(monkeypatch, tmp_path
     assert metadata_payload["run_id"] == run_dir.name
 
 
-def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
+def test_main_model_in_with_tune_logs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Loading model with --tune logs appropriate messages."""
     # Arrange
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -224,8 +240,8 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
         messages.append(fmt % args if args else fmt)
 
     monkeypatch.setattr(ml_model_cli.log, "info", fake_log)
-    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", lambda *_args, **_kwargs: "model")
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", returning("model"))
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     monkeypatch.setattr(sys, "argv", ["prog", "--model-in", str(model_path), "--tune"])
@@ -238,7 +254,7 @@ def test_main_model_in_with_tune_logs(monkeypatch, tmp_path: Path) -> None:
     assert any("No --predict-path provided" in msg for msg in messages)
 
 
-def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
+def test_main_model_outside_run_dir_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Training with model output outside run dir raises error."""
     # Arrange
     ml_model_cli = _import_ml_model_cli(monkeypatch)
@@ -254,10 +270,8 @@ def test_main_model_outside_run_dir_raises(monkeypatch, tmp_path: Path) -> None:
         early_stopping={"best_iteration": 1},
     )
 
-    monkeypatch.setattr(
-        ml_model_cli, "train_margin_total_model_with_report", lambda _options: result
-    )
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", returning(result))
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     monkeypatch.setattr(
@@ -301,19 +315,19 @@ def test_main_margin_total_training_predicts_without_writing_artifacts(
     monkeypatch.setattr(
         ml_model_cli,
         "train_margin_total_model_with_report",
-        lambda _options: result,
+        returning(result),
     )
     monkeypatch.setattr(
         ml_model_cli.artifacts,
         "save_model",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("save_model not expected")),
+        _failing("save_model not expected"),
     )
     monkeypatch.setattr(
         ml_model_cli.artifacts,
         "write_json",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("write_json not expected")),
+        _failing("write_json not expected"),
     )
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda *_args, **_kwargs: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
 
     def fake_predict(*args: object, **kwargs: object) -> pd.DataFrame:
@@ -405,9 +419,9 @@ def test_main_training_uses_and_records_the_resolved_xgb_device(
             calls["metadata"] = payload
 
     monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
-    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", returning(None))
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
     monkeypatch.setattr(sys, "argv", ["prog", "--run-dir", str(run_dir), *extra_argv])
 
@@ -444,12 +458,10 @@ def test_main_training_metadata_records_the_device_the_model_was_fitted_on(
         if path.name == "metadata.json":
             calls["metadata"] = payload
 
-    monkeypatch.setattr(
-        ml_model_cli, "train_margin_total_model_with_report", lambda _options: result
-    )
-    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", returning(result))
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", returning(None))
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
     monkeypatch.setattr(sys, "argv", ["prog", "--run-dir", str(tmp_path / "run")])
 
@@ -494,10 +506,10 @@ def test_training_pools_the_reference_runs_for_the_predicted_week(
             calls["metadata"] = payload
 
     monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
-    monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", lambda *_a, **_k: None)
-    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", lambda *_args: None)
+    monkeypatch.setattr(ml_model_cli, "predict_week_margin_total", returning(None))
+    monkeypatch.setattr(ml_model_cli.artifacts, "save_model", returning(None))
     monkeypatch.setattr(ml_model_cli.artifacts, "write_json", fake_write_json)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(ml_model_cli.artifacts, "now_utc_iso", lambda: "time")
     monkeypatch.setattr(
         sys,
@@ -531,7 +543,7 @@ def test_training_without_a_prediction_file_estimates_for_the_week_after_the_dat
         raise SystemExit(0)
 
     monkeypatch.setattr(ml_model_cli, "train_margin_total_model_with_report", fake_train)
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(sys, "argv", ["prog"])
 
     # Act
@@ -561,8 +573,8 @@ def test_loading_a_saved_model_reads_no_reference_runs(
     """Prediction from a saved model uses its recorded sigma and needs no reference run."""
     # Arrange
     ml_model_cli = _import_ml_model_cli(monkeypatch)
-    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", lambda *_args: "model")
-    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", lambda _: "hash")
+    monkeypatch.setattr(ml_model_cli, "load_model_checkpoint", returning("model"))
+    monkeypatch.setattr(ml_model_cli.artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(sys, "argv", ["prog", "--model-in", str(tmp_path / "model.joblib")])
 
     # Act

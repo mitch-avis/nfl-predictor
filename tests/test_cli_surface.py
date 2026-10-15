@@ -18,11 +18,14 @@ import inspect
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
 from nfl_predictor import constants
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 ROOT = Path(constants.ROOT_DIR)
 # The directory the package imports from, so a file path maps to its module name.
@@ -101,7 +104,7 @@ def _portable(value: Any) -> Any:
     if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, list | tuple):
-        return [_portable(item) for item in value]
+        return [_portable(item) for item in cast("Sequence[object]", value)]
     return str(value).replace(str(ROOT), "<repo>")
 
 
@@ -112,7 +115,8 @@ def _surface(parser: argparse.ArgumentParser, prefix: str = "") -> list[dict[str
         if isinstance(action, argparse._HelpAction):
             continue
         if isinstance(action, argparse._SubParsersAction):
-            for name, child in action.choices.items():
+            subparsers = cast("argparse._SubParsersAction[argparse.ArgumentParser]", action)
+            for name, child in subparsers.choices.items():
                 actions.extend(_surface(child, prefix=f"{prefix}{name} "))
             continue
         actions.append(

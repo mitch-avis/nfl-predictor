@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from nfl_predictor.cli import checkpoints
+from nfl_predictor.utils.logger import log
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -54,9 +55,11 @@ def test_main_lists_without_deleting(tmp_path: Path, monkeypatch: pytest.MonkeyP
     models, root = _layout(tmp_path)
     before = sorted(path for path in root.rglob("*"))
     messages: list[str] = []
-    monkeypatch.setattr(
-        checkpoints.log, "info", lambda message, *args: messages.append(message % args)
-    )
+
+    def capture(message: str, *args: object) -> None:
+        messages.append(message % args)
+
+    monkeypatch.setattr(log, "info", capture)
 
     # Act
     code = checkpoints.main(

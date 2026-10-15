@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.cli import validate as module
+from nfl_predictor.utils import polars_utils, validation_utils
+from nfl_predictor.utils.logger import log
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,12 +47,14 @@ def _write_dummy_all_data(tmp_path: Path) -> Path:
     return csv_path
 
 
-def test_validate_offline_main_missing_file_logs_error(tmp_path: Path, monkeypatch) -> None:
+def test_validate_offline_main_missing_file_logs_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Offline validation returns code 2 and logs an error when the CSV is missing."""
     # Arrange
     logger = _FakeLogger()
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
     # Act
     code = module.main([])
@@ -58,22 +64,24 @@ def test_validate_offline_main_missing_file_logs_error(tmp_path: Path, monkeypat
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
 
 
-def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypatch) -> None:
+def test_validate_offline_main_logs_errors_and_warnings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Offline validation emits logger output for both errors and warnings."""
     # Arrange
     logger = _FakeLogger()
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(pl, "read_csv", returning(pl.DataFrame({"season": [2024]})))
     monkeypatch.setattr(
-        module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
-    )
-    monkeypatch.setattr(
-        module.validation_utils,
+        validation_utils,
         "validate_dataframe",
-        lambda _df: module.validation_utils.ValidationResult(
-            errors=["bad schema"],
-            warnings=["missing optional field"],
+        returning(
+            validation_utils.ValidationResult(
+                errors=["bad schema"],
+                warnings=["missing optional field"],
+            )
         ),
     )
 
@@ -88,20 +96,20 @@ def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypa
     assert ("warning", "- missing optional field") in logger.records
 
 
-def test_validate_offline_main_logs_success(tmp_path: Path, monkeypatch) -> None:
+def test_validate_offline_main_logs_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Offline validation logs success and returns zero when no issues are found."""
     # Arrange
     logger = _FakeLogger()
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(pl, "read_csv", returning(pl.DataFrame({"season": [2024]})))
     monkeypatch.setattr(
-        module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
-    )
-    monkeypatch.setattr(
-        module.validation_utils,
+        validation_utils,
         "validate_dataframe",
-        lambda _df: module.validation_utils.ValidationResult(errors=[], warnings=[]),
+        returning(validation_utils.ValidationResult(errors=[], warnings=[])),
     )
 
     # Act
@@ -112,12 +120,14 @@ def test_validate_offline_main_logs_success(tmp_path: Path, monkeypatch) -> None
     assert logger.records == [("info", "Validation OK")]
 
 
-def test_validate_live_main_missing_file_logs_error(tmp_path: Path, monkeypatch) -> None:
+def test_validate_live_main_missing_file_logs_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Live validation returns code 2 and logs an error when the CSV is missing."""
     # Arrange
     logger = _FakeLogger()
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
     # Act
     code = module.main(LIVE)
@@ -127,20 +137,20 @@ def test_validate_live_main_missing_file_logs_error(tmp_path: Path, monkeypatch)
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
 
 
-def test_validate_live_main_logs_success_without_mismatches(tmp_path: Path, monkeypatch) -> None:
+def test_validate_live_main_logs_success_without_mismatches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Live validation logs success and returns zero when no score mismatches exist."""
     # Arrange
     logger = _FakeLogger()
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(pl, "read_csv", returning(pl.DataFrame({"season": [2024]})))
     monkeypatch.setattr(
-        module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
-    )
-    monkeypatch.setattr(
-        module.validation_utils,
+        validation_utils,
         "compare_latest_week_scores",
-        lambda _df: pl.DataFrame(),
+        returning(pl.DataFrame()),
     )
 
     # Act
@@ -151,21 +161,21 @@ def test_validate_live_main_logs_success_without_mismatches(tmp_path: Path, monk
     assert logger.records == [("info", "No mismatches found")]
 
 
-def test_validate_live_main_logs_mismatches(tmp_path: Path, monkeypatch) -> None:
+def test_validate_live_main_logs_mismatches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Live validation logs mismatch details and returns one when scores differ."""
     # Arrange
     logger = _FakeLogger()
     mismatches = pl.DataFrame({"away_abbr": ["BUF"], "home_abbr": ["KC"]})
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(pl, "read_csv", returning(pl.DataFrame({"season": [2024]})))
     monkeypatch.setattr(
-        module.pl, "read_csv", lambda _path, **_kwargs: pl.DataFrame({"season": [2024]})
-    )
-    monkeypatch.setattr(
-        module.validation_utils,
+        validation_utils,
         "compare_latest_week_scores",
-        lambda _df: mismatches,
+        returning(mismatches),
     )
 
     # Act
@@ -184,7 +194,7 @@ def test_validate_live_main_logs_mismatches(tmp_path: Path, monkeypatch) -> None
 def test_validate_reads_the_data_dir_option(
     mode: list[str],
     tmp_path: Path,
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An explicit data directory is read instead of the packaged one, in either mode."""
     # Arrange
@@ -193,7 +203,7 @@ def test_validate_reads_the_data_dir_option(
     chosen.mkdir()
 
     monkeypatch.setattr(module, "log", logger, raising=False)
-    monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path / "packaged")
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path / "packaged")
 
     # Act
     code = module.main([*mode, "--data-dir", str(chosen)])
@@ -211,8 +221,8 @@ def test_the_front_door_returns_the_validation_exit_code(
 ) -> None:
     """``nfl-predictor validate`` (and ``--live``) exits with the command's own return code."""
     # Arrange
-    monkeypatch.setattr(module.log, "info", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(module.log, "error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(log, "info", returning(None))
+    monkeypatch.setattr(log, "error", returning(None))
 
     # Act
     code = front_door.main(["validate", *extra, "--data-dir", str(tmp_path)])
@@ -227,9 +237,9 @@ _SCORED_MATCHUPS = (("BUF", "KC"), ("DAL", "PHI"), ("SF", "SEA"))
 def _write_newest_first_all_data(tmp_path: Path, unplayed_rows: int = 150) -> Path:
     """Write an all-data CSV whose first rows are unplayed games with empty scores."""
     columns = [
-        *module.constants.METADATA_COLUMNS,
-        *module.constants.LINES_COLUMNS,
-        *module.constants.RESULT_COLUMNS,
+        *constants.METADATA_COLUMNS,
+        *constants.LINES_COLUMNS,
+        *constants.RESULT_COLUMNS,
     ]
     rows: list[dict[str, object]] = [
         {
@@ -289,9 +299,7 @@ def test_validate_live_reads_scores_after_many_unplayed_rows(
             "home_score": [20, 21, 22],
         }
     )
-    monkeypatch.setattr(
-        module.validation_utils.polars_utils, "load_schedule", lambda _seasons: schedule
-    )
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(schedule))
 
     # Act
     code = module.main([*LIVE, "--data-dir", str(tmp_path)])

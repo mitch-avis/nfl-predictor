@@ -30,6 +30,7 @@ def _games_to_predict(away: str, home: str) -> pl.DataFrame:
 
 def test_motivation_features_use_only_prior_weeks() -> None:
     """Week N motivation must ignore results from week N and later."""
+    # Arrange
     season = 2024
 
     # Pick two teams in the same division to keep comparisons meaningful.
@@ -60,6 +61,7 @@ def test_motivation_features_use_only_prior_weeks() -> None:
 
     games_df = _games_to_predict(away, home)
 
+    # Act
     out = polars_utils.add_motivation_features(
         games_df,
         schedule,
@@ -68,6 +70,7 @@ def test_motivation_features_use_only_prior_weeks() -> None:
         include_postseason=False,
     )
 
+    # Assert
     # Based on week 1 only, BUF should lead the division and have 0 games behind.
     assert out["away_division_rank"].to_list() == [1]
     assert out["away_division_games_behind"].to_list() == [0.0]
@@ -75,6 +78,7 @@ def test_motivation_features_use_only_prior_weeks() -> None:
 
 def test_motivation_features_invariant_schema_on_missing_scores() -> None:
     """When schedule scores are missing, motivation columns should exist as nulls."""
+    # Arrange
     season = 2024
 
     schedule_missing_scores = pl.DataFrame(
@@ -89,6 +93,7 @@ def test_motivation_features_invariant_schema_on_missing_scores() -> None:
 
     games_df = _games_to_predict("BUF", "MIA")
 
+    # Act
     out = polars_utils.add_motivation_features(
         games_df,
         schedule_missing_scores,
@@ -97,6 +102,7 @@ def test_motivation_features_invariant_schema_on_missing_scores() -> None:
         include_postseason=False,
     )
 
+    # Assert
     for col in constants.MOTIVATION_FEATURE_COLUMNS:
         assert col in out.columns
         assert out[col].to_list() == [None]
@@ -108,6 +114,7 @@ def test_motivation_division_clinch_proxy_uses_max_wins_other() -> None:
     This test uses a minimal scheduled season for the AFC East teams so the leader can clinch
     early in a toy setup.
     """
+    # Arrange
     season = 2024
 
     schedule = _schedule_rows(
@@ -132,6 +139,8 @@ def test_motivation_division_clinch_proxy_uses_max_wins_other() -> None:
     )
 
     games_df = _games_to_predict("BUF", "MIA")
+
+    # Act
     out = polars_utils.add_motivation_features(
         games_df,
         schedule,
@@ -140,12 +149,14 @@ def test_motivation_division_clinch_proxy_uses_max_wins_other() -> None:
         include_postseason=False,
     )
 
+    # Assert
     assert out["away_division_rank"].to_list() == [1]
     assert out["away_division_clinched_proxy"].to_list() == [1]
 
 
 def test_motivation_features_use_historical_divisions_before_2002() -> None:
     """Historical division ranks should use the pre-2002 alignment."""
+    # Arrange
     season = 2001
 
     schedule = _schedule_rows(
@@ -169,6 +180,7 @@ def test_motivation_features_use_historical_divisions_before_2002() -> None:
         },
     )
 
+    # Act
     out = polars_utils.add_motivation_features(
         _games_to_predict("ARI", "DAL"),
         schedule,
@@ -177,5 +189,6 @@ def test_motivation_features_use_historical_divisions_before_2002() -> None:
         include_postseason=False,
     )
 
+    # Assert
     assert out["away_division_rank"].to_list() == [1]
     assert out["home_division_rank"].to_list() == [2]

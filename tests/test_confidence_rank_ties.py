@@ -8,6 +8,8 @@ their order.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pandas as pd
 
@@ -18,7 +20,11 @@ from nfl_predictor.ml.ml_model_core import (
     margin_to_home_win_prob,
 )
 from nfl_predictor.reporting import run_comparison
+from nfl_predictor.utils.logger import log
 from nfl_predictor.weekly_run import pipeline
+
+if TYPE_CHECKING:
+    import pytest
 
 # game "a" is the home underdog by 3, game "b" the home favorite by 3.
 TIED_MARGINS = np.array([-3.0, 3.0])
@@ -335,11 +341,17 @@ def test_untied_games_per_game_scores_rank_exactly_as_before() -> None:
     assert games["rank"].tolist() == expected.tolist()
 
 
-def test_display_weekly_predictions_orders_the_tie_by_game_id(monkeypatch) -> None:
+def test_display_weekly_predictions_orders_the_tie_by_game_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Without a rank column, the log display lists games by the shared ranking rule."""
     # Arrange
     messages: list[str] = []
-    monkeypatch.setattr(ml_utils.log, "info", lambda msg, *args: messages.append(msg % args))
+
+    def capture(msg: str, *args: object) -> None:
+        messages.append(msg % args)
+
+    monkeypatch.setattr(log, "info", capture)
     probs = _tied_probs()
     predictions = pd.DataFrame(
         {

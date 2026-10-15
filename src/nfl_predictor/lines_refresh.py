@@ -32,6 +32,7 @@ import polars as pl
 from nfl_predictor import constants
 from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 from nfl_predictor.utils.polars import moneyline_map, nfelo_lines, pick_time_lines
 
 LINE_COLUMNS: tuple[str, ...] = (
@@ -61,7 +62,9 @@ class BuildLines:
     """
 
     line_source: str
-    moneyline_maps: dict[int, moneyline_map.SpreadMoneylineMap | None] = field(default_factory=dict)
+    moneyline_maps: dict[int, moneyline_map.SpreadMoneylineMap | None] = field(
+        default_factory=dict[int, moneyline_map.SpreadMoneylineMap | None]
+    )
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,7 @@ class FileRefresh:
     exists: bool
     matched_rows: int = 0
     changed_rows: int = 0
-    changed_columns: dict[str, int] = field(default_factory=dict)
+    changed_columns: dict[str, int] = field(default_factory=dict[str, int])
 
     @property
     def written(self) -> bool:
@@ -145,12 +148,12 @@ def read_build_lines(data_dir: Path) -> BuildLines:
         )
         return BuildLines(constants.LINE_SOURCE_STORED)
     try:
-        record = json.loads(path.read_text(encoding="utf-8"))
+        record = as_str_dict(json.loads(path.read_text(encoding="utf-8")))
     except json.JSONDecodeError as exc:
         msg = f"The line record {path} is not valid JSON: {exc}"
         raise ValueError(msg) from exc
-    source = record.get("line_source") if isinstance(record, dict) else None
-    if source not in constants.LINE_SOURCES:
+    source = record.get("line_source") if record is not None else None
+    if record is None or source not in constants.LINE_SOURCES:
         msg = (
             f"The line record {path} names line source {source!r}; expected one of "
             f"{', '.join(constants.LINE_SOURCES)}."
@@ -158,8 +161,8 @@ def read_build_lines(data_dir: Path) -> BuildLines:
         raise ValueError(msg)
     if source == constants.LINE_SOURCE_STORED:
         return BuildLines(constants.LINE_SOURCE_STORED)
-    maps = record.get("moneyline_maps")
-    if not isinstance(maps, dict):
+    maps = as_str_dict(record.get("moneyline_maps"))
+    if maps is None:
         msg = f"The pick-time line record {path} has no moneyline map table."
         raise TypeError(msg)
     return BuildLines(

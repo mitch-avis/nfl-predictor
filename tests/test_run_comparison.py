@@ -18,6 +18,7 @@ import pytest
 from nfl_predictor.cli import compare as command
 from nfl_predictor.cli import main as front_door
 from nfl_predictor.reporting import run_comparison
+from nfl_predictor.utils.narrowing import as_str_dict
 from tests import snapshots
 
 # (game_id, season, week, p, actual margin); home wins when the margin is positive.
@@ -33,7 +34,7 @@ GAMES = [
 
 def _predictions(probs: dict[str, float] | None = None, margin_shift: float = 0.0) -> pd.DataFrame:
     """Return prediction rows for ``GAMES``, optionally overriding probabilities."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for game_id, season, week, p, margin in GAMES:
         prob = (probs or {}).get(game_id, p)
         rows.append(
@@ -342,7 +343,7 @@ TMP_PLACEHOLDER = "<tmp>"
 
 def _season_predictions(shift: float = 0.0, market: float = 0.5) -> pd.DataFrame:
     """Return prediction rows for ``SEASON_GAMES``; ``shift`` moves every probability."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for index, (game_id, season, week, p, margin) in enumerate(SEASON_GAMES):
         rows.append(
             {
@@ -376,11 +377,13 @@ def _without_tmp(text: str, tmp_path: Path) -> str:
 
 def _assert_contains(where: str, actual: object, expected: object) -> None:
     """Assert every key in ``expected`` is in ``actual`` with an exactly equal value."""
-    if isinstance(expected, dict):
-        assert isinstance(actual, dict), where
-        for key, value in expected.items():
-            assert key in actual, f"{where}: missing {key}"
-            _assert_contains(f"{where}.{key}", actual[key], value)
+    expected_dict = as_str_dict(expected)
+    if expected_dict is not None:
+        actual_dict = as_str_dict(actual)
+        assert actual_dict is not None, where
+        for key, value in expected_dict.items():
+            assert key in actual_dict, f"{where}: missing {key}"
+            _assert_contains(f"{where}.{key}", actual_dict[key], value)
     else:
         assert actual == expected, f"{where}: {actual!r} != {expected!r}"
 

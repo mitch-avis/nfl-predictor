@@ -1277,6 +1277,7 @@ ruff check
 ty check                      # src/ and tests/, from [tool.ty.src]
 pyright                       # src/ and tests/, from [tool.pyright]
 python -m pytest
+coverage report --include="src/*" --fail-under=90   # src/ alone; the total counts tests/
 markdownlint .
 nfl-predictor --help          # then every command's --help, listed by the front door
 ```

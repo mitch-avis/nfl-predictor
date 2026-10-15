@@ -177,6 +177,11 @@ venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
 
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["."]           # keeps `tests.*` imports resolving from the repo root
+reportPrivateUsage = false   # unit tests import their own module's private helpers
+
 # --------------------------------------------------------------------------------------------
 # Tests and coverage
 # --------------------------------------------------------------------------------------------

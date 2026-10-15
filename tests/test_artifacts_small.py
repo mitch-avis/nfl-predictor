@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,6 +15,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.ml import artifacts
 
 if TYPE_CHECKING:
@@ -207,7 +209,7 @@ def test_generate_run_id_uses_frozen_timestamp_and_stable_hash(
         @classmethod
         def now(cls, tz: object) -> datetime:
             """Return a fixed UTC timestamp."""
-            assert tz is artifacts.UTC
+            assert tz is UTC
             return datetime(2026, 6, 12, 18, 1, 2, tzinfo=UTC)
 
     monkeypatch.setattr(artifacts, "datetime", _FrozenDateTime)
@@ -227,7 +229,7 @@ def test_resolve_run_paths_defaults_to_repo_models_dir(
 ) -> None:
     """resolve_run_paths should default under ``MODELS_PATH/<run_id>``."""
     # Arrange
-    monkeypatch.setattr(artifacts.constants, "MODELS_PATH", tmp_path / "models")
+    monkeypatch.setattr(constants, "MODELS_PATH", tmp_path / "models")
 
     # Act
     paths = artifacts.resolve_run_paths("weekly_run")
@@ -266,7 +268,7 @@ def test_git_commit_hash_handles_success_failure_and_missing_git(
 ) -> None:
     """git_commit_hash should tolerate git failures and missing executables."""
     # Arrange
-    monkeypatch.setattr(artifacts.subprocess, "run", run)
+    monkeypatch.setattr(subprocess, "run", run)
 
     # Act
     commit = artifacts.git_commit_hash()
@@ -300,8 +302,12 @@ def test_library_versions_report_each_library_and_python(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """library_versions should remain deterministic under a mocked version lookup."""
+
     # Arrange
-    monkeypatch.setattr(artifacts, "_module_version", lambda name: f"{name}-1.0")
+    def fake_version(name: str) -> str:
+        return f"{name}-1.0"
+
+    monkeypatch.setattr(artifacts, "_module_version", fake_version)
 
     # Act
     versions = artifacts.library_versions()

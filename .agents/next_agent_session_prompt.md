@@ -1,253 +1,154 @@
 # Next Agent Session Prompt
 
 You are resuming work in the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`).
-Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as binding, then
-`.agents/step6_plan.md` (streams, authority, the user's decisions), `.agents/benchmarks.md` before
-any walk-forward, and this file. `.agents/ultracode_session_audit_2026-10-10.md` is the audit of
-the unattended session that built the step-6 branch.
+Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as binding, then this file,
+`.agents/TODO.md` ("Roadmap Status", steps 6-9), `.agents/benchmarks.md` before any walk-forward,
+and `models/qb_elos_measure/HYPOTHESIS.md` (main checkout; `models/` is not in git) before the
+builds. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-14, after `0.59.0` landed)
+## State (written 2026-10-15, 00:30 MDT)
 
-- `main` is at `0.59.0` (`119a016`, 2026-10-14, not pushed): `feat/step6-sos-port` merged with
-  `--no-ff` after `main`'s lock refresh (`33df363`) was merged into the branch (`5a7347a`). The
-  branch (worktree `~/scratch/step6`) is level with `main`. `scripts/gate.sh --web` exited `0` on
-  that tree in the worktree, and `scripts/gate.sh` exited `0` on `main` after
-  `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` (LightGBM stays `cuda`). Run a
-  worktree's gate with `VIRTUAL_ENV` set to that worktree's `.venv`: with the main checkout's
-  venv active, `uv sync --check --active` checks the wrong environment and fails.
-- The user's web server (`nfl-predictor web --port 8001`, no `--reload`, started 18:25 MDT from
-  the main checkout) still runs the `0.45.4` code it loaded, and `main`'s `web/dist/` is the old
-  build. The `--web` gate was left off on `main` so the served frontend would not change under
-  it. To see the new pages, the user stops it, runs `scripts/gate.sh --web` (which builds
-  `web/dist/`) and starts it again; never stop or restart it for them.
-- Phase 4 is fully reviewed. `models/step6/REVIEW.md` (main checkout; `models/` is not in git)
-  now holds three reviews, each by a reviewer that did not produce the runs, each with its
-  scripts embedded:
-  - Decision 1 (ported ratings in place of the strength snapshot): rule 1's first branch,
-    replace. Comparison 1 all weeks, two seeds: Brier −0.00084 [−0.00144, −0.00024].
-  - The new-build reference diagnostic, which splits comparison 1: the play-by-play corrections
-    are a tie on every column, window and seed (Brier +0.00011 [−0.00040, +0.00062]); the ported
-    ratings carry the whole gain (Brier −0.00095 [−0.00153, −0.00039], log loss −0.00218
-    [−0.00349, −0.00092], a win on each seed alone, a tie in weeks 1 and 2).
-  - Decision 2 (own Elo against the `qb_elos.csv` columns): rule 2's second branch. Comparison 3
-    (anchored) loses: Brier +0.00069 [+0.00017, +0.00122], log loss +0.00154, pool points −114.
-    Keep the `qb_elos.csv` columns; the own Elo stays optional and off. Comparison 4
-    (market-free) wins: Brier −0.00093 [−0.00177, −0.00005], log loss −0.00224, no column lost,
-    so the market-free clause adds the own Elo's market-free variant (`own_elo`, no win totals)
-    to the market-free configuration. Caveat (the reviewer's P2): the own Elo rates past games
-    for the starter known only at kickoff; the previous starter costs it +0.00101 Brier, about
-    the size of that win.
-  - The user decided on these on 2026-10-12 (below); `0.59.0` adopts them in production.
-- Integration progress, 2026-10-14. Each agent branch got one implementer fix round on its
-  findings (test first) and a fresh reviewer's re-check; the audit refresh and the blend default
-  each needed a second round. Re-check reports are in `~/scratch/step6_review/`
-  (`<name>_recheck.md`, `<name>_recheck2.md`; adversarial tests in `<name>/`).
-  - Betting-edge split: merged (`91e3eb8`), released as `0.57.2` (`9435542`), gate `0`; reports
-    in `.agents/sos_port/review/betting_edges/`. Open P3 for the adoption chunk:
-    `floor_sigma.home_win_prob` (`ml/floor_sigma.py:126`) accepts an infinite sigma
-    (unreachable today; test first).
-  - Phase-1 audit refresh: merged (`d6c9489`), released as `0.57.3` (`db13ae1`), gate `0` (3,357
-    tests); 35 judged pairs; reports in `.agents/sos_port/review/audit_refresh/`. Open P3: no test
-    covers the run loop's call to `check_opponent_rows` (`.agents/sos_port/parity.py:577-578`).
-  - Open rating-definition tests: merged (`327f30d`, the `.agents/sos_port/README.md` conflict
-    resolved to the audit's failure list plus the new section), released as `0.57.4` (`ccd4d45`),
-    gate `0` (3,488 tests); reports in `.agents/sos_port/review/rating_tests/`, review record in
-    `decisions/open_rating_tests.md`. Open P3: the quarterback test's calibration check reads the
-    recorded row count, not the fit, and no test shows `run_integrity_checks` calls it; the
-    information-set change leaves 1.75 and nulls as they were and the team check does not flip
-    later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds for
-    one season.
-  - Blend ranking default: merged (`fa52884`, no conflict: the branch had merged `1d9f84c`, which
-    carries the betting edges), released as `0.58.0` (`cd1b2ac`), gate `0` (3,518 tests); reports
-    in `.agents/sos_port/review/blend_default/`; `decisions/power_rankings.md` entry 12 now states
-    the reviewed behavior. Accepted without asking, to report at the check-in:
-    `power_rankings_method` stays commented out in `config/weekly_run.yaml` (unset ranks on the
-    blend, the same report), the docs advise `--no-resume` instead of a new flag, and a
-    `composite` skip takes the same error path. Open P3: check the single manifest match against
-    the run itself (`wf_best.json` weeks or `created_at`); three older skips at
-    `weekly_run/pipeline.py:533-539` log at info level; "market-free" wording in `stage1.py:63,68`
-    (docs close-out).
-  - Betting-label test, pre-registered in `.agents/sos_port/protocols/betting_labels.md`
-    (`5023f45`, corrected in `f5ea2a9` before any scoring): merged (`f76e2cf`), released as
-    `0.58.1` (`94fd18f`), gate `0` (3,553 tests); one independent round and a re-check (approve),
-    whose own script reproduced the governing number; reports in
-    `.agents/sos_port/review/betting_labels/`, record in `decisions/betting_edges.md` entry 3. On
-    the 815 real-moneyline games (2022, 2024, 2025), the beyond-the-spread claim minus the model's
-    Brier is -0.00036 [-0.00198, +0.00135], a tie, so the labels stay on the whole edge.
-  - Production adoption: merged (`ca617a6`), released as `0.59.0` (`9f3ac06`, with the
-    benchmarks record `2b556c1`), `scripts/gate.sh --web` `0` (3,603 tests, 283 web tests).
-    Production, `train` and `backtest` leave out `strength,own_elo,own_elo_wt` by default (`''`
-    or `[]` leaves none out, a list replaces the default, a YAML key with no value is refused);
-    the floor sigma reads `models/step6/ratings_anchored_seed{42,7}`; `home_win_prob` refuses a
-    sigma that is not finite and positive, not one number, or text; `train` and the weekly run
-    stop, and `backtest` warns, when `strength` is left out and the data has strength columns but
-    no ported-ratings column with a value (the weekly run checks right after its refresh, before
-    the run directory; a dry run that would refresh only warns). One review and two re-checks
-    (the last "approve"); reports in `.agents/sos_port/review/adoption/`; DECISIONS.md `0.59.0`.
-    `.agents/benchmarks.md` "Step 6 reference arms" holds the reference arms, every step-6
-    comparison and the kickoff-starter convention. Open P3s: group lists not normalized for
-    order or duplicates; no snapshot of the default fit's predictions; the weekly refresh writes
-    where `--data-collection-args` say while the run reads `--data-path` (older).
-  - Every merged agent branch and its fix and review worktrees are deleted; the reviewers'
-    untracked tests are in `~/scratch/step6_review/<name>/`.
-- The win-total runs (approved 2026-10-12) ran on 2026-10-14 (`models/step6/nogamelines_wt/`,
-  `driver.log`: both `exit 0`, no failed run). The independent rescore
-  (`models/step6/nogamelines_wt/REVIEW.md`, approve with findings, provenance OK) applies the
-  rule's second branch: in all weeks over two seeds the win-total variant ties on every column
-  (Brier -0.00012 [-0.00080, +0.00055], log loss -0.00030 [-0.00179, +0.00119]), so the
-  configuration without game lines keeps the own Elo without win totals (`own_elo`), its current
-  setting. No week-1 or week-2 loss. The GPU is free of this project's jobs.
-- Worktrees: `~/scratch/step6` (this branch), `~/scratch/step6_runs` (detached at `d6064eb`, the
-  runs' code). The `.claude/worktrees/agent-*` worktrees are the harness's; leave them.
-- The `/tmp` copies of the power-ranking evaluation (`RANKINGS_EVAL.md`) are snapshotted in
-  `~/scratch/step6_review/tmp_rankings_eval_snapshot/`.
+- `main` is at `0.59.0` plus docs commits (not pushed): the step-6 port, adopted in production.
+  `data/` was rebuilt on 2026-10-14 (record in `.agents/benchmarks.md`, "Data state and ETL
+  rebuild records"; backups in `~/scratch/data_backups/2026-10-14_pre_step6_merge/` and
+  `2026-10-14_pre_week6/`). The Week 6 run is `models/weekly_20261015_022416_9a4c092c`.
+- The user submits Week 6 picks before SEA@DEN (2026-10-15 20:15 ET). Production-changing merges
+  land after the Monday game (2026-10-19), with the user's approval (rule 14).
+- The user's web server runs on `:8001` from the main checkout (no `--reload`, the `0.45.4` code
+  it loaded, the old `web/dist/`). Never stop or restart it, and don't build `web/dist/` on `main`
+  while it runs; `scripts/gate.sh --web` and a browser look at the new pages wait until the user
+  restarts it.
+- `../nfeloqb` fork `main` is at `9bf32f2` (pushed): next-week projections now find a team stored
+  under a legacy code (`OAK` for Las Vegas), which had inflated Las Vegas's `qb_adj` to `+160`.
+  nfeloqb was not rerun; the user runs it each week (memory `nfeloqb-weekly-process`).
+- `feat/qb-adj-features` (`0.60.0`, three commits on `e576b91`: `a403f57`, `d4ef695`,
+  `c637fc0`), worktree `.claude/worktrees/agent-afad3cf465d5bcba7` (the harness's; inspect it
+  with `git -C`). The implementer reports `scripts/gate.sh` exit `0` (3,626 tests, 95.01%
+  coverage), not yet re-run by anyone else. The contract is `.agents/qb_adj_task.md`. What it
+  did: `away_qb_adj`, `home_qb_adj`, `qb_adj_diff` from `qb_elos.csv`, group `qb_adj` (not
+  market-informed), in `PRODUCTION_DISABLED_FEATURE_GROUPS`; the diff comes from
+  `teamrankings.calculate_stat_differentials`. Its notes for the review:
+  - beyond the contract's files it edited help text in `cli/options.py`, `cli/backtest.py`,
+    `cli/train.py`, `ml/feature_spec.py` (a message string; any `ml/` edit changes checkpoint
+    fingerprints), `.agents/guardrails.md` and `.agents/walk_forward_runbook.md` (the group list);
+  - the collision test passed before the change (a guard, not red-then-green);
+  - the weekly stage hashes changed, so a weekly run directory retrains stage 1 rather than
+    resuming;
+  - until `data/` is rebuilt, every run warns that `qb_adj` matches no column;
+  - `compare`'s production-settings section (`reporting/production_settings.py`) compares group
+    lists by name, so the floor-sigma reference runs (`models/step6/ratings_anchored_seed*`, the
+    three-group list) now show a difference from production although their data had no
+    `qb_adj` column. Proposed: record it in `.agents/benchmarks.md` as harmless (rule 11 needs
+    the user's approval), and replace the reference after the measurement.
+- The GPU showed 30% use and 795 MiB at 00:21 with no project job running; check `nvidia-smi`
+  before a launch.
 
-## Decisions on record
+## Next, in order
 
-- Through 2026-10-10: `.agents/step6_plan.md` ("Authority", "User decisions during the run").
-- 2026-10-11, on the audit: the blend default merges whole, last of the four, as a minor
-  version, and reaches `main` only with the user's approval; rule 1 waits for the reviewed
-  diagnostic (now reviewed); the ten-run ladder is ratified; the live-betting design and the
-  margin-only switch stay archived at the merge; no rating-definition outcome (every wiped
-  snap, every quarterback play, the botched-snap removal) is adopted before the merge, each
-  logged as a post-merge measured change; the rating tests' skipped ESPN QBR extras and passer
-  holdout are accepted departures; the betting report's three columns and sigma check are
-  approved, labels unchanged; `feat/sos-port-inventory` deleted.
+1. **Review `feat/qb-adj-features`** with a `reviewer` in a fresh context: the contract in
+   `.agents/qb_adj_task.md`, the notes above, re-run the gate in a detached scratch worktree with
+   its own synced venv (`VIRTUAL_ENV` set to it), adversarial tests (uncommitted). Also check
+   whether anything in the weekly run, `train` or `backtest` stops or warns on the
+   production-settings difference with the floor-sigma reference runs. Findings go back to an
+   implementer (test first), then a re-check. Don't merge: merging is must-ask and waits until
+   after the Monday game.
+2. **The grouped measurement** (accepted by the user 2026-10-15; `HYPOTHESIS.md` checksum in
+   `HYPOTHESIS.md.sha256`, `d682a0c0...`). Once the review approves:
+   - write `models/qb_elos_measure/build.sh`, `driver.sh` and `launch.sh` after
+     `models/step6/` (its `build.sh`, `driver.sh`, `launch.sh`): a detached worktree such as
+     `~/scratch/qb_measure` at the reviewed commit, with its own synced venv and its own `data/`
+     (the main checkout's upstream inputs copied in with a sha256 manifest; the main checkout's
+     `data/` is never touched). Build the new file first, cut it to `inputs/new_file.csv`, then
+     put `~/scratch/data_backups/2026-10-14_pre_week6/qb_elos.csv` in place, build again
+     (full builds, not `--incremental`), cut to `inputs/old_file.csv`; each with its sha256, the
+     pick-time line check and the leakage audit. Script the check that the two cuts differ only
+     in 2023-2025 rows of the `elo` and `qb_adj` columns;
+   - the eight runs, one at a time through `driver.sh`, launched with `nohup setsid` (check
+     `uptime`, `nvidia-smi` and `pgrep -af "nfl-predictor (backtest|weekly|data)"` first);
+     write the launch record before the launch and check the driver log after its first
+     run-to-run transition;
+   - afterwards an independent `reviewer` rescores from the fold checkpoints and writes
+     `REVIEW.md` (rule 3) before any number reaches the docs; then the check-in (rule 7) and the
+     decisions the rules hand to the user.
+3. **The "no game lines" groups change** (approved 2026-10-14): the configuration without game
+   lines (`--wf-market-mode none` and the three market options) leaves out
+   `strength,elo,own_elo_wt`, the reviewed list of `models/step6/elo_marketfree_seed{42,7}`. Test
+   first through an implementer and a reviewer, on a branch cut after `feat/qb-adj-features`
+   merges (both edit the group lists in `constants.py`) or stacked on it. `qb_adj` is
+   market-free, so it is not in that list.
+4. **`../nfeloqb`, a backup's first start** (approved 2026-10-15, test first): the next-week
+   projection rates the starter with `current_value`, while the played row uses
+   `get_value(team)`, which applies the backup rule (Baltimore's Week 5 projection was off by
+   `0.8`). Read `get_value` first and confirm it uses only pre-game information; then a failing
+   test in `tests/test_elo_qb_adjustment.py`, the fix in `elo_file_constructor.py`, the fork's
+   gates (`.venv/bin/ruff format .`, `ruff check .`, `ty check .`, `pyright .`,
+   `markdownlint-cli2 "**/*.md" "#.venv"`, `.venv/bin/python -m pytest`), a `fix:` commit, and a
+   push to the fork (`GUARD_OK=1`). Before the user's next nfeloqb run (Week 7).
+5. **The fork's win-total file** (approved 2026-10-15 as its own measurement after the grouped
+   one, landing between game weeks): `nfeloqb/Manual Data/wt_ratings.csv` ends at 2023, so the
+   QB-adjusted Elo has had no win-total pull since 2024 (`elo.py` line ~136). Hypothesis and
+   rule first, a fork change, a third build against the grouped measurement's new-file build.
+6. **The step-6 docs close-out and the roadmap tidy** (approved 2026-10-15):
+   - regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/` write: ask);
+   - rename "market-free" to "no game lines" where it means the configuration with Elo,
+     including `weekly_run/stage1.py:63,68`;
+   - refresh the stale "Review:" fields in `.agents/sos_port/decisions/*.md`; commit the
+     hypothesis checksums;
+   - record the 2026-10-11, 2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and
+     `TODO.md`; they and the open P3s from the integration reviews are in the previous handoff,
+     `git show 5b73686:.agents/next_agent_session_prompt.md` ("Decisions on record", "Open for
+     the user" and the integration-progress bullets);
+   - in `TODO.md`: refresh "Current validated baseline" (it still says `0.28.1`); mark step 6's
+     phases done; retire the follow-ups that concern only the strength snapshot if the grouped
+     measurement keeps the ported ratings (rule 5: the user approves each closure);
+   - build the approvals list and the user's final HTML report for step 6.
+7. `scripts/gate.sh --web` on `main` and a browser look once the user restarts the server; the
+   2026 roof recheck before the Paris game on 2026-10-25
+   (`.agents/sos_port/decisions/pbp_columns.md`).
 
-- 2026-10-12, on the review session's questions:
-  - Replace the strength snapshot with the ported ratings in production (rule 1): yes. Production
-    gets `disable_feature_groups: [strength, own_elo, own_elo_wt]`.
-  - Keep the play-by-play corrections, which measure as a tie: yes, as correctness fixes; record
-    the tie in `.agents/benchmarks.md`.
-  - Keep the `qb_elos.csv` columns, the own Elo optional and off (rule 2): yes, tentatively; the
-    user may revisit it soon.
-  - The own Elo joins the configuration without game lines, in whichever variant measures
-    stronger there, with or without the win-total pull; only the variant without win totals has
-    been measured in the model. The configuration may need a new name.
-  - The kickoff-starter point is a shared convention, not a caveat on adoption: `qb_elos.csv`
-    also rates past games for the actual starter, and the user sets each week's projected
-    starters by hand before running `../nfeloqb`. Record it once in `.agents/benchmarks.md`.
-  - The blend default's failure handling: read the reference runs only in week 1; on a skip, log
-    an error, keep the standings, do not mark the stage done; no fallback to `composite`.
-  - `main`'s handoff merged into `main`.
-  - Two walk-forwards approved (seeds 42 and 7, about 70 minutes on the GPU): the own Elo's
-    win-total variant against `models/step6/elo_marketfree_seed{42,7}` in the configuration
-    without game lines, on this build from `~/scratch/step6_runs` at `d6064eb`. They wait for the
-    GPU, which another job holds until about 2026-10-13. The rule is pre-registered in
-    `models/step6/nogamelines_wt/HYPOTHESIS.md` (sha256
-    `08bc8c7fdd902e730c0f9de31f41cf657f35aaf11b8a75eeb94959a649970caf`): all weeks, two seeds; a
-    Brier win with no log-loss loss adopts the win-total variant, anything else keeps the variant
-    without win totals; a week-1 or week-2 loss is flagged, not overriding; cap two runs.
-  - The configuration without the market's game lines, anchoring or transform is named "no game
-    lines"; "market-free test bench" stays the name of the strict reference without game lines or
-    Elo (`models/step4_reference/marketfree_all_seed{42,7}`). The rename in the docs is part of
-    the integration session.
+## Decisions on record (2026-10-15)
+
+- `../nfeloqb` Las Vegas fix: approved and done (`9bf32f2`).
+- Adopt `qb1_adj`/`qb2_adj` as features, off in production until measured: approved.
+- The grouped measurement: approved, with its ladder (two builds, eight runs).
+- The backup first-start fork fix: approved, test first, after the picks.
+- The stale win-total file: its own measurement after the grouped one, between game weeks.
+- The roadmap: steps 7 (the Elo inputs) and 8 (the feature ideas, explored quickly, then
+  accepted or dropped) go before the re-tune, now step 9 (`TODO.md`, "Roadmap Status").
+- Week 6: the top-decile ranking is the two-seed mean (2026-10-14, in DECISIONS.md).
 
 ## Open for the user
 
-Answered on 2026-10-14 (record in DECISIONS.md and `step6_plan.md` at the docs close-out):
-
-- The missing-ratings check as narrowed (stops `train` and the weekly run, warns in `backtest`,
-  fires only when the data has strength columns but no ratings): accepted. After the merge to
-  `main` the weekly run stops until `data/` is rebuilt with the ratings.
-- The "no game lines" mode (`--wf-market-mode none` and the three market options): make it leave
-  out `strength,elo,own_elo_wt`, the reviewed list of `models/step6/elo_marketfree_seed{42,7}`
-  (today it uses production's groups). Approved; implement test first after the Week 6 picks.
-- The merge: approved for today, after a preliminary Week 6 run on today's `main` and the user's
-  review of it and of the `../nfeloqb` changes; then back up and rebuild `data/`.
-- `../nfeloqb`: the user allowed me to run their weekly process for Week 6 (memory
-  `nfeloqb-weekly-process`) and approved taking upstream's Elo fix (`90e19d9`). Done: fork `main`
-  at `27709b5`, pushed. It merges upstream, adds `tests/test_elo_qb_adjustment.py` (failed on the
-  old code, passes now) and restores the fork's legacy team-code lookups in next-week projections
-  for both Elo tracks, which the merge had dropped. `data/qb_elos.csv` and `data/meta_data.csv`
-  replaced; the old copies, hashes and checks are in `~/scratch/data_backups/2026-10-14_pre_week6/`
-  (record in `.agents/benchmarks.md`, end of "Step 6 reference arms"). Week 6 swaps: `TB,2` only;
-  Baltimore (Lamar) is the toss-up to recheck after Friday's injury report.
-- The preliminary Week 6 run on `main` (`0.45.4`): `~/scratch/week06_prelim/launch.sh` (log
-  `run.log` beside it), exit `0` at 17:55 MDT, run directory
-  `models/weekly_20261014_235354_01c52e35`. All 41 walk-forward weeks retrained (none restored),
-  14 games, unique ranks 1..14, every pick on the market favorite's side. Against the 2026-10-08
-  run on the 608 shared games (one seed each, a diagnostic only, not for the docs): Brier
-  `+0.0015` [−0.0019, 0.0049], margin MAE 9.62 to 9.73, pick accuracy unchanged.
-
-Decided on 2026-10-15 (the user):
-
-- Fix the `../nfeloqb` Las Vegas bug: done, fork `main` at `9bf32f2` (pushed). Next-week
-  projections looked up the QB model's team under `LV`, but the model keys the Raiders as `OAK`
-  (nfelodcm's code), so a fresh team at the `25` VALUE baseline inflated Las Vegas's `qb_adj`
-  (`+160` for Week 6 against `+36` played). `_stored_team_code` in
-  `nfeloqb/Resources/elo_file_constructor.py` now looks a team up under its modern code, else
-  a legacy alias; two tests in `tests/test_elo_qb_adjustment.py` (the legacy one failed first
-  with `45.0`), 18 tests and the fork's gates pass. Only next-week rows change; nfeloqb was not
-  rerun (this repo reads no next-week `qb_adj` yet).
-- Adopt `qb1_adj`/`qb2_adj` as features: in progress through an implementer on
-  `feat/qb-adj-features` (`0.60.0`): `away_qb_adj`, `home_qb_adj`, `qb_adj_diff`, group
-  `qb_adj`, market-free, left out by default (in `PRODUCTION_DISABLED_FEATURE_GROUPS`) until
-  measured. A reviewer follows; no merge before the Week 6 games end (rule 14) and the user's
-  approval.
-- Group the measurement: the new file against the old, the `qb_adj` arm and decision 1's ratings
-  swap on the new file. Draft rules in `models/qb_elos_measure/HYPOTHESIS.md` (main checkout):
-  two builds from the reviewed `0.60.0` commit, eight runs (four arms, seeds `42` and `7`), the
-  step-6 instrument. The ladder waits for the user's acceptance (GPU time).
-
-Still open for the user:
-
-1. nfeloqb's next-week projection rates a backup's first start with the quarterback's
-   `current_value`, while the played row uses `get_value(team)`, which applies the backup rule
-   (Baltimore's Week 5 projection was off by `0.8`). It changes the upcoming `qb_value_pre` this
-   repo reads, slightly. Raised 2026-10-15, not decided.
-2. The fork's win-total file (`nfeloqb/Manual Data/wt_ratings.csv`) ends at 2023, so the
-   QB-adjusted Elo has had no win-total pull since 2024. Measuring a fresh file needs a fork
-   change and a third build; kept out of the ladder above. Raised 2026-10-15, not decided.
-3. The roadmap review (below, "After the picks"): raised 2026-10-15, not decided.
-
-Decided on 2026-10-14: the top-decile ranking is the two-seed mean (recorded in
-`.agents/sos_port/DECISIONS.md`).
-
-## Week 6 on the merged `main`, then the close-out
-
-Done on 2026-10-14 with the user's approval: the merge, the sync, the `data/` backup and rebuild
-and the leakage audit (record in `.agents/benchmarks.md`, "Data state and ETL rebuild records"),
-then the Week 6 run on `0.59.0`: `models/weekly_20261015_022416_9a4c092c`, exit `0` at 20:27
-MDT, all 41 walk-forward weeks trained, floor sigma `13.3049`, the ported ratings in and the
-strength snapshot out. Every pick sides with the preliminary run; ranks moved (BAL `0.722`, rank
-10). One seed against the preliminary run on the 623 shared games (a diagnostic only, not for
-the docs): Brier `+0.00177` [−0.00021, +0.00379], inside the three-season noise floor and the
-opposite sign to the reviewed decision 1, which was measured on the old `qb_elos.csv`. Fallback:
-`main` at `5087a5c` with `~/scratch/data_backups/2026-10-14_pre_step6_merge/`.
-
-The user submits picks before SEA@DEN (2026-10-15 20:15 ET); Baltimore hinges on Lamar
-Jackson's Thursday practice report.
-
-After the picks, on a fresh branch off `main`:
-
-1. The "no game lines" groups change, test first through an implementer and a reviewer.
-2. The grouped measurement (`models/qb_elos_measure/HYPOTHESIS.md`), once the `qb_adj` branch is
-   reviewed and the user accepts the ladder; then an independent rescore (rule 3) before any
-   number reaches the docs.
-3. The docs close-out: regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/`
-   write: ask), rename "market-free" to "no game lines" where it means the configuration with Elo
-   (including `stage1.py:63,68`), refresh the stale "Review:" fields in
-   `.agents/sos_port/decisions/*.md`, commit the hypothesis checksums, record the 2026-10-11,
-   2026-10-12 and 2026-10-14 decisions in `step6_plan.md` and `TODO.md`, list the open P3s above,
-   and build the approvals list and the user's final HTML report.
-4. `scripts/gate.sh --web` on the final tree; a browser look at the new pages; the 2026 roof
-   recheck before the Paris game on 2026-10-25.
+- The stats-only model: proposed 2026-10-15, not decided. A named track rather than one more
+  step at the end, in three parts:
+  - in step 8, measure each feature idea on the configuration without game lines as well as on
+    production's, since the market already prices injuries and weather;
+  - in step 9, tune it as its own study, since its best settings likely differ from the
+    anchored model's;
+  - a weekly shadow prediction (logged, never submitted), scored against the closing line, so it
+    builds a live record.
+  On the step-6 references it trails the pick-time line by `+0.00373` Brier with the own Elo and
+  `+0.00466` without any Elo (`.agents/benchmarks.md`, "Step 6 reference arms").
+- 58.1's exact survivor planner in place of the plan's beam search (acceptance pending).
+- Merging `feat/qb-adj-features` after the review, after the Monday game.
+- The production-settings difference with the floor-sigma reference runs (above).
 
 ## How the last sessions worked (keep doing this)
 
 - Each code chunk: an `implementer` subagent in its own worktree, a separate `reviewer` in a
-  fresh context (adversarial tests, uncommitted), fixes back to the implementer, a re-check by a
-  reviewer. A `--no-ff` merge into this branch (the commit hook needs a Conventional Commits
-  subject on merge commits). The delegating session writes `CHANGELOG.md` and the version
-  (`pyproject.toml`, `uv lock`, then `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`),
-  `TODO.md`, `ARCHIVE.md`, `AGENTS.md`, `.agents/benchmarks.md` and this file, and lints the
-  Markdown it edits.
+  fresh context (adversarial tests, uncommitted), fixes back to an implementer, a re-check by a
+  reviewer. A `--no-ff` merge (the commit hook needs a Conventional Commits subject on merge
+  commits; `git merge` needs `GUARD_OK=1`, only after the user's approval). The delegating
+  session writes `TODO.md`, `ARCHIVE.md`, `AGENTS.md`, `.agents/benchmarks.md` and this file,
+  and lints the Markdown it edits.
 - Reviewers get a detached scratch worktree with a synced venv, cap pytest with
   `PYTEST_ADDOPTS="-n 8"` when several run at once, and write only their report; at most four at
   once. Every measured number goes through an independent rescore before it enters a doc.
+- Run a worktree's gate with `VIRTUAL_ENV` set to that worktree's `.venv`. A backgrounded gate
+  wrapper must `exit` the gate's code, never echo after it.
 - The bash-guard hook blocks commands containing `git merge` in the main checkout (including
-  `merge-tree`); use `git diff A...B` and `git rev-list --count A..B` there.
+  `merge-tree`) and bare `python3`; use `git diff A...B`, `git rev-list --count A..B` and
+  `.venv/bin/python`.
 - Inspect another worktree with `git -C <path>` or absolute paths. Run
   `.venv/bin/pre-commit run --all-files` before ending a turn. Stop at a natural point well
   before the context fills, and rewrite this file.
@@ -258,7 +159,8 @@ After the picks, on a fresh branch off `main`:
   `pgrep -af "nfl-predictor (backtest|weekly)"` first.
 - A backtest that judges probabilities runs from 2007 week 1 or passes
   `--floor-sigma-reference-runs` with the GPU reference, and passes `--wf-start-week 1`.
-- The user runs `nfl-predictor web` from the main checkout only when they want it; check
-  `ss -ltnp | grep ':80'` before touching that checkout, and never stop or restart it.
+- Worktrees: `~/scratch/step6` (`feat/step6-sos-port`, merged) and `~/scratch/step6_runs`
+  (detached at `d6064eb`, the step-6 runs' code); the `.claude/worktrees/agent-*` worktrees are
+  the harness's, leave them.
 - Elo research is in `~/scratch/elo_research/`; `nfl-sos-ratings` is frozen at `9081bce`, read
   only as `git -C ../nfl-sos-ratings show 9081bce:<path>`.

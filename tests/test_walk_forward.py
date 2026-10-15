@@ -3,19 +3,26 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import itertools
 import json
+import subprocess
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pandas.testing as pdt
 import pytest
 from scipy.stats import norm
 
-from nfl_predictor import constants
+from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
+from nfl_predictor.utils.logger import log
+from tests.fakes import returning
 
 
 def _fixture_df() -> pd.DataFrame:
@@ -75,11 +82,11 @@ def _base_config() -> walk_forward.WalkForwardConfig:
 def _capture_info_messages(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Route ``walk_forward.log.info`` into a list of formatted messages and return it."""
     messages: list[str] = []
-    monkeypatch.setattr(
-        walk_forward.log,
-        "info",
-        lambda message, *args: messages.append(message % args if args else message),
-    )
+
+    def capture(message: str, *args: object) -> None:
+        messages.append(message % args if args else message)
+
+    monkeypatch.setattr(log, "info", capture)
     return messages
 
 
@@ -145,7 +152,7 @@ def test_run_walk_forward_backtest_logs_each_finished_week(
         """Record the formatted message."""
         messages.append(msg % args if args else msg)
 
-    monkeypatch.setattr(walk_forward.log, "info", _capture)
+    monkeypatch.setattr(log, "info", _capture)
 
     # Act
     walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
@@ -369,7 +376,7 @@ def test_fold_checkpoint_fingerprint_sources_are_the_package_modelling_files() -
 def _copy_modelling_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     """Copy the modelling source files elsewhere and point the fingerprint at the copies."""
     sources = walk_forward._modelling_source_files()
-    copies = []
+    copies: list[Path] = []
     for index, path in enumerate(sources):
         target = tmp_path / "elsewhere" / str(index) / path.name
         target.parent.mkdir(parents=True)
@@ -718,11 +725,7 @@ def test_filter_incomplete_eval_seasons_tracks_drops(
     # Arrange
     df = _fixture_df()
     eval_seasons = [2022, 2023]
-    monkeypatch.setattr(
-        walk_forward.constants,
-        "get_regular_season_weeks",
-        lambda _season: regular_season_weeks,
-    )
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(regular_season_weeks))
 
     # Act
     kept, dropped = walk_forward.filter_incomplete_eval_seasons(df, eval_seasons)
@@ -880,7 +883,7 @@ def test_git_commit_hash_returns_none_on_failure(monkeypatch: pytest.MonkeyPatch
         returncode = 1
         stdout = ""
 
-    monkeypatch.setattr(walk_forward.subprocess, "run", lambda *_args, **_kwargs: _Result())
+    monkeypatch.setattr(subprocess, "run", returning(_Result()))
 
     # Act
     result = walk_forward._git_commit_hash()
@@ -899,7 +902,7 @@ def test_library_versions_handles_import_error(monkeypatch: pytest.MonkeyPatch) 
             raise ImportError(msg)
         return type("M", (), {"__version__": "1.0.0"})
 
-    monkeypatch.setattr(walk_forward.importlib, "import_module", _fake_import)
+    monkeypatch.setattr(importlib, "import_module", _fake_import)
 
     # Act
     versions = walk_forward._library_versions()
@@ -1156,13 +1159,11 @@ def test_xgb_params_for_config_passes_overrides_and_seed(
     """The config's overrides and random seed reach the XGBoost parameter resolver."""
     # Arrange
     captured: dict[str, object] = {}
-    monkeypatch.setattr(
-        walk_forward.ml_model,
-        "resolve_xgb_params",
-        lambda _defaults, overrides: (
-            captured.setdefault("overrides", dict(overrides)) or dict(overrides)
-        ),
-    )
+
+    def fake_resolve(_defaults: dict[str, Any], overrides: dict[str, Any]) -> object:
+        return captured.setdefault("overrides", dict(overrides)) or dict(overrides)
+
+    monkeypatch.setattr(ml_model, "resolve_xgb_params", fake_resolve)
     config = replace(_base_config(), xgb_params_overrides={"max_depth": 4}, random_seed=99)
 
     # Act
@@ -1213,7 +1214,7 @@ def test_walk_forward_fails_cleanly_when_every_eval_season_is_incomplete(
     """Incomplete-season filtering that removes every eval season is an error, not a no-op."""
     # Arrange
     df = _fixture_df()
-    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 99)
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(99))
     incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
 
     # Act & Assert
@@ -1233,9 +1234,10 @@ def test_walk_forward_auto_calibration_uses_the_deterministic_floor(
 
     # Assert
     predictions = result["predictions"]
+    margins: npt.NDArray[np.float64] = predictions["predicted_margin"].to_numpy()
     np.testing.assert_allclose(
         predictions["home_win_prob"].to_numpy(),
-        norm.cdf(predictions["predicted_margin"].to_numpy() / constants.SCORE_DIFF_STD_DEV),
+        norm.cdf(margins / constants.SCORE_DIFF_STD_DEV),
     )
 
     assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
@@ -1265,11 +1267,13 @@ def test_walk_forward_disables_small_window_early_stopping(
     margin_rounds: list[object] = []
     quantile_rounds: list[object] = []
 
-    def fake_fit_margin_total_models(*_args, **kwargs):
+    def fake_fit_margin_total_models(
+        *_args: object, **kwargs: object
+    ) -> tuple[_DummyModel, _DummyModel]:
         margin_rounds.append(kwargs.get("early_stopping_rounds"))
         return _DummyModel("margin"), _DummyModel("total")
 
-    def fake_fit_quantile_models(*_args, **kwargs):
+    def fake_fit_quantile_models(*_args: object, **kwargs: object) -> dict[float, _DummyModel]:
         quantile_rounds.append(kwargs.get("early_stopping_rounds"))
         return {}
 
@@ -1279,12 +1283,12 @@ def test_walk_forward_disables_small_window_early_stopping(
         return np.full(x.shape[0], 44.0, dtype=float)
 
     monkeypatch.setattr(
-        walk_forward.ml_model,
+        ml_model,
         "fit_margin_total_models",
         fake_fit_margin_total_models,
     )
-    monkeypatch.setattr(walk_forward.ml_model, "fit_quantile_models", fake_fit_quantile_models)
-    monkeypatch.setattr(walk_forward.ml_model, "predict_xgb", fake_predict_xgb)
+    monkeypatch.setattr(ml_model, "fit_quantile_models", fake_fit_quantile_models)
+    monkeypatch.setattr(ml_model, "predict_xgb", fake_predict_xgb)
 
     # Act
     result = walk_forward.run_walk_forward_backtest(
@@ -1358,14 +1362,14 @@ def test_resolve_feature_group_columns_matches_configured_markers(
     """A group with non-empty markers resolves to the columns whose names contain a marker."""
     # Arrange
     monkeypatch.setattr(
-        walk_forward.constants,
+        constants,
         "FEATURE_GROUP_COLUMN_MARKERS",
         {"pbp": ("epa",), "other": ("success_rate",)},
     )
     columns = ["away_epa_per_play", "home_success_rate", "week", "season"]
 
     # Act
-    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+    resolved = resolve_feature_group_columns(columns, ["pbp"])
 
     # Assert
     assert resolved == ["away_epa_per_play"]
@@ -1376,11 +1380,11 @@ def test_resolve_feature_group_columns_empty_markers_matches_nothing(
 ) -> None:
     """An empty marker tuple for a group resolves to zero columns, dropping nothing."""
     # Arrange
-    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ()})
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ()})
     columns = ["away_epa_per_play", "home_epa_per_play", "epa_per_play_diff"]
 
     # Act
-    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+    resolved = resolve_feature_group_columns(columns, ["pbp"])
 
     # Assert
     assert resolved == []
@@ -1391,9 +1395,7 @@ def test_resolve_feature_group_columns_substring_matches_prefix_and_suffix_varia
 ) -> None:
     """A single marker catches away_/home_/opponent_ prefixed and _diff suffixed columns."""
     # Arrange
-    monkeypatch.setattr(
-        walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa_per_play",)}
-    )
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa_per_play",)})
     columns = [
         "away_epa_per_play",
         "home_epa_per_play",
@@ -1403,7 +1405,7 @@ def test_resolve_feature_group_columns_substring_matches_prefix_and_suffix_varia
     ]
 
     # Act
-    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+    resolved = resolve_feature_group_columns(columns, ["pbp"])
 
     # Assert
     assert resolved == sorted(
@@ -1421,11 +1423,11 @@ def test_resolve_feature_group_columns_unknown_group_raises(
 ) -> None:
     """An unknown group name raises a ValueError naming the bad group."""
     # Arrange
-    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
 
     # Act & Assert
     with pytest.raises(ValueError, match="not_a_real_group"):
-        walk_forward.resolve_feature_group_columns(["away_epa"], ["not_a_real_group"])
+        resolve_feature_group_columns(["away_epa"], ["not_a_real_group"])
 
 
 def test_walk_forward_config_disabled_feature_groups_serializes_to_list() -> None:

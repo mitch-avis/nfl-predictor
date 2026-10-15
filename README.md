@@ -74,15 +74,18 @@ source .venv/bin/activate
 uv sync
 ```
 
-To refresh the lockfile and sync the active virtual environment:
+To upgrade every locked dependency and sync `.venv` from the new lockfile:
 
 ```bash
 ./update_requirements.sh
 ```
 
-The helper expects `uv` on your `PATH` and an activated project virtual environment. If `.venv` is
-missing, it offers to create one with `uv venv .venv` and then exits so you can activate the
-environment before re-running it.
+The helper expects `uv` on your `PATH`; the virtual environment does not need to be activated. If
+`.venv` is missing, it offers to create one with `uv venv .venv` and carries on. It also reports
+whether `uv self update` changed uv's version and refreshes the hook versions in
+`.pre-commit-config.yaml` with `pre-commit autoupdate`. The script is the same in every project;
+this project's own steps (the LightGBM build below and an import check of the core packages) live
+in `update_requirements.hooks.sh`, which it sources.
 
 The lockfile installs the CPU-only LightGBM wheel. On a Linux machine with a CUDA toolkit, the
 helper instead keeps a CUDA build of the same LightGBM version: it syncs with the flags that

@@ -7,6 +7,9 @@
 - The default group list's change moves every walk-forward checkpoint fingerprint and the weekly
   stage hashes, so the first weekly run after the upgrade retrains stage 1. Until the dataset is
   rebuilt, a run that leaves out `qb_adj` logs that the group matches no column.
+- On a dataset with the new columns, a backtest recorded before 0.59.0 reproduces with
+  `--disable-feature-groups qb_adj` added, and a group list recorded before this version (such as
+  the step-6 arms' `strength,elo,own_elo_wt`) with `qb_adj` added to it.
 
 ### Added
 

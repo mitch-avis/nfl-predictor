@@ -10,13 +10,36 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.utils import clock, polars_utils
+from nfl_predictor.utils import clock, game_utils, polars_utils
 from nfl_predictor.utils.polars import loaders, moneyline_map, nfelo_lines
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 _SEASON = 2015
+
+
+def _same_frame(df: pl.DataFrame) -> pl.DataFrame:
+    """Return ``df`` unchanged."""
+    return df
+
+
+def _same_frame_of_three(df: pl.DataFrame, _second: object, _third: object) -> pl.DataFrame:
+    """Return ``df`` unchanged, ignoring the other two arguments."""
+    return df
+
+
+def _same_frame_of_two(df: pl.DataFrame, _other: object) -> pl.DataFrame:
+    """Return ``df`` unchanged, ignoring the second argument."""
+    return df
+
+
+def _season_schedule(
+    _season: int, schedule: pl.DataFrame, *_args: object, **_kwargs: object
+) -> pl.DataFrame:
+    """Return the season's ``schedule`` as its finished games."""
+    return schedule
 
 
 def _schedule(season: int = _SEASON) -> pl.DataFrame:
@@ -87,19 +110,17 @@ def _patch_sources(monkeypatch: pytest.MonkeyPatch, schedule_calls: list[list[in
         {"season": [_SEASON - 1], "week": [1], "team_abbr": ["AAA"], "opponent_abbr": ["BBB"]}
     )
     monkeypatch.setattr(polars_utils, "load_schedule", fake_load_schedule)
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: team_stats)
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: loaders._empty_pbp_frame())
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _s: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(team_stats))
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(loaders._empty_pbp_frame()))
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _same_frame_of_two)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _same_frame)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (_SEASON + 1, 1))
-    monkeypatch.setattr(polars_utils, "load_team_rankings", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(
-        data_collection, "process_season", lambda _season, schedule, *_a, **_k: schedule
-    )
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_team_rankings", returning(pl.DataFrame()))
+    monkeypatch.setattr(data_collection, "process_season", _season_schedule)
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _same_frame_of_two)
+    monkeypatch.setattr(polars_utils, "select_final_columns", _same_frame)
 
 
 def _config(line_source: str) -> data_collection.DataCollectionConfig:
@@ -206,8 +227,8 @@ def test_the_stored_source_never_reads_nfelo_and_fills_as_before(
         return df
 
     monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", no_nfelo)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", future_fill)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", moneyline_fill)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", future_fill)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", moneyline_fill)
     records = data_collection.CollectionRecords()
 
     # Act
@@ -227,8 +248,8 @@ def test_the_pick_time_source_anchors_to_the_opener_and_records_the_run(
     # Arrange
     schedule_calls: list[list[int]] = []
     _patch_sources(monkeypatch, schedule_calls)
-    monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", lambda **_kwargs: _snapshot())
-    monkeypatch.setattr(data_collection.game_utils, "scrape_survivor_grid_spreads", dict)
+    monkeypatch.setattr(nfelo_lines, "load_nfelo_lines", returning(_snapshot()))
+    monkeypatch.setattr(game_utils, "scrape_survivor_grid_spreads", dict)
     records = data_collection.CollectionRecords()
     expected = moneyline_map.fit_spread_moneyline_map(_price_history())
     assert expected is not None
@@ -260,9 +281,9 @@ _PICK_TIME_RECORD = {"line_source": "pick_time", "nfelo": {"sha256": "abc"}}
 def _patch_main(monkeypatch: pytest.MonkeyPatch) -> None:
     """Run main without writing datasets; a pick-time collection fills in its line record."""
     monkeypatch.setattr(clock, "local_today", lambda: date(2026, 9, 30))
-    monkeypatch.setattr(data_collection, "save_dataframe", lambda *_a, **_k: None)
-    monkeypatch.setattr(polars_utils, "filter_completed_games", lambda df: df)
-    monkeypatch.setattr(polars_utils, "filter_upcoming_games", lambda df, _s, _w: df)
+    monkeypatch.setattr(data_collection, "save_dataframe", returning(None))
+    monkeypatch.setattr(polars_utils, "filter_completed_games", _same_frame)
+    monkeypatch.setattr(polars_utils, "filter_upcoming_games", _same_frame_of_three)
 
     def fake_collect(
         _seasons: list[int],

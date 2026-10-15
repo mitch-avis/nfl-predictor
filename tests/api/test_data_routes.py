@@ -431,7 +431,7 @@ def test_weeks_offer_unpredicted_weeks_of_the_current_season(
     project_root: Path,
     viewer_client: TestClient,
     app: FastAPI,
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Unplayed weeks with no predictions are listed so the UI can offer to generate them."""
     # Arrange

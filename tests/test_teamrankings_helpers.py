@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import teamrankings
+from tests.fakes import returning
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.mark.parametrize(
@@ -72,10 +77,14 @@ def test_validate_tr_dataframe_accepts_every_required_column() -> None:
 
 def _patch_passthrough_team_normalization(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make team-column normalization return its frame unchanged."""
-    monkeypatch.setattr(teamrankings, "normalize_team_column", lambda df, _col: df)
+
+    def passthrough(df: pl.DataFrame, _col: str) -> pl.DataFrame:
+        return df
+
+    monkeypatch.setattr(teamrankings, "normalize_team_column", passthrough)
 
 
-def test_normalize_tr_dataframe(monkeypatch) -> None:
+def test_normalize_tr_dataframe(monkeypatch: pytest.MonkeyPatch) -> None:
     """TR dataframe normalization works as expected."""
     # Arrange
     _patch_passthrough_team_normalization(monkeypatch)
@@ -432,7 +441,7 @@ def test_filter_upcoming_games_keeps_the_unplayed_week() -> None:
 
 def _eighteen_week_stats(monkeypatch: pytest.MonkeyPatch) -> pl.DataFrame:
     """Fix an 18-week regular season and return week 1, 18 and 19 stats for one team."""
-    monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 18)
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(18))
     return pl.DataFrame(
         {
             "season": [2023, 2023, 2023],
@@ -444,7 +453,9 @@ def _eighteen_week_stats(monkeypatch: pytest.MonkeyPatch) -> pl.DataFrame:
     )
 
 
-def test_aggregate_team_stats_to_week_handles_week_one_and_playoff_paths(monkeypatch) -> None:
+def test_aggregate_team_stats_to_week_handles_week_one_and_playoff_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Week one has no prior-game window."""
     # Arrange
     stats = _eighteen_week_stats(monkeypatch)
@@ -484,7 +495,9 @@ def test_get_stats_for_diff_deduplicates_and_includes_expected_groups() -> None:
     assert constants.TREND_FEATURE_COLUMNS[0] in stats
 
 
-def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> None:
+def test_load_team_rankings_partial_full_and_future(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """TeamRankings are loaded correctly for past and future weeks."""
     # Arrange
     season = 2023
@@ -526,12 +539,12 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
     week3_cached.write_csv(season_dir / f"{season}_week_03_team_rankings.csv")
 
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
-    monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
-    monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(3))
+    monkeypatch.setattr(teamrankings, "get_week_date", returning(date(2023, 9, 1)))
 
     scraped_weeks: list[int] = []
 
-    def fake_scrape(week, _week_date, **_kwargs):
+    def fake_scrape(week: int, _week_date: date, **_kwargs: object) -> pl.DataFrame:
         """Fake scrape function returning dummy data."""
         scraped_weeks.append(int(week))
         return pl.DataFrame(
@@ -574,7 +587,9 @@ def test_load_team_rankings_partial_full_and_future(tmp_path, monkeypatch) -> No
     assert reloaded_week3["predictive_rating"].to_list() == [1.1, 2.2]
 
 
-def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> None:
+def test_load_team_rankings_min_week_skips_early_week(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Min week setting skips known-missing early weeks."""
     # Arrange
     season = 2023
@@ -582,13 +597,13 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
     season_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
-    monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
-    monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
-    monkeypatch.setattr(teamrankings, "update_season_team_rankings", lambda _season: None)
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(3))
+    monkeypatch.setattr(teamrankings, "get_week_date", returning(date(2023, 9, 1)))
+    monkeypatch.setattr(teamrankings, "update_season_team_rankings", returning(None))
 
     scraped_weeks: list[int] = []
 
-    def fake_scrape(week, _week_date, **_kwargs):
+    def fake_scrape(week: int, _week_date: date, **_kwargs: object) -> pl.DataFrame:
         """Fake scrape function returning dummy data."""
         scraped_weeks.append(int(week))
         return pl.DataFrame(
@@ -616,7 +631,9 @@ def test_load_team_rankings_min_week_skips_early_week(tmp_path, monkeypatch) -> 
     assert all(week >= 2 for week in scraped_weeks)
 
 
-def test_load_team_rankings_skips_pre_min_season(tmp_path, monkeypatch) -> None:
+def test_load_team_rankings_skips_pre_min_season(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Seasons before TR availability return empty data."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
@@ -634,7 +651,9 @@ def test_load_team_rankings_skips_pre_min_season(tmp_path, monkeypatch) -> None:
     assert combined.height == 0
 
 
-def test_load_team_rankings_returns_empty_for_future_season(tmp_path, monkeypatch) -> None:
+def test_load_team_rankings_returns_empty_for_future_season(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Future seasons short-circuit because there is no cached or scrapeable data yet."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
@@ -646,7 +665,9 @@ def test_load_team_rankings_returns_empty_for_future_season(tmp_path, monkeypatc
     assert combined.height == 0
 
 
-def test_load_team_rankings_uses_cached_fallback_when_refresh_fails(tmp_path, monkeypatch) -> None:
+def test_load_team_rankings_uses_cached_fallback_when_refresh_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A current-week cache is reused when the forced refresh scrape returns nothing."""
     # Arrange
     season = 2023
@@ -654,9 +675,13 @@ def test_load_team_rankings_uses_cached_fallback_when_refresh_fails(tmp_path, mo
     season_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
-    monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 3)
-    monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
-    monkeypatch.setattr(teamrankings, "_validate_tr_dataframe", lambda _df: (True, []))
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(3))
+    monkeypatch.setattr(teamrankings, "get_week_date", returning(date(2023, 9, 1)))
+
+    def always_valid(_df: pl.DataFrame) -> tuple[bool, list[str]]:
+        return True, []
+
+    monkeypatch.setattr(teamrankings, "_validate_tr_dataframe", always_valid)
 
     week2_cached = pl.DataFrame(
         {
@@ -670,7 +695,7 @@ def test_load_team_rankings_uses_cached_fallback_when_refresh_fails(tmp_path, mo
     monkeypatch.setattr(
         teamrankings,
         "scrape_team_rankings_for_week",
-        lambda *_args, **_kwargs: pl.DataFrame(),
+        returning(pl.DataFrame()),
     )
 
     # Act
@@ -687,8 +712,8 @@ def test_load_team_rankings_uses_cached_fallback_when_refresh_fails(tmp_path, mo
 
 
 def test_load_team_rankings_keeps_existing_partial_week_when_scrape_fails(
-    tmp_path,
-    monkeypatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Partial-scrape failures keep the cached week data instead of dropping it."""
     # Arrange
@@ -697,22 +722,22 @@ def test_load_team_rankings_keeps_existing_partial_week_when_scrape_fails(
     season_dir.mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
-    monkeypatch.setattr(constants, "get_regular_season_weeks", lambda _season: 1)
-    monkeypatch.setattr(teamrankings, "get_week_date", lambda _season, _week: date(2023, 9, 1))
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(1))
+    monkeypatch.setattr(teamrankings, "get_week_date", returning(date(2023, 9, 1)))
     monkeypatch.setattr(
         teamrankings,
         "_get_required_tr_columns",
         lambda: {"team_abbr", "week", "predictive_rating", "third_down_pct"},
     )
-    monkeypatch.setattr(
-        teamrankings,
-        "get_missing_tr_columns",
-        lambda _df: ({"stat": "third_down_pct"}, {}),
-    )
+
+    def missing_one_rating(_df: pl.DataFrame) -> tuple[dict[str, str], dict[str, str]]:
+        return {"stat": "third_down_pct"}, {}
+
+    monkeypatch.setattr(teamrankings, "get_missing_tr_columns", missing_one_rating)
     monkeypatch.setattr(
         teamrankings,
         "scrape_team_rankings_for_week",
-        lambda *_args, **_kwargs: pl.DataFrame(),
+        returning(pl.DataFrame()),
     )
 
     partial = pl.DataFrame(

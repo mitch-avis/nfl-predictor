@@ -119,6 +119,14 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
 
 ## Data state and ETL rebuild records
 
+- ETL rebuilt on 2026-10-14 at 20:12-20:18 MDT on `0.59.0` (`119a016`, the step-6 merge) with
+  `nfl-predictor data` and its defaults, after the user approved the merge and the rebuild:
+  `7340` completed rows, `541` columns, fingerprint `f3eca626...`, and `534` ported-ratings
+  files under `data/ratings/`. The build it replaced (`ca2f7bd3...`, `0.45.4` with the
+  2026-10-14 `qb_elos.csv`) is in `~/scratch/data_backups/2026-10-14_pre_step6_merge/` (`1641`
+  files, `SHA256SUMS.txt`, verified). The leakage audit passed on it (`490` features, `0`
+  flags, `models/leakage_audit.json`). The driver and its log are
+  `~/scratch/week06_step6/launch.sh` and `run.log` beside it.
 - ETL was rerun on 2026-09-20 at 04:31 from the cache for `1999-2026` on the `0.12.6` schema
   (pre-2002 division and conference alignment from `0.12.4`, the six `*_opponent_def_sacks` /
   `*_opponent_times_sacked` mirrors gone, the times-sacked mirror kept as an unpublished

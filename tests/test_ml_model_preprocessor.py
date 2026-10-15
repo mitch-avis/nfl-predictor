@@ -28,21 +28,9 @@ def _make_feature_spec() -> ml_model.FeatureSpec:
     )
 
 
-def test_preprocessor_sparse_with_categorical() -> None:
-    """One-hot categoricals should keep the transformed matrix sparse for trees."""
-    df = pd.DataFrame({"num_feature": [1.0, 2.0], "cat_feature": ["A", "B"]})
-    spec = _make_feature_spec()
-
-    preprocessor = ml_model.build_preprocessor(spec, for_tree=True)
-    features = preprocessor.fit_transform(df)
-
-    assert sparse.issparse(features)
-
-
-def test_preprocessor_handles_missing_numeric() -> None:
-    """Numeric NaNs are imputed so downstream training can proceed."""
-    df = pd.DataFrame({"num_feature": [1.0, np.nan, 3.0, 4.0]})
-    spec = ml_model.FeatureSpec(
+def _make_numeric_feature_spec() -> ml_model.FeatureSpec:
+    """Build a minimal FeatureSpec with one numeric feature."""
+    return ml_model.FeatureSpec(
         feature_columns=["num_feature"],
         categorical_columns=[],
         numeric_columns=["num_feature"],
@@ -57,9 +45,30 @@ def test_preprocessor_handles_missing_numeric() -> None:
         market_columns=[],
     )
 
-    preprocessor = ml_model.build_preprocessor(spec, for_tree=True)
+
+def test_preprocessor_sparse_with_categorical() -> None:
+    """One-hot categoricals should keep the transformed matrix sparse for trees."""
+    # Arrange
+    df = pd.DataFrame({"num_feature": [1.0, 2.0], "cat_feature": ["A", "B"]})
+    preprocessor = ml_model.build_preprocessor(_make_feature_spec(), for_tree=True)
+
+    # Act
+    features = preprocessor.fit_transform(df)
+
+    # Assert
+    assert sparse.issparse(features)
+
+
+def test_preprocessor_handles_missing_numeric() -> None:
+    """Numeric NaNs are imputed so downstream training can proceed."""
+    # Arrange
+    df = pd.DataFrame({"num_feature": [1.0, np.nan, 3.0, 4.0]})
+    preprocessor = ml_model.build_preprocessor(_make_numeric_feature_spec(), for_tree=True)
+
+    # Act
     features = fit_transform_matrix(preprocessor, df)
 
+    # Assert
     if sparse.issparse(features):
         csr = sparse.csr_matrix(features)
         data = csr.data
@@ -67,6 +76,14 @@ def test_preprocessor_handles_missing_numeric() -> None:
     else:
         dense = np.asarray(features, dtype=float)
         assert not np.isnan(dense).any()
+
+
+def test_models_train_on_the_imputed_matrix() -> None:
+    """The margin and total models fit on a matrix whose numeric NaNs were imputed."""
+    # Arrange
+    df = pd.DataFrame({"num_feature": [1.0, np.nan, 3.0, 4.0]})
+    preprocessor = ml_model.build_preprocessor(_make_numeric_feature_spec(), for_tree=True)
+    features = fit_transform_matrix(preprocessor, df)
     params = ml_model.resolve_xgb_params(
         ml_model.DEFAULT_XGB_PARAMS,
         overrides={
@@ -79,10 +96,12 @@ def test_preprocessor_handles_missing_numeric() -> None:
     )
     y_margin = np.array([1.0, -2.0, 0.5, 3.0])
     y_total = np.array([40.0, 38.0, 42.0, 44.0])
+
+    # Act
     margin_model, total_model = ml_model.fit_margin_total_models(
         ml_model.FitData(features, y_margin, y_total), params
     )
 
+    # Assert
     assert hasattr(margin_model, "feature_importances_")
-    assert hasattr(total_model, "feature_importances_")
     assert hasattr(total_model, "feature_importances_")

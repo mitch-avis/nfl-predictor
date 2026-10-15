@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.61.0] - 2026-10-15
+
+### Changed
+
+- A run without game lines leaves out `strength,elo,own_elo_wt,qb_adj` by default
+  (`constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`): the reviewed list of the step-6 runs
+  `models/step6/elo_marketfree_seed{42,7}`, plus `qb_adj` until it is measured. Such a run (the
+  weekly run's `--wf-market-mode none`; `backtest` with `--exclude-market --no-market-anchor
+  --no-market-transform`; `train` with `--exclude-market` and its anchor and transform off) now
+  trains on no market information, with the own Elo that has no win-total prior. Every other run
+  keeps production's list, and a list given on the command line or in a config file still wins,
+  `''` and `[]` included. One resolution serves the three commands
+  (`cli/options.resolve_disabled_feature_groups`). Production's runs are unchanged: the same
+  groups, stage-1 settings and stage hashes.
+- `config/weekly_run.yaml` no longer sets `disable_feature_groups`, so the default follows
+  `wf_market_mode`; its comment documents both defaults. A config file that sets the key keeps
+  its list in every mode.
+- `train` reports that it ignores `--disable-feature-groups` for a saved model only when the list
+  differs from the run's own default.
+- A backtest or `train` command without game lines recorded before this version with no group
+  option reproduces with the list it then defaulted to given explicitly
+  (`--disable-feature-groups strength,own_elo,own_elo_wt,qb_adj` from 0.59.0 on). The constant
+  moves every walk-forward checkpoint fingerprint.
+
+### Added
+
+- `nfl-predictor train` takes `--no-market-anchor` and `--no-market-transform` (both off by
+  default, as before), so the command without game lines is spelled the same as `backtest`'s.
+
 ## [0.60.0] - 2026-10-15
 
 ### Changed

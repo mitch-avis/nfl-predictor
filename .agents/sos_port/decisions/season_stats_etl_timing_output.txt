@@ -1,0 +1,51 @@
+Output of .agents/sos_port/season_stats_etl_timing.py, run on 2026-10-10 from 10:26 local time at
+commit 10698f5 in the worktree of branch worktree-agent-ad5396b63790d07a8 (uncommitted at the time:
+Markdown and web files only, no Python), on a 24-core machine shared with other work: the phase-4
+walk-forwards were running on the same machine (GPU and CPU) from 10:08, so every number below is
+inflated by that load, which the uptime lines and the script's load averages record. Each run wrote
+only to a temporary directory under ~/scratch. The ratings are not fitted (their columns are left
+null, which costs the tables the same join), so these are the seconds the season statistics add to
+an ETL run on top of the ratings.
+
+1. The ETL's own thread counts (Polars sizes its pool to every core), as nfl-predictor data runs:
+
+Command, from the worktree root:
+.venv/bin/python .agents/sos_port/season_stats_etl_timing.py
+
+ 10:26:27 up 10:25,  1 user,  load average: 4.74, 5.89, 5.83
+
+Season statistics ETL timing, seasons 1999-2026; threads {'POLARS_MAX_THREADS': 'unset', 'OPENBLAS_NUM_THREADS': 'unset', 'OMP_NUM_THREADS': 'unset'}; Polars pool 24
+load averages before 4.74, 5.89, 5.83; after 21.50, 12.04, 8.14
+     0.1 s  load the official team stats and gather the other sources
+   113.1 s  full rebuild: every season's tables, 1999-2026
+    31.9 s  incremental: the key of 1999-2025
+     3.3 s  incremental: 2026's tables
+     1.0 s  season cache: store and load every finished season's tables
+     0.6 s  write 280 tables
+SHA-256 of the 280 written tables' digests: 509c7f57633bfcb8841f840d8decec770835dbd4e9bc73d32cde717cb32ad50b
+ 10:29:21 up 10:28,  1 user,  load average: 21.50, 12.04, 8.14
+
+2. One Polars thread, for comparison:
+
+Command, from the worktree root:
+POLARS_MAX_THREADS=1 .venv/bin/python .agents/sos_port/season_stats_etl_timing.py
+
+ 10:29:28 up 10:28,  1 user,  load average: 19.94, 11.87, 8.10
+
+Season statistics ETL timing, seasons 1999-2026; threads {'POLARS_MAX_THREADS': '1', 'OPENBLAS_NUM_THREADS': 'unset', 'OMP_NUM_THREADS': 'unset'}; Polars pool 1
+load averages before 18.58, 11.72, 8.08; after 12.84, 10.98, 7.94
+     0.0 s  load the official team stats and gather the other sources
+    13.3 s  full rebuild: every season's tables, 1999-2026
+     9.4 s  incremental: the key of 1999-2025
+     0.3 s  incremental: 2026's tables
+     0.7 s  season cache: store and load every finished season's tables
+     1.0 s  write 280 tables
+SHA-256 of the 280 written tables' digests: 509c7f57633bfcb8841f840d8decec770835dbd4e9bc73d32cde717cb32ad50b
+ 10:30:03 up 10:29,  1 user,  load average: 12.84, 10.98, 7.94
+
+Read as the ETL's added time (run 1): a full rebuild about 114 s (loading 0.1, every season's tables
+113.1, writing 0.6); an incremental run about 37 s (loading 0.1, the finished seasons' key 31.9,
+the season in progress 3.3, the season cache's extra input and output 1.0, writing 0.6). Both runs
+wrote the same 280 tables byte for byte (the same digest), so the tables do not depend on the
+Polars thread count. Most of run 1's time is Polars' thread-pool overhead on the package's many
+small queries: run 2 builds the same tables about 8.5 times faster.

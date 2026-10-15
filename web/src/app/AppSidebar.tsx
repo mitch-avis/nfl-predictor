@@ -16,13 +16,16 @@ import {
 } from '@/components/ui/sidebar'
 import type { User } from '@/api/types'
 
-import { NAV_ITEMS } from './nav'
+import { NAV_ITEMS, NAV_SECTIONS } from './nav'
 
-/** Left navigation: an icon rail on desktop when collapsed, a drawer on mobile. */
+/** Left navigation in sections: an icon rail on desktop when collapsed, a drawer on mobile. */
 export function AppSidebar({ user }: { user: User }) {
   const location = useLocation()
   const { setOpenMobile, isMobile } = useSidebar()
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || user.role === 'admin')
+  const sections = NAV_SECTIONS.map((section) => ({ section, items: items.filter((item) => item.section === section) })).filter(
+    (group) => group.items.length > 0,
+  )
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
@@ -36,27 +39,29 @@ export function AppSidebar({ user }: { user: User }) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigate</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const active =
-                  item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
-                return (
-                  <SidebarMenuItem key={item.to}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
-                      <NavLink to={item.to} onClick={() => isMobile && setOpenMobile(false)}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {sections.map(({ section, items: sectionItems }) => (
+          <SidebarGroup key={section} role="group" aria-label={section}>
+            <SidebarGroupLabel>{section}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {sectionItems.map((item) => {
+                  const active =
+                    item.to === '/' ? location.pathname === '/' : location.pathname.startsWith(item.to)
+                  return (
+                    <SidebarMenuItem key={item.to}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                        <NavLink to={item.to} onClick={() => isMobile && setOpenMobile(false)}>
+                          <item.icon />
+                          <span>{item.label}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <div className="px-2 py-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">

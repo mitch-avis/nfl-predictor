@@ -1,0 +1,37 @@
+1. Games whose play_id does not increase in publication order
+   1999: 6 of 247 games
+   2000: 40 of 246 games
+   2001: 54 of 248 games
+   2002: 57 of 256 games
+   2003: 49 of 256 games
+   2004: 47 of 256 games
+   2005: 50 of 256 games
+   2006: 50 of 256 games
+   2007: 56 of 256 games
+   2008: 46 of 256 games
+   2009: 61 of 256 games
+   2010: 60 of 256 games
+   2011: 56 of 256 games
+   2012: 48 of 256 games
+   2013: 52 of 256 games
+   2014: 52 of 256 games
+   2015: 52 of 256 games
+   2016: 53 of 256 games
+   2017: 67 of 256 games
+   2018: 56 of 256 games
+   2019: 76 of 256 games
+   2020: 58 of 256 games
+   2021: 57 of 272 games
+   2022: 260 of 271 games
+   2023: 272 of 272 games
+   2024: 272 of 272 games
+   2025: 272 of 272 games
+   total: 2279
+2. Regular-season games with a final score and no play-by-play
+   1999: 1999_01_BAL_STL
+   2000: 2000_03_SD_KC, 2000_06_BUF_MIA
+3. Official team stats the override reads that loaders.load_team_stats sums away
+   fumbles_lost = sack_fumbles_lost + rushing_fumbles_lost + receiving_fumbles_lost; the override reads sack_fumbles_lost, rushing_fumbles_lost
+   first_downs = passing_first_downs + rushing_first_downs; the override reads passing_first_downs, rushing_first_downs
+4. numpy, scipy, or sklearn imports in src/nfl_predictor/season_stats
+   none

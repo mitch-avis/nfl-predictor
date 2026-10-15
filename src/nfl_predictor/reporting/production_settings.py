@@ -9,14 +9,15 @@ change to them.
 
 Each half gets four lists. ``differences`` holds the settings whose values differ. A setting
 one side applies implicitly carries that value on the side with no option for it (production
-never drops pruning, feature groups or trend features; a walk-forward fold holds out no season,
-never tunes and weights postseason games like any other), so a real difference lands in
-``differences``. What is left on one side only goes to ``run_only`` or ``production_only``
-(the tuning options when production tunes, for example), and ``not_recorded`` names the
-production settings an older run did not record (its resolved XGBoost parameters). A half
-reads "no model-affecting differences" only when all four are empty and the run recorded no
-retired setting. Settings an older run recorded that no longer exist are listed as
-``retired``, with their values. Two groups are listed apart and are never differences:
+never drops pruning or trend features; a walk-forward fold holds out no season, never tunes and
+weights postseason games like any other), so a real difference lands in ``differences``. The
+disabled feature groups are compared as a set, sorted: the same groups in any order, or named
+twice, remove the same columns. What is left on one side only goes to ``run_only`` or
+``production_only`` (the tuning options when production tunes, for example), and
+``not_recorded`` names the production settings an older run did not record (its resolved
+XGBoost parameters). A half reads "no model-affecting differences" only when all four are empty
+and the run recorded no retired setting. Settings an older run recorded that no longer exist are
+listed as ``retired``, with their values. Two groups are listed apart and are never differences:
 ``scope`` (which seasons and weeks are scored, the seed, the files a run reads) and
 ``runtime`` (thread count, log verbosity and the quantile models, none of which changes a
 scored prediction). Market settings are compared after resolving them against the dataset's
@@ -89,6 +90,11 @@ _TUNING_SETTINGS = {
 }
 
 
+def _feature_groups(groups: Sequence[str]) -> list[str]:
+    """Return disabled feature groups as compared: sorted, each named once."""
+    return sorted(set(groups))
+
+
 def _xgb_settings(params: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Split XGBoost parameters into model settings and runtime settings, leaving the seed."""
     model: dict[str, Any] = {}
@@ -137,7 +143,7 @@ def _walk_forward_settings(
         "feature_start": config.feature_start,
         "feature_end": config.feature_end,
         "disable_pruning": bool(config.disable_pruning),
-        "disabled_feature_groups": list(config.disabled_feature_groups),
+        "disabled_feature_groups": _feature_groups(config.disabled_feature_groups),
         "disable_trend_features": bool(disable_trend_features),
         **xgb_model,
     }
@@ -195,9 +201,9 @@ def _final_fit_settings(
             "include_postseason": include_postseason,
             # The weight applies only when postseason games are in training.
             "postseason_weight": train_config["postseason_weight"] if include_postseason else None,
-            # The final fit has no option to drop pruning, feature groups or trend features.
+            "disabled_feature_groups": _feature_groups(train_config["disabled_feature_groups"]),
+            # The final fit has no option to drop pruning or trend features.
             "disable_pruning": False,
-            "disabled_feature_groups": [],
             "disable_trend_features": False,
             "tune": bool(optuna_config.enabled),
         }

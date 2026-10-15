@@ -37,7 +37,7 @@ class CheckpointDir:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     """Parse the command line."""
-    models = Path(constants.ROOT_DIR) / "models"
+    models = Path(constants.MODELS_PATH)
     parser = argparse.ArgumentParser(
         description="List walk-forward checkpoint directories and what references them."
     )

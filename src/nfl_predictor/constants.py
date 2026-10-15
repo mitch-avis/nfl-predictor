@@ -9,6 +9,9 @@ from pathlib import Path
 # Project directory configurations
 ROOT_DIR = Path(__file__).parents[2]
 DATA_PATH = ROOT_DIR / "data"
+# Run directories and walk-forward checkpoints. Code reads it when it runs, never into a copy at
+# import, so the test suite can point it at a temporary directory (tests/data_isolation.py).
+MODELS_PATH = ROOT_DIR / "models"
 NFLREADPY_CACHE_DIR = DATA_PATH / "cache" / "nflreadpy"
 # Finished seasons' ETL builds for `nfl-predictor data --incremental`, kept under the output
 # directory's `cache/`. Safe to delete: a missing entry is rebuilt.
@@ -52,10 +55,18 @@ SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for 
 FLOOR_SIGMA_MIN_POOL_SEASONS = 3
 # The walk-forward runs whose out-of-fold errors form the production pool (the weekly run and
 # `nfl-predictor train`), relative to the repository root; their fold checkpoints are only read.
+# Both seeds of the reviewed walk-forward of production's settings: market anchored, with
+# PRODUCTION_DISABLED_FEATURE_GROUPS left out.
 FLOOR_SIGMA_REFERENCE_RUNS = (
-    "models/step4_reference/adopted_seed42",
-    "models/step4_reference/adopted_seed7",
+    "models/step6/ratings_anchored_seed42",
+    "models/step6/ratings_anchored_seed7",
 )
+
+# The feature groups (FEATURE_GROUP_COLUMN_MARKERS) production leaves out: the strength snapshot
+# and both presets of this repository's own Elo, so production trains on the ported team ratings
+# (`ratings`) and the `qb_elos.csv` Elo (`elo`). The default of the weekly run,
+# `nfl-predictor train` and `nfl-predictor backtest`, so a backtest measures production's features.
+PRODUCTION_DISABLED_FEATURE_GROUPS = ("strength", "own_elo", "own_elo_wt")
 
 # URL for SurvivorGrid spreads (future games)
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
@@ -89,6 +100,15 @@ MONEYLINE_MAP_MIN_GAMES = 200
 # Written beside the datasets by a pick-time build: the nfelo snapshot, match rates, fallback
 # rows and the moneyline maps the run used.
 MARKET_LINES_METADATA_NAME = "market_lines_metadata"
+# Base name of the own Elo's build record (both presets and the win-total file it read), JSON.
+OWN_ELO_METADATA_NAME = "own_elo_metadata"
+# nfelosrs's preseason win-total ratings (`greerreNFL/nfelosrs`, 2003 on): each team's rating
+# implied by the sportsbooks' season win totals and its schedule, on the Elo scale. Market
+# information: only the own Elo's win-total preset reads it, cached and snapshotted like the
+# lines under NFELO_CACHE_DIR / "win_totals".
+NFELOSRS_WIN_TOTALS_URL = (
+    "https://raw.githubusercontent.com/greerreNFL/nfelosrs/main/wt_ratings.csv"
+)
 
 # Minimum season for data collection (default)
 MIN_SEASON = 1999
@@ -475,6 +495,190 @@ NFLREADPY_SCHEDULE_RENAME = {
 }
 
 # ============================================================================
+# nflverse player sources: weekly player stats, snap counts, the players file, rosters, ESPN QBR
+# ============================================================================
+
+# The first season each source publishes. Its loader returns no rows for an earlier season
+# without asking nflreadpy, which refuses some of them with a ValueError. nflverse's 2012 snap
+# counts file holds no rows, so snap counts start in 2013 in practice.
+NFLREADPY_PLAYER_STATS_MIN_SEASON = 1999
+NFLREADPY_SNAP_COUNTS_MIN_SEASON = 2012
+NFLREADPY_ROSTERS_MIN_SEASON = 1920
+NFLREADPY_WEEKLY_ROSTERS_MIN_SEASON = 2002
+
+# Columns kept from `nflreadpy.load_player_stats(summary_level="week")`, one row per player and
+# game: identity, the official passing and rushing totals the quarterback rating reads, and the
+# defensive stats only the box score charts.
+NFLREADPY_PLAYER_STATS_COLUMNS = [
+    "player_id",
+    "player_name",
+    "player_display_name",
+    "position",
+    "season",
+    "week",
+    "season_type",
+    "game_id",
+    "team",
+    "opponent_team",
+    "completions",
+    "attempts",
+    "passing_yards",
+    "passing_tds",
+    "passing_interceptions",
+    "sacks_suffered",
+    "sack_yards_lost",
+    "passing_epa",
+    "passing_cpoe",
+    "carries",
+    "rushing_yards",
+    "rushing_tds",
+    "rushing_first_downs",
+    "rushing_epa",
+    "rushing_fumbles",
+    "rushing_fumbles_lost",
+    "rushing_2pt_conversions",
+    "def_tackles_for_loss",
+    "def_fumbles_forced",
+    "def_sacks",
+    "def_qb_hits",
+    "def_interceptions",
+    "def_pass_defended",
+    "def_safeties",
+]
+
+# Weekly player stats credit no one with these stats in these seasons (inclusive) and publish 0
+# instead of a missing value; the loader leaves them null there. nflverse charts one tackle for
+# loss in all of 2006.
+NFLREADPY_PLAYER_STAT_GAPS: dict[str, tuple[int, int]] = {
+    "def_tackles_for_loss": (2003, 2011),
+    "def_qb_hits": (2003, 2005),
+}
+
+# Columns kept from `nflreadpy.load_snap_counts`, keyed by the Pro Football Reference player id.
+NFLREADPY_SNAP_COUNT_COLUMNS = [
+    "game_id",
+    "season",
+    "game_type",
+    "week",
+    "player",
+    "pfr_player_id",
+    "position",
+    "team",
+    "opponent",
+    "offense_snaps",
+    "offense_pct",
+]
+
+# Columns kept from `nflreadpy.load_players`, one row per player with his latest position and the
+# ids other sources key on (Pro Football Reference for snap counts, ESPN for QBR).
+NFLREADPY_PLAYERS_COLUMNS = [
+    "gsis_id",
+    "display_name",
+    "position",
+    "pfr_id",
+    "espn_id",
+]
+
+# Columns kept from `nflreadpy.load_rosters` and `nflreadpy.load_rosters_weekly`, which share a
+# schema. Season rosters before 2002 carry no week or game type.
+NFLREADPY_ROSTER_COLUMNS = [
+    "season",
+    "week",
+    "game_type",
+    "team",
+    "position",
+    "full_name",
+    "gsis_id",
+    "pfr_id",
+]
+
+# League (GSIS) team codes the 2002-2015 season and weekly rosters use, with nflverse's code for
+# each; the loaders then normalize nflverse's codes through ALIAS_TO_CANONICAL as usual.
+NFLVERSE_ROSTER_TEAM_CODES = {
+    "ARZ": "ARI",
+    "BLT": "BAL",
+    "CLV": "CLE",
+    "HST": "HOU",
+    "SL": "STL",
+}
+
+# The position a source lists a quarterback at. A player the players file or any regular-season
+# week of the season's weekly roster lists here is a quarterback that season, whatever else he
+# plays (`utils/polars/player_identity.py`).
+QB_POSITION = "QB"
+
+# Games with at least this many player team values that all name one team are credited wholly to
+# one team (`utils/polars/player_team_repair.py`): every real game credits plays to both teams,
+# but a short fixture or a partly published game may not.
+ONE_TEAM_GAME_MIN_VALUES = 20
+
+# Play-by-play team columns that name a player's team, with the player id each one belongs to.
+PBP_PLAYER_TEAM_ID_COLUMNS = {
+    "td_team": "td_player_id",
+    "penalty_team": "penalty_player_id",
+    "fumbled_1_team": "fumbled_1_player_id",
+    "fumbled_2_team": "fumbled_2_player_id",
+    "fumble_recovery_1_team": "fumble_recovery_1_player_id",
+    "fumble_recovery_2_team": "fumble_recovery_2_player_id",
+    "forced_fumble_player_1_team": "forced_fumble_player_1_player_id",
+    "forced_fumble_player_2_team": "forced_fumble_player_2_player_id",
+    "solo_tackle_1_team": "solo_tackle_1_player_id",
+    "solo_tackle_2_team": "solo_tackle_2_player_id",
+    "assist_tackle_1_team": "assist_tackle_1_player_id",
+    "assist_tackle_2_team": "assist_tackle_2_player_id",
+    "assist_tackle_3_team": "assist_tackle_3_player_id",
+    "assist_tackle_4_team": "assist_tackle_4_player_id",
+    "tackle_with_assist_1_team": "tackle_with_assist_1_player_id",
+    "tackle_with_assist_2_team": "tackle_with_assist_2_player_id",
+}
+
+# Play-by-play team columns with no player behind them, unknown in a game credited to one team.
+PBP_TEAM_ONLY_COLUMNS = ("return_team", "timeout_team")
+
+# ESPN QBR (utils/polars/espn_qbr.py), a validation reference only: never a game-dataset column
+# or a model input. nflverse publishes it from 2006 as release assets, every season in one file
+# per level.
+ESPN_QBR_MIN_SEASON = 2006
+ESPN_QBR_RELEASE_URLS = {
+    "season": (
+        "https://github.com/nflverse/nflverse-data/releases/download/espn_data/"
+        "qbr_season_level.parquet"
+    ),
+    "week": (
+        "https://github.com/nflverse/nflverse-data/releases/download/espn_data/"
+        "qbr_week_level.parquet"
+    ),
+}
+
+# Columns kept from each QBR asset. `player_id` is ESPN's id (`espn_id` in the players file).
+ESPN_QBR_SEASON_COLUMNS = [
+    "season",
+    "season_type",
+    "game_week",
+    "team_abb",
+    "player_id",
+    "name_display",
+    "qb_plays",
+    "qbr_total",
+    "qbr_raw",
+    "qualified",
+]
+ESPN_QBR_WEEK_COLUMNS = [
+    "season",
+    "season_type",
+    "game_id",
+    "game_week",
+    "team_abb",
+    "opp_abb",
+    "player_id",
+    "name_display",
+    "qb_plays",
+    "qbr_total",
+    "qbr_raw",
+    "qualified",
+]
+
+# ============================================================================
 # Data Collection Column Definitions
 # ============================================================================
 
@@ -700,7 +904,8 @@ PRUNED_FEATURE_COLUMNS = [
     "away_games_played",
     "home_games_played",
     # The two teams in a game have almost always played the same number of games, so the diff
-    # is a constant zero outside bye weeks.
+    # is a constant zero outside bye weeks. The ETL does not publish it (STATS_WITHOUT_DIFF);
+    # it stays pruned so a dataset that still carries it trains the same way.
     "strength_games_played_diff",
     # Equal to the schedule's `division` flag from the 2002 realignment on, and derived from
     # the current division map before it, so the schedule flag is the one to keep.
@@ -795,6 +1000,31 @@ ELO_TREND_COLUMNS = [
     "qb_value_4wk_trend",
 ]
 
+# This repository's own Elo (FiveThirtyEight's method, computed from game results by
+# `utils/polars/elo_ratings.py`), separate from the `data/qb_elos.csv` columns above so one
+# dataset can carry both. It is published as two families, one per preset. The market-free one:
+# per team, prefixed with away_/home_ and with an away-minus-home `_diff`, the team's pre-game
+# rating, its quarterback adjustment included.
+OWN_ELO_TEAM_STATS = ["own_elo"]
+# Per game: the home team's pre-game win probability from the same ratings, home field and the
+# other game-level adjustments included.
+OWN_ELO_GAME_COLUMNS = ["own_elo_home_win_prob"]
+OWN_ELO_COLUMNS = [
+    *(f"{side}_{stat}" for stat in OWN_ELO_TEAM_STATS for side in ("away", "home")),
+    *(f"{stat}_diff" for stat in OWN_ELO_TEAM_STATS),
+    *OWN_ELO_GAME_COLUMNS,
+]
+# The same columns from the preset with the win-total pull (market information). The stat is
+# `own_wt_elo`, not `own_elo_wt`: group markers match substrings, and `away_own_elo` is a
+# substring of `away_own_elo_wt`, so the market-free group could not leave those columns out.
+OWN_WT_ELO_TEAM_STATS = ["own_wt_elo"]
+OWN_WT_ELO_GAME_COLUMNS = ["own_wt_elo_home_win_prob"]
+OWN_WT_ELO_COLUMNS = [
+    *(f"{side}_{stat}" for stat in OWN_WT_ELO_TEAM_STATS for side in ("away", "home")),
+    *(f"{stat}_diff" for stat in OWN_WT_ELO_TEAM_STATS),
+    *OWN_WT_ELO_GAME_COLUMNS,
+]
+
 TREND_FEATURE_COLUMNS = [
     "last_5_games_rating_trend",
     *ELO_TREND_COLUMNS,
@@ -832,9 +1062,13 @@ TR_STATS = [
 # Play-by-play columns selected from nflreadpy.load_pbp before caching.
 # Every column is existence-guarded at load time: older seasons do not publish all of
 # them, and a missing column becomes a null-filled default rather than an error.
+# The list also carries every column the ratings ported from nfl-sos-ratings read (its team,
+# quarterback, special-teams and win-probability inputs, its loader's team-code repairs and the
+# botched-snap rule), so they are cached before anything here reads them.
 PBP_COLUMNS = [
     # Identity and join keys
     "game_id",
+    "play_id",
     "season",
     "season_type",
     "week",
@@ -843,24 +1077,49 @@ PBP_COLUMNS = [
     "home_team",
     "away_team",
     "posteam_type",
+    # Game state before the snap, and the score after the play
+    "qtr",
+    "half_seconds_remaining",
+    "score_differential",
+    "score_differential_post",
+    "posteam_score",
+    "posteam_score_post",
+    "wp",
     # Play classification
     "play_type",
     "qb_dropback",
     "qb_kneel",
     "qb_spike",
+    "qb_scramble",
+    "aborted_play",
     "rush",
     "pass",
     "rush_attempt",
     "pass_attempt",
+    "shotgun",
+    "no_huddle",
+    "pass_length",
     "down",
     "ydstogo",
     "yardline_100",
+    "goal_to_go",
+    "yrdln",
+    "side_of_field",
+    "end_yard_line",
     # Value columns
     "epa",
     "qb_epa",
+    "wpa",
     "success",
     "yards_gained",
+    "passing_yards",
+    "rushing_yards",
+    "return_yards",
     "air_yards",
+    "air_epa",
+    "yards_after_catch",
+    "yac_epa",
+    "xyac_mean_yardage",
     "cpoe",
     "xpass",
     "pass_oe",
@@ -871,31 +1130,123 @@ PBP_COLUMNS = [
     "fourth_down_failed",
     "two_point_attempt",
     "two_point_conv_result",
+    "defensive_two_point_conv",
+    "touchdown",
     "td_team",
     "sack",
+    "qb_hit",
     "interception",
     "fumble",
+    "fumble_forced",
     "fumble_lost",
     "complete_pass",
+    "incomplete_pass",
+    "tackled_for_loss",
     "pass_touchdown",
     "rush_touchdown",
     "first_down",
     "first_down_pass",
     "first_down_rush",
+    "first_down_penalty",
     "penalty",
     "penalty_team",
     "penalty_yards",
+    "penalty_type",
+    "timeout_team",
     # Special teams
     "special",
     "special_teams_play",
+    "punt_attempt",
+    "field_goal_attempt",
+    "kickoff_attempt",
+    "return_team",
     # Drives
     "fixed_drive",
     "fixed_drive_result",
     "drive_start_yard_line",
+    "drive_end_yard_line",
+    "drive_play_count",
+    "drive_first_downs",
+    "drive_inside20",
+    "drive_time_of_possession",
+    "drive_yards_penalized",
+    "ydsnet",
+    # Series (a set of downs that ends in a first down, a score or a change of possession)
+    "series",
+    "series_success",
+    "series_result",
     # Passer identity (bridge to Elo QB identities)
     "passer_player_id",
     "passer_player_name",
+    # The other players nflverse credits on a play, by id, with the team it credits each to
+    "rusher_player_id",
+    "rusher_player_name",
+    "receiver_player_id",
+    "receiver_player_name",
+    "td_player_id",
+    "penalty_player_id",
+    "pass_defense_1_player_id",
+    "fumbled_1_team",
+    "fumbled_1_player_id",
+    "fumbled_2_team",
+    "fumbled_2_player_id",
+    "fumble_recovery_1_team",
+    "fumble_recovery_1_player_id",
+    "fumble_recovery_2_team",
+    "fumble_recovery_2_player_id",
+    "forced_fumble_player_1_team",
+    "forced_fumble_player_1_player_id",
+    "forced_fumble_player_2_team",
+    "forced_fumble_player_2_player_id",
+    "solo_tackle_1_team",
+    "solo_tackle_1_player_id",
+    "solo_tackle_2_team",
+    "solo_tackle_2_player_id",
+    "assist_tackle_1_team",
+    "assist_tackle_1_player_id",
+    "assist_tackle_2_team",
+    "assist_tackle_2_player_id",
+    "assist_tackle_3_team",
+    "assist_tackle_3_player_id",
+    "assist_tackle_4_team",
+    "assist_tackle_4_player_id",
+    "tackle_with_assist_1_team",
+    "tackle_with_assist_1_player_id",
+    "tackle_with_assist_2_team",
+    "tackle_with_assist_2_player_id",
+    # Play text (the gamebook description)
+    "desc",
 ]
+
+# Columns of PBP_COLUMNS that hold a team code. nflverse writes the Rams as LA and Washington as
+# WAS in every one of them, so the loader normalizes each through ALIAS_TO_CANONICAL before
+# caching. Yard-line text that opens with a team code ("LA 25": yrdln, end_yard_line and the
+# drive yard lines) is cached as nflverse writes it.
+PBP_TEAM_COLUMNS = (
+    "posteam",
+    "defteam",
+    "home_team",
+    "away_team",
+    "side_of_field",
+    "td_team",
+    "penalty_team",
+    "timeout_team",
+    "return_team",
+    "fumbled_1_team",
+    "fumbled_2_team",
+    "fumble_recovery_1_team",
+    "fumble_recovery_2_team",
+    "forced_fumble_player_1_team",
+    "forced_fumble_player_2_team",
+    "solo_tackle_1_team",
+    "solo_tackle_2_team",
+    "assist_tackle_1_team",
+    "assist_tackle_2_team",
+    "assist_tackle_3_team",
+    "assist_tackle_4_team",
+    "tackle_with_assist_1_team",
+    "tackle_with_assist_2_team",
+)
 
 # Candidate column names for the special-teams play flag, in preference order.
 # nflreadpy has published this flag under both names; the first one present wins.
@@ -913,9 +1264,14 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     "next_opponent_identity": ("next_opponent_abbr",),
     # Every column built from `data/qb_elos.csv` (the `../nfeloqb` Elo file): the Elo values
     # and their four-week trends. That Elo pulls each preseason rating toward one built from
-    # betting win totals, so the group is market-informed; a run with no market information
-    # disables it along with the market features.
+    # betting win totals, so the group is market-informed (MARKET_INFORMED_FEATURE_GROUPS): a
+    # run that leaves the market columns out keeps it unless it disables the group as well.
     "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
+    # This repository's own Elo, market-free preset (OWN_ELO_COLUMNS).
+    "own_elo": tuple(OWN_ELO_TEAM_STATS),
+    # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group,
+    # and likewise kept by a run without the market columns unless it disables the group.
+    "own_elo_wt": tuple(OWN_WT_ELO_TEAM_STATS),
     # Rare event counts that led the audit's noise-family ranking.
     "rare_events": (
         "special_teams_tds",
@@ -927,10 +1283,17 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+# Feature groups built on betting-market information without being line columns. Leaving the
+# market columns out (`include_market` off) does not leave these out: a run with no market
+# information at all disables them too, and a run that keeps any of them while leaving the
+# market columns out logs a warning naming it (`ml.feature_spec.build_feature_spec`).
+MARKET_INFORMED_FEATURE_GROUPS = ("elo", "own_elo_wt")
+
 # Raw per-team-game counts and sums produced from play-by-play.
 # These are carried through season-to-date aggregation so rates can be computed as a
 # ratio of sums afterwards; they are not published in the final schema themselves,
-# apart from the snap volumes that also appear in PBP_STATS.
+# apart from the snap volumes that also appear in PBP_STATS. Each one feeds a published
+# rate: a count no rate reads is not carried.
 PBP_COUNT_COLUMNS = [
     "offensive_snaps",
     "defensive_snaps",
@@ -958,21 +1321,13 @@ PBP_COUNT_COLUMNS = [
     "st_epa_against",
     "st_plays",
     "third_down_conversions",
-    "third_down_fails",
     "third_down_attempts",
     "third_down_conversions_allowed",
-    "third_down_fails_allowed",
     "third_down_attempts_allowed",
     "fourth_down_conversions",
-    "fourth_down_fails",
     "fourth_down_attempts",
     "fourth_down_conversions_allowed",
-    "fourth_down_fails_allowed",
     "fourth_down_attempts_allowed",
-    "red_zone_plays",
-    "red_zone_tds",
-    "red_zone_plays_allowed",
-    "red_zone_tds_allowed",
     "red_zone_trips",
     "red_zone_td_drives",
     "red_zone_trips_allowed",
@@ -981,7 +1336,6 @@ PBP_COUNT_COLUMNS = [
     "two_point_successes",
     "two_point_attempts_allowed",
     "two_point_successes_allowed",
-    "total_plays",
 ]
 
 # Play-by-play stats published in the final schema (per team, prefixed with away_/home_).
@@ -1056,6 +1410,11 @@ SCHEDULE_STRENGTH_STATS = [
 # Every per-team strength column published in the final schema.
 ADJUSTED_STRENGTH_STATS = [*STRENGTH_TEAM_STATS, *SCHEDULE_STRENGTH_STATS]
 
+# Stats published per side without the away-minus-home `_diff` companion: the two teams in a
+# game have almost always played the same number of games, so that diff is a constant zero
+# outside bye weeks.
+STATS_WITHOUT_DIFF = ["strength_games_played"]
+
 # Columns the weekly snapshot builder emits, keyed by team. `adj_hfa` is the shared
 # home-field term: one league-wide value per (season, week), so it is deliberately
 # NOT published to the game schema, where it would become two identical away_/home_
@@ -1121,6 +1480,30 @@ QB_NAME_ALIASES = {
     "Mitch Trubisky": "Mitchell Trubisky",
     "Robert Griffin": "Robert Griffin III",
 }
+
+# The team and quarterback ratings ported from nfl-sos-ratings (`nfl_predictor.ratings`), fit by
+# the ETL on the games before each week (`utils/polars/ratings_build.py`). Published per side
+# with a _diff companion; every name starts with "ratings_", which no other column contains, so
+# the group stays disjoint from the strength, quarterback and TeamRankings rating columns.
+RATINGS_FEATURE_STATS = [
+    # Points per game against an average team on a neutral field, from opponent-adjusted EPA.
+    "ratings_offense",
+    "ratings_defense",
+    "ratings_special_teams",
+    "ratings_team",
+    # Mean team rating of the opponents played, each rated without the team's games (null in
+    # weeks 1 and 2, before any opponent has played someone else).
+    "ratings_sos",
+    # The expected starter's adjusted EPA per dropback, from this season's games before the week.
+    "ratings_qb",
+    # His dropbacks behind it (0 before his first dropback of the season).
+    "ratings_qb_dropbacks",
+]
+
+FEATURE_GROUP_COLUMN_MARKERS["ratings"] = tuple(RATINGS_FEATURE_STATS)
+
+# Directory under DATA_PATH for the published ratings tables, `{season}_{kind}.parquet`.
+RATINGS_DIRNAME = "ratings"
 
 # Stats to EXCLUDE from opponent stat generation (they create duplicates)
 # These stats are duplicates when viewed from opponent's perspective:
@@ -1261,6 +1644,12 @@ STADIUMS = {
         "state": "MA",
         "elevation_ft": 289.0,
     },
+    "BOS99": {
+        "name": "Foxboro Stadium",
+        "city": "Foxborough",
+        "state": "MA",
+        "elevation_ft": 313.0,
+    },
     "BUF00": {
         "name": "Highmark Stadium",
         "city": "Orchard Park",
@@ -1304,6 +1693,12 @@ STADIUMS = {
         "state": "OH",
         "elevation_ft": 482.0,
     },
+    "CIN99": {
+        "name": "Cinergy Field",
+        "city": "Cincinnati",
+        "state": "OH",
+        "elevation_ft": 505.0,
+    },
     "CLE00": {
         "name": "Cleveland Browns Stadium",
         "city": "Cleveland",
@@ -1315,6 +1710,12 @@ STADIUMS = {
         "city": "Pittsburgh",
         "state": "PA",
         "elevation_ft": 712.0,
+    },
+    "PIT99": {
+        "name": "Three Rivers Stadium",
+        "city": "Pittsburgh",
+        "state": "PA",
+        "elevation_ft": 731.0,
     },
     # AFC South
     "HOU00": {
@@ -1353,6 +1754,12 @@ STADIUMS = {
         "city": "Denver",
         "state": "CO",
         "elevation_ft": 5280.0,
+    },
+    "DEN99": {
+        "name": "Mile High Stadium",
+        "city": "Denver",
+        "state": "CO",
+        "elevation_ft": 5210.0,
     },
     "KAN00": {
         "name": "Arrowhead Stadium",
@@ -1415,6 +1822,12 @@ STADIUMS = {
         "state": "PA",
         "elevation_ft": 39.0,
     },
+    "PHI99": {
+        "name": "Veterans Stadium",
+        "city": "Philadelphia",
+        "state": "PA",
+        "elevation_ft": 21.0,
+    },
     "WAS00": {
         "name": "Northwest Stadium (FedEx Field)",
         "city": "Landover",
@@ -1428,11 +1841,23 @@ STADIUMS = {
         "state": "IL",
         "elevation_ft": 590.0,
     },
+    "CHI99": {
+        "name": "Memorial Stadium (Champaign)",
+        "city": "Champaign",
+        "state": "IL",
+        "elevation_ft": 732.0,
+    },
     "DET00": {
         "name": "Ford Field",
         "city": "Detroit",
         "state": "MI",
         "elevation_ft": 600.0,
+    },
+    "DET99": {
+        "name": "Pontiac Silverdome",
+        "city": "Pontiac",
+        "state": "MI",
+        "elevation_ft": 892.0,
     },
     "GNB00": {
         "name": "Lambeau Field",
@@ -1520,6 +1945,18 @@ STADIUMS = {
         "state": "WA",
         "elevation_ft": 16.0,
     },
+    "SEA98": {
+        "name": "Kingdome",
+        "city": "Seattle",
+        "state": "WA",
+        "elevation_ft": 18.0,
+    },
+    "SEA99": {
+        "name": "Husky Stadium",
+        "city": "Seattle",
+        "state": "WA",
+        "elevation_ft": 32.0,
+    },
     "SFO00": {
         "name": "Candlestick Park",
         "city": "San Francisco",
@@ -1569,11 +2006,42 @@ STADIUMS = {
         "state": "UK",
         "elevation_ft": 82.0,
     },
+    "MAD01": {
+        "name": "Santiago Bernabéu Stadium",
+        "city": "Madrid",
+        "state": "ES",
+        "elevation_ft": 2315.0,
+    },
+    "MEL00": {
+        "name": "Melbourne Cricket Ground",
+        "city": "Melbourne",
+        "state": "AU",
+        "elevation_ft": 54.0,
+    },
     "MEX00": {
         "name": "Estadio Azteca",
         "city": "Mexico City",
         "state": "MX",
         "elevation_ft": 7380.0,
+    },
+    # The Allianz Arena again, under the name it has at UEFA and NFL events.
+    "MUN01": {
+        "name": "Allianz Arena",
+        "city": "Munich",
+        "state": "DE",
+        "elevation_ft": 1617.0,
+    },
+    "PAR00": {
+        "name": "Stade de France",
+        "city": "Saint-Denis",
+        "state": "FR",
+        "elevation_ft": 138.0,
+    },
+    "RIO00": {
+        "name": "Maracanã Stadium",
+        "city": "Rio de Janeiro",
+        "state": "BR",
+        "elevation_ft": 38.0,
     },
     "SAO00": {
         "name": "Arena Corinthians (Neo Química Arena)",
@@ -1581,4 +2049,78 @@ STADIUMS = {
         "state": "BR",
         "elevation_ft": 2490.0,
     },
+}
+
+# Approximate stadium coordinates (latitude, longitude in degrees, north and east positive) for
+# every nflverse `stadium_id` on the 1999-2026 schedules, temporary and international venues
+# included. Only the own Elo's travel-distance term reads them: 4 Elo points per 1,000 miles,
+# so an error of a few miles moves a rating by a hundredth of a point.
+STADIUM_COORDINATES: dict[str, tuple[float, float]] = {
+    "ATL00": (33.758, -84.401),  # Georgia Dome, Atlanta
+    "ATL97": (33.755, -84.401),  # Mercedes-Benz Stadium, Atlanta
+    "BAL00": (39.278, -76.623),  # M&T Bank Stadium, Baltimore
+    "BOS00": (42.091, -71.264),  # Gillette Stadium, Foxborough
+    "BOS99": (42.093, -71.266),  # Foxboro Stadium, Foxborough
+    "BRG00": (30.412, -91.184),  # Tiger Stadium, Baton Rouge
+    "BUF00": (42.774, -78.787),  # Highmark Stadium, Orchard Park
+    "BUF01": (43.641, -79.389),  # Rogers Centre, Toronto
+    "CAR00": (35.226, -80.853),  # Bank of America Stadium, Charlotte
+    "CHI98": (41.862, -87.617),  # Soldier Field, Chicago
+    "CHI99": (40.099, -88.236),  # Memorial Stadium, Champaign
+    "CIN00": (39.095, -84.516),  # Paycor Stadium, Cincinnati
+    "CIN99": (39.097, -84.508),  # Cinergy Field, Cincinnati
+    "CLE00": (41.506, -81.700),  # Cleveland Browns Stadium, Cleveland
+    "DAL00": (32.748, -97.093),  # AT&T Stadium, Arlington
+    "DAL99": (32.840, -96.911),  # Texas Stadium, Irving
+    "DEN00": (39.744, -105.020),  # Empower Field at Mile High, Denver
+    "DEN99": (39.746, -105.022),  # Mile High Stadium, Denver
+    "DET00": (42.340, -83.046),  # Ford Field, Detroit
+    "DET99": (42.646, -83.255),  # Pontiac Silverdome, Pontiac
+    "FRA00": (50.069, 8.645),  # Deutsche Bank Park, Frankfurt
+    "GER00": (48.219, 11.625),  # Allianz Arena, Munich
+    "GNB00": (44.501, -88.062),  # Lambeau Field, Green Bay
+    "HOU00": (29.685, -95.411),  # NRG Stadium, Houston
+    "IND00": (39.760, -86.164),  # Lucas Oil Stadium, Indianapolis
+    "IND99": (39.763, -86.163),  # RCA Dome, Indianapolis
+    "JAX00": (30.324, -81.637),  # EverBank Stadium, Jacksonville
+    "KAN00": (39.049, -94.484),  # Arrowhead Stadium, Kansas City
+    "LAX01": (33.953, -118.339),  # SoFi Stadium, Inglewood
+    "LAX97": (33.864, -118.261),  # StubHub Center, Carson
+    "LAX99": (34.014, -118.288),  # Los Angeles Memorial Coliseum
+    "LON00": (51.556, -0.280),  # Wembley Stadium, London
+    "LON01": (51.456, -0.342),  # Twickenham Stadium, London
+    "LON02": (51.604, -0.066),  # Tottenham Hotspur Stadium, London
+    "MAD01": (40.453, -3.688),  # Santiago Bernabeu, Madrid
+    "MEL00": (-37.820, 144.983),  # Melbourne Cricket Ground
+    "MEX00": (19.303, -99.150),  # Estadio Azteca, Mexico City
+    "MIA00": (25.958, -80.239),  # Hard Rock Stadium, Miami Gardens
+    "MIN00": (44.974, -93.258),  # Metrodome, Minneapolis
+    "MIN01": (44.974, -93.258),  # U.S. Bank Stadium, Minneapolis
+    "MIN98": (44.977, -93.225),  # TCF Bank Stadium, Minneapolis
+    "MUN01": (48.219, 11.625),  # FC Bayern Munich Stadium (Allianz Arena), Munich
+    "NAS00": (36.166, -86.771),  # Nissan Stadium, Nashville
+    "NOR00": (29.951, -90.081),  # Superdome, New Orleans
+    "NYC00": (40.812, -74.077),  # Giants Stadium, East Rutherford
+    "NYC01": (40.814, -74.074),  # MetLife Stadium, East Rutherford
+    "OAK00": (37.752, -122.201),  # Oakland Coliseum
+    "PAR00": (48.924, 2.360),  # Stade de France, Saint-Denis
+    "PHI00": (39.901, -75.168),  # Lincoln Financial Field, Philadelphia
+    "PHI99": (39.907, -75.171),  # Veterans Stadium, Philadelphia
+    "PHO00": (33.528, -112.263),  # State Farm Stadium, Glendale
+    "PHO99": (33.426, -111.933),  # Sun Devil Stadium, Tempe
+    "PIT00": (40.447, -80.016),  # Acrisure Stadium, Pittsburgh
+    "PIT99": (40.447, -80.013),  # Three Rivers Stadium, Pittsburgh
+    "RIO00": (-22.912, -43.230),  # Maracana Stadium, Rio de Janeiro
+    "SAN00": (29.417, -98.479),  # Alamodome, San Antonio
+    "SAO00": (-23.545, -46.474),  # Arena Corinthians, Sao Paulo
+    "SDG00": (32.783, -117.120),  # Qualcomm Stadium, San Diego
+    "SEA00": (47.595, -122.332),  # Lumen Field, Seattle
+    "SEA98": (47.595, -122.332),  # Kingdome, Seattle
+    "SEA99": (47.650, -122.302),  # Husky Stadium, Seattle
+    "SFO00": (37.714, -122.386),  # Candlestick Park, San Francisco
+    "SFO01": (37.403, -121.970),  # Levi's Stadium, Santa Clara
+    "STL00": (38.633, -90.188),  # Edward Jones Dome, St. Louis
+    "TAM00": (27.976, -82.503),  # Raymond James Stadium, Tampa
+    "VEG00": (36.091, -115.184),  # Allegiant Stadium, Las Vegas
+    "WAS00": (38.908, -76.864),  # Northwest Stadium, Landover
 }

@@ -132,7 +132,7 @@ def _surface(parser: argparse.ArgumentParser, prefix: str = "") -> list[dict[str
     return actions
 
 
-@pytest.mark.usefixtures("packaged_data_paths")
+@pytest.mark.usefixtures("packaged_data_paths", "packaged_models_path")
 def test_every_entrypoint_parser_matches_the_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     """The flags, defaults and help of every entrypoint equal the committed snapshot."""
     # Act

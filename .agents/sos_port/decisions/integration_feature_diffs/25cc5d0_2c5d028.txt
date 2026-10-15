@@ -1,0 +1,15 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17332 rows before, 17332 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 520 columns before, 541 after
+columns added: ['away_ratings_defense', 'away_ratings_offense', 'away_ratings_qb', 'away_ratings_qb_dropbacks', 'away_ratings_sos', 'away_ratings_special_teams', 'away_ratings_team', 'home_ratings_defense', 'home_ratings_offense', 'home_ratings_qb', 'home_ratings_qb_dropbacks', 'home_ratings_sos', 'home_ratings_special_teams', 'home_ratings_team', 'ratings_defense_diff', 'ratings_offense_diff', 'ratings_qb_diff', 'ratings_qb_dropbacks_diff', 'ratings_sos_diff', 'ratings_special_teams_diff', 'ratings_team_diff']
+columns removed: []
+
+468 published numeric columns are identical before and after

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from nfl_predictor import constants
 from nfl_predictor.cli import options
-from nfl_predictor.ml import floor_sigma, walk_forward
+from nfl_predictor.ml import feature_spec, floor_sigma, walk_forward
 from nfl_predictor.ml.ml_model_xgb_utils import XGB_DEVICE_AUTO, XGB_DEVICE_HELP, xgb_device_arg
 from nfl_predictor.reporting import production_settings, run_comparison
 from nfl_predictor.utils.logger import log
@@ -122,9 +122,12 @@ def _parse_args() -> argparse.Namespace:
         action="store_false",
         dest="include_market",
         help=(
-            "Train with no market feature column (no spread, total or moneyline, raw or "
-            "transformed). With --no-market-anchor and --no-market-transform the run is "
-            "market-free; the market-implied probability is still scored as the yardstick."
+            "Train with no game-line columns (no spread, total or moneyline, raw or "
+            "transformed). With --no-market-anchor and --no-market-transform the run uses no "
+            "game lines; the market-implied probability is still scored as the yardstick. The "
+            "default groups keep the elo group's preseason win-total prior; for no market "
+            "information pass --disable-feature-groups strength,elo,own_elo_wt (keeps the "
+            "market-free own Elo) or strength,elo,own_elo,own_elo_wt (no Elo at all)."
         ),
     )
     parser.add_argument(
@@ -140,7 +143,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Drop trend + season-phase features for ablation comparisons.",
     )
-    options.add_feature_group_option(parser)
+    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
     parser.add_argument(
         "--xgb-tree-method",
         type=str,
@@ -195,7 +198,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint-dir",
         type=Path,
-        default=walk_forward.DEFAULT_CHECKPOINT_DIR,
+        default=walk_forward.default_checkpoint_dir(),
         help=(
             "Root for per-week checkpoints; each run uses a subdirectory named for its "
             "fingerprint (default: models/wf_checkpoints)."
@@ -234,7 +237,8 @@ def _apply_ablations(df: pd.DataFrame, args: argparse.Namespace) -> tuple[pd.Dat
     disabled_groups = options.parse_feature_groups(args.disable_feature_groups)
     group_columns: list[str] = []
     if disabled_groups:
-        group_columns = walk_forward.resolve_feature_group_columns(
+        feature_spec.check_ratings_replace_strength(df, disabled_groups, stop=False)
+        group_columns = feature_spec.resolve_feature_group_columns(
             list(df.columns), disabled_groups
         )
         if group_columns:
@@ -373,7 +377,7 @@ def main() -> None:
         floor_sigma_history=history,
     )
 
-    run_dir = Path(constants.ROOT_DIR) / "models" / run_id
+    run_dir = Path(constants.MODELS_PATH) / run_id
     out_json = args.out_json or (run_dir / "metrics_report.json")
     out_json.parent.mkdir(parents=True, exist_ok=True)
 

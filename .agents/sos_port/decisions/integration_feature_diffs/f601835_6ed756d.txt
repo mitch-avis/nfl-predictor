@@ -1,0 +1,535 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+
+## team_games: columns that differ, by season
+┌──────────────────────────────┬────────┬──────────────┬──────────────┬──────────────┐
+│ column                       ┆ season ┆ rows_changed ┆ total_before ┆ total_after  │
+│ ---                          ┆ ---    ┆ ---          ┆ ---          ┆ ---          │
+│ str                          ┆ i64    ┆ u32          ┆ f64          ┆ f64          │
+╞══════════════════════════════╪════════╪══════════════╪══════════════╪══════════════╡
+│ carries                      ┆ 1999   ┆ 2            ┆ 12671.000000 ┆ 12668.000000 │
+│ carries                      ┆ 2003   ┆ 1            ┆ 13899.000000 ┆ 13898.000000 │
+│ carries                      ┆ 2004   ┆ 1            ┆ 13702.000000 ┆ 13701.000000 │
+│ carries_allowed              ┆ 1999   ┆ 2            ┆ 12671.000000 ┆ 12668.000000 │
+│ carries_allowed              ┆ 2003   ┆ 1            ┆ 13899.000000 ┆ 13898.000000 │
+│ carries_allowed              ┆ 2004   ┆ 1            ┆ 13702.000000 ┆ 13701.000000 │
+│ defensive_snaps              ┆ 1999   ┆ 328          ┆ 30802.000000 ┆ 31620.000000 │
+│ defensive_snaps              ┆ 2000   ┆ 207          ┆ 30719.000000 ┆ 31159.000000 │
+│ defensive_snaps              ┆ 2001   ┆ 170          ┆ 31096.000000 ┆ 31407.000000 │
+│ defensive_snaps              ┆ 2002   ┆ 159          ┆ 32681.000000 ┆ 32951.000000 │
+│ defensive_snaps              ┆ 2003   ┆ 329          ┆ 31839.000000 ┆ 32497.000000 │
+│ defensive_snaps              ┆ 2004   ┆ 339          ┆ 31680.000000 ┆ 32391.000000 │
+│ defensive_snaps              ┆ 2005   ┆ 284          ┆ 31978.000000 ┆ 32510.000000 │
+│ dropbacks                    ┆ 1999   ┆ 329          ┆ 17703.000000 ┆ 18524.000000 │
+│ dropbacks                    ┆ 2000   ┆ 207          ┆ 17667.000000 ┆ 18107.000000 │
+│ dropbacks                    ┆ 2001   ┆ 170          ┆ 17851.000000 ┆ 18162.000000 │
+│ dropbacks                    ┆ 2002   ┆ 159          ┆ 19004.000000 ┆ 19274.000000 │
+│ dropbacks                    ┆ 2003   ┆ 329          ┆ 17514.000000 ┆ 18173.000000 │
+│ dropbacks                    ┆ 2004   ┆ 339          ┆ 17474.000000 ┆ 18185.000000 │
+│ dropbacks                    ┆ 2005   ┆ 284          ┆ 17580.000000 ┆ 18112.000000 │
+│ dropbacks_allowed            ┆ 1999   ┆ 329          ┆ 17703.000000 ┆ 18524.000000 │
+│ dropbacks_allowed            ┆ 2000   ┆ 207          ┆ 17667.000000 ┆ 18107.000000 │
+│ dropbacks_allowed            ┆ 2001   ┆ 170          ┆ 17851.000000 ┆ 18162.000000 │
+│ dropbacks_allowed            ┆ 2002   ┆ 159          ┆ 19004.000000 ┆ 19274.000000 │
+│ dropbacks_allowed            ┆ 2003   ┆ 329          ┆ 17514.000000 ┆ 18173.000000 │
+│ dropbacks_allowed            ┆ 2004   ┆ 339          ┆ 17474.000000 ┆ 18185.000000 │
+│ dropbacks_allowed            ┆ 2005   ┆ 284          ┆ 17580.000000 ┆ 18112.000000 │
+│ early_down_passes            ┆ 1999   ┆ 260          ┆ 12198.000000 ┆ 12776.000000 │
+│ early_down_passes            ┆ 2000   ┆ 168          ┆ 12281.000000 ┆ 12597.000000 │
+│ early_down_passes            ┆ 2001   ┆ 128          ┆ 12344.000000 ┆ 12541.000000 │
+│ early_down_passes            ┆ 2002   ┆ 111          ┆ 13338.000000 ┆ 13508.000000 │
+│ early_down_passes            ┆ 2003   ┆ 265          ┆ 12006.000000 ┆ 12443.000000 │
+│ early_down_passes            ┆ 2004   ┆ 267          ┆ 12151.000000 ┆ 12624.000000 │
+│ early_down_passes            ┆ 2005   ┆ 205          ┆ 12119.000000 ┆ 12433.000000 │
+│ early_down_plays             ┆ 1999   ┆ 260          ┆ 23707.000000 ┆ 24283.000000 │
+│ early_down_plays             ┆ 2000   ┆ 168          ┆ 23736.000000 ┆ 24052.000000 │
+│ early_down_plays             ┆ 2001   ┆ 128          ┆ 23927.000000 ┆ 24124.000000 │
+│ early_down_plays             ┆ 2002   ┆ 111          ┆ 25259.000000 ┆ 25429.000000 │
+│ early_down_plays             ┆ 2003   ┆ 265          ┆ 24582.000000 ┆ 25019.000000 │
+│ early_down_plays             ┆ 2004   ┆ 267          ┆ 24627.000000 ┆ 25100.000000 │
+│ early_down_plays             ┆ 2005   ┆ 205          ┆ 24761.000000 ┆ 25075.000000 │
+│ explosive_pass_allowed_count ┆ 1999   ┆ 25           ┆ 1413.000000  ┆ 1439.000000  │
+│ explosive_pass_allowed_count ┆ 2000   ┆ 12           ┆ 1333.000000  ┆ 1346.000000  │
+│ explosive_pass_allowed_count ┆ 2001   ┆ 7            ┆ 1424.000000  ┆ 1431.000000  │
+│ explosive_pass_allowed_count ┆ 2002   ┆ 11           ┆ 1401.000000  ┆ 1413.000000  │
+│ explosive_pass_allowed_count ┆ 2003   ┆ 18           ┆ 1333.000000  ┆ 1351.000000  │
+│ explosive_pass_allowed_count ┆ 2004   ┆ 20           ┆ 1478.000000  ┆ 1500.000000  │
+│ explosive_pass_allowed_count ┆ 2005   ┆ 13           ┆ 1319.000000  ┆ 1333.000000  │
+│ explosive_pass_count         ┆ 1999   ┆ 25           ┆ 1413.000000  ┆ 1439.000000  │
+│ explosive_pass_count         ┆ 2000   ┆ 12           ┆ 1333.000000  ┆ 1346.000000  │
+│ explosive_pass_count         ┆ 2001   ┆ 7            ┆ 1424.000000  ┆ 1431.000000  │
+│ explosive_pass_count         ┆ 2002   ┆ 11           ┆ 1401.000000  ┆ 1413.000000  │
+│ explosive_pass_count         ┆ 2003   ┆ 18           ┆ 1333.000000  ┆ 1351.000000  │
+│ explosive_pass_count         ┆ 2004   ┆ 20           ┆ 1478.000000  ┆ 1500.000000  │
+│ explosive_pass_count         ┆ 2005   ┆ 13           ┆ 1319.000000  ┆ 1333.000000  │
+│ explosive_rush_allowed_count ┆ 1999   ┆ 2            ┆ 851.000000   ┆ 849.000000   │
+│ explosive_rush_allowed_count ┆ 2004   ┆ 1            ┆ 1005.000000  ┆ 1004.000000  │
+│ explosive_rush_count         ┆ 1999   ┆ 2            ┆ 851.000000   ┆ 849.000000   │
+│ explosive_rush_count         ┆ 2004   ┆ 1            ┆ 1005.000000  ┆ 1004.000000  │
+│ offensive_snaps              ┆ 1999   ┆ 328          ┆ 30802.000000 ┆ 31620.000000 │
+│ offensive_snaps              ┆ 2000   ┆ 207          ┆ 30719.000000 ┆ 31159.000000 │
+│ offensive_snaps              ┆ 2001   ┆ 170          ┆ 31096.000000 ┆ 31407.000000 │
+│ offensive_snaps              ┆ 2002   ┆ 159          ┆ 32681.000000 ┆ 32951.000000 │
+│ offensive_snaps              ┆ 2003   ┆ 329          ┆ 31839.000000 ┆ 32497.000000 │
+│ offensive_snaps              ┆ 2004   ┆ 339          ┆ 31680.000000 ┆ 32391.000000 │
+│ offensive_snaps              ┆ 2005   ┆ 284          ┆ 31978.000000 ┆ 32510.000000 │
+│ pass_epa_allowed_sum         ┆ 1999   ┆ 329          ┆ -343.860800  ┆ -156.478211  │
+│ pass_epa_allowed_sum         ┆ 2000   ┆ 207          ┆ 42.125085    ┆ 201.897760   │
+│ pass_epa_allowed_sum         ┆ 2001   ┆ 170          ┆ -176.478480  ┆ -77.840245   │
+│ pass_epa_allowed_sum         ┆ 2002   ┆ 159          ┆ 46.215964    ┆ 147.989685   │
+│ pass_epa_allowed_sum         ┆ 2003   ┆ 329          ┆ -544.999721  ┆ -345.952024  │
+│ pass_epa_allowed_sum         ┆ 2004   ┆ 339          ┆ 223.509364   ┆ 457.642761   │
+│ pass_epa_allowed_sum         ┆ 2005   ┆ 284          ┆ -81.738939   ┆ 96.057857    │
+│ pass_epa_sum                 ┆ 1999   ┆ 329          ┆ -343.860800  ┆ -156.478211  │
+│ pass_epa_sum                 ┆ 2000   ┆ 207          ┆ 42.125085    ┆ 201.897760   │
+│ pass_epa_sum                 ┆ 2001   ┆ 170          ┆ -176.478480  ┆ -77.840245   │
+│ pass_epa_sum                 ┆ 2002   ┆ 159          ┆ 46.215964    ┆ 147.989685   │
+│ pass_epa_sum                 ┆ 2003   ┆ 329          ┆ -544.999721  ┆ -345.952024  │
+│ pass_epa_sum                 ┆ 2004   ┆ 339          ┆ 223.509364   ┆ 457.642761   │
+│ pass_epa_sum                 ┆ 2005   ┆ 284          ┆ -81.738939   ┆ 96.057857    │
+│ pass_success_allowed_count   ┆ 1999   ┆ 228          ┆ 7319.000000  ┆ 7741.000000  │
+│ pass_success_allowed_count   ┆ 2000   ┆ 143          ┆ 7508.000000  ┆ 7753.000000  │
+│ pass_success_allowed_count   ┆ 2001   ┆ 112          ┆ 7640.000000  ┆ 7808.000000  │
+│ pass_success_allowed_count   ┆ 2002   ┆ 113          ┆ 8359.000000  ┆ 8521.000000  │
+│ pass_success_allowed_count   ┆ 2003   ┆ 229          ┆ 7455.000000  ┆ 7833.000000  │
+│ pass_success_allowed_count   ┆ 2004   ┆ 247          ┆ 7639.000000  ┆ 8039.000000  │
+│ pass_success_allowed_count   ┆ 2005   ┆ 191          ┆ 7649.000000  ┆ 7939.000000  │
+│ pass_success_count           ┆ 1999   ┆ 228          ┆ 7319.000000  ┆ 7741.000000  │
+│ pass_success_count           ┆ 2000   ┆ 143          ┆ 7508.000000  ┆ 7753.000000  │
+│ pass_success_count           ┆ 2001   ┆ 112          ┆ 7640.000000  ┆ 7808.000000  │
+│ pass_success_count           ┆ 2002   ┆ 113          ┆ 8359.000000  ┆ 8521.000000  │
+│ pass_success_count           ┆ 2003   ┆ 229          ┆ 7455.000000  ┆ 7833.000000  │
+│ pass_success_count           ┆ 2004   ┆ 247          ┆ 7639.000000  ┆ 8039.000000  │
+│ pass_success_count           ┆ 2005   ┆ 191          ┆ 7649.000000  ┆ 7939.000000  │
+│ rush_epa_allowed_sum         ┆ 1999   ┆ 2            ┆ -1754.053977 ┆ -1757.138367 │
+│ rush_epa_allowed_sum         ┆ 2003   ┆ 1            ┆ -1097.085692 ┆ -1095.729732 │
+│ rush_epa_allowed_sum         ┆ 2004   ┆ 1            ┆ -1197.092006 ┆ -1197.955273 │
+│ rush_epa_sum                 ┆ 1999   ┆ 2            ┆ -1754.053977 ┆ -1757.138367 │
+│ rush_epa_sum                 ┆ 2003   ┆ 1            ┆ -1097.085692 ┆ -1095.729732 │
+│ rush_epa_sum                 ┆ 2004   ┆ 1            ┆ -1197.092006 ┆ -1197.955273 │
+│ rush_success_allowed_count   ┆ 1999   ┆ 2            ┆ 4435.000000  ┆ 4432.000000  │
+│ rush_success_allowed_count   ┆ 2004   ┆ 1            ┆ 5355.000000  ┆ 5354.000000  │
+│ rush_success_count           ┆ 1999   ┆ 2            ┆ 4435.000000  ┆ 4432.000000  │
+│ rush_success_count           ┆ 2004   ┆ 1            ┆ 5355.000000  ┆ 5354.000000  │
+└──────────────────────────────┴────────┴──────────────┴──────────────┴──────────────┘
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17142 rows before, 17142 after; 0 only before, 0 only after; columns added [], removed []
+
+## qb_games: columns that differ, by season
+┌────────────┬────────┬──────────────┬──────────────┬──────────────┐
+│ column     ┆ season ┆ rows_changed ┆ total_before ┆ total_after  │
+│ ---        ┆ ---    ┆ ---          ┆ ---          ┆ ---          │
+│ str        ┆ i64    ┆ u32          ┆ f64          ┆ f64          │
+╞════════════╪════════╪══════════════╪══════════════╪══════════════╡
+│ dropbacks  ┆ 1999   ┆ 329          ┆ 17703.000000 ┆ 18524.000000 │
+│ dropbacks  ┆ 2000   ┆ 207          ┆ 17667.000000 ┆ 18107.000000 │
+│ dropbacks  ┆ 2001   ┆ 170          ┆ 17851.000000 ┆ 18162.000000 │
+│ dropbacks  ┆ 2002   ┆ 159          ┆ 19004.000000 ┆ 19274.000000 │
+│ dropbacks  ┆ 2003   ┆ 329          ┆ 17514.000000 ┆ 18173.000000 │
+│ dropbacks  ┆ 2004   ┆ 339          ┆ 17474.000000 ┆ 18185.000000 │
+│ dropbacks  ┆ 2005   ┆ 284          ┆ 17580.000000 ┆ 18112.000000 │
+│ qb_epa_sum ┆ 1999   ┆ 329          ┆ -76.962435   ┆ 110.420154   │
+│ qb_epa_sum ┆ 2000   ┆ 207          ┆ 374.879024   ┆ 534.651699   │
+│ qb_epa_sum ┆ 2001   ┆ 170          ┆ 124.221125   ┆ 222.859360   │
+│ qb_epa_sum ┆ 2002   ┆ 159          ┆ 437.800387   ┆ 539.574108   │
+│ qb_epa_sum ┆ 2003   ┆ 329          ┆ -295.467083  ┆ -96.419386   │
+│ qb_epa_sum ┆ 2004   ┆ 339          ┆ 562.200294   ┆ 796.333691   │
+│ qb_epa_sum ┆ 2005   ┆ 284          ┆ 232.524660   ┆ 410.321456   │
+└────────────┴────────┴──────────────┴──────────────┴──────────────┘
+
+# published game columns: 7261 games before, 7261 after; 513 columns before, 513 after
+columns added: []
+columns removed: []
+
+## published stats that moved (all seasons)
+┌───────────────────────────────┬───────────────┬──────────────┬─────────────┬────────────────┐
+│ stat                          ┆ games_changed ┆ first_season ┆ last_season ┆ max_abs_change │
+│ ---                           ┆ ---           ┆ ---          ┆ ---         ┆ ---            │
+│ str                           ┆ u32           ┆ i32          ┆ i32         ┆ f64            │
+╞═══════════════════════════════╪═══════════════╪══════════════╪═════════════╪════════════════╡
+│ adj_def_pass_epa_snap         ┆ 2097          ┆ 1999         ┆ 2006        ┆ 0.015874       │
+│ adj_def_rush_epa_snap         ┆ 2097          ┆ 1999         ┆ 2006        ┆ 0.002294       │
+│ adj_off_pass_epa_snap         ┆ 2097          ┆ 1999         ┆ 2006        ┆ 0.025351       │
+│ adj_off_rush_epa_snap         ┆ 2097          ┆ 1999         ┆ 2006        ┆ 0.003705       │
+│ adj_strength_composite        ┆ 2097          ┆ 1999         ┆ 2006        ┆ 0.273678       │
+│ def_pass_epa_allowed_per_snap ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.060332       │
+│ def_rush_epa_allowed_per_snap ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.012726       │
+│ defensive_snaps               ┆ 2092          ┆ 1999         ┆ 2006        ┆ 13.000000      │
+│ early_down_pass_rate          ┆ 2087          ┆ 1999         ┆ 2006        ┆ 0.071340       │
+│ epa_margin_per_play           ┆ 2097          ┆ 1999         ┆ 2006        ┆ 0.073381       │
+│ epa_per_carry                 ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.093302       │
+│ epa_per_carry_allowed         ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.093302       │
+│ epa_per_dropback              ┆ 2094          ┆ 1999         ┆ 2006        ┆ 0.170395       │
+│ epa_per_dropback_allowed      ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.134800       │
+│ explosive_pass_rate           ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.023148       │
+│ explosive_pass_rate_allowed   ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.015152       │
+│ explosive_rush_rate           ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.041667       │
+│ explosive_rush_rate_allowed   ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.041667       │
+│ off_pass_epa_per_snap         ┆ 2094          ┆ 1999         ┆ 2006        ┆ 0.071551       │
+│ off_rush_epa_per_snap         ┆ 2094          ┆ 1999         ┆ 2006        ┆ 0.012726       │
+│ offensive_snaps               ┆ 2094          ┆ 1999         ┆ 2006        ┆ 13.000000      │
+│ pass_success_rate             ┆ 2094          ┆ 1999         ┆ 2006        ┆ 0.070327       │
+│ pass_success_rate_allowed     ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.077389       │
+│ qb_dropback_epa               ┆ 7261          ┆ 1999         ┆ 2025        ┆ 0.056678       │
+│ qb_dropback_epa_recent        ┆ 7261          ┆ 1999         ┆ 2025        ┆ 0.107669       │
+│ qb_history_dropbacks          ┆ 4098          ┆ 1999         ┆ 2022        ┆ 188.000000     │
+│ qb_sack_rate                  ┆ 7261          ┆ 1999         ┆ 2025        ┆ 0.008130       │
+│ rush_success_rate             ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.090278       │
+│ rush_success_rate_allowed     ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.090278       │
+│ sos_played_adj                ┆ 1987          ┆ 1999         ┆ 2006        ┆ 0.203400       │
+│ sos_played_raw                ┆ 1624          ┆ 1999         ┆ 2005        ┆ 0.041375       │
+│ sos_remaining_adj             ┆ 2009          ┆ 1999         ┆ 2006        ┆ 0.194349       │
+│ stuffed_rush_rate             ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.041667       │
+│ stuffed_rush_rate_allowed     ┆ 830           ┆ 1999         ┆ 2005        ┆ 0.041667       │
+│ success_rate                  ┆ 2094          ┆ 1999         ┆ 2006        ┆ 0.036385       │
+│ success_rate_allowed          ┆ 2092          ┆ 1999         ┆ 2006        ┆ 0.037373       │
+└───────────────────────────────┴───────────────┴──────────────┴─────────────┴────────────────┘
+
+## published stats that moved, by season
+┌───────────────────────────────┬────────┬───────────────┬──────────────┬────────────────┬─────────────────┐
+│ stat                          ┆ season ┆ games_changed ┆ null_changed ┆ max_abs_change ┆ mean_abs_change │
+│ ---                           ┆ ---    ┆ ---           ┆ ---          ┆ ---            ┆ ---             │
+│ str                           ┆ i32    ┆ u32           ┆ u32          ┆ f64            ┆ f64             │
+╞═══════════════════════════════╪════════╪═══════════════╪══════════════╪════════════════╪═════════════════╡
+│ adj_def_pass_epa_snap         ┆ 1999   ┆ 244           ┆ 0            ┆ 0.015874       ┆ 0.004671        │
+│ adj_def_pass_epa_snap         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.009844       ┆ 0.003079        │
+│ adj_def_pass_epa_snap         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.009873       ┆ 0.002687        │
+│ adj_def_pass_epa_snap         ┆ 2002   ┆ 267           ┆ 0            ┆ 0.007068       ┆ 0.002083        │
+│ adj_def_pass_epa_snap         ┆ 2003   ┆ 267           ┆ 0            ┆ 0.009666       ┆ 0.002943        │
+│ adj_def_pass_epa_snap         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.009186       ┆ 0.003156        │
+│ adj_def_pass_epa_snap         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.009593       ┆ 0.002813        │
+│ adj_def_pass_epa_snap         ┆ 2006   ┆ 267           ┆ 0            ┆ 0.008823       ┆ 0.001325        │
+│ adj_def_rush_epa_snap         ┆ 1999   ┆ 244           ┆ 0            ┆ 0.002294       ┆ 0.000678        │
+│ adj_def_rush_epa_snap         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.001309       ┆ 0.000399        │
+│ adj_def_rush_epa_snap         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.001485       ┆ 0.000429        │
+│ adj_def_rush_epa_snap         ┆ 2002   ┆ 267           ┆ 0            ┆ 0.001429       ┆ 0.000295        │
+│ adj_def_rush_epa_snap         ┆ 2003   ┆ 267           ┆ 0            ┆ 0.001398       ┆ 0.000392        │
+│ adj_def_rush_epa_snap         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.001342       ┆ 0.000486        │
+│ adj_def_rush_epa_snap         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001282       ┆ 0.000374        │
+│ adj_def_rush_epa_snap         ┆ 2006   ┆ 267           ┆ 0            ┆ 0.000909       ┆ 0.000171        │
+│ adj_off_pass_epa_snap         ┆ 1999   ┆ 244           ┆ 0            ┆ 0.020743       ┆ 0.005738        │
+│ adj_off_pass_epa_snap         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.012291       ┆ 0.003616        │
+│ adj_off_pass_epa_snap         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.009496       ┆ 0.002078        │
+│ adj_off_pass_epa_snap         ┆ 2002   ┆ 267           ┆ 0            ┆ 0.009938       ┆ 0.002682        │
+│ adj_off_pass_epa_snap         ┆ 2003   ┆ 267           ┆ 0            ┆ 0.012410       ┆ 0.003493        │
+│ adj_off_pass_epa_snap         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.025351       ┆ 0.004036        │
+│ adj_off_pass_epa_snap         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.020963       ┆ 0.004271        │
+│ adj_off_pass_epa_snap         ┆ 2006   ┆ 267           ┆ 0            ┆ 0.007909       ┆ 0.001428        │
+│ adj_off_rush_epa_snap         ┆ 1999   ┆ 244           ┆ 0            ┆ 0.003705       ┆ 0.000861        │
+│ adj_off_rush_epa_snap         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.001831       ┆ 0.000469        │
+│ adj_off_rush_epa_snap         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.000974       ┆ 0.000336        │
+│ adj_off_rush_epa_snap         ┆ 2002   ┆ 267           ┆ 0            ┆ 0.000898       ┆ 0.000255        │
+│ adj_off_rush_epa_snap         ┆ 2003   ┆ 267           ┆ 0            ┆ 0.001895       ┆ 0.000419        │
+│ adj_off_rush_epa_snap         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.001958       ┆ 0.000595        │
+│ adj_off_rush_epa_snap         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001529       ┆ 0.000476        │
+│ adj_off_rush_epa_snap         ┆ 2006   ┆ 267           ┆ 0            ┆ 0.000892       ┆ 0.000188        │
+│ adj_strength_composite        ┆ 1999   ┆ 244           ┆ 0            ┆ 0.227314       ┆ 0.067450        │
+│ adj_strength_composite        ┆ 2000   ┆ 259           ┆ 0            ┆ 0.171591       ┆ 0.053016        │
+│ adj_strength_composite        ┆ 2001   ┆ 259           ┆ 0            ┆ 0.181341       ┆ 0.040756        │
+│ adj_strength_composite        ┆ 2002   ┆ 267           ┆ 0            ┆ 0.165563       ┆ 0.042089        │
+│ adj_strength_composite        ┆ 2003   ┆ 267           ┆ 0            ┆ 0.177501       ┆ 0.059113        │
+│ adj_strength_composite        ┆ 2004   ┆ 267           ┆ 0            ┆ 0.238390       ┆ 0.060221        │
+│ adj_strength_composite        ┆ 2005   ┆ 267           ┆ 0            ┆ 0.273678       ┆ 0.057461        │
+│ adj_strength_composite        ┆ 2006   ┆ 267           ┆ 0            ┆ 0.169913       ┆ 0.028079        │
+│ def_pass_epa_allowed_per_snap ┆ 1999   ┆ 239           ┆ 0            ┆ 0.060332       ┆ 0.014401        │
+│ def_pass_epa_allowed_per_snap ┆ 2000   ┆ 259           ┆ 0            ┆ 0.021880       ┆ 0.007785        │
+│ def_pass_epa_allowed_per_snap ┆ 2001   ┆ 259           ┆ 0            ┆ 0.027216       ┆ 0.007418        │
+│ def_pass_epa_allowed_per_snap ┆ 2002   ┆ 267           ┆ 0            ┆ 0.015368       ┆ 0.005298        │
+│ def_pass_epa_allowed_per_snap ┆ 2003   ┆ 267           ┆ 0            ┆ 0.026413       ┆ 0.008384        │
+│ def_pass_epa_allowed_per_snap ┆ 2004   ┆ 267           ┆ 0            ┆ 0.024790       ┆ 0.009863        │
+│ def_pass_epa_allowed_per_snap ┆ 2005   ┆ 267           ┆ 0            ┆ 0.033693       ┆ 0.009028        │
+│ def_pass_epa_allowed_per_snap ┆ 2006   ┆ 267           ┆ 0            ┆ 0.013377       ┆ 0.003205        │
+│ def_rush_epa_allowed_per_snap ┆ 1999   ┆ 239           ┆ 0            ┆ 0.012726       ┆ 0.002804        │
+│ def_rush_epa_allowed_per_snap ┆ 2000   ┆ 259           ┆ 0            ┆ 0.004578       ┆ 0.001384        │
+│ def_rush_epa_allowed_per_snap ┆ 2001   ┆ 259           ┆ 0            ┆ 0.004226       ┆ 0.001051        │
+│ def_rush_epa_allowed_per_snap ┆ 2002   ┆ 267           ┆ 0            ┆ 0.001647       ┆ 0.000542        │
+│ def_rush_epa_allowed_per_snap ┆ 2003   ┆ 267           ┆ 0            ┆ 0.003751       ┆ 0.000824        │
+│ def_rush_epa_allowed_per_snap ┆ 2004   ┆ 267           ┆ 0            ┆ 0.002898       ┆ 0.001164        │
+│ def_rush_epa_allowed_per_snap ┆ 2005   ┆ 267           ┆ 0            ┆ 0.003305       ┆ 0.001051        │
+│ def_rush_epa_allowed_per_snap ┆ 2006   ┆ 267           ┆ 0            ┆ 0.001593       ┆ 0.000407        │
+│ defensive_snaps               ┆ 1999   ┆ 239           ┆ 0            ┆ 13.000000      ┆ 2.238508        │
+│ defensive_snaps               ┆ 2000   ┆ 259           ┆ 0            ┆ 2.689759       ┆ 1.421734        │
+│ defensive_snaps               ┆ 2001   ┆ 259           ┆ 0            ┆ 2.115402       ┆ 1.010430        │
+│ defensive_snaps               ┆ 2002   ┆ 267           ┆ 0            ┆ 1.667204       ┆ 0.737939        │
+│ defensive_snaps               ┆ 2003   ┆ 267           ┆ 0            ┆ 2.129557       ┆ 1.093012        │
+│ defensive_snaps               ┆ 2004   ┆ 267           ┆ 0            ┆ 2.521354       ┆ 1.522521        │
+│ defensive_snaps               ┆ 2005   ┆ 267           ┆ 0            ┆ 2.335612       ┆ 1.346473        │
+│ defensive_snaps               ┆ 2006   ┆ 267           ┆ 0            ┆ 1.471354       ┆ 0.483387        │
+│ early_down_pass_rate          ┆ 1999   ┆ 234           ┆ 0            ┆ 0.071340       ┆ 0.018273        │
+│ early_down_pass_rate          ┆ 2000   ┆ 259           ┆ 0            ┆ 0.023456       ┆ 0.010939        │
+│ early_down_pass_rate          ┆ 2001   ┆ 259           ┆ 0            ┆ 0.019310       ┆ 0.006807        │
+│ early_down_pass_rate          ┆ 2002   ┆ 267           ┆ 0            ┆ 0.013436       ┆ 0.005101        │
+│ early_down_pass_rate          ┆ 2003   ┆ 267           ┆ 0            ┆ 0.019570       ┆ 0.008524        │
+│ early_down_pass_rate          ┆ 2004   ┆ 267           ┆ 0            ┆ 0.043713       ┆ 0.012779        │
+│ early_down_pass_rate          ┆ 2005   ┆ 267           ┆ 0            ┆ 0.031479       ┆ 0.010031        │
+│ early_down_pass_rate          ┆ 2006   ┆ 267           ┆ 0            ┆ 0.013127       ┆ 0.003322        │
+│ epa_margin_per_play           ┆ 1999   ┆ 244           ┆ 0            ┆ 0.073381       ┆ 0.020905        │
+│ epa_margin_per_play           ┆ 2000   ┆ 259           ┆ 0            ┆ 0.030547       ┆ 0.009857        │
+│ epa_margin_per_play           ┆ 2001   ┆ 259           ┆ 0            ┆ 0.028382       ┆ 0.007166        │
+│ epa_margin_per_play           ┆ 2002   ┆ 267           ┆ 0            ┆ 0.027587       ┆ 0.007118        │
+│ epa_margin_per_play           ┆ 2003   ┆ 267           ┆ 0            ┆ 0.031003       ┆ 0.011201        │
+│ epa_margin_per_play           ┆ 2004   ┆ 267           ┆ 0            ┆ 0.050480       ┆ 0.011654        │
+│ epa_margin_per_play           ┆ 2005   ┆ 267           ┆ 0            ┆ 0.055793       ┆ 0.010779        │
+│ epa_margin_per_play           ┆ 2006   ┆ 267           ┆ 0            ┆ 0.015469       ┆ 0.003001        │
+│ epa_per_carry                 ┆ 1999   ┆ 23            ┆ 0            ┆ 0.093302       ┆ 0.011327        │
+│ epa_per_carry                 ┆ 2000   ┆ 259           ┆ 0            ┆ 0.003759       ┆ 0.000176        │
+│ epa_per_carry                 ┆ 2003   ┆ 14            ┆ 0            ┆ 0.007612       ┆ 0.004147        │
+│ epa_per_carry                 ┆ 2004   ┆ 267           ┆ 0            ┆ 0.004566       ┆ 0.000191        │
+│ epa_per_carry                 ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001448       ┆ 0.000048        │
+│ epa_per_carry_allowed         ┆ 1999   ┆ 23            ┆ 0            ┆ 0.093302       ┆ 0.013202        │
+│ epa_per_carry_allowed         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.003719       ┆ 0.000193        │
+│ epa_per_carry_allowed         ┆ 2003   ┆ 14            ┆ 0            ┆ 0.008154       ┆ 0.004287        │
+│ epa_per_carry_allowed         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.004453       ┆ 0.000208        │
+│ epa_per_carry_allowed         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001647       ┆ 0.000045        │
+│ epa_per_dropback              ┆ 1999   ┆ 241           ┆ 0            ┆ 0.170395       ┆ 0.030478        │
+│ epa_per_dropback              ┆ 2000   ┆ 259           ┆ 0            ┆ 0.050286       ┆ 0.014689        │
+│ epa_per_dropback              ┆ 2001   ┆ 259           ┆ 0            ┆ 0.034779       ┆ 0.011119        │
+│ epa_per_dropback              ┆ 2002   ┆ 267           ┆ 0            ┆ 0.052865       ┆ 0.010540        │
+│ epa_per_dropback              ┆ 2003   ┆ 267           ┆ 0            ┆ 0.049292       ┆ 0.014128        │
+│ epa_per_dropback              ┆ 2004   ┆ 267           ┆ 0            ┆ 0.115451       ┆ 0.020334        │
+│ epa_per_dropback              ┆ 2005   ┆ 267           ┆ 0            ┆ 0.104687       ┆ 0.019729        │
+│ epa_per_dropback              ┆ 2006   ┆ 267           ┆ 0            ┆ 0.028281       ┆ 0.005900        │
+│ epa_per_dropback_allowed      ┆ 1999   ┆ 239           ┆ 0            ┆ 0.134800       ┆ 0.025630        │
+│ epa_per_dropback_allowed      ┆ 2000   ┆ 259           ┆ 0            ┆ 0.037563       ┆ 0.013242        │
+│ epa_per_dropback_allowed      ┆ 2001   ┆ 259           ┆ 0            ┆ 0.046204       ┆ 0.012604        │
+│ epa_per_dropback_allowed      ┆ 2002   ┆ 267           ┆ 0            ┆ 0.025402       ┆ 0.009075        │
+│ epa_per_dropback_allowed      ┆ 2003   ┆ 267           ┆ 0            ┆ 0.045236       ┆ 0.014985        │
+│ epa_per_dropback_allowed      ┆ 2004   ┆ 267           ┆ 0            ┆ 0.045070       ┆ 0.017732        │
+│ epa_per_dropback_allowed      ┆ 2005   ┆ 267           ┆ 0            ┆ 0.069553       ┆ 0.016292        │
+│ epa_per_dropback_allowed      ┆ 2006   ┆ 267           ┆ 0            ┆ 0.024021       ┆ 0.005915        │
+│ explosive_pass_rate           ┆ 1999   ┆ 239           ┆ 0            ┆ 0.023148       ┆ 0.004284        │
+│ explosive_pass_rate           ┆ 2000   ┆ 259           ┆ 0            ┆ 0.008238       ┆ 0.002646        │
+│ explosive_pass_rate           ┆ 2001   ┆ 259           ┆ 0            ┆ 0.006093       ┆ 0.002010        │
+│ explosive_pass_rate           ┆ 2002   ┆ 267           ┆ 0            ┆ 0.004017       ┆ 0.001431        │
+│ explosive_pass_rate           ┆ 2003   ┆ 267           ┆ 0            ┆ 0.006957       ┆ 0.002051        │
+│ explosive_pass_rate           ┆ 2004   ┆ 267           ┆ 0            ┆ 0.009272       ┆ 0.003166        │
+│ explosive_pass_rate           ┆ 2005   ┆ 267           ┆ 0            ┆ 0.014258       ┆ 0.002670        │
+│ explosive_pass_rate           ┆ 2006   ┆ 267           ┆ 0            ┆ 0.003144       ┆ 0.000881        │
+│ explosive_pass_rate_allowed   ┆ 1999   ┆ 239           ┆ 0            ┆ 0.015152       ┆ 0.004002        │
+│ explosive_pass_rate_allowed   ┆ 2000   ┆ 259           ┆ 0            ┆ 0.005684       ┆ 0.002268        │
+│ explosive_pass_rate_allowed   ┆ 2001   ┆ 259           ┆ 0            ┆ 0.004851       ┆ 0.001772        │
+│ explosive_pass_rate_allowed   ┆ 2002   ┆ 267           ┆ 0            ┆ 0.006853       ┆ 0.001626        │
+│ explosive_pass_rate_allowed   ┆ 2003   ┆ 267           ┆ 0            ┆ 0.006460       ┆ 0.002046        │
+│ explosive_pass_rate_allowed   ┆ 2004   ┆ 267           ┆ 0            ┆ 0.006098       ┆ 0.002940        │
+│ explosive_pass_rate_allowed   ┆ 2005   ┆ 267           ┆ 0            ┆ 0.009322       ┆ 0.002743        │
+│ explosive_pass_rate_allowed   ┆ 2006   ┆ 267           ┆ 0            ┆ 0.005109       ┆ 0.000942        │
+│ explosive_rush_rate           ┆ 1999   ┆ 23            ┆ 0            ┆ 0.041667       ┆ 0.006444        │
+│ explosive_rush_rate           ┆ 2000   ┆ 259           ┆ 0            ┆ 0.001458       ┆ 0.000095        │
+│ explosive_rush_rate           ┆ 2003   ┆ 14            ┆ 0            ┆ 0.000433       ┆ 0.000264        │
+│ explosive_rush_rate           ┆ 2004   ┆ 267           ┆ 0            ┆ 0.004261       ┆ 0.000120        │
+│ explosive_rush_rate           ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001350       ┆ 0.000044        │
+│ explosive_rush_rate_allowed   ┆ 1999   ┆ 23            ┆ 0            ┆ 0.041667       ┆ 0.006877        │
+│ explosive_rush_rate_allowed   ┆ 2000   ┆ 259           ┆ 0            ┆ 0.001673       ┆ 0.000101        │
+│ explosive_rush_rate_allowed   ┆ 2003   ┆ 14            ┆ 0            ┆ 0.000473       ┆ 0.000246        │
+│ explosive_rush_rate_allowed   ┆ 2004   ┆ 267           ┆ 0            ┆ 0.004270       ┆ 0.000140        │
+│ explosive_rush_rate_allowed   ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001515       ┆ 0.000044        │
+│ off_pass_epa_per_snap         ┆ 1999   ┆ 241           ┆ 0            ┆ 0.071551       ┆ 0.016468        │
+│ off_pass_epa_per_snap         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.029026       ┆ 0.008377        │
+│ off_pass_epa_per_snap         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.022455       ┆ 0.006564        │
+│ off_pass_epa_per_snap         ┆ 2002   ┆ 267           ┆ 0            ┆ 0.022203       ┆ 0.006056        │
+│ off_pass_epa_per_snap         ┆ 2003   ┆ 267           ┆ 0            ┆ 0.027989       ┆ 0.008050        │
+│ off_pass_epa_per_snap         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.053126       ┆ 0.010486        │
+│ off_pass_epa_per_snap         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.049744       ┆ 0.010513        │
+│ off_pass_epa_per_snap         ┆ 2006   ┆ 267           ┆ 0            ┆ 0.014137       ┆ 0.003201        │
+│ off_rush_epa_per_snap         ┆ 1999   ┆ 241           ┆ 0            ┆ 0.012726       ┆ 0.002522        │
+│ off_rush_epa_per_snap         ┆ 2000   ┆ 259           ┆ 0            ┆ 0.004299       ┆ 0.001355        │
+│ off_rush_epa_per_snap         ┆ 2001   ┆ 259           ┆ 0            ┆ 0.002370       ┆ 0.000896        │
+│ off_rush_epa_per_snap         ┆ 2002   ┆ 267           ┆ 0            ┆ 0.004151       ┆ 0.000615        │
+│ off_rush_epa_per_snap         ┆ 2003   ┆ 267           ┆ 0            ┆ 0.004739       ┆ 0.000877        │
+│ off_rush_epa_per_snap         ┆ 2004   ┆ 267           ┆ 0            ┆ 0.003736       ┆ 0.001352        │
+│ off_rush_epa_per_snap         ┆ 2005   ┆ 267           ┆ 0            ┆ 0.003242       ┆ 0.001233        │
+│ off_rush_epa_per_snap         ┆ 2006   ┆ 267           ┆ 0            ┆ 0.001642       ┆ 0.000431        │
+│ offensive_snaps               ┆ 1999   ┆ 241           ┆ 0            ┆ 13.000000      ┆ 2.343694        │
+│ offensive_snaps               ┆ 2000   ┆ 259           ┆ 0            ┆ 3.468623       ┆ 1.515551        │
+│ offensive_snaps               ┆ 2001   ┆ 259           ┆ 0            ┆ 2.782069       ┆ 1.045531        │
+│ offensive_snaps               ┆ 2002   ┆ 267           ┆ 0            ┆ 1.708669       ┆ 0.797085        │
+│ offensive_snaps               ┆ 2003   ┆ 267           ┆ 0            ┆ 2.622396       ┆ 1.238666        │
+│ offensive_snaps               ┆ 2004   ┆ 267           ┆ 0            ┆ 4.690430       ┆ 1.754838        │
+│ offensive_snaps               ┆ 2005   ┆ 267           ┆ 0            ┆ 3.879557       ┆ 1.503385        │
+│ offensive_snaps               ┆ 2006   ┆ 267           ┆ 0            ┆ 2.263021       ┆ 0.523004        │
+│ pass_success_rate             ┆ 1999   ┆ 241           ┆ 0            ┆ 0.070327       ┆ 0.013113        │
+│ pass_success_rate             ┆ 2000   ┆ 259           ┆ 0            ┆ 0.023396       ┆ 0.006403        │
+│ pass_success_rate             ┆ 2001   ┆ 259           ┆ 0            ┆ 0.014702       ┆ 0.004917        │
+│ pass_success_rate             ┆ 2002   ┆ 267           ┆ 0            ┆ 0.024631       ┆ 0.004812        │
+│ pass_success_rate             ┆ 2003   ┆ 267           ┆ 0            ┆ 0.022642       ┆ 0.006749        │
+│ pass_success_rate             ┆ 2004   ┆ 267           ┆ 0            ┆ 0.041790       ┆ 0.008807        │
+│ pass_success_rate             ┆ 2005   ┆ 267           ┆ 0            ┆ 0.041137       ┆ 0.008542        │
+│ pass_success_rate             ┆ 2006   ┆ 267           ┆ 0            ┆ 0.014887       ┆ 0.002390        │
+│ pass_success_rate_allowed     ┆ 1999   ┆ 239           ┆ 0            ┆ 0.077389       ┆ 0.012618        │
+│ pass_success_rate_allowed     ┆ 2000   ┆ 259           ┆ 0            ┆ 0.019490       ┆ 0.005647        │
+│ pass_success_rate_allowed     ┆ 2001   ┆ 259           ┆ 0            ┆ 0.018364       ┆ 0.005286        │
+│ pass_success_rate_allowed     ┆ 2002   ┆ 267           ┆ 0            ┆ 0.020499       ┆ 0.004103        │
+│ pass_success_rate_allowed     ┆ 2003   ┆ 267           ┆ 0            ┆ 0.021259       ┆ 0.006382        │
+│ pass_success_rate_allowed     ┆ 2004   ┆ 267           ┆ 0            ┆ 0.019283       ┆ 0.007800        │
+│ pass_success_rate_allowed     ┆ 2005   ┆ 267           ┆ 0            ┆ 0.023884       ┆ 0.006676        │
+│ pass_success_rate_allowed     ┆ 2006   ┆ 267           ┆ 0            ┆ 0.009231       ┆ 0.002291        │
+│ qb_dropback_epa               ┆ 1999   ┆ 244           ┆ 0            ┆ 0.040293       ┆ 0.015648        │
+│ qb_dropback_epa               ┆ 2000   ┆ 259           ┆ 0            ┆ 0.033769       ┆ 0.013854        │
+│ qb_dropback_epa               ┆ 2001   ┆ 259           ┆ 0            ┆ 0.025034       ┆ 0.012324        │
+│ qb_dropback_epa               ┆ 2002   ┆ 267           ┆ 0            ┆ 0.023496       ┆ 0.010482        │
+│ qb_dropback_epa               ┆ 2003   ┆ 267           ┆ 0            ┆ 0.025102       ┆ 0.010411        │
+│ qb_dropback_epa               ┆ 2004   ┆ 267           ┆ 0            ┆ 0.048287       ┆ 0.012473        │
+│ qb_dropback_epa               ┆ 2005   ┆ 267           ┆ 0            ┆ 0.056678       ┆ 0.014221        │
+│ qb_dropback_epa               ┆ 2006   ┆ 267           ┆ 0            ┆ 0.046381       ┆ 0.012217        │
+│ qb_dropback_epa               ┆ 2007   ┆ 267           ┆ 0            ┆ 0.025083       ┆ 0.008210        │
+│ qb_dropback_epa               ┆ 2008   ┆ 267           ┆ 0            ┆ 0.015370       ┆ 0.005996        │
+│ qb_dropback_epa               ┆ 2009   ┆ 267           ┆ 0            ┆ 0.014698       ┆ 0.004382        │
+│ qb_dropback_epa               ┆ 2010   ┆ 267           ┆ 0            ┆ 0.036390       ┆ 0.004812        │
+│ qb_dropback_epa               ┆ 2011   ┆ 267           ┆ 0            ┆ 0.029012       ┆ 0.004068        │
+│ qb_dropback_epa               ┆ 2012   ┆ 267           ┆ 0            ┆ 0.023589       ┆ 0.002995        │
+│ qb_dropback_epa               ┆ 2013   ┆ 267           ┆ 0            ┆ 0.021082       ┆ 0.002628        │
+│ qb_dropback_epa               ┆ 2014   ┆ 267           ┆ 0            ┆ 0.020823       ┆ 0.002344        │
+│ qb_dropback_epa               ┆ 2015   ┆ 267           ┆ 0            ┆ 0.019770       ┆ 0.002011        │
+│ qb_dropback_epa               ┆ 2016   ┆ 267           ┆ 0            ┆ 0.010781       ┆ 0.001472        │
+│ qb_dropback_epa               ┆ 2017   ┆ 267           ┆ 0            ┆ 0.010226       ┆ 0.001660        │
+│ qb_dropback_epa               ┆ 2018   ┆ 267           ┆ 0            ┆ 0.009026       ┆ 0.001309        │
+│ qb_dropback_epa               ┆ 2019   ┆ 267           ┆ 0            ┆ 0.002916       ┆ 0.001080        │
+│ qb_dropback_epa               ┆ 2020   ┆ 269           ┆ 0            ┆ 0.002610       ┆ 0.000927        │
+│ qb_dropback_epa               ┆ 2021   ┆ 285           ┆ 0            ┆ 0.002420       ┆ 0.000938        │
+│ qb_dropback_epa               ┆ 2022   ┆ 284           ┆ 0            ┆ 0.002294       ┆ 0.000739        │
+│ qb_dropback_epa               ┆ 2023   ┆ 285           ┆ 0            ┆ 0.002200       ┆ 0.000847        │
+│ qb_dropback_epa               ┆ 2024   ┆ 285           ┆ 0            ┆ 0.002113       ┆ 0.000659        │
+│ qb_dropback_epa               ┆ 2025   ┆ 285           ┆ 0            ┆ 0.002020       ┆ 0.000633        │
+│ qb_dropback_epa_recent        ┆ 1999   ┆ 244           ┆ 0            ┆ 0.057271       ┆ 0.019419        │
+│ qb_dropback_epa_recent        ┆ 2000   ┆ 259           ┆ 0            ┆ 0.040927       ┆ 0.014676        │
+│ qb_dropback_epa_recent        ┆ 2001   ┆ 259           ┆ 0            ┆ 0.034006       ┆ 0.012842        │
+│ qb_dropback_epa_recent        ┆ 2002   ┆ 267           ┆ 0            ┆ 0.035620       ┆ 0.010680        │
+│ qb_dropback_epa_recent        ┆ 2003   ┆ 267           ┆ 0            ┆ 0.037528       ┆ 0.013590        │
+│ qb_dropback_epa_recent        ┆ 2004   ┆ 267           ┆ 0            ┆ 0.104433       ┆ 0.017056        │
+│ qb_dropback_epa_recent        ┆ 2005   ┆ 267           ┆ 0            ┆ 0.107669       ┆ 0.017972        │
+│ qb_dropback_epa_recent        ┆ 2006   ┆ 267           ┆ 0            ┆ 0.050379       ┆ 0.009377        │
+│ qb_dropback_epa_recent        ┆ 2007   ┆ 267           ┆ 0            ┆ 0.030037       ┆ 0.005179        │
+│ qb_dropback_epa_recent        ┆ 2008   ┆ 267           ┆ 0            ┆ 0.018116       ┆ 0.003632        │
+│ qb_dropback_epa_recent        ┆ 2009   ┆ 267           ┆ 0            ┆ 0.009296       ┆ 0.002533        │
+│ qb_dropback_epa_recent        ┆ 2010   ┆ 267           ┆ 0            ┆ 0.031828       ┆ 0.002900        │
+│ qb_dropback_epa_recent        ┆ 2011   ┆ 267           ┆ 0            ┆ 0.014066       ┆ 0.002266        │
+│ qb_dropback_epa_recent        ┆ 2012   ┆ 267           ┆ 0            ┆ 0.011894       ┆ 0.001719        │
+│ qb_dropback_epa_recent        ┆ 2013   ┆ 267           ┆ 0            ┆ 0.012615       ┆ 0.001525        │
+│ qb_dropback_epa_recent        ┆ 2014   ┆ 267           ┆ 0            ┆ 0.013297       ┆ 0.001355        │
+│ qb_dropback_epa_recent        ┆ 2015   ┆ 267           ┆ 0            ┆ 0.012865       ┆ 0.001144        │
+│ qb_dropback_epa_recent        ┆ 2016   ┆ 267           ┆ 0            ┆ 0.005150       ┆ 0.000890        │
+│ qb_dropback_epa_recent        ┆ 2017   ┆ 267           ┆ 0            ┆ 0.005373       ┆ 0.000960        │
+│ qb_dropback_epa_recent        ┆ 2018   ┆ 267           ┆ 0            ┆ 0.004759       ┆ 0.000796        │
+│ qb_dropback_epa_recent        ┆ 2019   ┆ 267           ┆ 0            ┆ 0.002714       ┆ 0.000705        │
+│ qb_dropback_epa_recent        ┆ 2020   ┆ 269           ┆ 0            ┆ 0.002567       ┆ 0.000571        │
+│ qb_dropback_epa_recent        ┆ 2021   ┆ 285           ┆ 0            ┆ 0.002420       ┆ 0.000590        │
+│ qb_dropback_epa_recent        ┆ 2022   ┆ 284           ┆ 0            ┆ 0.002257       ┆ 0.000487        │
+│ qb_dropback_epa_recent        ┆ 2023   ┆ 285           ┆ 0            ┆ 0.002200       ┆ 0.000560        │
+│ qb_dropback_epa_recent        ┆ 2024   ┆ 285           ┆ 0            ┆ 0.002113       ┆ 0.000425        │
+│ qb_dropback_epa_recent        ┆ 2025   ┆ 285           ┆ 0            ┆ 0.002020       ┆ 0.000418        │
+│ qb_history_dropbacks          ┆ 1999   ┆ 238           ┆ 0            ┆ 57.000000      ┆ 14.315126       │
+│ qb_history_dropbacks          ┆ 2000   ┆ 259           ┆ 0            ┆ 84.000000      ┆ 30.467181       │
+│ qb_history_dropbacks          ┆ 2001   ┆ 259           ┆ 0            ┆ 102.000000     ┆ 41.181467       │
+│ qb_history_dropbacks          ┆ 2002   ┆ 263           ┆ 0            ┆ 125.000000     ┆ 45.600760       │
+│ qb_history_dropbacks          ┆ 2003   ┆ 267           ┆ 0            ┆ 157.000000     ┆ 52.044944       │
+│ qb_history_dropbacks          ┆ 2004   ┆ 267           ┆ 0            ┆ 180.000000     ┆ 62.318352       │
+│ qb_history_dropbacks          ┆ 2005   ┆ 267           ┆ 0            ┆ 187.000000     ┆ 71.606742       │
+│ qb_history_dropbacks          ┆ 2006   ┆ 260           ┆ 0            ┆ 188.000000     ┆ 74.215385       │
+│ qb_history_dropbacks          ┆ 2007   ┆ 239           ┆ 0            ┆ 188.000000     ┆ 61.573222       │
+│ qb_history_dropbacks          ┆ 2008   ┆ 226           ┆ 0            ┆ 188.000000     ┆ 55.827434       │
+│ qb_history_dropbacks          ┆ 2009   ┆ 216           ┆ 0            ┆ 150.000000     ┆ 44.925926       │
+│ qb_history_dropbacks          ┆ 2010   ┆ 196           ┆ 0            ┆ 168.000000     ┆ 47.755102       │
+│ qb_history_dropbacks          ┆ 2011   ┆ 168           ┆ 0            ┆ 168.000000     ┆ 39.369048       │
+│ qb_history_dropbacks          ┆ 2012   ┆ 138           ┆ 0            ┆ 168.000000     ┆ 38.884058       │
+│ qb_history_dropbacks          ┆ 2013   ┆ 135           ┆ 0            ┆ 168.000000     ┆ 37.088889       │
+│ qb_history_dropbacks          ┆ 2014   ┆ 129           ┆ 0            ┆ 168.000000     ┆ 34.829457       │
+│ qb_history_dropbacks          ┆ 2015   ┆ 136           ┆ 0            ┆ 168.000000     ┆ 32.323529       │
+│ qb_history_dropbacks          ┆ 2016   ┆ 98            ┆ 0            ┆ 57.000000      ┆ 25.265306       │
+│ qb_history_dropbacks          ┆ 2017   ┆ 100           ┆ 0            ┆ 57.000000      ┆ 29.580000       │
+│ qb_history_dropbacks          ┆ 2018   ┆ 78            ┆ 0            ┆ 57.000000      ┆ 26.974359       │
+│ qb_history_dropbacks          ┆ 2019   ┆ 45            ┆ 0            ┆ 45.000000      ┆ 22.733333       │
+│ qb_history_dropbacks          ┆ 2020   ┆ 59            ┆ 0            ┆ 45.000000      ┆ 26.457627       │
+│ qb_history_dropbacks          ┆ 2021   ┆ 37            ┆ 0            ┆ 31.000000      ┆ 22.702703       │
+│ qb_history_dropbacks          ┆ 2022   ┆ 18            ┆ 0            ┆ 16.000000      ┆ 16.000000       │
+│ qb_sack_rate                  ┆ 1999   ┆ 244           ┆ 0            ┆ 0.006751       ┆ 0.003813        │
+│ qb_sack_rate                  ┆ 2000   ┆ 259           ┆ 0            ┆ 0.006565       ┆ 0.003290        │
+│ qb_sack_rate                  ┆ 2001   ┆ 259           ┆ 0            ┆ 0.005348       ┆ 0.002556        │
+│ qb_sack_rate                  ┆ 2002   ┆ 267           ┆ 0            ┆ 0.005782       ┆ 0.002152        │
+│ qb_sack_rate                  ┆ 2003   ┆ 267           ┆ 0            ┆ 0.004708       ┆ 0.002087        │
+│ qb_sack_rate                  ┆ 2004   ┆ 267           ┆ 0            ┆ 0.007868       ┆ 0.002565        │
+│ qb_sack_rate                  ┆ 2005   ┆ 267           ┆ 0            ┆ 0.008130       ┆ 0.002744        │
+│ qb_sack_rate                  ┆ 2006   ┆ 267           ┆ 0            ┆ 0.007721       ┆ 0.002327        │
+│ qb_sack_rate                  ┆ 2007   ┆ 267           ┆ 0            ┆ 0.003869       ┆ 0.001602        │
+│ qb_sack_rate                  ┆ 2008   ┆ 267           ┆ 0            ┆ 0.003277       ┆ 0.001152        │
+│ qb_sack_rate                  ┆ 2009   ┆ 267           ┆ 0            ┆ 0.003178       ┆ 0.000885        │
+│ qb_sack_rate                  ┆ 2010   ┆ 267           ┆ 0            ┆ 0.006040       ┆ 0.000902        │
+│ qb_sack_rate                  ┆ 2011   ┆ 267           ┆ 0            ┆ 0.005038       ┆ 0.000768        │
+│ qb_sack_rate                  ┆ 2012   ┆ 267           ┆ 0            ┆ 0.004013       ┆ 0.000581        │
+│ qb_sack_rate                  ┆ 2013   ┆ 267           ┆ 0            ┆ 0.003511       ┆ 0.000493        │
+│ qb_sack_rate                  ┆ 2014   ┆ 267           ┆ 0            ┆ 0.003334       ┆ 0.000433        │
+│ qb_sack_rate                  ┆ 2015   ┆ 267           ┆ 0            ┆ 0.003323       ┆ 0.000379        │
+│ qb_sack_rate                  ┆ 2016   ┆ 267           ┆ 0            ┆ 0.001804       ┆ 0.000297        │
+│ qb_sack_rate                  ┆ 2017   ┆ 267           ┆ 0            ┆ 0.001703       ┆ 0.000319        │
+│ qb_sack_rate                  ┆ 2018   ┆ 267           ┆ 0            ┆ 0.001483       ┆ 0.000262        │
+│ qb_sack_rate                  ┆ 2019   ┆ 267           ┆ 0            ┆ 0.000619       ┆ 0.000234        │
+│ qb_sack_rate                  ┆ 2020   ┆ 269           ┆ 0            ┆ 0.000589       ┆ 0.000193        │
+│ qb_sack_rate                  ┆ 2021   ┆ 285           ┆ 0            ┆ 0.000558       ┆ 0.000200        │
+│ qb_sack_rate                  ┆ 2022   ┆ 284           ┆ 0            ┆ 0.000521       ┆ 0.000166        │
+│ qb_sack_rate                  ┆ 2023   ┆ 285           ┆ 0            ┆ 0.000508       ┆ 0.000195        │
+│ qb_sack_rate                  ┆ 2024   ┆ 285           ┆ 0            ┆ 0.000488       ┆ 0.000153        │
+│ qb_sack_rate                  ┆ 2025   ┆ 285           ┆ 0            ┆ 0.000469       ┆ 0.000147        │
+│ rush_success_rate             ┆ 1999   ┆ 23            ┆ 0            ┆ 0.090278       ┆ 0.010216        │
+│ rush_success_rate             ┆ 2000   ┆ 259           ┆ 0            ┆ 0.002150       ┆ 0.000104        │
+│ rush_success_rate             ┆ 2003   ┆ 14            ┆ 0            ┆ 0.001808       ┆ 0.001125        │
+│ rush_success_rate             ┆ 2004   ┆ 267           ┆ 0            ┆ 0.002870       ┆ 0.000100        │
+│ rush_success_rate             ┆ 2005   ┆ 267           ┆ 0            ┆ 0.000922       ┆ 0.000031        │
+│ rush_success_rate_allowed     ┆ 1999   ┆ 23            ┆ 0            ┆ 0.090278       ┆ 0.011902        │
+│ rush_success_rate_allowed     ┆ 2000   ┆ 259           ┆ 0            ┆ 0.002568       ┆ 0.000115        │
+│ rush_success_rate_allowed     ┆ 2003   ┆ 14            ┆ 0            ┆ 0.002353       ┆ 0.001288        │
+│ rush_success_rate_allowed     ┆ 2004   ┆ 267           ┆ 0            ┆ 0.002783       ┆ 0.000112        │
+│ rush_success_rate_allowed     ┆ 2005   ┆ 267           ┆ 0            ┆ 0.001043       ┆ 0.000030        │
+│ sos_played_adj                ┆ 1999   ┆ 244           ┆ 0            ┆ 0.108700       ┆ 0.028936        │
+│ sos_played_adj                ┆ 2000   ┆ 244           ┆ 0            ┆ 0.142008       ┆ 0.019607        │
+│ sos_played_adj                ┆ 2001   ┆ 244           ┆ 0            ┆ 0.097640       ┆ 0.017580        │
+│ sos_played_adj                ┆ 2002   ┆ 251           ┆ 0            ┆ 0.156148       ┆ 0.015918        │
+│ sos_played_adj                ┆ 2003   ┆ 251           ┆ 0            ┆ 0.129612       ┆ 0.020147        │
+│ sos_played_adj                ┆ 2004   ┆ 251           ┆ 0            ┆ 0.150325       ┆ 0.024064        │
+│ sos_played_adj                ┆ 2005   ┆ 251           ┆ 0            ┆ 0.203400       ┆ 0.024487        │
+│ sos_played_adj                ┆ 2006   ┆ 251           ┆ 0            ┆ 0.169913       ┆ 0.012982        │
+│ sos_played_raw                ┆ 1999   ┆ 229           ┆ 0            ┆ 0.032169       ┆ 0.004291        │
+│ sos_played_raw                ┆ 2000   ┆ 226           ┆ 0            ┆ 0.029394       ┆ 0.002686        │
+│ sos_played_raw                ┆ 2001   ┆ 229           ┆ 0            ┆ 0.041375       ┆ 0.002754        │
+│ sos_played_raw                ┆ 2002   ┆ 235           ┆ 0            ┆ 0.020375       ┆ 0.002123        │
+│ sos_played_raw                ┆ 2003   ┆ 235           ┆ 0            ┆ 0.040472       ┆ 0.003296        │
+│ sos_played_raw                ┆ 2004   ┆ 235           ┆ 0            ┆ 0.026511       ┆ 0.003607        │
+│ sos_played_raw                ┆ 2005   ┆ 235           ┆ 0            ┆ 0.039823       ┆ 0.003461        │
+│ sos_remaining_adj             ┆ 1999   ┆ 233           ┆ 0            ┆ 0.137719       ┆ 0.027612        │
+│ sos_remaining_adj             ┆ 2000   ┆ 248           ┆ 0            ┆ 0.077502       ┆ 0.019180        │
+│ sos_remaining_adj             ┆ 2001   ┆ 248           ┆ 0            ┆ 0.097912       ┆ 0.017263        │
+│ sos_remaining_adj             ┆ 2002   ┆ 256           ┆ 0            ┆ 0.092053       ┆ 0.015713        │
+│ sos_remaining_adj             ┆ 2003   ┆ 256           ┆ 0            ┆ 0.132141       ┆ 0.022529        │
+│ sos_remaining_adj             ┆ 2004   ┆ 256           ┆ 0            ┆ 0.194349       ┆ 0.022754        │
+│ sos_remaining_adj             ┆ 2005   ┆ 256           ┆ 0            ┆ 0.131989       ┆ 0.023675        │
+│ sos_remaining_adj             ┆ 2006   ┆ 256           ┆ 0            ┆ 0.036231       ┆ 0.010037        │
+│ stuffed_rush_rate             ┆ 1999   ┆ 23            ┆ 0            ┆ 0.041667       ┆ 0.004996        │
+│ stuffed_rush_rate             ┆ 2000   ┆ 259           ┆ 0            ┆ 0.000873       ┆ 0.000041        │
+│ stuffed_rush_rate             ┆ 2003   ┆ 14            ┆ 0            ┆ 0.001624       ┆ 0.000880        │
+│ stuffed_rush_rate             ┆ 2004   ┆ 267           ┆ 0            ┆ 0.001116       ┆ 0.000043        │
+│ stuffed_rush_rate             ┆ 2005   ┆ 267           ┆ 0            ┆ 0.000348       ┆ 0.000012        │
+│ stuffed_rush_rate_allowed     ┆ 1999   ┆ 23            ┆ 0            ┆ 0.041667       ┆ 0.004657        │
+│ stuffed_rush_rate_allowed     ┆ 2000   ┆ 259           ┆ 0            ┆ 0.000985       ┆ 0.000045        │
+│ stuffed_rush_rate_allowed     ┆ 2003   ┆ 14            ┆ 0            ┆ 0.001365       ┆ 0.000663        │
+│ stuffed_rush_rate_allowed     ┆ 2004   ┆ 267           ┆ 0            ┆ 0.001072       ┆ 0.000043        │
+│ stuffed_rush_rate_allowed     ┆ 2005   ┆ 267           ┆ 0            ┆ 0.000400       ┆ 0.000011        │
+│ success_rate                  ┆ 1999   ┆ 241           ┆ 0            ┆ 0.036385       ┆ 0.007939        │
+│ success_rate                  ┆ 2000   ┆ 259           ┆ 0            ┆ 0.014450       ┆ 0.004209        │
+│ success_rate                  ┆ 2001   ┆ 259           ┆ 0            ┆ 0.009847       ┆ 0.003327        │
+│ success_rate                  ┆ 2002   ┆ 267           ┆ 0            ┆ 0.012497       ┆ 0.002896        │
+│ success_rate                  ┆ 2003   ┆ 267           ┆ 0            ┆ 0.013766       ┆ 0.004234        │
+│ success_rate                  ┆ 2004   ┆ 267           ┆ 0            ┆ 0.021607       ┆ 0.005342        │
+│ success_rate                  ┆ 2005   ┆ 267           ┆ 0            ┆ 0.020964       ┆ 0.005166        │
+│ success_rate                  ┆ 2006   ┆ 267           ┆ 0            ┆ 0.008530       ┆ 0.001504        │
+│ success_rate_allowed          ┆ 1999   ┆ 239           ┆ 0            ┆ 0.037373       ┆ 0.007811        │
+│ success_rate_allowed          ┆ 2000   ┆ 259           ┆ 0            ┆ 0.012601       ┆ 0.003832        │
+│ success_rate_allowed          ┆ 2001   ┆ 259           ┆ 0            ┆ 0.011411       ┆ 0.003554        │
+│ success_rate_allowed          ┆ 2002   ┆ 267           ┆ 0            ┆ 0.011905       ┆ 0.002624        │
+│ success_rate_allowed          ┆ 2003   ┆ 267           ┆ 0            ┆ 0.013031       ┆ 0.004000        │
+│ success_rate_allowed          ┆ 2004   ┆ 267           ┆ 0            ┆ 0.011798       ┆ 0.004828        │
+│ success_rate_allowed          ┆ 2005   ┆ 267           ┆ 0            ┆ 0.012477       ┆ 0.004133        │
+│ success_rate_allowed          ┆ 2006   ┆ 267           ┆ 0            ┆ 0.005419       ┆ 0.001385        │
+└───────────────────────────────┴────────┴───────────────┴──────────────┴────────────────┴─────────────────┘
+
+353 published numeric columns are identical before and after

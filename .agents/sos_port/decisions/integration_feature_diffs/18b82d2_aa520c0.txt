@@ -1,0 +1,93 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17332 rows before, 17332 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 513 columns before, 513 after
+columns added: []
+columns removed: []
+
+## published stats that moved (all seasons)
+┌────────────────────────┬───────────────┬──────────────┬─────────────┬────────────────┐
+│ stat                   ┆ games_changed ┆ first_season ┆ last_season ┆ max_abs_change │
+│ ---                    ┆ ---           ┆ ---          ┆ ---         ┆ ---            │
+│ str                    ┆ u32           ┆ i32          ┆ i32         ┆ f64            │
+╞════════════════════════╪═══════════════╪══════════════╪═════════════╪════════════════╡
+│ qb_any_a               ┆ 11            ┆ 2000         ┆ 2025        ┆ 1.395745       │
+│ qb_any_a_recent        ┆ 11            ┆ 2000         ┆ 2025        ┆ 1.297333       │
+│ qb_cpoe                ┆ 10            ┆ 2006         ┆ 2025        ┆ 1.922126       │
+│ qb_dropback_epa        ┆ 11            ┆ 2000         ┆ 2025        ┆ 0.217271       │
+│ qb_dropback_epa_recent ┆ 11            ┆ 2000         ┆ 2025        ┆ 0.168319       │
+│ qb_history_dropbacks   ┆ 11            ┆ 2000         ┆ 2025        ┆ 5380.000000    │
+│ qb_sack_rate           ┆ 11            ┆ 2000         ┆ 2025        ┆ 0.043843       │
+└────────────────────────┴───────────────┴──────────────┴─────────────┴────────────────┘
+
+## published stats that moved, by season
+┌────────────────────────┬────────┬───────────────┬──────────────┬────────────────┬─────────────────┐
+│ stat                   ┆ season ┆ games_changed ┆ null_changed ┆ max_abs_change ┆ mean_abs_change │
+│ ---                    ┆ ---    ┆ ---           ┆ ---          ┆ ---            ┆ ---             │
+│ str                    ┆ i32    ┆ u32           ┆ u32          ┆ f64            ┆ f64             │
+╞════════════════════════╪════════╪═══════════════╪══════════════╪════════════════╪═════════════════╡
+│ qb_any_a               ┆ 2000   ┆ 1             ┆ 0            ┆ 0.651955       ┆ 0.651955        │
+│ qb_any_a               ┆ 2006   ┆ 1             ┆ 0            ┆ 0.233813       ┆ 0.233813        │
+│ qb_any_a               ┆ 2009   ┆ 1             ┆ 0            ┆ 0.348942       ┆ 0.348942        │
+│ qb_any_a               ┆ 2015   ┆ 1             ┆ 0            ┆ 0.200941       ┆ 0.200941        │
+│ qb_any_a               ┆ 2019   ┆ 1             ┆ 0            ┆ 0.087745       ┆ 0.087745        │
+│ qb_any_a               ┆ 2022   ┆ 2             ┆ 0            ┆ 0.148583       ┆ 0.123033        │
+│ qb_any_a               ┆ 2024   ┆ 3             ┆ 0            ┆ 1.395745       ┆ 0.782029        │
+│ qb_any_a               ┆ 2025   ┆ 1             ┆ 0            ┆ 0.176521       ┆ 0.176521        │
+│ qb_any_a_recent        ┆ 2000   ┆ 1             ┆ 0            ┆ 0.784496       ┆ 0.784496        │
+│ qb_any_a_recent        ┆ 2006   ┆ 1             ┆ 0            ┆ 0.339236       ┆ 0.339236        │
+│ qb_any_a_recent        ┆ 2009   ┆ 1             ┆ 0            ┆ 0.097194       ┆ 0.097194        │
+│ qb_any_a_recent        ┆ 2015   ┆ 1             ┆ 0            ┆ 0.410730       ┆ 0.410730        │
+│ qb_any_a_recent        ┆ 2019   ┆ 1             ┆ 0            ┆ 0.129493       ┆ 0.129493        │
+│ qb_any_a_recent        ┆ 2022   ┆ 2             ┆ 0            ┆ 0.535792       ┆ 0.337694        │
+│ qb_any_a_recent        ┆ 2024   ┆ 3             ┆ 0            ┆ 1.297333       ┆ 0.784103        │
+│ qb_any_a_recent        ┆ 2025   ┆ 1             ┆ 0            ┆ 0.062075       ┆ 0.062075        │
+│ qb_cpoe                ┆ 2006   ┆ 1             ┆ 0            ┆ 0.540123       ┆ 0.540123        │
+│ qb_cpoe                ┆ 2009   ┆ 1             ┆ 0            ┆ 0.439582       ┆ 0.439582        │
+│ qb_cpoe                ┆ 2015   ┆ 1             ┆ 0            ┆ 0.571963       ┆ 0.571963        │
+│ qb_cpoe                ┆ 2019   ┆ 1             ┆ 0            ┆ 0.777114       ┆ 0.777114        │
+│ qb_cpoe                ┆ 2022   ┆ 2             ┆ 0            ┆ 0.982802       ┆ 0.500128        │
+│ qb_cpoe                ┆ 2024   ┆ 3             ┆ 0            ┆ 1.922126       ┆ 1.738345        │
+│ qb_cpoe                ┆ 2025   ┆ 1             ┆ 0            ┆ 0.463747       ┆ 0.463747        │
+│ qb_dropback_epa        ┆ 2000   ┆ 1             ┆ 0            ┆ 0.071559       ┆ 0.071559        │
+│ qb_dropback_epa        ┆ 2006   ┆ 1             ┆ 0            ┆ 0.037918       ┆ 0.037918        │
+│ qb_dropback_epa        ┆ 2009   ┆ 1             ┆ 0            ┆ 0.073452       ┆ 0.073452        │
+│ qb_dropback_epa        ┆ 2015   ┆ 1             ┆ 0            ┆ 0.006494       ┆ 0.006494        │
+│ qb_dropback_epa        ┆ 2019   ┆ 1             ┆ 0            ┆ 0.014577       ┆ 0.014577        │
+│ qb_dropback_epa        ┆ 2022   ┆ 2             ┆ 0            ┆ 0.078693       ┆ 0.041260        │
+│ qb_dropback_epa        ┆ 2024   ┆ 3             ┆ 0            ┆ 0.217271       ┆ 0.090218        │
+│ qb_dropback_epa        ┆ 2025   ┆ 1             ┆ 0            ┆ 0.065933       ┆ 0.065933        │
+│ qb_dropback_epa_recent ┆ 2000   ┆ 1             ┆ 0            ┆ 0.110148       ┆ 0.110148        │
+│ qb_dropback_epa_recent ┆ 2006   ┆ 1             ┆ 0            ┆ 0.002023       ┆ 0.002023        │
+│ qb_dropback_epa_recent ┆ 2009   ┆ 1             ┆ 0            ┆ 0.000641       ┆ 0.000641        │
+│ qb_dropback_epa_recent ┆ 2015   ┆ 1             ┆ 0            ┆ 0.014074       ┆ 0.014074        │
+│ qb_dropback_epa_recent ┆ 2019   ┆ 1             ┆ 0            ┆ 0.035326       ┆ 0.035326        │
+│ qb_dropback_epa_recent ┆ 2022   ┆ 2             ┆ 0            ┆ 0.062299       ┆ 0.061581        │
+│ qb_dropback_epa_recent ┆ 2024   ┆ 3             ┆ 0            ┆ 0.168319       ┆ 0.093577        │
+│ qb_dropback_epa_recent ┆ 2025   ┆ 1             ┆ 0            ┆ 0.005875       ┆ 0.005875        │
+│ qb_history_dropbacks   ┆ 2000   ┆ 1             ┆ 0            ┆ 25.000000      ┆ 25.000000       │
+│ qb_history_dropbacks   ┆ 2006   ┆ 1             ┆ 0            ┆ 3180.000000    ┆ 3180.000000     │
+│ qb_history_dropbacks   ┆ 2009   ┆ 1             ┆ 0            ┆ 3376.000000    ┆ 3376.000000     │
+│ qb_history_dropbacks   ┆ 2015   ┆ 1             ┆ 0            ┆ 2615.000000    ┆ 2615.000000     │
+│ qb_history_dropbacks   ┆ 2019   ┆ 1             ┆ 0            ┆ 1459.000000    ┆ 1459.000000     │
+│ qb_history_dropbacks   ┆ 2022   ┆ 2             ┆ 0            ┆ 5380.000000    ┆ 2891.000000     │
+│ qb_history_dropbacks   ┆ 2024   ┆ 3             ┆ 0            ┆ 414.000000     ┆ 310.666667      │
+│ qb_history_dropbacks   ┆ 2025   ┆ 1             ┆ 0            ┆ 1877.000000    ┆ 1877.000000     │
+│ qb_sack_rate           ┆ 2000   ┆ 1             ┆ 0            ┆ 0.003570       ┆ 0.003570        │
+│ qb_sack_rate           ┆ 2006   ┆ 1             ┆ 0            ┆ 0.000944       ┆ 0.000944        │
+│ qb_sack_rate           ┆ 2009   ┆ 1             ┆ 0            ┆ 0.000540       ┆ 0.000540        │
+│ qb_sack_rate           ┆ 2015   ┆ 1             ┆ 0            ┆ 0.001386       ┆ 0.001386        │
+│ qb_sack_rate           ┆ 2019   ┆ 1             ┆ 0            ┆ 0.019572       ┆ 0.019572        │
+│ qb_sack_rate           ┆ 2022   ┆ 2             ┆ 0            ┆ 0.010741       ┆ 0.010198        │
+│ qb_sack_rate           ┆ 2024   ┆ 3             ┆ 0            ┆ 0.043843       ┆ 0.021216        │
+│ qb_sack_rate           ┆ 2025   ┆ 1             ┆ 0            ┆ 0.000777       ┆ 0.000777        │
+└────────────────────────┴────────┴───────────────┴──────────────┴────────────────┴─────────────────┘
+
+440 published numeric columns are identical before and after

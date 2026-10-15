@@ -59,6 +59,8 @@ export interface ColumnMeta {
   decimals: number | null
   actionable: boolean
   sticky: boolean
+  /** Context rather than a grade (schedule strength, the opponents faced); shaded in a muted hue. */
+  contextual?: boolean
 }
 
 export type Row = Record<string, string | number | boolean | null>
@@ -130,6 +132,136 @@ export interface PowerOut {
   division_standings: TablePayload | null
 }
 
+/** One game on the confidence pool sheet; `result` and `points_won` are set once it is final. */
+export interface SheetRow {
+  game_id: string
+  points: number | null
+  pick: string | null
+  opponent: string | null
+  pick_is_home: boolean | null
+  away_abbr: string
+  home_abbr: string
+  kickoff: string | null
+  pick_win_prob: number | null
+  expected_points: number | null
+  away_score: number | null
+  home_score: number | null
+  result: 'win' | 'loss' | 'tie' | null
+  points_won: number | null
+  /** On a sheet of the picks entered before the lock: the points and pick predicted since, when they differ. */
+  newer_points: number | null
+  newer_pick: string | null
+}
+
+/**
+ * A week's confidence pool sheet: picks by points, the lock (first kickoff) and the scoring. When
+ * the predictions were rewritten after the lock, `picks_file` names the pre-lock picks it shows.
+ */
+export interface ConfidenceSheet {
+  run_id: string | null
+  source: string
+  season: number | null
+  week: number | null
+  generated_at: string | null
+  rows: SheetRow[]
+  games: number
+  max_points: number
+  expected_points: number | null
+  games_final: number
+  points_won: number | null
+  points_possible: number | null
+  lock_at: string | null
+  generated_after_lock: boolean | null
+  rank_problem: string | null
+  picks_file: string | null
+  newer_predictions_at: string | null
+  changed_after_lock: number
+}
+
+/** A game's whole-point tiebreak entry and the p10 to p90 bands behind it. */
+export interface TiebreakGame {
+  game_id: string
+  away_abbr: string
+  home_abbr: string
+  kickoff: string | null
+  slot: string | null
+  total_points: number | null
+  home_points: number | null
+  away_points: number | null
+  total_raw: number | null
+  home_raw: number | null
+  away_raw: number | null
+  total_p10: number | null
+  total_p90: number | null
+  home_p10: number | null
+  home_p90: number | null
+  away_p10: number | null
+  away_p90: number | null
+}
+
+/** The week's highest or lowest team score, and the team projected to have it. */
+export interface ScoreEstimate {
+  points: number | null
+  median: number | null
+  p10: number | null
+  p90: number | null
+  projected_team: string | null
+  projected_points: number | null
+}
+
+export interface Tiebreakers {
+  run_id: string | null
+  source: string
+  season: number | null
+  week: number | null
+  generated_at: string | null
+  games: TiebreakGame[]
+  default_game_ids: string[]
+  highest: ScoreEstimate
+  lowest: ScoreEstimate
+}
+
+export interface SurvivorRequest {
+  season: number
+  start_week: number
+  used_teams: string[]
+  /** How many weeks from the start week the plans show as near-term picks; every week is solved. */
+  horizon_weeks: number
+}
+
+/** One week's pick in a survivor plan; `later` marks a lookahead pick. */
+export interface SurvivorPick {
+  week: number
+  team: string
+  opponent: string
+  is_home: boolean
+  win_prob: number
+  game_id: string
+  kickoff: string | null
+  later: boolean
+  cumulative_survival: number
+}
+
+export interface SurvivorPlan {
+  rank: number
+  picks: SurvivorPick[]
+  survival: number
+  later_survival: number | null
+  total_survival: number
+}
+
+export interface SurvivorOut {
+  season: number
+  start_week: number
+  planned_weeks: number[]
+  later_weeks: number[]
+  missing_weeks: number[]
+  used_teams: string[]
+  teams: string[]
+  plans: SurvivorPlan[]
+  future_values: { team: string; value: number }[]
+}
+
 export interface CalibrationBin {
   bin_lower: number
   bin_upper: number
@@ -150,10 +282,19 @@ export interface FeatureImportanceRow {
   splits: number | null
 }
 
+/**
+ * `rows` ranks the features over both heads (the default view); `margin_rows` ranks every feature
+ * by the margin head alone, with `value` and `splits` for that head, and is empty when the run
+ * recorded no per-head numbers.
+ */
 export interface FeatureImportance {
   measure: FeatureImportanceMeasure | null
   rows: FeatureImportanceRow[]
+  margin_rows: FeatureImportanceRow[]
 }
+
+/** Which ranking the feature importance chart plots: both heads added, or the margin head alone. */
+export type ImportanceHead = 'combined' | 'margin'
 
 export interface MetricStrategyEntry {
   metric: string
@@ -311,3 +452,120 @@ export interface JobLogs {
 }
 
 export type JobParams = Record<string, string | number | boolean>
+
+/** Which page family a ratings route serves: the team pages or the quarterback pages. */
+export type EntityKind = 'teams' | 'qbs'
+
+/** How a registry metric behaves across views: a summable count, a rate, a maximum, ... */
+export type MetricShape = 'count' | 'rate' | 'avg' | 'max' | 'flag' | 'id' | 'score'
+
+/** A ratings column: the app's column format plus what the metric registry says about it. */
+export interface MetricColumnMeta extends ColumnMeta {
+  full_name: string
+  category: string | null
+  subcategory: string | null
+  contextual: boolean
+  shape: MetricShape | null
+  /** A proportion (0.653) shown as a percentage (65.3%). */
+  percent: boolean
+}
+
+export interface MetricTable {
+  rows: Row[]
+  visible_columns: string[]
+  column_groups: Record<string, string[]>
+  column_metadata: Record<string, MetricColumnMeta>
+}
+
+/** A metric category of the team or quarterback pages, with its subcategories in display order. */
+export interface MetricCategory {
+  name: string
+  description: string
+  subcategories: string[]
+}
+
+export interface RatingsSeasons {
+  seasons: number[]
+  current_season: number
+}
+
+/**
+ * One season's team or quarterback table. `in_progress` holds only for the season under way while
+ * a team has games left; `games_played` is the most any team has played.
+ */
+export interface EntityTable {
+  kind: EntityKind
+  season: number
+  in_progress: boolean
+  games_played: number | null
+  games_per_team: number
+  table: MetricTable
+  categories: MetricCategory[]
+  team_names: Record<string, string>
+}
+
+/** A league-wide section (rank ranges) or one team's or quarterback's (game logs, histories, pairs). */
+export interface SeasonTable {
+  kind: EntityKind
+  season: number
+  entity_id: string | null
+  table: MetricTable
+}
+
+/** One team's or quarterback's games; `league_size` is how many teams the opponents' ranks run to. */
+export interface GameLogsTable extends SeasonTable {
+  league_size: number | null
+}
+
+/** A rank-range row: the scalar columns plus `<rank>_probabilities`, the chance of each rank. */
+export type RankRangeRow = Record<string, Row[string] | number[]>
+
+/** A season's rank ranges, with the franchise name of every team code in them. */
+export interface RankRangeTable extends Omit<SeasonTable, 'table'> {
+  table: Omit<MetricTable, 'rows'> & { rows: RankRangeRow[] }
+  team_names: Record<string, string>
+}
+
+/** Every completed team-season ranked on schedule strength, softest first. */
+export interface ScheduleRanks {
+  count: number
+  seasons: number[]
+  skipped_seasons: number[]
+  table: MetricTable
+}
+
+/** One metric of the registry, as the glossary shows it. */
+export interface RegistryMetric {
+  label: string
+  full_name: string
+  description: string
+  entity: 'team' | 'qb'
+  category: string
+  subcategory: string | null
+  shape: MetricShape
+  polarity: Polarity
+  source: string
+  denominator: string | null
+  since: number | null
+  duplicate_of: string | null
+  contextual: boolean
+  formula: string | null
+  note: string | null
+  percent: boolean
+}
+
+/** How a column prefix (`opp_`, `qopp_`, ...) changes a metric's name and meaning. */
+export interface PrefixRule {
+  prefix: string
+  label_template: string
+  full_name_template: string
+  description_note: string
+  contextual: boolean
+  invert_polarity_for_qb: boolean
+}
+
+export interface MetricRegistry {
+  entities: Record<'team' | 'qb', { categories: MetricCategory[] }>
+  metrics: Record<string, RegistryMetric>
+  prefix_rules: PrefixRule[]
+}

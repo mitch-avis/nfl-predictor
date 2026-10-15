@@ -11,6 +11,8 @@ range from ``away_rest`` to ``home_moneyline`` (market columns last), then the s
 It also writes ``reference_run/``, a walk-forward run directory whose fold checkpoints predict
 every history game at the market spread; the weekly config names it as the floor sigma's
 reference run, so the pool spans three earlier seasons from the current season's first week.
+``ratings/`` holds the current season's published weekly ported ratings for the completed weeks,
+which the weekly run's default blend ranking reads.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 import joblib
 import numpy as np
 import pandas as pd
+import polars as pl
 import yaml
 
 from nfl_predictor import constants
@@ -64,6 +67,7 @@ ID_COLUMNS = (
     "season",
     "week",
     "game_type",
+    "neutral",
     "date",
     "gametime",
     "game_datetime",
@@ -127,6 +131,7 @@ def game_rows(
             "season": season,
             "week": week,
             "game_type": "REG",
+            "neutral": 0,
             "date": kickoff.isoformat(),
             "gametime": "13:00",
             "game_datetime": f"{kickoff.isoformat()}T13:00:00",
@@ -218,7 +223,26 @@ def build_fixture(root: Path) -> dict[str, Path]:
     games.loc[predict_rows].to_csv(paths["predict"], index=False)
     pd.DataFrame(snapshots, columns=list(SNAPSHOT_COLUMNS)).to_csv(paths["snapshots"], index=False)
     paths["reference"] = write_reference_run(root, games[games["season"].isin(HISTORY_SEASONS)])
+    paths["ratings"] = write_ratings_dir(root, strength)
     return paths
+
+
+def write_ratings_dir(root: Path, strength: dict[str, float]) -> Path:
+    """Write the current season's published weekly ported ratings for the completed weeks."""
+    ratings_dir = root / "ratings"
+    ratings_dir.mkdir(parents=True, exist_ok=True)
+    weeks = range(1, COMPLETED_CURRENT_WEEKS + 1)
+    pl.DataFrame(
+        {
+            "week": [week for week in weeks for _ in TEAMS],
+            "team": [team for _ in weeks for team in TEAMS],
+            "games_played": [week for week in weeks for _ in TEAMS],
+            "team_rating": [
+                round(strength[team] + 0.1 * week, 4) for week in weeks for team in TEAMS
+            ],
+        }
+    ).write_parquet(ratings_dir / f"{CURRENT_SEASON}_ratings_by_week.parquet")
+    return ratings_dir
 
 
 def write_reference_run(root: Path, games: pd.DataFrame) -> Path:
@@ -230,6 +254,9 @@ def write_reference_run(root: Path, games: pd.DataFrame) -> Path:
             "game_id": games["game_id"],
             "season": games["season"],
             "week": games["week"],
+            "away_abbr": games["away_abbr"],
+            "home_abbr": games["home_abbr"],
+            "neutral": games["neutral"],
             "actual_margin": games["home_score"] - games["away_score"],
             "predicted_margin": games["away_spread"],
         }
@@ -265,6 +292,7 @@ def write_weekly_config(root: Path, paths: dict[str, Path], output_dir: Path) ->
             "power_rankings_data_schedule": str(paths["all"]),
             "power_rankings_strength_snapshots": str(paths["snapshots"]),
             "floor_sigma_reference_runs": [str(paths["reference"])],
+            "power_rankings_ratings_dir": str(paths["ratings"]),
         }
     )
     config_path = root / "weekly_run.yaml"

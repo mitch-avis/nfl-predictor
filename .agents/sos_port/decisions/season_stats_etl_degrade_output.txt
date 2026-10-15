@@ -1,0 +1,66 @@
+Output of .agents/sos_port/decisions/season_stats_etl_degrade.py, run on 2026-10-10 at 11:35 local
+time at commit 3dfb4c6 in the worktree of branch worktree-agent-ad5396b63790d07a8, with one Polars
+and BLAS thread (the script's default; a second run gave the same output). Each variant leaves one
+nflverse source of the 2025 season out of the ETL's season statistics step. The rating columns are
+left null in every variant, so every variant also warns that the season has no team ratings.
+Nothing was written outside a temporary directory under ~/scratch.
+
+Command, from the worktree root:
+.venv/bin/python .agents/sos_port/decisions/season_stats_etl_degrade.py
+
+2025, every source: 10 tables
+  team_game_logs: 544 rows, 246 columns (full build 544 rows, 246 columns)
+  qb_game_logs: 687 rows, 54 columns (full build 687 rows, 54 columns)
+  team_per_game_stats: 32 rows, 246 columns (full build 32 rows, 246 columns)
+  qb_per_game_stats: 82 rows, 88 columns (full build 82 rows, 88 columns)
+  qb_opponent_profiles: 64 rows, 54 columns (full build 64 rows, 54 columns)
+  opponent_profiles: 32 rows, 241 columns (full build 32 rows, 241 columns)
+  combined: 32 rows, 492 columns (full build 32 rows, 492 columns)
+  qb_combined: 82 rows, 141 columns (full build 82 rows, 141 columns)
+  team_wp_bins: 20629 rows, 8 columns (full build 20629 rows, 8 columns)
+  qb_wp_bins: 11053 rows, 6 columns (full build 11053 rows, 6 columns)
+  warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
+
+2025, no official weekly team stats: 10 tables
+  team_game_logs: 544 rows, 246 columns (full build 544 rows, 246 columns)
+  qb_game_logs: 687 rows, 54 columns (full build 687 rows, 54 columns)
+  team_per_game_stats: 32 rows, 246 columns (full build 32 rows, 246 columns)
+  qb_per_game_stats: 82 rows, 88 columns (full build 82 rows, 88 columns)
+  qb_opponent_profiles: 64 rows, 54 columns (full build 64 rows, 54 columns)
+  opponent_profiles: 32 rows, 241 columns (full build 32 rows, 241 columns)
+  combined: 32 rows, 492 columns (full build 32 rows, 492 columns)
+  qb_combined: 82 rows, 141 columns (full build 82 rows, 141 columns)
+  team_wp_bins: 20629 rows, 8 columns (full build 20629 rows, 8 columns)
+  qb_wp_bins: 11053 rows, 6 columns (full build 11053 rows, 6 columns)
+  warning: Season statistics: season 2025 has no official weekly team stats, so the play-by-play's passing, rushing, first-down, sack, interception and lost-fumble totals stand in for the official ones
+  warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
+
+2025, no weekly player stats: 10 tables
+  team_game_logs: 544 rows, 246 columns (full build 544 rows, 246 columns)
+  qb_game_logs: 687 rows, 54 columns (full build 687 rows, 54 columns)
+  team_per_game_stats: 32 rows, 246 columns (full build 32 rows, 246 columns)
+  qb_per_game_stats: 82 rows, 88 columns (full build 82 rows, 88 columns)
+  qb_opponent_profiles: 64 rows, 54 columns (full build 64 rows, 54 columns)
+  opponent_profiles: 32 rows, 241 columns (full build 32 rows, 241 columns)
+  combined: 32 rows, 492 columns (full build 32 rows, 492 columns)
+  qb_combined: 82 rows, 141 columns (full build 82 rows, 141 columns)
+  team_wp_bins: 20629 rows, 8 columns (full build 20629 rows, 8 columns)
+  qb_wp_bins: 11053 rows, 6 columns (full build 11053 rows, 6 columns)
+  warning: Season statistics: season 2025 has no weekly player stats, so its tables leave the defense box score and the passers' official passing and rushing figures null
+  warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
+
+2025, no snap counts: 10 tables
+  team_game_logs: 544 rows, 246 columns (full build 544 rows, 246 columns)
+  qb_game_logs: 635 rows, 54 columns (full build 687 rows, 54 columns)
+  team_per_game_stats: 32 rows, 246 columns (full build 32 rows, 246 columns)
+  qb_per_game_stats: 78 rows, 88 columns (full build 82 rows, 88 columns)
+  qb_opponent_profiles: 65 rows, 54 columns (full build 64 rows, 54 columns)
+  opponent_profiles: 32 rows, 241 columns (full build 32 rows, 241 columns)
+  combined: 32 rows, 492 columns (full build 32 rows, 492 columns)
+  qb_combined: 78 rows, 141 columns (full build 82 rows, 141 columns)
+  team_wp_bins: 20629 rows, 8 columns (full build 20629 rows, 8 columns)
+  qb_wp_bins: 11053 rows, 6 columns (full build 11053 rows, 6 columns)
+  warning: Season statistics: season 2025 has no snap counts, so its tables leave the passers' offensive snaps null and leave out the passers who played without a dropback
+  warning: Season statistics: season 2025 has no team ratings, so combined leaves them null
+
+2025, no play-by-play (before kickoff): 0 tables

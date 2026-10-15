@@ -16,7 +16,7 @@ import pandas as pd
 
 from nfl_predictor import constants
 from nfl_predictor.cli import options
-from nfl_predictor.ml import artifacts, floor_sigma
+from nfl_predictor.ml import artifacts, feature_spec, floor_sigma
 from nfl_predictor.ml.ml_model_core import (
     DEFAULT_EARLY_STOPPING_ROUNDS,
     DEFAULT_FEATURE_END_COLUMN,
@@ -63,7 +63,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--exclude-market",
         action="store_true",
-        help="Exclude market features like spreads/totals/moneylines.",
+        help=(
+            "Train with no game-line columns (spreads, totals, moneylines). The default groups "
+            "keep the elo group's preseason win-total prior; for no market information pass "
+            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
+            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
+        ),
     )
     parser.add_argument(
         "--include-postseason",
@@ -131,6 +136,7 @@ def _parse_args() -> argparse.Namespace:
         default=0.5,
         help="Drop categorical columns with unique ratio above this threshold.",
     )
+    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
     parser.add_argument(
         "--win-prob-calibration",
         choices=["auto", "none"],
@@ -291,7 +297,19 @@ def _parse_args() -> argparse.Namespace:
             "none|int|half|nfl."
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.disable_feature_groups = _disabled_feature_groups(parser, args.disable_feature_groups)
+    return args
+
+
+def _disabled_feature_groups(parser: argparse.ArgumentParser, raw: str | None) -> tuple[str, ...]:
+    """Return the groups ``--disable-feature-groups`` names; an unknown one is a usage error."""
+    groups = options.parse_feature_groups(raw)
+    try:
+        feature_spec.validate_feature_groups(groups)
+    except ValueError as error:
+        parser.error(str(error))
+    return groups
 
 
 def _predicted_week(predict_path: Path | None) -> tuple[int, int] | None:
@@ -340,6 +358,11 @@ def _predict_from_checkpoint(args: argparse.Namespace, output_path: Path | None)
     """Load ``--model-in`` and predict ``--predict-path`` with it, training nothing."""
     if args.tune:
         log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
+    if args.disable_feature_groups != constants.PRODUCTION_DISABLED_FEATURE_GROUPS:
+        log.info(
+            "Model checkpoint provided; ignoring --disable-feature-groups: a saved model "
+            "predicts with the columns it was trained on."
+        )
     model = load_model_checkpoint(args.model_in, args.model_kind)
     if not args.predict_path:
         log.info("No --predict-path provided; exiting after loading model.")
@@ -372,6 +395,7 @@ def _training_options(args: argparse.Namespace, optuna_config: OptunaConfig) -> 
         feature_end=args.feature_end,
         floor_sigma_pool=floor_sigma.load_reference_pool(args.floor_sigma_reference_runs),
         floor_sigma_week=_predicted_week(args.predict_path),
+        disabled_feature_groups=args.disable_feature_groups,
     )
 
 

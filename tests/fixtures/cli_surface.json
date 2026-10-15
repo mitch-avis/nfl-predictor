@@ -298,7 +298,7 @@
    "choices": null,
    "default": true,
    "dest": "include_market",
-   "help": "Train with no market feature column (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run is market-free; the market-implied probability is still scored as the yardstick.",
+   "help": "Train with no game-line columns (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run uses no game lines; the market-implied probability is still scored as the yardstick. The default groups keep the elo group's preseason win-total prior; for no market information pass --disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) or strength,elo,own_elo,own_elo_wt (no Elo at all).",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -338,9 +338,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": null,
+   "default": "strength,own_elo,own_elo_wt",
    "dest": "disable_feature_groups",
-   "help": "Comma-separated feature group names to drop for ablation comparisons (e.g. 'pbp' or 'pbp,other'). See constants.FEATURE_GROUP_COLUMN_MARKERS.",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'strength,own_elo,own_elo_wt,pbp'); the list replaces the default rather than adding to it. A column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt; an empty value leaves no group out.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -788,7 +788,7 @@
    "choices": null,
    "default": true,
    "dest": "include_market",
-   "help": "Exclude market columns from the feature set.",
+   "help": "Audit a feature set with no game-line columns. The Elo groups' preseason win-total priors (elo, own_elo_wt) stay in it.",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -973,11 +973,14 @@
    "action": "_StoreAction",
    "choices": [
     "composite",
-    "bradley_terry"
+    "bradley_terry",
+    "ported",
+    "model",
+    "blend"
    ],
    "default": null,
    "dest": "method",
-   "help": "How teams are rated. 'composite' (default) ranks on the ETL's schedule-adjusted strength composite for the week after --through-week: the current-season view. 'bradley_terry' fits ratings to game results with the --ratings-* options. --legacy-franchise-fit implies bradley_terry.",
+   "help": "How teams are rated. 'composite' (default) ranks on the ETL's schedule-adjusted strength composite for the week after --through-week: the current-season view. 'bradley_terry' fits ratings to game results with the --ratings-* options. --legacy-franchise-fit implies bradley_terry. 'ported' ranks on the ported team rating (--ratings-dir), 'model' on a fit to a walk-forward's predicted margins (--model-predictions), and 'blend' on both (--blend-weight on the ported rating).",
    "nargs": null,
    "options": [
     "--method"
@@ -985,6 +988,48 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/ratings",
+   "dest": "ratings_dir",
+   "help": "Published ported ratings tables, read by the ported method and by the model and blend methods in week 1 (default: data/ratings).",
+   "nargs": null,
+   "options": [
+    "--ratings-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [],
+   "dest": "model_predictions",
+   "help": "Model and blend methods: walk-forward run directories or fold checkpoint directories whose pre-game predictions cover every completed regular-season game of the season before the ranked week (the previous season for week 1).",
+   "nargs": "+",
+   "options": [
+    "--model-predictions"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": null,
+   "dest": "blend_weight",
+   "help": "Blend method: the weight on the ported rating, from 0 to 1.",
+   "nargs": null,
+   "options": [
+    "--blend-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
   },
   {
    "action": "_StoreAction",
@@ -1154,7 +1199,7 @@
    "choices": null,
    "default": false,
    "dest": "exclude_market",
-   "help": "Exclude market features like spreads/totals/moneylines.",
+   "help": "Train with no game-line columns (spreads, totals, moneylines). The default groups keep the elo group's preseason win-total prior; for no market information pass --disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) or strength,elo,own_elo,own_elo_wt (no Elo at all).",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -1306,6 +1351,20 @@
   },
   {
    "action": "_StoreAction",
+   "choices": null,
+   "default": "strength,own_elo,own_elo_wt",
+   "dest": "disable_feature_groups",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'strength,own_elo,own_elo_wt,pbp'); the list replaces the default rather than adding to it. A column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt; an empty value leaves no group out.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "str"
+  },
+  {
+   "action": "_StoreAction",
    "choices": [
     "auto",
     "none"
@@ -1325,8 +1384,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": [
-    "models/step4_reference/adopted_seed42",
-    "models/step4_reference/adopted_seed7"
+    "models/step6/ratings_anchored_seed42",
+    "models/step6/ratings_anchored_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
    "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the floor's sigma, which the saved model records; their checkpoints are only read. A missing run is an error; give no paths to train without them (the constant, recorded as the fallback).",
@@ -2254,7 +2313,7 @@
    ],
    "default": "hybrid",
    "dest": "wf_market_mode",
-   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (market-free: no market feature, no anchor and no market transform).",
+   "help": "Market mode of the walk-forward and the final fit: market lines as features, the model anchored to them, both (hybrid, the default), or none (no game lines: no game-line columns, no anchor and no market transform). The default groups keep the elo group's preseason win-total prior; for no market information pass --disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) or strength,elo,own_elo,own_elo_wt (no Elo at all).",
    "nargs": null,
    "options": [
     "--wf-market-mode"
@@ -2262,6 +2321,24 @@
    "required": false,
    "subcommand": null,
    "type": null
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [
+    "strength",
+    "own_elo",
+    "own_elo_wt"
+   ],
+   "dest": "disable_feature_groups",
+   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file; default: strength,own_elo,own_elo_wt; an empty value leaves no group out). The list replaces the default rather than adding to it. An unknown group stops the run before the data refresh.",
+   "nargs": null,
+   "options": [
+    "--disable-feature-groups"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "parse_feature_groups"
   },
   {
    "action": "BooleanOptionalAction",
@@ -2438,8 +2515,8 @@
    "action": "_StoreAction",
    "choices": null,
    "default": [
-    "models/step4_reference/adopted_seed42",
-    "models/step4_reference/adopted_seed7"
+    "models/step6/ratings_anchored_seed42",
+    "models/step6/ratings_anchored_seed7"
    ],
    "dest": "floor_sigma_reference_runs",
    "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks).",
@@ -2732,11 +2809,14 @@
    "action": "_StoreAction",
    "choices": [
     "composite",
-    "bradley_terry"
+    "bradley_terry",
+    "ported",
+    "model",
+    "blend"
    ],
    "default": null,
    "dest": "power_rankings_method",
-   "help": "Power rankings method: 'composite' (default; the ETL's schedule-adjusted strength for the week after the through-week) or 'bradley_terry'. --legacy-franchise-fit implies bradley_terry.",
+   "help": "Power rankings method: 'blend' (default; the ported team rating and the model rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's schedule-adjusted strength for the week after the through-week), 'bradley_terry', 'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted margins). --legacy-franchise-fit implies bradley_terry when no method is set and refuses any other method.",
    "nargs": null,
    "options": [
     "--power-rankings-method"
@@ -2758,6 +2838,48 @@
    "required": false,
    "subcommand": null,
    "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": "<repo>/data/ratings",
+   "dest": "power_rankings_ratings_dir",
+   "help": "Published ported ratings tables the ported method reads (and the model and blend methods in week 1).",
+   "nargs": null,
+   "options": [
+    "--power-rankings-ratings-dir"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": [],
+   "dest": "power_rankings_model_predictions",
+   "help": "Walk-forward runs or fold checkpoint directories whose pre-game predictions the model and blend methods fit their rating to; they must cover every completed regular-season game of the season before the ranked week (the previous season for week 1). Default: this run's stage-1 fold checkpoints for the ranked season and the --floor-sigma-reference-runs, averaged as one source, for earlier seasons.",
+   "nargs": "*",
+   "options": [
+    "--power-rankings-model-predictions"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "Path"
+  },
+  {
+   "action": "_StoreAction",
+   "choices": null,
+   "default": 0.5,
+   "dest": "power_rankings_blend_weight",
+   "help": "The blend method's weight on the ported rating, from 0 to 1 (default: 0.5).",
+   "nargs": null,
+   "options": [
+    "--power-rankings-blend-weight"
+   ],
+   "required": false,
+   "subcommand": null,
+   "type": "float"
   },
   {
    "action": "_StoreAction",

@@ -12,7 +12,7 @@ import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.cli import backtest, train
-from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml import feature_spec, floor_sigma, ml_model_xgb_utils, walk_forward
 from nfl_predictor.ml.feature_spec import (
     MARKET_DERIVED_COLUMNS,
     FeatureSelection,
@@ -404,3 +404,163 @@ def test_weekly_warns_only_when_the_market_free_mode_overrides_a_requested_trans
     # Assert
     overrides = [message for message in warnings if "--market-transform" in message]
     assert len(overrides) == (1 if warned else 0)
+
+
+def test_the_overridden_transform_warning_says_no_game_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    warnings = _recorded_warnings(monkeypatch)
+    expected = (
+        "--wf-market-mode none overrides --market-transform (or market_transform: true): "
+        "a run with no game lines trains with no market transform."
+    )
+
+    # Act
+    _weekly_args(tmp_path, "--wf-market-mode", "none", "--market-transform")
+
+    # Assert
+    assert warnings == [expected]
+
+
+def _recorded_infos(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the project logger's info messages."""
+    infos: list[str] = []
+    monkeypatch.setattr(
+        log, "info", lambda message, *args: infos.append(message % args if args else message)
+    )
+    return infos
+
+
+def _spec_notes(
+    monkeypatch: pytest.MonkeyPatch, frame: pd.DataFrame, *, include_market: bool, builds: int = 1
+) -> list[str]:
+    """Build the feature spec ``builds`` times and return its "No game lines" notes.
+
+    The notes are info messages; a warning mentioning the win-total priors is returned too, so a
+    test can tell the levels apart.
+    """
+    warnings = _recorded_warnings(monkeypatch)
+    infos = _recorded_infos(monkeypatch)
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
+    selection = FeatureSelection(
+        include_market=include_market,
+        max_cardinality_ratio=walk_forward.WalkForwardConfig().max_cardinality_ratio,
+    )
+    for _ in range(builds):
+        build_feature_spec(frame, selection)
+    return [message for message in [*infos, *warnings] if "win-total" in message]
+
+
+def test_a_run_without_game_lines_notes_the_win_total_groups_it_keeps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+
+    # Act
+    notes = _spec_notes(monkeypatch, frame, include_market=False)
+
+    # Assert
+    expected = (
+        "No game lines: the model trains without betting-line columns but keeps the preseason "
+        "win-total priors in the feature group(s) ['elo', 'own_elo_wt']; for a run with no "
+        "market information at all, add elo,own_elo_wt to the groups left out: "
+        "`--disable-feature-groups` (backtest, train; it replaces the default list) or "
+        "`disable_feature_groups` in the weekly config."
+    )
+    assert notes == [expected]
+
+
+def test_a_run_without_game_lines_logs_its_note_at_info_level(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    warnings = _recorded_warnings(monkeypatch)
+    infos = _recorded_infos(monkeypatch)
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
+    selection = FeatureSelection(
+        include_market=False,
+        max_cardinality_ratio=walk_forward.WalkForwardConfig().max_cardinality_ratio,
+    )
+
+    # Act
+    build_feature_spec(_schema_frame(derived_in_range=False), selection)
+
+    # Assert
+    assert len([message for message in infos if message.startswith("No game lines:")]) == 1
+    assert not [message for message in warnings if "own_elo_wt" in message]
+
+
+def test_a_run_without_game_lines_notes_once_for_every_fold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+
+    # Act
+    notes = _spec_notes(monkeypatch, frame, include_market=False, builds=3)
+
+    # Assert
+    assert len(notes) == 1
+
+
+def test_a_run_that_leaves_one_group_out_names_only_the_other(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+    frame = frame.drop(
+        columns=walk_forward.resolve_feature_group_columns(list(frame.columns), ["elo"])
+    )
+
+    # Act
+    notes = _spec_notes(monkeypatch, frame, include_market=False)
+
+    # Assert
+    assert len(notes) == 1
+    assert "['own_elo_wt']" in notes[0]
+
+
+@pytest.mark.parametrize(
+    ("emptied", "kept"),
+    [(("own_elo_wt",), ["elo"]), (("elo", "own_elo_wt"), [])],
+    ids=["own-elo-wt-empty", "both-empty"],
+)
+def test_a_market_informed_group_the_spec_drops_as_empty_goes_unnamed(
+    monkeypatch: pytest.MonkeyPatch, emptied: tuple[str, ...], kept: list[str]
+) -> None:
+    """A group whose columns are all null leaves the features, so the note leaves it out."""
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+    empty = walk_forward.resolve_feature_group_columns(list(frame.columns), emptied)
+    frame.loc[:, empty] = np.nan
+
+    # Act
+    notes = _spec_notes(monkeypatch, frame, include_market=False)
+
+    # Assert
+    assert len(notes) == (1 if kept else 0)
+    assert all(f"feature group(s) {kept};" in message for message in notes)
+
+
+@pytest.mark.parametrize(
+    ("include_market", "dropped"),
+    [(True, ()), (False, ("elo", "own_elo_wt"))],
+    ids=["with-market", "groups-left-out"],
+)
+def test_no_warning_when_the_market_columns_stay_or_the_groups_are_left_out(
+    monkeypatch: pytest.MonkeyPatch, *, include_market: bool, dropped: tuple[str, ...]
+) -> None:
+    # Arrange
+    frame = _schema_frame(derived_in_range=False)
+    if dropped:
+        frame = frame.drop(
+            columns=walk_forward.resolve_feature_group_columns(list(frame.columns), dropped)
+        )
+
+    # Act
+    notes = _spec_notes(monkeypatch, frame, include_market=include_market)
+
+    # Assert
+    assert notes == []

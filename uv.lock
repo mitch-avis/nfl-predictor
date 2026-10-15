@@ -817,7 +817,7 @@ wheels = [
 
 [[package]]
 name = "nfl-predictor"
-version = "0.45.4"
+version = "0.59.0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
@@ -840,6 +840,7 @@ dependencies = [
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "sse-starlette" },
+    { name = "threadpoolctl" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "xgboost" },
 ]
@@ -884,6 +885,7 @@ requires-dist = [
     { name = "scikit-learn", specifier = ">=1.9" },
     { name = "scipy", specifier = ">=1.18" },
     { name = "sse-starlette", specifier = ">=3.5" },
+    { name = "threadpoolctl", specifier = ">=3.7" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54" },
     { name = "xgboost", specifier = ">=3.4" },
 ]

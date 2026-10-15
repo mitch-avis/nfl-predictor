@@ -1,0 +1,40 @@
+output columns:
+  different -> different: 500
+  different -> matched: 26
+  matched -> matched: 30
+  missing -> matched: 1180
+data sources:
+  different -> different: 1
+  different -> matched: 1
+  matched -> matched: 1
+  missing -> matched: 8
+  missing -> missing: 1
+web items:
+  different -> different: 9
+  matched -> matched: 1
+  missing -> different: 21
+  missing -> matched: 10
+  missing -> missing: 4
+column rule moves (old rule, old class -> new rule, new class: columns):
+  gl-carries-faced different -> gl-carries-faced matched: 1
+  gl-defense-rates different -> gl-defense-rates-same matched: 4
+  gl-designed-runs different -> gl-designed-runs matched: 2
+  gl-downs different -> gl-downs matched: 8
+  gl-games missing -> gl-games matched: 1
+  gl-penalties different -> gl-penalties matched: 2
+  gl-rest missing -> gl-rest matched: 111
+  gl-snaps different -> gl-snaps matched: 2
+  gl-turnovers-on-downs different -> gl-turnovers-on-downs matched: 1
+  opponent-prefix-rest missing -> opponent-prefix-rest matched: 239
+  opponent-rest missing -> opponent-rest matched: 239
+  qb-faced-defense missing -> qb-faced-defense matched: 2
+  qb-game-rest missing -> qb-game-rest matched: 26
+  qb-opponents missing -> qb-opponents matched: 102
+  qb-ratings-volume missing -> qb-ratings-volume matched: 2
+  qb-season-rest missing -> qb-season-rest matched: 112
+  rank-ranges missing -> rank-ranges matched: 115
+  ratings-history different -> ratings-history matched: 4
+  season-mirrors-game-logs different -> season-rest matched: 2
+  season-rest missing -> season-rest matched: 222
+  team-prior missing -> team-prior matched: 2
+  wp-bins missing -> wp-bins matched: 7

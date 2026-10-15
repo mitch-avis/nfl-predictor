@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,9 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 DEFAULT_FEATURE_START_COLUMN = "away_rest"
 DEFAULT_FEATURE_END_COLUMN = "home_moneyline"
@@ -148,6 +151,109 @@ def _drop_high_cardinality_columns(
     return df.drop(columns=dropped), dropped
 
 
+def validate_feature_groups(groups: Sequence[str]) -> None:
+    """Check that every name in ``groups`` is a feature group, before any data is read.
+
+    Raises:
+        ValueError: if any name is not a key in ``constants.FEATURE_GROUP_COLUMN_MARKERS``; the
+            message lists the unknown names and the valid ones.
+
+    """
+    valid_groups = constants.FEATURE_GROUP_COLUMN_MARKERS
+    unknown = sorted({group for group in groups if group not in valid_groups})
+    if unknown:
+        msg = f"Unknown feature group(s): {unknown}. Valid groups: {sorted(valid_groups)}."
+        raise ValueError(msg)
+
+
+def resolve_feature_group_columns(
+    columns: Sequence[str], groups: Sequence[str], *, warn_unmatched: bool = True
+) -> list[str]:
+    """Resolve which columns belong to the given feature groups: what disabling them removes.
+
+    Every fit that leaves feature groups out drops exactly these columns: each walk-forward
+    fold (``WalkForwardConfig.disabled_feature_groups``) and the final fit
+    (``TrainingOptions.disabled_feature_groups``).
+
+    A group that matches none of ``columns`` leaves nothing out, so a dataset build that lacks
+    it trains differently from one that has it; each such group is logged as a warning, unless
+    ``warn_unmatched`` is off for a caller resolving columns that may already have been dropped.
+
+    A column belongs to a group when any marker string configured for that group in
+    ``constants.FEATURE_GROUP_COLUMN_MARKERS`` is a *substring* of the column name (not a
+    prefix), so a single marker can match ``away_``/``home_``/``opponent_`` prefixed variants
+    and ``_diff`` suffixed variants of the same base name at once. A group whose marker tuple
+    is empty matches zero columns.
+
+    Raises:
+        ValueError: if any requested group name is not a key in
+            ``constants.FEATURE_GROUP_COLUMN_MARKERS`` (``validate_feature_groups``).
+
+    """
+    validate_feature_groups(groups)
+    matched: set[str] = set()
+    unmatched: list[str] = []
+    for group in groups:
+        markers = constants.FEATURE_GROUP_COLUMN_MARKERS[group]
+        group_columns = [
+            column for column in columns if any(marker in column for marker in markers)
+        ]
+        if not group_columns:
+            unmatched.append(group)
+        matched.update(group_columns)
+    if unmatched and warn_unmatched:
+        log.warning(
+            "Feature group(s) %s match no column of the data, so leaving them out drops "
+            "nothing; a dataset build without them trains differently from one with them.",
+            sorted(set(unmatched)),
+        )
+    return sorted(matched)
+
+
+def check_ratings_replace_strength(
+    games: pd.DataFrame, groups: Sequence[str], *, stop: bool
+) -> None:
+    """Stop or warn when ``groups`` leave out the strength snapshot and no ported rating is there.
+
+    Production leaves out ``strength`` because the ported team ratings (``ratings``) replace
+    it; a dataset built before the port has the strength snapshot but no ratings column, and a
+    build without play-by-play keeps the ratings columns null in every row, so either way the
+    fit would train on neither. A ratings column counts only if some row has a value. Data with
+    neither group gets no message: leaving ``strength`` out removes nothing there, and no group
+    list would help. ``stop`` raises; otherwise the same message is logged as a warning and the
+    run carries on (a backtest, which runs ablations on purpose).
+
+    Raises:
+        ValueError: if ``stop`` is set, ``groups`` include ``strength``, and ``games`` hold a
+            column of the ``strength`` group but no ``ratings`` column with a value.
+
+    """
+    if "strength" not in groups:
+        return
+    columns = list(games.columns)
+    if not resolve_feature_group_columns(columns, ["strength"], warn_unmatched=False):
+        return
+    ratings = resolve_feature_group_columns(columns, ["ratings"], warn_unmatched=False)
+    if ratings and bool(games[ratings].notna().any(axis=None)):
+        return
+    msg = (
+        "The feature groups left out include the strength snapshot (strength), but the data has "
+        "no column of the ported ratings (ratings) with a value, so the model would train on "
+        "neither. "
+        "Rebuild the dataset with the ported ratings (`nfl-predictor data`), or pass a group "
+        "list that keeps strength: `--disable-feature-groups own_elo,own_elo_wt`, or "
+        "`disable_feature_groups: [own_elo, own_elo_wt]` in the weekly config."
+    )
+    if stop:
+        raise ValueError(msg)
+    log.warning(msg)
+
+
+# The sets of market-informed groups this process has already noted, each noted once:
+# every walk-forward fold builds its own spec.
+_WARNED_MARKET_INFORMED: set[tuple[str, ...]] = set()
+
+
 @dataclass(frozen=True, kw_only=True)
 class FeatureSelection:
     """How a feature spec chooses its columns from a dataset.
@@ -197,6 +303,36 @@ def _resolve_market_columns(
         else [col for col in feature_range if col in raw or col in MARKET_DERIVED_COLUMNS]
     )
     return _MarketColumns(feature_range, derived, features, excluded, dropped_raw)
+
+
+def _note_kept_market_informed_groups(columns: Sequence[str], selection: FeatureSelection) -> None:
+    """Note that a run without game lines keeps the Elo groups' preseason win-total priors.
+
+    A run without the market columns (``include_market`` off) means "no game lines": it still
+    trains on the groups of ``constants.MARKET_INFORMED_FEATURE_GROUPS``, whose ratings carry a
+    preseason win-total prior, unless it leaves them out too. That is the run's choice, so an
+    info message names the groups it keeps and how to leave them out, once per set of groups in
+    a process. ``columns`` are the spec's final feature columns, so a group whose columns all
+    dropped out (all null or constant in the training rows) goes unnamed.
+    """
+    if selection.include_market:
+        return
+    kept = tuple(
+        group
+        for group in constants.MARKET_INFORMED_FEATURE_GROUPS
+        if resolve_feature_group_columns(columns, [group], warn_unmatched=False)
+    )
+    if not kept or kept in _WARNED_MARKET_INFORMED:
+        return
+    _WARNED_MARKET_INFORMED.add(kept)
+    log.info(
+        "No game lines: the model trains without betting-line columns but keeps the preseason "
+        "win-total priors in the feature group(s) %s; for a run with no market information at "
+        "all, add %s to the groups left out: `--disable-feature-groups` (backtest, train; it "
+        "replaces the default list) or `disable_feature_groups` in the weekly config.",
+        list(kept),
+        ",".join(kept),
+    )
 
 
 def _log_feature_spec(
@@ -282,6 +418,7 @@ def build_feature_spec(df: pd.DataFrame, selection: FeatureSelection) -> Feature
     feature_df, high_cardinality_columns = _drop_high_cardinality_columns(
         feature_df, selection.max_cardinality_ratio
     )
+    _note_kept_market_informed_groups(feature_df.columns.tolist(), selection)
 
     categorical_columns = feature_df.select_dtypes(include=["object", "category"]).columns.tolist()
     numeric_columns = [col for col in feature_df.columns if col not in categorical_columns]

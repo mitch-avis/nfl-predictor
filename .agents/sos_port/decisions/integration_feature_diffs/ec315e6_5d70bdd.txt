@@ -1,0 +1,15 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17332 rows before, 17332 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 521 columns before, 520 after
+columns added: []
+columns removed: ['strength_games_played_diff']
+
+468 published numeric columns are identical before and after

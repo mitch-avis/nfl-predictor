@@ -9,11 +9,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
 from nfl_predictor.ml import artifacts
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True)
@@ -116,44 +120,79 @@ class _PlainStringValue:
 
 def test_now_utc_iso_parses_as_isoformat() -> None:
     """now_utc_iso returns an ISO timestamp string."""
+    # Act
     value = artifacts.now_utc_iso()
+
+    # Assert
     # Should be parseable by stdlib; tolerate timezone suffix.
     parsed = value.replace("Z", "+00:00")
     assert parsed
     # datetime.fromisoformat is strict, so this catches malformed strings.
-    datetime.fromisoformat(parsed)
+    assert isinstance(datetime.fromisoformat(parsed), datetime)
 
 
 def test_sha256_file_matches_known_digest(tmp_path: Path) -> None:
     """sha256_file matches hashlib's result for the same bytes."""
+    # Arrange
     path = tmp_path / "payload.bin"
     payload = b"hello world\n"
     path.write_bytes(payload)
-
     expected = hashlib.sha256(payload).hexdigest()
-    assert artifacts.sha256_file(path) == expected
+
+    # Act
+    digest = artifacts.sha256_file(path)
+
+    # Assert
+    assert digest == expected
 
 
 def test_stable_short_hash_is_order_invariant() -> None:
     """stable_short_hash is stable under dict key reordering."""
+    # Arrange
     a = {"b": 2, "a": 1}
     b = {"a": 1, "b": 2}
-    assert artifacts.stable_short_hash(a) == artifacts.stable_short_hash(b)
+
+    # Act
+    hashes = {artifacts.stable_short_hash(payload) for payload in (a, b)}
+
+    # Assert
+    assert len(hashes) == 1
 
 
-def test_to_jsonable_handles_dataclasses_and_fallback_protocols() -> None:
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (_PayloadDataclass(path=Path("data.csv"), count=3), {"path": "data.csv", "count": 3}),
+        (_PayloadDataclass, str(_PayloadDataclass)),
+        (_ItemValue(Path("nested.csv")), "nested.csv"),
+        (_FallbackToList(), [1, 2, 3]),
+        (_OnlyToList(), [4, 5, 6]),
+        (_FallbackIsoformat(), "2026-06-12T18:00:00+00:00"),
+        (_OnlyIsoformat(), "2026-06-12T19:00:00+00:00"),
+        (_FallbackString(), "fallback-value"),
+        (_PlainStringValue(), "plain-fallback"),
+    ],
+    ids=[
+        "dataclass",
+        "dataclass-type",
+        "item",
+        "item-then-tolist",
+        "tolist",
+        "isoformat-fallback",
+        "isoformat",
+        "str-fallback",
+        "plain-str",
+    ],
+)
+def test_to_jsonable_handles_dataclasses_and_fallback_protocols(
+    value: object, expected: object
+) -> None:
     """to_jsonable should normalize dataclasses and protocol-like helper objects."""
-    dataclass_payload = _PayloadDataclass(path=Path("data.csv"), count=3)
+    # Act
+    result = artifacts.to_jsonable(value)
 
-    assert artifacts.to_jsonable(dataclass_payload) == {"path": "data.csv", "count": 3}
-    assert artifacts.to_jsonable(_PayloadDataclass) == str(_PayloadDataclass)
-    assert artifacts.to_jsonable(_ItemValue(Path("nested.csv"))) == "nested.csv"
-    assert artifacts.to_jsonable(_FallbackToList()) == [1, 2, 3]
-    assert artifacts.to_jsonable(_OnlyToList()) == [4, 5, 6]
-    assert artifacts.to_jsonable(_FallbackIsoformat()) == "2026-06-12T18:00:00+00:00"
-    assert artifacts.to_jsonable(_OnlyIsoformat()) == "2026-06-12T19:00:00+00:00"
-    assert artifacts.to_jsonable(_FallbackString()) == "fallback-value"
-    assert artifacts.to_jsonable(_PlainStringValue()) == "plain-fallback"
+    # Assert
+    assert result == expected
 
 
 def test_generate_run_id_uses_frozen_timestamp_and_stable_hash(
@@ -161,6 +200,7 @@ def test_generate_run_id_uses_frozen_timestamp_and_stable_hash(
 ) -> None:
     """generate_run_id should combine the prefix, timestamp, and stable short hash."""
 
+    # Arrange
     class _FrozenDateTime:
         """Test double for the datetime class used by generate_run_id."""
 
@@ -171,25 +211,28 @@ def test_generate_run_id_uses_frozen_timestamp_and_stable_hash(
             return datetime(2026, 6, 12, 18, 1, 2, tzinfo=UTC)
 
     monkeypatch.setattr(artifacts, "datetime", _FrozenDateTime)
-
     config = {"calibration": "platt", "holdout_seasons": 1}
     expected_hash = artifacts.stable_short_hash({"dataset_hash": "abc123", "config": config})
 
-    assert (
-        artifacts.generate_run_id("weekly", "abc123", config)
-        == f"weekly_20260612_180102_{expected_hash}"
-    )
+    # Act
+    run_id = artifacts.generate_run_id("weekly", "abc123", config)
+
+    # Assert
+    assert run_id == f"weekly_20260612_180102_{expected_hash}"
 
 
 def test_resolve_run_paths_defaults_to_repo_models_dir(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """resolve_run_paths should default under ``ROOT_DIR/models/<run_id>``."""
-    monkeypatch.setattr(artifacts.constants, "ROOT_DIR", tmp_path)
+    """resolve_run_paths should default under ``MODELS_PATH/<run_id>``."""
+    # Arrange
+    monkeypatch.setattr(artifacts.constants, "MODELS_PATH", tmp_path / "models")
 
+    # Act
     paths = artifacts.resolve_run_paths("weekly_run")
 
+    # Assert
     assert paths.run_dir == tmp_path / "models" / "weekly_run"
     assert paths.model_path == paths.run_dir / "model.joblib"
     assert paths.metadata_path == paths.run_dir / "metadata.json"
@@ -197,77 +240,105 @@ def test_resolve_run_paths_defaults_to_repo_models_dir(
     assert paths.feature_importance_path == paths.run_dir / "feature_importance.json"
 
 
+def _completed(returncode: int, stdout: str) -> Callable[..., SimpleNamespace]:
+    """Return a stand-in for ``subprocess.run`` that finishes with ``returncode`` and ``stdout``."""
+    return lambda *_args, **_kwargs: SimpleNamespace(returncode=returncode, stdout=stdout)
+
+
+def _raise_os_error(*_args: object, **_kwargs: object) -> SimpleNamespace:
+    """Raise an OSError to emulate a missing git executable."""
+    msg = "git unavailable"
+    raise OSError(msg)
+
+
+@pytest.mark.parametrize(
+    ("run", "expected"),
+    [
+        (_completed(0, "abc123\n"), "abc123"),
+        (_completed(1, "ignored\n"), None),
+        (_completed(0, "\n"), None),
+        (_raise_os_error, None),
+    ],
+    ids=["success", "failure", "empty-output", "missing-git"],
+)
 def test_git_commit_hash_handles_success_failure_and_missing_git(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, run: Callable[..., SimpleNamespace], expected: str | None
 ) -> None:
     """git_commit_hash should tolerate git failures and missing executables."""
-    monkeypatch.setattr(
-        artifacts.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="abc123\n"),
-    )
-    assert artifacts.git_commit_hash() == "abc123"
+    # Arrange
+    monkeypatch.setattr(artifacts.subprocess, "run", run)
 
-    monkeypatch.setattr(
-        artifacts.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout="ignored\n"),
-    )
-    assert artifacts.git_commit_hash() is None
+    # Act
+    commit = artifacts.git_commit_hash()
 
-    monkeypatch.setattr(
-        artifacts.subprocess,
-        "run",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout="\n"),
-    )
-    assert artifacts.git_commit_hash() is None
-
-    def _raise_os_error(*_args: object, **_kwargs: object) -> SimpleNamespace:
-        """Raise an OSError to emulate a missing git executable."""
-        msg = "git unavailable"
-        raise OSError(msg)
-
-    monkeypatch.setattr(artifacts.subprocess, "run", _raise_os_error)
-    assert artifacts.git_commit_hash() is None
+    # Assert
+    assert commit == expected
 
 
-def test_module_version_library_versions_and_metadata_payload(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("module", "expected"),
+    [("fake_versioned_module", "fake-1.0"), ("missing_module", None)],
+    ids=["versioned", "missing"],
+)
+def test_module_version_reads_the_version_of_an_importable_module(
+    monkeypatch: pytest.MonkeyPatch, module: str, expected: str | None
 ) -> None:
-    """Version helpers and metadata assembly should remain deterministic under mocks."""
+    """_module_version returns a module's ``__version__``, or None when it cannot import it."""
+    # Arrange
     fake_module = ModuleType("fake_versioned_module")
     fake_module.__dict__["__version__"] = "fake-1.0"
     monkeypatch.setitem(sys.modules, "fake_versioned_module", fake_module)
 
-    assert artifacts._module_version("fake_versioned_module") == "fake-1.0"
-    assert artifacts._module_version("missing_module") is None
+    # Act
+    version = artifacts._module_version(module)
 
+    # Assert
+    assert version == expected
+
+
+def test_library_versions_report_each_library_and_python(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """library_versions should remain deterministic under a mocked version lookup."""
+    # Arrange
     monkeypatch.setattr(artifacts, "_module_version", lambda name: f"{name}-1.0")
 
+    # Act
     versions = artifacts.library_versions()
+
+    # Assert
     assert versions["numpy"] == "numpy-1.0"
     assert versions["pandas"] == "pandas-1.0"
     assert versions["python"]
     assert versions["python_executable"]
 
+
+def test_build_metadata_records_the_commit_versions_and_optuna_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Metadata assembly should remain deterministic under mocks."""
+    # Arrange
     monkeypatch.setattr(artifacts, "git_commit_hash", lambda: "commit123")
     monkeypatch.setattr(artifacts, "library_versions", lambda: {"python": "3.14-test"})
+    details = artifacts.TrainedModelDetails(
+        feature_list=["feature_a"],
+        splits={"holdout_seasons": [2025]},
+        params={"max_depth": 4},
+        tuned_params={"eta": 0.1},
+        early_stopping={"best_iteration": 12},
+        optuna_summary={"best_value": 0.2},
+    )
 
+    # Act
     metadata = artifacts.build_metadata(
         created_at="2026-06-12T18:00:00+00:00",
         run_id="weekly_20260612",
         dataset_hash="dataset123",
         config={"market_mode": "anchor"},
-        details=artifacts.TrainedModelDetails(
-            feature_list=["feature_a"],
-            splits={"holdout_seasons": [2025]},
-            params={"max_depth": 4},
-            tuned_params={"eta": 0.1},
-            early_stopping={"best_iteration": 12},
-            optuna_summary={"best_value": 0.2},
-        ),
+        details=details,
     )
 
+    # Assert
     assert metadata["git_commit_hash"] == "commit123"
     assert metadata["library_versions"] == {"python": "3.14-test"}
     assert metadata["optuna_summary"] == {"best_value": 0.2}
@@ -276,6 +347,7 @@ def test_module_version_library_versions_and_metadata_payload(
 
 def test_build_metadata_records_the_xgb_device() -> None:
     """The artifact contract names the device the model trained on."""
+    # Act
     metadata = artifacts.build_metadata(
         created_at="2026-09-27T00:00:00+00:00",
         run_id="train_20260927",
@@ -284,14 +356,19 @@ def test_build_metadata_records_the_xgb_device() -> None:
         details=artifacts.TrainedModelDetails(xgb_device="cuda"),
     )
 
+    # Assert
     assert metadata["xgb_device"] == "cuda"
 
 
 def test_write_json_serializes_paths(tmp_path: Path) -> None:
     """write_json converts Path values to strings and writes valid JSON."""
+    # Arrange
     out = tmp_path / "out.json"
+
+    # Act
     artifacts.write_json(out, {"path": tmp_path})
 
+    # Assert
     loaded = json.loads(out.read_text(encoding="utf-8"))
     assert loaded["path"] == str(tmp_path)
 
@@ -305,13 +382,22 @@ class _BrokenItem:
         raise RuntimeError(msg)
 
 
-def test_to_jsonable_converts_numpy_values() -> None:
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(np.int64(7), 7), (np.array([1, 2]), [1, 2])],
+    ids=["scalar", "array"],
+)
+def test_to_jsonable_converts_numpy_values(value: object, expected: object) -> None:
     """A NumPy scalar becomes its Python value and an array falls back to a list."""
-    assert artifacts.to_jsonable(np.int64(7)) == 7
-    assert artifacts.to_jsonable(np.array([1, 2])) == [1, 2]
+    # Act
+    result = artifacts.to_jsonable(value)
+
+    # Assert
+    assert result == expected
 
 
 def test_to_jsonable_raises_unexpected_errors() -> None:
     """Only the multi-element ``ValueError`` falls through; other errors surface."""
+    # Act & Assert
     with pytest.raises(RuntimeError, match="item broke"):
         artifacts.to_jsonable(_BrokenItem())

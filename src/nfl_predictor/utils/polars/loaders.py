@@ -40,27 +40,52 @@ NUMERIC_DTYPES = {
 }
 
 
-# Columns of `constants.PBP_COLUMNS` that carry text rather than measurements.
-# Everything else in that list is numeric; `season`/`week` are whole numbers and the
-# remaining value columns (EPA, rates, indicator flags) are stored as floats because
-# nflreadpy publishes several of them as nullable floats.
+# Columns of `constants.PBP_COLUMNS` that carry text rather than measurements: every team-code
+# column of `constants.PBP_TEAM_COLUMNS` and the ones below. Everything else in that list is
+# numeric; `season`/`week` are whole numbers and the remaining value columns (EPA, rates,
+# indicator flags) are stored as floats because nflreadpy publishes several of them as nullable
+# floats.
 _PBP_STRING_COLUMNS = frozenset(
     {
+        *constants.PBP_TEAM_COLUMNS,
         "game_id",
-        "posteam",
-        "defteam",
-        "home_team",
-        "away_team",
         "posteam_type",
         "play_type",
         "season_type",
+        "pass_length",
+        "yrdln",
+        "end_yard_line",
         "two_point_conv_result",
-        "td_team",
-        "penalty_team",
+        "penalty_type",
         "fixed_drive_result",
         "drive_start_yard_line",
+        "drive_end_yard_line",
+        "drive_time_of_possession",
+        "series_result",
         "passer_player_id",
         "passer_player_name",
+        "rusher_player_id",
+        "rusher_player_name",
+        "receiver_player_id",
+        "receiver_player_name",
+        "td_player_id",
+        "penalty_player_id",
+        "pass_defense_1_player_id",
+        "fumbled_1_player_id",
+        "fumbled_2_player_id",
+        "fumble_recovery_1_player_id",
+        "fumble_recovery_2_player_id",
+        "forced_fumble_player_1_player_id",
+        "forced_fumble_player_2_player_id",
+        "solo_tackle_1_player_id",
+        "solo_tackle_2_player_id",
+        "assist_tackle_1_player_id",
+        "assist_tackle_2_player_id",
+        "assist_tackle_3_player_id",
+        "assist_tackle_4_player_id",
+        "tackle_with_assist_1_player_id",
+        "tackle_with_assist_2_player_id",
+        "desc",
     }
 )
 
@@ -197,6 +222,27 @@ def _read_cached_frame(path: Path, requested_columns: Sequence[str] = ()) -> pl.
         return None
 
 
+def _warn_about_pbp_fallback_gaps(
+    frame: pl.DataFrame, requested_columns: Sequence[str], *, season: int, path: Path
+) -> None:
+    """Log every requested column a play-by-play file used as a fallback lacks.
+
+    A fallback file is read as it is, even one written before a column was requested, so a
+    feature that reads a column the file lacks is built without it (play-by-play red-zone trips,
+    for one, count none without ``drive_inside20``). Naming the columns keeps such a run from
+    passing as a complete one.
+    """
+    lacking = [column for column in requested_columns if column not in frame.columns]
+    if lacking:
+        log.warning(
+            "The cached play-by-play for season %d (%s) lacks the requested columns, so each "
+            "feature that reads one is built without it for that season: %s",
+            season,
+            path,
+            ", ".join(lacking),
+        )
+
+
 def _write_cached_frame(
     df: pl.DataFrame, path: Path, requested_columns: Sequence[str] = ()
 ) -> None:
@@ -213,8 +259,40 @@ def _write_cached_frame(
         log.warning("Failed to write nflreadpy cache file %s: %s", path, exc)
 
 
+def _plural(count: int, noun: str) -> str:
+    """Return ``count`` with ``noun``, adding an ``s`` unless the count is one."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def _warn_about_unlisted_venues(stadium_ids: pl.Series) -> None:
+    """Log one warning naming the venues `constants.STADIUMS` lacks.
+
+    Their games get the unknown venue's elevation of 0 ft, which looks like a sea-level stadium
+    to the model, so every venue id without an entry, and any game without a venue id, is named.
+    """
+    listed = stadium_ids.drop_nulls()
+    unlisted = listed.filter(~listed.is_in(list(constants.STADIUMS)))
+    without_id = stadium_ids.null_count()
+    if unlisted.is_empty() and not without_id:
+        return
+    parts = []
+    if not unlisted.is_empty():
+        venues = sorted(unlisted.unique(maintain_order=True).to_list())
+        parts.append(f"venue ids {venues} ({_plural(unlisted.len(), 'game')})")
+    if without_id:
+        parts.append(f"{_plural(without_id, 'game')} without a venue id")
+    log.warning(
+        "constants.STADIUMS has no entry for %s; their stadium_elevation falls back to 0 ft.",
+        " and ".join(parts),
+    )
+
+
 def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
-    """Add stadium type and altitude features."""
+    """Add stadium type and altitude features.
+
+    A game whose venue `constants.STADIUMS` lacks gets an elevation of 0 ft, and a warning names
+    the venue (`_warn_about_unlisted_venues`).
+    """
     roof_expr = pl.lit(None)
     if "stadium_roof" in df.columns:
         roof_raw = pl.col("stadium_roof").cast(pl.Utf8).str.to_lowercase()
@@ -229,6 +307,7 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
         )
 
     if "stadium_id" in df.columns:
+        _warn_about_unlisted_venues(df.get_column("stadium_id"))
         altitude_map = {
             stadium_id: meta.get("elevation_ft", 0.0)
             for stadium_id, meta in constants.STADIUMS.items()
@@ -266,8 +345,13 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
 
 
 def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
-    """Add optional stadium features to a schedule DataFrame."""
-    if "stadium_id" in df.columns and "stadium_city" not in df.columns:
+    """Add optional stadium features to a schedule DataFrame.
+
+    The columns `constants.STADIUMS` supplies (city, state, a missing name, the elevation) are
+    derived again on every load, cached frames included, so a cache written before the table
+    gained or corrected a venue gives the same values as a fresh download.
+    """
+    if "stadium_id" in df.columns:
         df = _add_stadium_location(df)
     return _add_stadium_features(df)
 
@@ -1029,12 +1113,32 @@ def _select_pbp_columns(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.select([c for c in constants.PBP_COLUMNS if c in available_cols])
 
 
+def _cast_pbp_value_columns(frame: pl.DataFrame) -> pl.DataFrame:
+    """Give every cached column but `season` and `week` the dtype of `_PBP_COLUMN_DTYPES`.
+
+    nflverse publishes a few columns with a dtype that changes between seasons (`goal_to_go`
+    is a whole number in some seasons and a float in others), and seasons whose dtypes differ
+    cannot be stacked. Columns that already have their mapped dtype are left as they are;
+    `season` and `week` keep the whole-number dtype nflverse publishes.
+    """
+    casts = [
+        pl.col(column).cast(dtype)
+        for column, dtype in _PBP_COLUMN_DTYPES.items()
+        if column in frame.columns
+        and column not in _PBP_INTEGER_COLUMNS
+        and frame.schema[column] != dtype
+    ]
+    return frame.with_columns(casts) if casts else frame
+
+
 def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.DataFrame:
     """Reduce raw nflreadpy play-by-play data to the cached project schema.
 
     Only the columns of `constants.PBP_COLUMNS` that are actually present are kept, because
-    older seasons do not publish every column. Team abbreviations are normalized so cached
-    frames already use canonical identifiers.
+    older seasons do not publish every column, and each keeps one dtype across seasons
+    (`_cast_pbp_value_columns`). Every team-code column of `constants.PBP_TEAM_COLUMNS` is
+    normalized so cached frames already use canonical identifiers; yard-line text that opens
+    with a team code is kept as nflverse writes it.
 
     Args:
         season_df: Raw play-by-play frame for a single season
@@ -1044,12 +1148,12 @@ def _prepare_pbp(season_df: pl.DataFrame, *, regular_season_only: bool) -> pl.Da
         Prepared play-by-play DataFrame ready to cache
 
     """
-    prepared = _select_pbp_columns(season_df)
+    prepared = _cast_pbp_value_columns(_select_pbp_columns(season_df))
 
     if regular_season_only and "season_type" in prepared.columns:
         prepared = prepared.filter(pl.col("season_type") == "REG")
 
-    for col in ("posteam", "defteam", "home_team", "away_team", "td_team", "penalty_team"):
+    for col in constants.PBP_TEAM_COLUMNS:
         if col in prepared.columns:
             prepared = normalize_team_column(prepared, col)
 
@@ -1088,8 +1192,10 @@ def load_pbp(
         - A failure for a historical season is re-raised, because historical data is expected
           to be available.
         - A failure for the current or a future season is logged as a warning and the cached
-          frame is used when one exists, even one that predates the requested columns;
-          otherwise that season is skipped. Both a `ConnectionError` and a `ValueError`
+          frame is used when one exists, even one that predates the requested columns, in
+          which case a second warning names every requested column the file lacks (each
+          feature that reads one is built without it for that season); otherwise that
+          season is skipped. Both a `ConnectionError` and a `ValueError`
           count as a failure here: before kickoff the current season has no play-by-play
           published at all, and nflreadpy reports that by raising `ValueError` for an
           out-of-range season rather than by failing to connect.
@@ -1151,6 +1257,9 @@ def load_pbp(
                     season,
                     cache_path,
                     exc,
+                )
+                _warn_about_pbp_fallback_gaps(
+                    fallback_cached, requested_columns, season=season, path=cache_path
                 )
                 pbp_frames.append(_select_pbp_columns(fallback_cached))
             else:

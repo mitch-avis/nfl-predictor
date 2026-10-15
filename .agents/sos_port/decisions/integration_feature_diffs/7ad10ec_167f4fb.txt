@@ -1,0 +1,202 @@
+
+# team_games: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+
+## team_games: columns that differ, by season
+┌────────────────────────────┬────────┬──────────────┬──────────────┬─────────────┐
+│ column                     ┆ season ┆ rows_changed ┆ total_before ┆ total_after │
+│ ---                        ┆ ---    ┆ ---          ┆ ---          ┆ ---         │
+│ str                        ┆ i64    ┆ u32          ┆ f64          ┆ f64         │
+╞════════════════════════════╪════════╪══════════════╪══════════════╪═════════════╡
+│ red_zone_td_drives         ┆ 1999   ┆ 244          ┆ 1036.000000  ┆ 707.000000  │
+│ red_zone_td_drives         ┆ 2000   ┆ 212          ┆ 1053.000000  ┆ 768.000000  │
+│ red_zone_td_drives         ┆ 2001   ┆ 209          ┆ 996.000000   ┆ 706.000000  │
+│ red_zone_td_drives         ┆ 2002   ┆ 231          ┆ 1149.000000  ┆ 843.000000  │
+│ red_zone_td_drives         ┆ 2003   ┆ 244          ┆ 1101.000000  ┆ 788.000000  │
+│ red_zone_td_drives         ┆ 2004   ┆ 226          ┆ 1163.000000  ┆ 842.000000  │
+│ red_zone_td_drives         ┆ 2005   ┆ 228          ┆ 1085.000000  ┆ 790.000000  │
+│ red_zone_td_drives         ┆ 2006   ┆ 237          ┆ 1080.000000  ┆ 773.000000  │
+│ red_zone_td_drives         ┆ 2007   ┆ 240          ┆ 1136.000000  ┆ 811.000000  │
+│ red_zone_td_drives         ┆ 2008   ┆ 213          ┆ 1142.000000  ┆ 854.000000  │
+│ red_zone_td_drives         ┆ 2009   ┆ 241          ┆ 1159.000000  ┆ 829.000000  │
+│ red_zone_td_drives         ┆ 2010   ┆ 260          ┆ 1175.000000  ┆ 832.000000  │
+│ red_zone_td_drives         ┆ 2011   ┆ 246          ┆ 1157.000000  ┆ 839.000000  │
+│ red_zone_td_drives         ┆ 2012   ┆ 238          ┆ 1177.000000  ┆ 856.000000  │
+│ red_zone_td_drives         ┆ 2013   ┆ 251          ┆ 1227.000000  ┆ 903.000000  │
+│ red_zone_td_drives         ┆ 2014   ┆ 250          ┆ 1197.000000  ┆ 869.000000  │
+│ red_zone_td_drives         ┆ 2015   ┆ 256          ┆ 1213.000000  ┆ 885.000000  │
+│ red_zone_td_drives         ┆ 2016   ┆ 233          ┆ 1235.000000  ┆ 930.000000  │
+│ red_zone_td_drives         ┆ 2017   ┆ 234          ┆ 1133.000000  ┆ 822.000000  │
+│ red_zone_td_drives         ┆ 2018   ┆ 234          ┆ 1294.000000  ┆ 971.000000  │
+│ red_zone_td_drives         ┆ 2019   ┆ 233          ┆ 1252.000000  ┆ 922.000000  │
+│ red_zone_td_drives         ┆ 2020   ┆ 248          ┆ 1411.000000  ┆ 1070.000000 │
+│ red_zone_td_drives         ┆ 2021   ┆ 225          ┆ 1353.000000  ┆ 1056.000000 │
+│ red_zone_td_drives         ┆ 2022   ┆ 221          ┆ 1243.000000  ┆ 948.000000  │
+│ red_zone_td_drives         ┆ 2023   ┆ 231          ┆ 1228.000000  ┆ 933.000000  │
+│ red_zone_td_drives         ┆ 2024   ┆ 233          ┆ 1326.000000  ┆ 1024.000000 │
+│ red_zone_td_drives         ┆ 2025   ┆ 244          ┆ 1324.000000  ┆ 999.000000  │
+│ red_zone_td_drives_allowed ┆ 1999   ┆ 244          ┆ 1036.000000  ┆ 707.000000  │
+│ red_zone_td_drives_allowed ┆ 2000   ┆ 212          ┆ 1053.000000  ┆ 768.000000  │
+│ red_zone_td_drives_allowed ┆ 2001   ┆ 209          ┆ 996.000000   ┆ 706.000000  │
+│ red_zone_td_drives_allowed ┆ 2002   ┆ 231          ┆ 1149.000000  ┆ 843.000000  │
+│ red_zone_td_drives_allowed ┆ 2003   ┆ 244          ┆ 1101.000000  ┆ 788.000000  │
+│ red_zone_td_drives_allowed ┆ 2004   ┆ 226          ┆ 1163.000000  ┆ 842.000000  │
+│ red_zone_td_drives_allowed ┆ 2005   ┆ 228          ┆ 1085.000000  ┆ 790.000000  │
+│ red_zone_td_drives_allowed ┆ 2006   ┆ 237          ┆ 1080.000000  ┆ 773.000000  │
+│ red_zone_td_drives_allowed ┆ 2007   ┆ 240          ┆ 1136.000000  ┆ 811.000000  │
+│ red_zone_td_drives_allowed ┆ 2008   ┆ 213          ┆ 1142.000000  ┆ 854.000000  │
+│ red_zone_td_drives_allowed ┆ 2009   ┆ 241          ┆ 1159.000000  ┆ 829.000000  │
+│ red_zone_td_drives_allowed ┆ 2010   ┆ 260          ┆ 1175.000000  ┆ 832.000000  │
+│ red_zone_td_drives_allowed ┆ 2011   ┆ 246          ┆ 1157.000000  ┆ 839.000000  │
+│ red_zone_td_drives_allowed ┆ 2012   ┆ 238          ┆ 1177.000000  ┆ 856.000000  │
+│ red_zone_td_drives_allowed ┆ 2013   ┆ 251          ┆ 1227.000000  ┆ 903.000000  │
+│ red_zone_td_drives_allowed ┆ 2014   ┆ 250          ┆ 1197.000000  ┆ 869.000000  │
+│ red_zone_td_drives_allowed ┆ 2015   ┆ 256          ┆ 1213.000000  ┆ 885.000000  │
+│ red_zone_td_drives_allowed ┆ 2016   ┆ 233          ┆ 1235.000000  ┆ 930.000000  │
+│ red_zone_td_drives_allowed ┆ 2017   ┆ 234          ┆ 1133.000000  ┆ 822.000000  │
+│ red_zone_td_drives_allowed ┆ 2018   ┆ 234          ┆ 1294.000000  ┆ 971.000000  │
+│ red_zone_td_drives_allowed ┆ 2019   ┆ 233          ┆ 1252.000000  ┆ 922.000000  │
+│ red_zone_td_drives_allowed ┆ 2020   ┆ 248          ┆ 1411.000000  ┆ 1070.000000 │
+│ red_zone_td_drives_allowed ┆ 2021   ┆ 225          ┆ 1353.000000  ┆ 1056.000000 │
+│ red_zone_td_drives_allowed ┆ 2022   ┆ 221          ┆ 1243.000000  ┆ 948.000000  │
+│ red_zone_td_drives_allowed ┆ 2023   ┆ 231          ┆ 1228.000000  ┆ 933.000000  │
+│ red_zone_td_drives_allowed ┆ 2024   ┆ 233          ┆ 1326.000000  ┆ 1024.000000 │
+│ red_zone_td_drives_allowed ┆ 2025   ┆ 244          ┆ 1324.000000  ┆ 999.000000  │
+│ red_zone_trips             ┆ 1999   ┆ 304          ┆ 1992.000000  ┆ 1518.000000 │
+│ red_zone_trips             ┆ 2000   ┆ 279          ┆ 1985.000000  ┆ 1587.000000 │
+│ red_zone_trips             ┆ 2001   ┆ 295          ┆ 1934.000000  ┆ 1498.000000 │
+│ red_zone_trips             ┆ 2002   ┆ 305          ┆ 2101.000000  ┆ 1639.000000 │
+│ red_zone_trips             ┆ 2003   ┆ 301          ┆ 1990.000000  ┆ 1533.000000 │
+│ red_zone_trips             ┆ 2004   ┆ 305          ┆ 2043.000000  ┆ 1570.000000 │
+│ red_zone_trips             ┆ 2005   ┆ 296          ┆ 1985.000000  ┆ 1556.000000 │
+│ red_zone_trips             ┆ 2006   ┆ 297          ┆ 1977.000000  ┆ 1524.000000 │
+│ red_zone_trips             ┆ 2007   ┆ 316          ┆ 2047.000000  ┆ 1555.000000 │
+│ red_zone_trips             ┆ 2008   ┆ 311          ┆ 2087.000000  ┆ 1618.000000 │
+│ red_zone_trips             ┆ 2009   ┆ 304          ┆ 2063.000000  ┆ 1595.000000 │
+│ red_zone_trips             ┆ 2010   ┆ 318          ┆ 2069.000000  ┆ 1581.000000 │
+│ red_zone_trips             ┆ 2011   ┆ 320          ┆ 2094.000000  ┆ 1617.000000 │
+│ red_zone_trips             ┆ 2012   ┆ 317          ┆ 2078.000000  ┆ 1587.000000 │
+│ red_zone_trips             ┆ 2013   ┆ 320          ┆ 2123.000000  ┆ 1634.000000 │
+│ red_zone_trips             ┆ 2014   ┆ 326          ┆ 2116.000000  ┆ 1624.000000 │
+│ red_zone_trips             ┆ 2015   ┆ 319          ┆ 2069.000000  ┆ 1578.000000 │
+│ red_zone_trips             ┆ 2016   ┆ 306          ┆ 2123.000000  ┆ 1677.000000 │
+│ red_zone_trips             ┆ 2017   ┆ 314          ┆ 2009.000000  ┆ 1538.000000 │
+│ red_zone_trips             ┆ 2018   ┆ 306          ┆ 2105.000000  ┆ 1652.000000 │
+│ red_zone_trips             ┆ 2019   ┆ 303          ┆ 2086.000000  ┆ 1630.000000 │
+│ red_zone_trips             ┆ 2020   ┆ 306          ┆ 2223.000000  ┆ 1753.000000 │
+│ red_zone_trips             ┆ 2021   ┆ 297          ┆ 2225.000000  ┆ 1804.000000 │
+│ red_zone_trips             ┆ 2022   ┆ 286          ┆ 2104.000000  ┆ 1689.000000 │
+│ red_zone_trips             ┆ 2023   ┆ 299          ┆ 2130.000000  ┆ 1694.000000 │
+│ red_zone_trips             ┆ 2024   ┆ 290          ┆ 2195.000000  ┆ 1777.000000 │
+│ red_zone_trips             ┆ 2025   ┆ 298          ┆ 2174.000000  ┆ 1743.000000 │
+│ red_zone_trips_allowed     ┆ 1999   ┆ 304          ┆ 1992.000000  ┆ 1518.000000 │
+│ red_zone_trips_allowed     ┆ 2000   ┆ 279          ┆ 1985.000000  ┆ 1587.000000 │
+│ red_zone_trips_allowed     ┆ 2001   ┆ 295          ┆ 1934.000000  ┆ 1498.000000 │
+│ red_zone_trips_allowed     ┆ 2002   ┆ 305          ┆ 2101.000000  ┆ 1639.000000 │
+│ red_zone_trips_allowed     ┆ 2003   ┆ 301          ┆ 1990.000000  ┆ 1533.000000 │
+│ red_zone_trips_allowed     ┆ 2004   ┆ 305          ┆ 2043.000000  ┆ 1570.000000 │
+│ red_zone_trips_allowed     ┆ 2005   ┆ 296          ┆ 1985.000000  ┆ 1556.000000 │
+│ red_zone_trips_allowed     ┆ 2006   ┆ 297          ┆ 1977.000000  ┆ 1524.000000 │
+│ red_zone_trips_allowed     ┆ 2007   ┆ 316          ┆ 2047.000000  ┆ 1555.000000 │
+│ red_zone_trips_allowed     ┆ 2008   ┆ 311          ┆ 2087.000000  ┆ 1618.000000 │
+│ red_zone_trips_allowed     ┆ 2009   ┆ 304          ┆ 2063.000000  ┆ 1595.000000 │
+│ red_zone_trips_allowed     ┆ 2010   ┆ 318          ┆ 2069.000000  ┆ 1581.000000 │
+│ red_zone_trips_allowed     ┆ 2011   ┆ 320          ┆ 2094.000000  ┆ 1617.000000 │
+│ red_zone_trips_allowed     ┆ 2012   ┆ 317          ┆ 2078.000000  ┆ 1587.000000 │
+│ red_zone_trips_allowed     ┆ 2013   ┆ 320          ┆ 2123.000000  ┆ 1634.000000 │
+│ red_zone_trips_allowed     ┆ 2014   ┆ 326          ┆ 2116.000000  ┆ 1624.000000 │
+│ red_zone_trips_allowed     ┆ 2015   ┆ 319          ┆ 2069.000000  ┆ 1578.000000 │
+│ red_zone_trips_allowed     ┆ 2016   ┆ 306          ┆ 2123.000000  ┆ 1677.000000 │
+│ red_zone_trips_allowed     ┆ 2017   ┆ 314          ┆ 2009.000000  ┆ 1538.000000 │
+│ red_zone_trips_allowed     ┆ 2018   ┆ 306          ┆ 2105.000000  ┆ 1652.000000 │
+│ red_zone_trips_allowed     ┆ 2019   ┆ 303          ┆ 2086.000000  ┆ 1630.000000 │
+│ red_zone_trips_allowed     ┆ 2020   ┆ 306          ┆ 2223.000000  ┆ 1753.000000 │
+│ red_zone_trips_allowed     ┆ 2021   ┆ 297          ┆ 2225.000000  ┆ 1804.000000 │
+│ red_zone_trips_allowed     ┆ 2022   ┆ 286          ┆ 2104.000000  ┆ 1689.000000 │
+│ red_zone_trips_allowed     ┆ 2023   ┆ 299          ┆ 2130.000000  ┆ 1694.000000 │
+│ red_zone_trips_allowed     ┆ 2024   ┆ 290          ┆ 2195.000000  ┆ 1777.000000 │
+│ red_zone_trips_allowed     ┆ 2025   ┆ 298          ┆ 2174.000000  ┆ 1743.000000 │
+└────────────────────────────┴────────┴──────────────┴──────────────┴─────────────┘
+
+# box_scores: 13928 rows before, 13928 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# qb_games: 17332 rows before, 17332 after; 0 only before, 0 only after; columns added [], removed []
+no column differs
+
+# published game columns: 7261 games before, 7261 after; 541 columns before, 541 after
+columns added: []
+columns removed: []
+
+## published stats that moved (all seasons)
+┌──────────────────────────┬───────────────┬──────────────┬─────────────┬────────────────┐
+│ stat                     ┆ games_changed ┆ first_season ┆ last_season ┆ max_abs_change │
+│ ---                      ┆ ---           ┆ ---          ┆ ---         ┆ ---            │
+│ str                      ┆ u32           ┆ i32          ┆ i32         ┆ f64            │
+╞══════════════════════════╪═══════════════╪══════════════╪═════════════╪════════════════╡
+│ opponent_red_zone_td_pct ┆ 7256          ┆ 1999         ┆ 2025        ┆ 66.666667      │
+│ red_zone_td_pct          ┆ 7260          ┆ 1999         ┆ 2025        ┆ 66.666667      │
+└──────────────────────────┴───────────────┴──────────────┴─────────────┴────────────────┘
+
+## published stats that moved, by season
+┌──────────────────────────┬────────┬───────────────┬──────────────┬────────────────┬─────────────────┐
+│ stat                     ┆ season ┆ games_changed ┆ null_changed ┆ max_abs_change ┆ mean_abs_change │
+│ ---                      ┆ ---    ┆ ---           ┆ ---          ┆ ---            ┆ ---             │
+│ str                      ┆ i32    ┆ u32           ┆ u32          ┆ f64            ┆ f64             │
+╞══════════════════════════╪════════╪═══════════════╪══════════════╪════════════════╪═════════════════╡
+│ opponent_red_zone_td_pct ┆ 1999   ┆ 239           ┆ 0            ┆ 66.666667      ┆ 9.800696        │
+│ opponent_red_zone_td_pct ┆ 2000   ┆ 259           ┆ 0            ┆ 15.169149      ┆ 7.109466        │
+│ opponent_red_zone_td_pct ┆ 2001   ┆ 259           ┆ 0            ┆ 13.254304      ┆ 6.335255        │
+│ opponent_red_zone_td_pct ┆ 2002   ┆ 267           ┆ 0            ┆ 50.000000      ┆ 7.108339        │
+│ opponent_red_zone_td_pct ┆ 2003   ┆ 267           ┆ 0            ┆ 17.721855      ┆ 6.134885        │
+│ opponent_red_zone_td_pct ┆ 2004   ┆ 267           ┆ 0            ┆ 17.244567      ┆ 6.140815        │
+│ opponent_red_zone_td_pct ┆ 2005   ┆ 267           ┆ 0            ┆ 15.043898      ┆ 5.605159        │
+│ opponent_red_zone_td_pct ┆ 2006   ┆ 267           ┆ 0            ┆ 19.093789      ┆ 6.233572        │
+│ opponent_red_zone_td_pct ┆ 2007   ┆ 267           ┆ 0            ┆ 12.542747      ┆ 5.674752        │
+│ opponent_red_zone_td_pct ┆ 2008   ┆ 267           ┆ 0            ┆ 14.464505      ┆ 4.890668        │
+│ opponent_red_zone_td_pct ┆ 2009   ┆ 267           ┆ 0            ┆ 14.251602      ┆ 5.424526        │
+│ opponent_red_zone_td_pct ┆ 2010   ┆ 267           ┆ 0            ┆ 12.935139      ┆ 6.457199        │
+│ opponent_red_zone_td_pct ┆ 2011   ┆ 267           ┆ 0            ┆ 15.510609      ┆ 5.639625        │
+│ opponent_red_zone_td_pct ┆ 2012   ┆ 267           ┆ 0            ┆ 13.308874      ┆ 5.612938        │
+│ opponent_red_zone_td_pct ┆ 2013   ┆ 267           ┆ 0            ┆ 16.657347      ┆ 5.392581        │
+│ opponent_red_zone_td_pct ┆ 2014   ┆ 267           ┆ 0            ┆ 12.168357      ┆ 5.000488        │
+│ opponent_red_zone_td_pct ┆ 2015   ┆ 267           ┆ 0            ┆ 14.569962      ┆ 4.998329        │
+│ opponent_red_zone_td_pct ┆ 2016   ┆ 267           ┆ 0            ┆ 13.322899      ┆ 5.051233        │
+│ opponent_red_zone_td_pct ┆ 2017   ┆ 267           ┆ 0            ┆ 13.259478      ┆ 5.637889        │
+│ opponent_red_zone_td_pct ┆ 2018   ┆ 267           ┆ 0            ┆ 14.005945      ┆ 5.798728        │
+│ opponent_red_zone_td_pct ┆ 2019   ┆ 267           ┆ 0            ┆ 15.695465      ┆ 5.652126        │
+│ opponent_red_zone_td_pct ┆ 2020   ┆ 269           ┆ 0            ┆ 12.766662      ┆ 4.690157        │
+│ opponent_red_zone_td_pct ┆ 2021   ┆ 285           ┆ 0            ┆ 11.912135      ┆ 4.378464        │
+│ opponent_red_zone_td_pct ┆ 2022   ┆ 284           ┆ 0            ┆ 11.532283      ┆ 4.388415        │
+│ opponent_red_zone_td_pct ┆ 2023   ┆ 285           ┆ 0            ┆ 13.369053      ┆ 5.274497        │
+│ opponent_red_zone_td_pct ┆ 2024   ┆ 285           ┆ 0            ┆ 16.188257      ┆ 4.735034        │
+│ opponent_red_zone_td_pct ┆ 2025   ┆ 285           ┆ 0            ┆ 12.132031      ┆ 5.053465        │
+│ red_zone_td_pct          ┆ 1999   ┆ 243           ┆ 0            ┆ 66.666667      ┆ 10.109623       │
+│ red_zone_td_pct          ┆ 2000   ┆ 259           ┆ 0            ┆ 15.012048      ┆ 7.332138        │
+│ red_zone_td_pct          ┆ 2001   ┆ 259           ┆ 0            ┆ 14.988760      ┆ 6.157801        │
+│ red_zone_td_pct          ┆ 2002   ┆ 267           ┆ 0            ┆ 26.330770      ┆ 6.772592        │
+│ red_zone_td_pct          ┆ 2003   ┆ 267           ┆ 0            ┆ 17.152632      ┆ 5.973920        │
+│ red_zone_td_pct          ┆ 2004   ┆ 267           ┆ 0            ┆ 13.672290      ┆ 5.388678        │
+│ red_zone_td_pct          ┆ 2005   ┆ 267           ┆ 0            ┆ 21.563556      ┆ 6.608365        │
+│ red_zone_td_pct          ┆ 2006   ┆ 267           ┆ 0            ┆ 14.039727      ┆ 5.944611        │
+│ red_zone_td_pct          ┆ 2007   ┆ 267           ┆ 0            ┆ 14.899704      ┆ 6.106394        │
+│ red_zone_td_pct          ┆ 2008   ┆ 267           ┆ 0            ┆ 12.298581      ┆ 4.877468        │
+│ red_zone_td_pct          ┆ 2009   ┆ 267           ┆ 0            ┆ 11.824666      ┆ 5.174874        │
+│ red_zone_td_pct          ┆ 2010   ┆ 267           ┆ 0            ┆ 13.746936      ┆ 6.548857        │
+│ red_zone_td_pct          ┆ 2011   ┆ 267           ┆ 0            ┆ 12.960815      ┆ 5.685801        │
+│ red_zone_td_pct          ┆ 2012   ┆ 267           ┆ 0            ┆ 17.285393      ┆ 5.581371        │
+│ red_zone_td_pct          ┆ 2013   ┆ 267           ┆ 0            ┆ 12.894192      ┆ 4.732872        │
+│ red_zone_td_pct          ┆ 2014   ┆ 267           ┆ 0            ┆ 12.792215      ┆ 5.156089        │
+│ red_zone_td_pct          ┆ 2015   ┆ 267           ┆ 0            ┆ 15.372244      ┆ 4.925384        │
+│ red_zone_td_pct          ┆ 2016   ┆ 267           ┆ 0            ┆ 11.867441      ┆ 4.586508        │
+│ red_zone_td_pct          ┆ 2017   ┆ 267           ┆ 0            ┆ 14.183881      ┆ 5.065304        │
+│ red_zone_td_pct          ┆ 2018   ┆ 267           ┆ 0            ┆ 16.920426      ┆ 5.867811        │
+│ red_zone_td_pct          ┆ 2019   ┆ 267           ┆ 0            ┆ 12.562219      ┆ 6.012891        │
+│ red_zone_td_pct          ┆ 2020   ┆ 269           ┆ 0            ┆ 20.686664      ┆ 5.569176        │
+│ red_zone_td_pct          ┆ 2021   ┆ 285           ┆ 0            ┆ 10.109342      ┆ 4.458911        │
+│ red_zone_td_pct          ┆ 2022   ┆ 284           ┆ 0            ┆ 14.420119      ┆ 4.906251        │
+│ red_zone_td_pct          ┆ 2023   ┆ 285           ┆ 0            ┆ 11.853259      ┆ 4.300151        │
+│ red_zone_td_pct          ┆ 2024   ┆ 285           ┆ 0            ┆ 13.919044      ┆ 4.686722        │
+│ red_zone_td_pct          ┆ 2025   ┆ 285           ┆ 0            ┆ 12.965159      ┆ 4.823902        │
+└──────────────────────────┴────────┴───────────────┴──────────────┴────────────────┴─────────────────┘
+
+462 published numeric columns are identical before and after

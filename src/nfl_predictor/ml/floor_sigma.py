@@ -120,13 +120,26 @@ def home_win_prob(margin: np.ndarray, sigma: float) -> np.ndarray:
     """Return the floor, ``Phi(margin / sigma)``.
 
     Raises:
-        ValueError: If ``sigma`` is not positive.
+        TypeError: If ``sigma`` is text (a string, bytes, or an array holding either), which
+            would otherwise parse as a number.
+        ValueError: If ``sigma``, or any element of a vector passed as one, is not finite and
+            positive, or if ``sigma`` is more than one number.
 
     """
-    if not sigma > 0:
-        msg = f"The floor's sigma must be positive, got {sigma!r}."
+    raw = np.asarray(sigma)
+    if raw.dtype.kind in "US" or (
+        raw.dtype.kind == "O" and any(isinstance(value, str | bytes) for value in raw.ravel())
+    ):
+        msg = f"The floor's sigma must be a number, not text: got {sigma!r}."
+        raise TypeError(msg)
+    values = raw.astype(float)
+    if not (np.all(np.isfinite(values)) and np.all(values > 0)):
+        msg = f"The floor's sigma must be finite and positive, got {sigma!r}."
         raise ValueError(msg)
-    return norm.cdf(margin / float(sigma))
+    if values.size != 1:
+        msg = f"The floor's sigma must be one number, got {values.size} values."
+        raise ValueError(msg)
+    return norm.cdf(margin / float(values.item()))
 
 
 def margin_errors(predictions: pd.DataFrame) -> pd.DataFrame:

@@ -1,0 +1,170 @@
+Source (read only): /home/mitch/scratch/step6/data
+nflreadpy files first from (read only): /tmp/step6_int/cache
+Scenario: season 2025, week 18 made unplayed
+Code: a000802
+
+1. Inputs and what the unplayed copy changes
+   schedule_1999.parquet  a412cd97d0d3e1c5  from /tmp/step6_int/cache
+   pbp_1999_reg.parquet  e5e7d95838f97eb8  from /tmp/step6_int/cache
+   schedule_2000.parquet  81da91863bd35e03  from /tmp/step6_int/cache
+   pbp_2000_reg.parquet  ced050da34904444  from /tmp/step6_int/cache
+   schedule_2001.parquet  33df3b05e9bb3f07  from /tmp/step6_int/cache
+   pbp_2001_reg.parquet  09924364076aa632  from /tmp/step6_int/cache
+   schedule_2002.parquet  69ea33535b318cbd  from /tmp/step6_int/cache
+   pbp_2002_reg.parquet  9ec175ab7b9ad473  from /tmp/step6_int/cache
+   schedule_2003.parquet  5f66d339589bd90b  from /tmp/step6_int/cache
+   pbp_2003_reg.parquet  797e7c99747fa6f5  from /tmp/step6_int/cache
+   schedule_2004.parquet  f17d9a5634f50bc5  from /tmp/step6_int/cache
+   pbp_2004_reg.parquet  2f7c0dbd89603e40  from /tmp/step6_int/cache
+   schedule_2005.parquet  61d25e0910981776  from /tmp/step6_int/cache
+   pbp_2005_reg.parquet  9bc1ed202d07042c  from /tmp/step6_int/cache
+   schedule_2006.parquet  332da9d4aa1ce1fe  from /tmp/step6_int/cache
+   pbp_2006_reg.parquet  a066cb8d96769d6d  from /tmp/step6_int/cache
+   schedule_2007.parquet  e582de1e7d3f3226  from /tmp/step6_int/cache
+   pbp_2007_reg.parquet  f0099127899d9693  from /tmp/step6_int/cache
+   schedule_2008.parquet  4315c62e79b19ca9  from /tmp/step6_int/cache
+   pbp_2008_reg.parquet  cd474c8924b5580f  from /tmp/step6_int/cache
+   schedule_2009.parquet  61a32fc5e8cf0aac  from /tmp/step6_int/cache
+   pbp_2009_reg.parquet  bf85d5559477dcf5  from /tmp/step6_int/cache
+   schedule_2010.parquet  81d54580c3236a4f  from /tmp/step6_int/cache
+   pbp_2010_reg.parquet  f0db0d658396e354  from /tmp/step6_int/cache
+   schedule_2011.parquet  63b1425c1f91a327  from /tmp/step6_int/cache
+   pbp_2011_reg.parquet  5a96398a85c48db0  from /tmp/step6_int/cache
+   schedule_2012.parquet  c4495aae42121421  from /tmp/step6_int/cache
+   pbp_2012_reg.parquet  45312bbb3a22c91b  from /tmp/step6_int/cache
+   schedule_2013.parquet  4b6f0f1f123a8168  from /tmp/step6_int/cache
+   pbp_2013_reg.parquet  895885da99f33280  from /tmp/step6_int/cache
+   schedule_2014.parquet  56fb33613d8ad5e5  from /tmp/step6_int/cache
+   pbp_2014_reg.parquet  3e2d72c225772d9b  from /tmp/step6_int/cache
+   schedule_2015.parquet  fd2a81d048115465  from /tmp/step6_int/cache
+   pbp_2015_reg.parquet  1a7798a94dd928c7  from /tmp/step6_int/cache
+   schedule_2016.parquet  e0e0d2cb2afc5733  from /tmp/step6_int/cache
+   pbp_2016_reg.parquet  44f8d70fa3e3e640  from /tmp/step6_int/cache
+   schedule_2017.parquet  72e37e7b4581d4e0  from /tmp/step6_int/cache
+   pbp_2017_reg.parquet  2c60aff2133888d9  from /tmp/step6_int/cache
+   schedule_2018.parquet  41e50497c81e0934  from /tmp/step6_int/cache
+   pbp_2018_reg.parquet  98882862248b774e  from /tmp/step6_int/cache
+   schedule_2019.parquet  5454f627f20464da  from /tmp/step6_int/cache
+   pbp_2019_reg.parquet  1349cb263e0acae1  from /tmp/step6_int/cache
+   schedule_2020.parquet  4837401aee047de1  from /tmp/step6_int/cache
+   pbp_2020_reg.parquet  694d7a8119abe077  from /tmp/step6_int/cache
+   schedule_2021.parquet  ac5db528ca0bd50b  from /tmp/step6_int/cache
+   pbp_2021_reg.parquet  dc98a2206e581c47  from /tmp/step6_int/cache
+   schedule_2022.parquet  feb296ba83c53de5  from /tmp/step6_int/cache
+   pbp_2022_reg.parquet  8531fac4d3411043  from /tmp/step6_int/cache
+   schedule_2023.parquet  ef59edecdd4de667  from /tmp/step6_int/cache
+   pbp_2023_reg.parquet  d7c415f2e1e87f21  from /tmp/step6_int/cache
+   schedule_2024.parquet  2834d8d0883d16d2  from /tmp/step6_int/cache
+   pbp_2024_reg.parquet  f23b1322332e492b  from /tmp/step6_int/cache
+   schedule_2025.parquet  a65b3bc8407a1c45  from /tmp/step6_int/cache
+   pbp_2025_reg.parquet  7adcccad0cc3ac8f  from /tmp/step6_int/cache
+   team_stats_2024_reg.parquet  4c8e4ee0e898decc  from /tmp/step6_int/cache
+   team_stats_2025_reg.parquet  909b69416beb5f1f  from /tmp/step6_int/cache
+   qb_elos.csv  f245999687d4b5fc  from /home/mitch/scratch/step6/data
+   meta_data.csv  7cc566a5d76ebbd7  from /home/mitch/scratch/step6/data
+   nfl_elo.csv  6031da852f754381  from /home/mitch/scratch/step6/data
+   nfl_lines.csv  8c231799ed12e8e5  from /home/mitch/scratch/step6/data
+   unplayed copy: schedule_2025.parquet: 16 games of week 18 with away_score, home_score, result, total, overtime blanked
+   unplayed copy: team_stats_2025_reg.parquet: 32 rows of week 18 removed
+   unplayed copy: pbp_2025_reg.parquet: 2636 rows of week 18 removed
+   built by: /tmp/trend-parity-6kcu29h4/base/src/nfl_predictor/__init__.py
+   built: 16 played rows, 16 upcoming rows
+   upcoming rows with a score: 0
+
+2. The played build against the source's published rows (trend columns)
+   games matched: 16 of 16
+   away_scoring_margin_4wk_trend: largest gap 0.0
+   home_scoring_margin_4wk_trend: largest gap 0.0
+   away_turnover_margin_4wk_trend: largest gap 0.0
+   home_turnover_margin_4wk_trend: largest gap 0.0
+   scoring_margin_4wk_trend_diff: largest gap 0.0
+   turnover_margin_4wk_trend_diff: largest gap 0.0
+
+3. Columns that differ between a game's completed row and its upcoming row
+| column                         | rows_differing | largest_gap |
+|--------------------------------|----------------|-------------|
+| away_moneyline                 | 16             | 500.0       |
+| away_score                     | 16             | null        |
+| away_scoring_margin_4wk_trend  | 16             | 15.75       |
+| away_spread                    | 15             | 7.0         |
+| away_turnover_margin_4wk_trend | 16             | 1.5625      |
+| home_moneyline                 | 16             | 820.0       |
+| home_score                     | 16             | null        |
+| home_scoring_margin_4wk_trend  | 16             | 13.875      |
+| home_spread                    | 15             | 7.0         |
+| home_turnover_margin_4wk_trend | 14             | 2.0625      |
+| scoring_margin_4wk_trend_diff  | 16             | 22.625      |
+| total_line                     | 13             | 3.0         |
+| turnover_margin_4wk_trend_diff | 15             | 3.0625      |
+
+4. Each game's team-stat trends, completed row against upcoming row
+   (sc = scoring margin, to = turnover margin; c = completed, u = upcoming)
+| game_id         | away_sc_c | home_sc_c | away_to_c | home_to_c | away_sc_u | home_sc_u | away_to_u | home_to_u |
+|-----------------|-----------|-----------|-----------|-----------|-----------|-----------|-----------|-----------|
+| 2025_18_ARI_LA  | -12.25    | -1.9375   | -0.375    | -0.5      | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_BAL_PIT | 6.25      | 3.5       | 0.5625    | 0.0       | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_CAR_TB  | 0.6875    | -0.6875   | 0.6875    | -1.3125   | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_CLE_CIN | -0.125    | 9.25      | -1.5625   | 0.4375    | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_DAL_NYG | -6.5625   | 3.4375    | -0.25     | 1.125     | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_DET_CHI | -6.8125   | 3.9375    | -0.5      | -0.1875   | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_GB_MIN  | -8.75     | 13.875    | -1.0      | 2.0625    | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_IND_HOU | -15.375   | 2.6875    | -0.9375   | 0.3125    | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_KC_LV   | -11.5     | -3.9375   | -0.6875   | -0.5625   | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_LAC_DEN | 2.0       | -2.625    | 1.125     | -0.3125   | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_MIA_NE  | 0.5625    | 3.625     | 0.5625    | 0.1875    | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_NO_ATL  | 14.1875   | -1.125    | 0.625     | -0.375    | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_NYJ_BUF | -15.75    | -2.8125   | -0.6875   | 0.625     | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_SEA_SF  | 0.6875    | 9.25      | 0.125     | 0.5625    | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_TEN_JAX | 9.5       | 9.75      | 0.75      | 0.75      | 0.0       | 0.0       | 0.0       | 0.0       |
+| 2025_18_WAS_PHI | -3.875    | 6.1875    | -0.375    | 0.0       | 0.0       | 0.0       | 0.0       | 0.0       |
+
+5. Published completed regular-season rows: scoring_margin_4wk_trend candidates
+   season   rows  equal_strictly_before  equal_including_own_game  rows_where_the_two_differ  of_those_equal_including
+   1999    466                    466                        94                        372                         0
+   2000    496                    496                       125                        371                         0
+   2001    496                    496                       124                        372                         0
+   2002    512                    512                       128                        384                         0
+   2003    512                    512                       129                        383                         0
+   2004    512                    512                       130                        382                         0
+   2005    512                    512                       128                        384                         0
+   2006    512                    512                       129                        383                         0
+   2007    512                    512                       128                        384                         0
+   2008    512                    512                       128                        384                         0
+   2009    512                    512                       130                        382                         0
+   2010    512                    512                       128                        384                         0
+   2011    512                    512                       129                        383                         0
+   2012    512                    512                       128                        384                         0
+   2013    512                    512                       128                        384                         0
+   2014    512                    512                       130                        382                         0
+   2015    512                    512                       128                        384                         0
+   2016    512                    512                       129                        383                         0
+   2017    512                    512                       129                        383                         0
+   2018    512                    512                       129                        383                         0
+   2019    512                    512                       129                        383                         0
+   2020    512                    512                       129                        383                         0
+   2021    544                    544                       129                        415                         0
+   2022    542                    542                       129                        413                         0
+   2023    544                    544                       129                        415                         0
+   2024    544                    544                       129                        415                         0
+   2025    544                    544                       130                        414                         0
+   2026    130                    130                       128                          2                         0
+   all    14034                  14034                      3563                      10471                         0
+
+6. Unplayed games of the latest published season: the ELO trends' fallback
+   season 2026
+| week | unplayed_games | elo_trend_zero | qb_elo_trend_null |
+|------|----------------|----------------|-------------------|
+| 5    | 14             | 0              | 0                 |
+| 6    | 14             | 14             | 14                |
+| 7    | 14             | 14             | 14                |
+| 8    | 14             | 14             | 14                |
+| 9    | 15             | 15             | 15                |
+| 10   | 14             | 14             | 14                |
+| 11   | 13             | 13             | 13                |
+| 12   | 16             | 16             | 16                |
+| 13   | 14             | 14             | 14                |
+| 14   | 15             | 15             | 15                |
+| 15   | 16             | 16             | 16                |
+| 16   | 16             | 16             | 16                |
+| 17   | 16             | 16             | 16                |
+| 18   | 16             | 16             | 16                |

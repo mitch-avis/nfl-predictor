@@ -1,0 +1,36 @@
+Source (read only): /home/mitch/scratch/step6/data
+nflreadpy files first from (read only): /tmp/step6_int/cache
+Seasons: 1999-2025; code: af66025
+
+Team-games loaded: 13935
+   scoring_margin: 1 team-games without a value
+   turnover_margin: 22 team-games without a value
+
+Sides that lose their trend to a missing value in the game before, per season
+(changed: the sides whose trend without the loss would not be 0.0)
+| season | statistic       | kind           | sides | changed |
+|--------|-----------------|----------------|-------|---------|
+| 2000   | turnover_margin | regular season | 4     | 2       |
+| 2001   | turnover_margin | regular season | 5     | 4       |
+| 2002   | turnover_margin | regular season | 7     | 5       |
+   total: 16 sides, 11 with a changed value
+
+The sides, with the trend each would carry without the loss
+| season | week | team_abbr | kind           | statistic       | would_be  |
+|--------|------|-----------|----------------|-----------------|-----------|
+| 2000   | 4    | KC        | regular season | turnover_margin | 0.0       |
+| 2000   | 4    | LAC       | regular season | turnover_margin | 0.0       |
+| 2000   | 7    | BUF       | regular season | turnover_margin | -0.083333 |
+| 2000   | 8    | MIA       | regular season | turnover_margin | -1.866667 |
+| 2001   | 7    | JAX       | regular season | turnover_margin | 0.0       |
+| 2001   | 10   | JAX       | regular season | turnover_margin | -0.166667 |
+| 2001   | 12   | JAX       | regular season | turnover_margin | -1.0      |
+| 2001   | 13   | JAX       | regular season | turnover_margin | -2.0      |
+| 2001   | 17   | JAX       | regular season | turnover_margin | 0.761905  |
+| 2002   | 5    | JAX       | regular season | turnover_margin | 0.0       |
+| 2002   | 6    | JAX       | regular season | turnover_margin | 0.0       |
+| 2002   | 9    | JAX       | regular season | turnover_margin | -0.666667 |
+| 2002   | 11   | JAX       | regular season | turnover_margin | -0.25     |
+| 2002   | 14   | JAX       | regular season | turnover_margin | 0.5       |
+| 2002   | 15   | JAX       | regular season | turnover_margin | 0.5       |
+| 2002   | 17   | JAX       | regular season | turnover_margin | 1.714286  |

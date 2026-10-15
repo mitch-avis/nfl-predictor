@@ -31,13 +31,25 @@ def _filled(value: Path | None, name: str) -> Path:
     return value
 
 
+def _default_models_dir(root: Path) -> Path:
+    """Return ``root/models``, which for this package's own checkout is read from constants.
+
+    ``constants.MODELS_PATH`` is that checkout's models directory, read when the settings are
+    built, so the test suite can point it at a temporary directory.
+    """
+    if root == Path(constants.ROOT_DIR).resolve():
+        return Path(constants.MODELS_PATH)
+    return root / "models"
+
+
 class Settings(BaseSettings):
     """Configuration for the API process.
 
     Attributes:
         root_dir: Repository root; defaults to the checkout that owns this package.
         data_dir: Directory holding ETL outputs (defaults to ``root_dir/data``).
-        models_dir: Directory holding run directories (defaults to ``root_dir/models``).
+        models_dir: Directory holding run directories (defaults to ``root_dir/models``, read
+            from ``constants.MODELS_PATH`` when ``root_dir`` is this package's checkout).
         reports_dir: Directory holding ad-hoc reports (defaults to ``root_dir/reports``).
         state_dir: Directory for the API's own state such as the SQLite database
             (defaults to ``data_dir/web``).
@@ -45,7 +57,6 @@ class Settings(BaseSettings):
         jwt_secret: Secret used to sign session tokens; generated into ``state_dir`` when unset.
         cookie_secure: Whether the session cookie carries the ``Secure`` flag.
         session_hours: Session token lifetime in hours.
-        sos_data_dir: Parquet outputs of the sibling ``nfl-sos-ratings`` project.
         web_dist: Built frontend directory (defaults to ``root_dir/web/dist``).
         python_executable: Interpreter used to launch jobs (defaults to ``root_dir/.venv``).
         host: Bind address for ``python -m nfl_predictor.api``.
@@ -64,7 +75,6 @@ class Settings(BaseSettings):
     jwt_secret: str | None = None
     cookie_secure: bool = False
     session_hours: int = 24 * 7
-    sos_data_dir: Path | None = None
     web_dist: Path | None = None
     python_executable: Path | None = None
     host: str = "127.0.0.1"
@@ -76,11 +86,10 @@ class Settings(BaseSettings):
         root = self.root_dir.resolve()
         self.root_dir = root
         self.data_dir = (self.data_dir or root / "data").resolve()
-        self.models_dir = (self.models_dir or root / "models").resolve()
+        self.models_dir = (self.models_dir or _default_models_dir(root)).resolve()
         self.reports_dir = (self.reports_dir or root / "reports").resolve()
         self.state_dir = (self.state_dir or self.data_dir / "web").resolve()
         self.db_path = (self.db_path or self.state_dir / "app.db").resolve()
-        self.sos_data_dir = (self.sos_data_dir or root / "nfl-sos-ratings" / "data").resolve()
         self.web_dist = (self.web_dist or root / "web" / "dist").resolve()
         # The venv interpreter is a symlink to the base Python; resolving it would launch jobs
         # outside the virtual environment, so this path is made absolute but never resolved.
@@ -118,9 +127,13 @@ class Settings(BaseSettings):
         return _filled(self.web_dist, "web_dist")
 
     @property
-    def sos_data_path(self) -> Path:
-        """Return the resolved nfl-sos-ratings data directory."""
-        return _filled(self.sos_data_dir, "sos_data_dir")
+    def ratings_path(self) -> Path:
+        """Return the directory of the per-season ratings and statistics tables.
+
+        Each season's tables sit there as ``{season}_{kind}.parquet``. The folder always sits
+        inside the data directory, so pointing ``data_dir`` at another tree moves it too.
+        """
+        return self.data_path / "ratings"
 
     @property
     def python_path(self) -> Path:

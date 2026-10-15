@@ -6,15 +6,18 @@ threads instead of working, so every variable below defaults to one thread; an e
 the environment is kept. Each library reads its variable once, when it loads, so this module sets
 them before importing anything that loads one; the test modules import those only after it runs.
 
-Then ``tests.data_isolation.install`` points the package's data paths at a session directory and
-refuses the network for the whole session, before any test module imports the package (see that
-module). On top of it every test gets its own empty data directory (paths a module copied at
-import time keep the shared session directory), and a refused connection or lookup fails the next
-test to finish, or the session when none does. So no test reads the checkout's data through
-``constants.DATA_PATH``, writes its caches or line record, or downloads anything; a test that
-checks the packaged paths themselves asks for ``packaged_data_paths``. Not redirected (see
-``tests/data_isolation.py``): run directories under ``models/``, ``api.settings.Settings()``
-built without a root (the checkout's ``data/web/app.db``), and the relative ``data/`` defaults of
+Then ``tests.data_isolation.install`` points the package's data paths and models directory at
+session directories and refuses the network for the whole session, before any test module imports
+the package (see that module). On top of it every test gets its own empty data and models
+directories (paths a module copied at import time keep the shared session directory), and a
+refused connection or lookup fails the next test to finish, or the session when none does. So no
+test reads the checkout's data through ``constants.DATA_PATH``, writes its caches or line record,
+writes or reads a run under ``constants.MODELS_PATH``, or downloads anything; a test that checks
+the packaged paths themselves asks for ``packaged_data_paths`` or ``packaged_models_path``. Not
+redirected (see ``tests/data_isolation.py``): ``api.settings.Settings()`` built without a root
+(its data, state and database paths, the checkout's ``data/web/app.db``), the floor-sigma
+reference runs (resolved against ``constants.ROOT_DIR``, by default
+``models/step6/ratings_anchored_seed*``), and the relative ``data/`` defaults of
 ``cli/rankings.py``; tests that touch them pass their own paths.
 """
 
@@ -79,9 +82,10 @@ DATA_PATH_TARGETS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 @dataclass
 class DataIsolation:
-    """A test's private data directory and the patch that put it in place."""
+    """A test's private data and models directories and the patch that put them in place."""
 
     data_dir: Path
+    models_dir: Path
     patch: pytest.MonkeyPatch
 
     @staticmethod
@@ -105,16 +109,19 @@ def _no_network_outside_tests() -> Generator[None]:
 
 @pytest.fixture(autouse=True)
 def isolated_data(tmp_path_factory: pytest.TempPathFactory) -> Generator[DataIsolation]:
-    """Point every data path at a fresh directory, and fail the test if it touched the network.
+    """Point every data path and the models directory at fresh directories, and fail the test if
+    it touched the network.
 
     The refusals themselves are installed for the whole session (``tests.data_isolation``); an
     attempt made by a module- or session-scoped fixture is reported by the next test that ends.
     """
     data_dir = tmp_path_factory.mktemp("data")
+    models_dir = tmp_path_factory.mktemp("models")
     with pytest.MonkeyPatch.context() as patch:
         for target, parts in DATA_PATH_TARGETS:
             patch.setattr(target, data_dir.joinpath(*parts))
-        yield DataIsolation(data_dir=data_dir, patch=patch)
+        patch.setattr("nfl_predictor.constants.MODELS_PATH", models_dir)
+        yield DataIsolation(data_dir=data_dir, models_dir=models_dir, patch=patch)
         _fail_on_network_attempts("the test")
 
 
@@ -123,4 +130,17 @@ def packaged_data_paths(isolated_data: DataIsolation) -> None:
     """Restore the checkout's data paths in every loaded package module, for path checks."""
     data_isolation.restore_packaged_paths(
         isolated_data.patch, (isolated_data.data_dir, data_isolation.SESSION_DATA_DIR)
+    )
+
+
+@pytest.fixture
+def packaged_models_path(isolated_data: DataIsolation) -> None:
+    """Restore the checkout's models directory in every loaded package module, for path checks.
+
+    Only for tests that compute paths: a test that writes a run uses its own models directory.
+    """
+    data_isolation.restore_packaged_paths(
+        isolated_data.patch,
+        (isolated_data.models_dir, data_isolation.SESSION_MODELS_DIR),
+        data_isolation.PACKAGED_MODELS_DIR,
     )

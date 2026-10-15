@@ -317,6 +317,39 @@ def _merge_elo(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
         return merged
 
 
+def warn_if_elo_lacks_week(
+    elo_df: pl.DataFrame, schedule_df: pl.DataFrame, *, season: int, week: int
+) -> None:
+    """Warn when the ELO rows skip a week the schedule still has games to play in.
+
+    `_merge_elo` then falls back for every game of that week: each team's latest listed
+    pre-game rating, a team ELO trend of 0.0 and no quarterback trends, values a completed row
+    never carries once its teams have played. The ETL calls this for the week being predicted;
+    the weeks after it are never listed yet, so they are not checked. Without any ELO rows
+    nothing falls back (the loader warns about that), and nothing is logged here.
+    """
+    if elo_df.height == 0 or not {"season", "week"}.issubset(elo_df.columns):
+        return
+    if not {"season", "week", "away_score", "home_score"}.issubset(schedule_df.columns):
+        return
+    unplayed = schedule_df.filter(
+        (pl.col("season") == season)
+        & (pl.col("week") == week)
+        & (pl.col("away_score").is_null() | pl.col("home_score").is_null())
+    )
+    listed = elo_df.filter((pl.col("season") == season) & (pl.col("week") == week))
+    if unplayed.height == 0 or listed.height > 0:
+        return
+    log.warning(
+        "qb_elos.csv has no rows for %d week %d, the week being predicted: its %d unplayed "
+        "games fall back to each team's latest listed ELO rating, a 0.0 ELO trend and no "
+        "quarterback trends. Refresh data/qb_elos.csv before the run.",
+        season,
+        week,
+        unplayed.height,
+    )
+
+
 def _add_team_rankings_features(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
     """Join the TeamRankings ratings and add the last-5 versus last-10 rating trend."""
     inputs = week.inputs

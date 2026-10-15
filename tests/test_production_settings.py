@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 SECTION = production_settings.SECTION_KEY
+# The feature groups production leaves out by default.
+PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
 
 
 def _games() -> pd.DataFrame:
@@ -93,8 +95,10 @@ def test_a_run_with_the_production_settings_shows_no_model_differences(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The backtest's defaults are production's: neither stage lists a difference."""
+    # Act
     section = _run_backtest(tmp_path, monkeypatch, [])[SECTION]
 
+    # Assert
     for stage in ("stage1", "final_fit"):
         assert section[stage] == {
             "differences": [],
@@ -113,8 +117,10 @@ def test_the_backtest_records_the_xgboost_parameters_its_folds_train_with(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The run's config keeps every resolved parameter, so later readers need not infer them."""
+    # Act
     report = _run_backtest(tmp_path, monkeypatch, ["--n-estimators", "400"])
 
+    # Assert
     recorded = report["config"][production_settings.RESOLVED_XGB_PARAMS_KEY]
     assert recorded["n_estimators"] == 400
     assert recorded["device"] == "cuda"
@@ -126,8 +132,10 @@ def test_a_recency_half_life_is_the_only_difference(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Weighting by recency differs from production's unweighted stage 1 and final fit."""
+    # Act
     section = _run_backtest(tmp_path, monkeypatch, ["--recency-half-life-seasons", "16"])[SECTION]
 
+    # Assert
     expected = [{"setting": "recency_half_life_seasons", "run": 16.0, "production": None}]
     assert section["stage1"]["differences"] == expected
     assert section["final_fit"]["differences"] == expected
@@ -137,8 +145,10 @@ def test_training_on_the_cpu_is_the_only_difference_from_the_gpu(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With a usable GPU, production's ``auto`` trains on it; a CPU run differs only there."""
+    # Act
     section = _run_backtest(tmp_path, monkeypatch, ["--xgb-device", "cpu"])[SECTION]
 
+    # Assert
     expected = [{"setting": "xgb.device", "run": "cpu", "production": "cuda"}]
     assert section["stage1"]["differences"] == expected
     assert section["final_fit"]["differences"] == expected
@@ -148,10 +158,12 @@ def test_the_production_side_reads_the_weekly_config_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A value in the weekly config file is production's; the final fit follows stage 1's."""
+    # Act
     section = _run_backtest(
         tmp_path, monkeypatch, [], production_config={"wf_recency_half_life_seasons": 8}
     )[SECTION]
 
+    # Assert
     expected = [{"setting": "recency_half_life_seasons", "run": None, "production": 8}]
     assert section["stage1"]["differences"] == expected
     assert section["final_fit"]["differences"] == expected
@@ -161,10 +173,12 @@ def test_the_final_fit_trains_with_the_weekly_config_tree_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run matching the config file's tree budget matches production in both halves."""
+    # Act
     section = _run_backtest(
         tmp_path, monkeypatch, ["--n-estimators", "400"], production_config={"wf_n_estimators": 400}
     )[SECTION]
 
+    # Assert
     for stage in ("stage1", "final_fit"):
         assert section[stage]["differences"] == []
 
@@ -173,6 +187,7 @@ def test_the_final_fit_follows_the_weekly_config_depth_and_learning_rate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The config file's depth and learning rate are production's for both halves."""
+    # Act
     section = _run_backtest(
         tmp_path,
         monkeypatch,
@@ -180,6 +195,7 @@ def test_the_final_fit_follows_the_weekly_config_depth_and_learning_rate(
         production_config={"wf_max_depth": 3, "wf_learning_rate": 0.05},
     )[SECTION]
 
+    # Assert
     expected = [
         {
             "setting": "xgb.learning_rate",
@@ -200,12 +216,14 @@ def test_xgboost_and_market_overrides_are_named_setting_by_setting(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Tree budget, regularization, anchoring and pruning each show under their own name."""
+    # Act
     section = _run_backtest(
         tmp_path,
         monkeypatch,
         ["--n-estimators", "400", "--gamma", "1.5", "--no-market-anchor", "--disable-pruning"],
     )[SECTION]
 
+    # Assert
     assert _settings(section, "stage1") == [
         "disable_pruning",
         "market_anchor",
@@ -235,7 +253,11 @@ def test_xgboost_and_market_overrides_are_named_setting_by_setting(
         ),
         (
             ["--disable-feature-groups", "pbp"],
-            {"setting": "disabled_feature_groups", "run": ["pbp"], "production": []},
+            {
+                "setting": "disabled_feature_groups",
+                "run": ["pbp"],
+                "production": ["own_elo", "own_elo_wt", "strength"],
+            },
         ),
         (
             ["--disable-trend-features"],
@@ -249,9 +271,11 @@ def test_each_ablation_alone_is_a_difference_in_both_halves(
     extra_argv: list[str],
     difference: dict[str, object],
 ) -> None:
-    """Production never drops pruning, feature groups or trend features, in either half."""
+    """Production's defaults keep pruning and drop no feature group or trend feature."""
+    # Act
     section = _run_backtest(tmp_path, monkeypatch, extra_argv)[SECTION]
 
+    # Assert
     for stage in ("stage1", "final_fit"):
         assert section[stage]["differences"] == [difference]
         assert section[stage]["run_only"] == {}
@@ -260,12 +284,57 @@ def test_each_ablation_alone_is_a_difference_in_both_halves(
     assert not any(production_settings.NO_DIFFERENCES in line for line in lines)
 
 
+def test_production_without_feature_groups_differs_from_a_run_with_them_in_both_halves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The weekly config's groups are what stage 1 and the final fit both leave out."""
+    # Act
+    section = _run_backtest(
+        tmp_path,
+        monkeypatch,
+        ["--disable-feature-groups", ""],
+        production_config={"disable_feature_groups": ["elo"]},
+    )[SECTION]
+
+    # Assert
+    expected = [{"setting": "disabled_feature_groups", "run": [], "production": ["elo"]}]
+    assert section["stage1"]["differences"] == expected
+    assert section["final_fit"]["differences"] == expected
+
+
+@pytest.mark.parametrize(
+    "run_groups", ["elo,own_elo_wt", "own_elo_wt,elo,elo"], ids=["same-order", "any-order"]
+)
+def test_a_run_leaving_out_production_groups_matches_both_halves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, run_groups: str
+) -> None:
+    """The same groups, in any order or repeated, remove the same columns: no difference."""
+    # Act
+    section = _run_backtest(
+        tmp_path,
+        monkeypatch,
+        ["--disable-feature-groups", run_groups],
+        production_config={"disable_feature_groups": ["elo", "own_elo_wt"]},
+    )[SECTION]
+
+    # Assert
+    for stage in ("stage1", "final_fit"):
+        assert section[stage] == {
+            "differences": [],
+            "run_only": {},
+            "production_only": {},
+            "not_recorded": [],
+        }
+
+
 def test_postseason_games_differ_with_their_weight_in_the_final_fit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A fold weights a postseason game like any other; production trains without them."""
+    # Act
     section = _run_backtest(tmp_path, monkeypatch, ["--include-postseason"])[SECTION]
 
+    # Assert
     assert _settings(section, "stage1") == ["include_postseason"]
     assert section["final_fit"]["differences"] == [
         {"setting": "include_postseason", "run": True, "production": False},
@@ -277,8 +346,10 @@ def test_production_tuning_differs_and_lists_its_options(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A fold never tunes; when production does, every tuning option is listed on its side."""
+    # Act
     section = _run_backtest(tmp_path, monkeypatch, [], production_config={"tune": True})[SECTION]
 
+    # Assert
     assert section["final_fit"]["differences"] == [
         {"setting": "tune", "run": False, "production": True}
     ]
@@ -293,6 +364,7 @@ def test_production_tuning_differs_and_lists_its_options(
 
 def test_a_setting_left_on_one_side_keeps_the_headline_from_saying_no_differences() -> None:
     """Only a half with nothing on either side alone reads as having no differences."""
+    # Arrange
     stage = {
         "differences": [],
         "run_only": {},
@@ -308,8 +380,10 @@ def test_a_setting_left_on_one_side_keeps_the_headline_from_saying_no_difference
         "runtime": {},
     }
 
+    # Act
     lines = production_settings.format_section(section)
 
+    # Assert
     assert (
         "- final fit: no compared setting differs; 1 model setting(s) could not be compared"
         in lines
@@ -321,6 +395,7 @@ def test_scope_settings_are_listed_apart_from_differences(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Which seasons and weeks are scored, the seed and the paths are scope, not differences."""
+    # Act
     section = _run_backtest(
         tmp_path,
         monkeypatch,
@@ -336,6 +411,7 @@ def test_scope_settings_are_listed_apart_from_differences(
         ],
     )[SECTION]
 
+    # Assert
     assert section["stage1"]["differences"] == []
     assert section["final_fit"]["differences"] == []
     scope = section["scope"]
@@ -357,10 +433,13 @@ def test_the_log_prints_the_section(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The backtest's log carries the same section, one line per stage."""
+    # Arrange
     caplog.set_level(logging.INFO)
 
+    # Act
     _run_backtest(tmp_path, monkeypatch, ["--recency-half-life-seasons", "16"])
 
+    # Assert
     messages = [record.getMessage() for record in caplog.records]
     assert any(message.startswith(production_settings.HEADING) for message in messages)
     assert (
@@ -373,10 +452,13 @@ def test_an_unreadable_production_config_leaves_the_run_report_intact(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """A weekly config that fails to load says why; the finished run still writes its report."""
+    # Arrange
     caplog.set_level(logging.INFO)
 
+    # Act
     report = _run_backtest(tmp_path, monkeypatch, [], production_config={"not_a_weekly_option": 1})
 
+    # Assert
     reason = report[SECTION]["unavailable"]
     assert "not_a_weekly_option" in reason
     assert report["config"]["checkpoint"] == {"dir": "somewhere"}
@@ -386,18 +468,21 @@ def test_an_unreadable_production_config_leaves_the_run_report_intact(
 
 def test_a_weekly_config_the_parser_rejects_is_unavailable_too(tmp_path: Path) -> None:
     """Option combinations the weekly parser exits on give a reason instead of exiting."""
+    # Arrange
     config_path = tmp_path / "weekly_run.json"
     config_path.write_text(
         json.dumps({"legacy_franchise_fit": True, "power_rankings_method": "composite"}),
         encoding="utf-8",
     )
 
+    # Act
     section = production_settings.settings_versus_production(
         walk_forward.WalkForwardConfig(xgb_params_overrides={"device": "cpu"}),
         _games(),
         production_argv=["--config", str(config_path)],
     )
 
+    # Assert
     assert section == {"unavailable": "the production weekly configuration does not parse"}
 
 
@@ -406,16 +491,19 @@ def test_a_production_setting_that_fails_to_resolve_is_unavailable(
 ) -> None:
     """Resolving production's options (its device, for one) is guarded like loading them."""
 
+    # Arrange
     def refuse(_args: object) -> None:
         msg = "unknown XGBoost device 'tpu'"
         raise ValueError(msg)
 
     monkeypatch.setattr(weekly_config, "apply_run_defaults", refuse)
 
+    # Act
     section = production_settings.settings_versus_production(
         walk_forward.WalkForwardConfig(xgb_params_overrides={"device": "cpu"}), _games()
     )
 
+    # Assert
     assert section == {
         "unavailable": "the production weekly configuration does not load: "
         "unknown XGBoost device 'tpu'"
@@ -424,18 +512,23 @@ def test_a_production_setting_that_fails_to_resolve_is_unavailable(
 
 def test_format_says_when_nothing_differs() -> None:
     """A stage with no difference says so rather than printing nothing."""
+    # Arrange
     section = production_settings.settings_versus_production(
         walk_forward.with_resolved_xgb_device(
             walk_forward.WalkForwardConfig(
-                include_quantiles=False, xgb_params_overrides={"device": "cpu"}
+                include_quantiles=False,
+                xgb_params_overrides={"device": "cpu"},
+                disabled_feature_groups=PRODUCTION_GROUPS,
             )
         ),
         _games(),
         production_argv=["--xgb-device", "cpu"],
     )
 
+    # Act
     lines = production_settings.format_section(section)
 
+    # Assert
     assert "- stage 1 walk-forward: no model-affecting differences" in lines
     assert "- final fit: no model-affecting differences" in lines
 
@@ -458,6 +551,7 @@ def test_compare_shows_each_runs_settings_versus_production(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``compare`` adds the section for every run whose metadata and dataset it can read."""
+    # Arrange
     config_path = tmp_path / "weekly_run.json"
     config_path.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(weekly_config, "DEFAULT_CONFIG_PATH", config_path)
@@ -468,7 +562,7 @@ def test_compare_shows_each_runs_settings_versus_production(
         "calibration": "auto",
         "include_quantiles": True,
         "xgb_params_overrides": {"device": "cuda"},
-        "disabled_feature_groups": [],
+        "disabled_feature_groups": list(PRODUCTION_GROUPS),
     }
     candidate = _write_compare_run(
         tmp_path, "cand", {**recorded, "recency_half_life_seasons": 16.0}, data_path
@@ -477,6 +571,7 @@ def test_compare_shows_each_runs_settings_versus_production(
     out_json = tmp_path / "compare.json"
     out_md = tmp_path / "compare.md"
 
+    # Act
     code = front_door.main(
         [
             "compare",
@@ -493,6 +588,7 @@ def test_compare_shows_each_runs_settings_versus_production(
         ]
     )
 
+    # Assert
     assert code == 0
     sections = json.loads(out_json.read_text(encoding="utf-8"))[SECTION]
     assert sections["cand"]["stage1"]["differences"] == [
@@ -509,18 +605,25 @@ def test_compare_shows_each_runs_settings_versus_production(
 
 def test_a_run_without_metadata_has_no_section() -> None:
     """A bare checkpoint directory records no settings to compare."""
-    assert "metadata" in production_settings.section_for_metadata(None)["unavailable"]
+    # Act
+    section = production_settings.section_for_metadata(None)
+
+    # Assert
+    assert "metadata" in section["unavailable"]
 
 
 def test_a_run_whose_recorded_config_no_longer_loads_has_no_section(tmp_path: Path) -> None:
     """A retired setting in an old run's metadata is reported, not raised."""
+    # Arrange
     data_path = tmp_path / "games.csv"
     _games().to_csv(data_path, index=False)
 
+    # Act
     section = production_settings.section_for_metadata(
         {"config": {"calibration": "platt", "data_path": str(data_path)}}
     )
 
+    # Assert
     assert "platt" in section["unavailable"]
 
 
@@ -534,7 +637,13 @@ def _metadata_section(
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
     data_path = tmp_path / "games.csv"
     _games().to_csv(data_path, index=False)
-    recorded = {"calibration": "auto", "random_seed": 42, "data_path": str(data_path), **config}
+    recorded = {
+        "calibration": "auto",
+        "random_seed": 42,
+        "data_path": str(data_path),
+        "disabled_feature_groups": list(PRODUCTION_GROUPS),
+        **config,
+    }
     return production_settings.section_for_metadata({"config": recorded})
 
 
@@ -542,8 +651,10 @@ def test_an_older_run_without_xgboost_records_is_not_inferred_from_todays_defaul
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With no recorded parameters or device, the XGBoost block reads "not recorded"."""
+    # Act
     section = _metadata_section(tmp_path, monkeypatch, {"xgb_params_overrides": None})
 
+    # Assert
     for stage in ("stage1", "final_fit"):
         assert section[stage]["differences"] == []
         assert "xgb.n_estimators" in section[stage]["not_recorded"]
@@ -560,12 +671,14 @@ def test_a_recorded_partial_override_still_shows_its_difference(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A recorded override is compared; the device comes from the recorded ``xgb_device``."""
+    # Act
     section = _metadata_section(
         tmp_path,
         monkeypatch,
         {"xgb_params_overrides": {"n_estimators": 400}, "xgb_device": "cpu"},
     )
 
+    # Assert
     assert section["stage1"]["differences"] == [
         {"setting": "xgb.device", "run": "cpu", "production": "cuda"},
         {"setting": "xgb.n_estimators", "run": 400, "production": 200},
@@ -578,16 +691,20 @@ def test_recorded_resolved_parameters_are_compared_in_full(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run that recorded its trained parameters has nothing left unrecorded."""
+    # Arrange
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
     trained = walk_forward.xgb_params_for_config(
         walk_forward.WalkForwardConfig(xgb_params_overrides={"device": "cuda"})
     )
+
+    # Act
     section = _metadata_section(
         tmp_path,
         monkeypatch,
         {"xgb_params_overrides": {"device": "cuda"}, "xgb_params": trained},
     )
 
+    # Assert
     assert section["stage1"] == {
         "differences": [],
         "run_only": {},
@@ -600,12 +717,14 @@ def test_retired_settings_an_older_run_recorded_are_listed_with_their_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Keys that no longer exist are neither dropped silently nor read as no difference."""
+    # Act
     section = _metadata_section(
         tmp_path,
         monkeypatch,
         {"market_prob_weight": 0.5, "calibration_weeks": 4, "checkpoint": {"dir": "x"}},
     )
 
+    # Assert
     assert section["retired"] == {"calibration_weeks": 4, "market_prob_weight": 0.5}
     lines = production_settings.format_section(section)
     assert (
@@ -663,10 +782,13 @@ def test_a_real_backtests_metadata_round_trips_with_nothing_retired_or_unrecorde
     The keys it records beside the walk-forward configuration are exactly the known records,
     so a new key written by the backtest, or a stale one in the list, fails here.
     """
+    # Arrange
     metadata = _real_backtest_metadata(tmp_path, monkeypatch, extra_argv)
 
+    # Act
     section = production_settings.section_for_metadata(metadata)
 
+    # Assert
     assert section["retired"] == {}
     for stage in ("stage1", "final_fit"):
         assert section[stage]["not_recorded"] == []
@@ -680,8 +802,10 @@ def test_a_real_backtests_metadata_round_trips_with_nothing_retired_or_unrecorde
 
 def test_a_config_that_is_not_an_object_is_a_type_error(tmp_path: Path) -> None:
     """A config file must hold a mapping; a list is refused as the wrong type."""
+    # Arrange
     path = tmp_path / "weekly_run.json"
     path.write_text(json.dumps([1, 2]), encoding="utf-8")
 
+    # Act & Assert
     with pytest.raises(TypeError, match="must parse to a JSON/YAML object"):
         weekly_config._load_config(path)

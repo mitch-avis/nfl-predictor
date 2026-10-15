@@ -24,6 +24,7 @@ Outputs land under the run directory (default: models/<run_id>/) and include:
 from __future__ import annotations
 
 import json
+import math
 import shlex
 import sys
 from dataclasses import asdict, dataclass
@@ -35,7 +36,14 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.ml import artifacts, floor_sigma, metrics, ml_model_core, walk_forward
+from nfl_predictor.ml import (
+    artifacts,
+    feature_spec,
+    floor_sigma,
+    metrics,
+    ml_model_core,
+    walk_forward,
+)
 from nfl_predictor.ml.metrics import confidence_ranks
 from nfl_predictor.ml.ml_model_predict import predict_week_margin_total
 from nfl_predictor.ml.ml_model_training import (
@@ -44,7 +52,7 @@ from nfl_predictor.ml.ml_model_training import (
     train_margin_total_model_with_report,
     write_training_artifacts,
 )
-from nfl_predictor.reporting import power_rankings
+from nfl_predictor.reporting import power_rankings, rating_sources
 from nfl_predictor.reporting.betting_report import build_betting_report
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.utils.logger import log
@@ -146,16 +154,34 @@ def _stage_marker_path(run_dir: Path, stage: str) -> Path:
     return run_dir / f"{stage}_state.json"
 
 
+def _marker_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Return a stage's settings as its reuse marker hashes them.
+
+    Leaving no feature group out is how every run trained before the setting existed, so an
+    empty ``disabled_feature_groups`` stays out of the hash and a run directory written then
+    still resumes; a non-empty one is hashed like any other setting.
+    """
+    if settings.get("disabled_feature_groups"):
+        return settings
+    return {key: value for key, value in settings.items() if key != "disabled_feature_groups"}
+
+
 def _stage_can_reuse(
     marker_path: Path,
     dataset_hash: str,
     config_hash: str,
     outputs: list[Path],
 ) -> bool:
-    """Check whether a stage marker matches and outputs exist."""
+    """Check whether a stage marker matches, the stage finished, and its outputs exist.
+
+    A marker with ``"complete": false`` records a stage that skipped part of its work (the
+    reports stage when the power rankings were unavailable), so it is never reused.
+    """
     if not marker_path.exists():
         return False
     payload = json.loads(marker_path.read_text(encoding="utf-8"))
+    if payload.get("complete") is False:
+        return False
     if payload.get("dataset_hash") != dataset_hash:
         return False
     if payload.get("config_hash") != config_hash:
@@ -227,6 +253,14 @@ def _power_rankings_outputs(out_dir: Path, season: int, through_week: int) -> li
 
 
 @dataclass(frozen=True)
+class _RankingOutputs:
+    """The files the rankings step wrote, and why it skipped the ranking when it did."""
+
+    paths: list[Path]
+    skipped: str | None = None
+
+
+@dataclass(frozen=True)
 class _RunContext:
     """The weekly run's arguments, identity and dataset, which every stage reads."""
 
@@ -238,6 +272,29 @@ class _RunContext:
     dataset_hash: str
     dataset_fingerprint: dict[str, Any]
     config_payload: dict[str, Any]
+
+
+def _check_ratings_replace_strength(args: argparse.Namespace) -> None:
+    """Stop before any work when the groups left out need ported ratings the data lacks.
+
+    It reads only the strength and ratings columns of the dataset, so a dry run on old data
+    stops here rather than reporting success. A dry run that would refresh the data first
+    warns instead, since the refresh may add the ratings. Stage 1 and the final fit repeat the
+    check on the frames they load, which covers a stage reused from an earlier run. A missing
+    dataset is left to ``_start_run``, which names it.
+    """
+    groups = list(args.disable_feature_groups)
+    if "strength" not in groups or not args.data_path.exists():
+        return
+    header = list(pd.read_csv(args.data_path, nrows=0).columns)
+    needed = feature_spec.resolve_feature_group_columns(
+        header, ["strength", "ratings"], warn_unmatched=False
+    )
+    if not needed:
+        return
+    games = pd.read_csv(args.data_path, usecols=needed)
+    stop = args.skip_data_refresh or not args.dry_run
+    feature_spec.check_ratings_replace_strength(games, groups, stop=stop)
 
 
 def _start_run(args: argparse.Namespace) -> _RunContext:
@@ -252,7 +309,7 @@ def _start_run(args: argparse.Namespace) -> _RunContext:
 
     config_payload = _config_payload(args)
     run_id = args.run_id or artifacts.generate_run_id("weekly", dataset_hash, config_payload)
-    run_dir = args.run_dir or (Path(constants.ROOT_DIR) / "models" / run_id)
+    run_dir = args.run_dir or (Path(constants.MODELS_PATH) / run_id)
     run_dir.mkdir(parents=True, exist_ok=True)
 
     output_dir = args.output_dir or run_dir
@@ -290,6 +347,7 @@ def _wf_run_fingerprint(
             "max_cardinality_ratio": float(args.max_cardinality_ratio),
             "feature_start": ml_model_core.DEFAULT_FEATURE_START_COLUMN,
             "feature_end": ml_model_core.DEFAULT_FEATURE_END_COLUMN,
+            "disabled_feature_groups": list(options.disabled_feature_groups),
             "xgb_params_overrides": options.xgb_params_overrides,
             "floor_sigma_history": reference_pool.digest(),
         },
@@ -310,7 +368,7 @@ def _run_stage1(ctx: _RunContext, reference_pool: floor_sigma.ErrorPool) -> dict
     }
     wf_run_fingerprint = _wf_run_fingerprint(ctx, options, reference_pool)
 
-    wf_config_hash = artifacts.stable_short_hash(wf_config)
+    wf_config_hash = artifacts.stable_short_hash(_marker_settings(wf_config))
     wf_marker = _stage_marker_path(ctx.run_dir, "wf_compare")
 
     if args.resume and _stage_can_reuse(
@@ -321,6 +379,13 @@ def _run_stage1(ctx: _RunContext, reference_pool: floor_sigma.ErrorPool) -> dict
     ):
         log.info("Stage 1: reuse %s", wf_best_json)
         wf_summary = json.loads(wf_best_json.read_text(encoding="utf-8"))
+        if not stage1.has_predictions_source(ctx.run_dir):
+            stage1.write_reused_predictions_source(
+                walk_forward.load_games(args.data_path),
+                options,
+                run_dir=ctx.run_dir,
+                floor_sigma_history=reference_pool,
+            )
     else:
         df = walk_forward.load_games(args.data_path)
         run = stage1.Stage1Run(
@@ -357,7 +422,7 @@ def _run_stage2(
         "pool_digest": sigma_pool.digest(),
         "week": list(sigma_week),
     }
-    train_config_hash = artifacts.stable_short_hash(train_config)
+    train_config_hash = artifacts.stable_short_hash(_marker_settings(train_config))
     train_marker = _stage_marker_path(ctx.run_dir, "train")
     paths = artifacts.resolve_run_paths(ctx.run_id, run_dir=ctx.run_dir)
 
@@ -390,6 +455,7 @@ def _run_stage2(
             xgb_params_overrides=train_config["xgb_params_overrides"],
             floor_sigma_pool=sigma_pool,
             floor_sigma_week=sigma_week,
+            disabled_feature_groups=tuple(train_config["disabled_feature_groups"]),
         )
     )
     record = TrainingRecord(
@@ -480,8 +546,13 @@ def _run_stage3(
 
 def _write_power_rankings(
     ctx: _RunContext, season: int | None, week: int | None, model_path: Path
-) -> list[Path]:
-    """Write the power rankings and projected standings; return the files written."""
+) -> _RankingOutputs:
+    """Write the power rankings and projected standings; return the files written.
+
+    When the configured method's rating source is unavailable, the ranking is skipped with an
+    error and no other method stands in; the projected standings, which no method changes, are
+    still written, and the returned ``skipped`` names the reason.
+    """
     args = ctx.args
     pr_season = args.power_rankings_season or season
     pr_week = args.power_rankings_through_week
@@ -490,37 +561,71 @@ def _write_power_rankings(
 
     if pr_season is None or pr_week is None:
         log.info("Power rankings skipped: unable to infer season/week.")
-        return []
+        return _RankingOutputs([])
     if not args.power_rankings_data_ml.exists():
         log.info("Power rankings skipped: missing %s", args.power_rankings_data_ml)
-        return []
+        return _RankingOutputs([])
     if not args.power_rankings_data_schedule.exists():
         log.info("Power rankings skipped: missing %s", args.power_rankings_data_schedule)
-        return []
+        return _RankingOutputs([])
     pr_out_dir = args.power_rankings_out_dir or ctx.output_dir
     pr_out_dir.mkdir(parents=True, exist_ok=True)
     model = ml_model_core.load_model_checkpoint(model_path, "margin_total")
-    try:
-        ranking_inputs = power_rankings.RankingInputs(
-            data_ml=args.power_rankings_data_ml,
-            data_schedule=args.power_rankings_data_schedule,
-            season=pr_season,
-            through_week=pr_week,
-            include_postseason=bool(args.power_rankings_include_postseason),
-        )
-        result = power_rankings.compute_power_rankings(
-            model, ranking_inputs, config.power_ranking_options(args)
-        )
-    except power_rankings.StrengthSnapshotUnavailableError as exc:
-        log.warning("Power rankings skipped: %s", exc)
-        return []
-    power_rankings.write_ranking_outputs(
-        result,
-        out_dir=pr_out_dir,
+    ranking_inputs = power_rankings.RankingInputs(
+        data_ml=args.power_rankings_data_ml,
+        data_schedule=args.power_rankings_data_schedule,
         season=pr_season,
         through_week=pr_week,
+        include_postseason=bool(args.power_rankings_include_postseason),
     )
-    return _power_rankings_outputs(pr_out_dir, pr_season, pr_week)
+    try:
+        result = power_rankings.compute_power_rankings(
+            model, ranking_inputs, config.power_ranking_options(args, run_dir=ctx.run_dir)
+        )
+    except rating_sources.RatingSourceUnavailableError as exc:
+        skipped = str(exc)
+    else:
+        power_rankings.write_ranking_outputs(
+            result,
+            out_dir=pr_out_dir,
+            season=pr_season,
+            through_week=pr_week,
+        )
+        return _RankingOutputs(_power_rankings_outputs(pr_out_dir, pr_season, pr_week))
+    log.error("Power rankings skipped: %s", skipped)
+    return _RankingOutputs(_write_projected_standings(model, ranking_inputs, pr_out_dir), skipped)
+
+
+def _write_projected_standings(
+    model: ml_model_core.MarginTotalModel,
+    ranking_inputs: power_rankings.RankingInputs,
+    out_dir: Path,
+) -> list[Path]:
+    """Write the projected standings alone, for a week whose ranking was skipped."""
+    standings = power_rankings.project_standings(
+        power_rankings.load_league_standings(model, ranking_inputs)
+    )
+    return power_rankings.write_standings_outputs(
+        standings,
+        out_dir=out_dir,
+        season=ranking_inputs.season,
+        through_week=ranking_inputs.through_week,
+    )
+
+
+def _report_floor_sigma(predictions: pd.DataFrame) -> float | None:
+    """Return the production floor sigma behind the predictions' win probabilities, or None.
+
+    Every prediction row carries the sigma the final fit estimated for the week
+    (``floor_sigma``); the betting report needs it to split the moneyline edge at the spread.
+    None when the column is missing or does not hold exactly one finite positive value.
+    """
+    if "floor_sigma" not in predictions.columns:
+        return None
+    values = pd.to_numeric(predictions["floor_sigma"], errors="coerce").dropna().unique()
+    if len(values) != 1 or not (math.isfinite(values[0]) and values[0] > 0):
+        return None
+    return float(values[0])
 
 
 def _run_stage4(
@@ -540,7 +645,7 @@ def _run_stage4(
         "power_rankings_data_schedule": str(args.power_rankings_data_schedule),
         "power_rankings_out_dir": str(pr_out_dir_default),
         "power_rankings_include_postseason": bool(args.power_rankings_include_postseason),
-        **config.power_rankings_report_config(args),
+        **config.power_rankings_report_config(args, run_dir=ctx.run_dir),
     }
     report_hash = artifacts.stable_short_hash(report_config)
     report_marker = _stage_marker_path(ctx.run_dir, "reports")
@@ -556,7 +661,7 @@ def _run_stage4(
     betting_report_path = output_paths["betting_report"]
 
     try:
-        report_df = build_betting_report(predictions)
+        report_df = build_betting_report(predictions, floor_sigma=_report_floor_sigma(predictions))
     except ValueError as exc:
         log.info("Betting report skipped: %s", exc)
     else:
@@ -564,15 +669,20 @@ def _run_stage4(
         outputs.append(betting_report_path)
         log.info("Wrote betting report to %s", betting_report_path)
 
+    extra: dict[str, Any] = {}
     if not args.skip_power_rankings:
-        outputs.extend(_write_power_rankings(ctx, season, week, model_path))
+        rankings = _write_power_rankings(ctx, season, week, model_path)
+        outputs.extend(rankings.paths)
+        if rankings.skipped is not None:
+            # A resume runs this stage again rather than reusing a run without its rankings.
+            extra = {"complete": False, "power_rankings_skipped": rankings.skipped}
 
     _write_stage_marker(
         report_marker,
         dataset_hash=ctx.dataset_hash,
         config_hash=report_hash,
         stage="reports",
-        extra={"outputs": [str(path) for path in outputs]},
+        extra={"outputs": [str(path) for path in outputs], **extra},
     )
     log.info("Weekly run complete.")
 
@@ -587,6 +697,7 @@ def main() -> int:
             log.info("Dry-run: would refresh data before running the stages")
         else:
             _refresh_data(args.data_collection_args)
+    _check_ratings_replace_strength(args)
 
     ctx = _start_run(args)
     if args.dry_run:

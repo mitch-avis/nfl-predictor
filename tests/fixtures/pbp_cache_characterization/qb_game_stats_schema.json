@@ -1,0 +1,19 @@
+{
+  "attempts": "Float64",
+  "completions": "Float64",
+  "cpoe_count": "Float64",
+  "cpoe_sum": "Float64",
+  "dropbacks": "Float64",
+  "interceptions": "Float64",
+  "opponent_abbr": "String",
+  "pass_tds": "Float64",
+  "pass_yards": "Float64",
+  "passer_name": "String",
+  "qb_epa_sum": "Float64",
+  "qb_id": "String",
+  "sack_yards": "Float64",
+  "sacks": "Float64",
+  "season": "Int64",
+  "team_abbr": "String",
+  "week": "Int64"
+}

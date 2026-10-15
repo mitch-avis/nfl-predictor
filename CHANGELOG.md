@@ -1,5 +1,498 @@
 # Changelog
 
+## [0.59.0] - 2026-10-14
+
+### Changed
+
+- **Breaking:** the weekly run, `nfl-predictor train` and `nfl-predictor backtest` leave out the
+  strength snapshot and both own-Elo presets by default (`strength,own_elo,own_elo_wt`,
+  `constants.PRODUCTION_DISABLED_FEATURE_GROUPS`), so production trains on the ported ratings
+  beside the `qb_elos.csv` columns, as the user decided on 2026-10-12 from the reviewed step-6
+  runs. `--disable-feature-groups ''` (or `[]` in `config/weekly_run.yaml`) leaves no group out,
+  and a list given replaces the default; a backtest recorded before this version reproduces with
+  `--disable-feature-groups ''` added.
+- The floor sigma's reference pool is `models/step6/ratings_anchored_seed42` and
+  `models/step6/ratings_anchored_seed7`, read by the weekly run and `train`, and so by the power
+  rankings' model rating; `backtest` still defaults to none.
+- A `disable_feature_groups` key with no value in the weekly config is refused instead of read as
+  no group; write `[]` to leave no group out.
+- The help and the docs name whole group lists for the stricter configurations (no market
+  information with the own Elo: `strength,elo,own_elo_wt`; no Elo at all:
+  `strength,elo,own_elo,own_elo_wt`), the weekly run's `--wf-market-mode` and
+  `--disable-feature-groups` included, and say that a list replaces the default.
+- `predict --model-in` logs that it ignores the group option only for a list other than the
+  default.
+- Every walk-forward checkpoint fingerprint and the weekly stage hashes change, so the first
+  weekly run after the upgrade retrains stage 1.
+
+### Added
+
+- When the groups left out include `strength` and the data has the strength snapshot but no
+  ported-ratings column with a value (a column null in every row counts as missing), `train` and
+  the weekly run stop and name both remedies: rebuild the data with `nfl-predictor data`, or keep
+  `strength`. The weekly run checks right after the data refresh or its skip, before creating the
+  run directory, and stage 1 and the final fit check again; a dry run that would refresh the data
+  only warns. `backtest` and the web walk-forward job warn and carry on.
+- `.agents/benchmarks.md` records the step-6 reference arms, every step-6 comparison and the
+  kickoff-starter convention.
+
+### Fixed
+
+- The floor's win probability refuses a sigma that is not finite and positive, or more than one
+  number, with `ValueError`, and a text sigma with `TypeError`.
+- The no-game-lines note says a group list replaces the default.
+
+## [0.58.1] - 2026-10-14
+
+### Added
+
+- `.agents/sos_port/betting_labels.py` tests the betting report's confidence score and action
+  label on the whole moneyline edge against the model's part beyond the spread (report-only), on
+  both seeds of the adopted configuration's reference, and writes
+  `.agents/sos_port/BETTING_LABELS.md` and `betting_labels.json`. Under its protocol, written
+  before any score (`.agents/sos_port/protocols/betting_labels.md`), the labels stay on the whole
+  edge: on the 815 games of the seasons with real moneylines (2022, 2024, 2025), the Brier score of
+  the beyond-the-spread claim minus the model's is `-0.00036` (95% interval `-0.00198` to
+  `+0.00135`), which contains zero (reviewed independently; decision entry 3 in
+  `.agents/sos_port/decisions/betting_edges.md`).
+
+## [0.58.0] - 2026-10-14
+
+### Changed
+
+- **Breaking:** the weekly run ranks teams on the even blend of the ported and model ratings by
+  default (`power_rankings_method` unset, `power_rankings_blend_weight: 0.5` in
+  `config/weekly_run.yaml`), as the user chose after the rankings measurement; set
+  `power_rankings_method: composite` to restore the composite, whose report is unchanged. The model
+  rating reads the ranked season from the run's own stage-1 fold checkpoints, and the floor-sigma
+  reference runs, averaged per game, only for week 1's carried-forward fit.
+- A ranking the weekly run cannot build (a missing or short source) is skipped with an error that
+  names what is missing; no other method ranks in its place, the projected standings are still
+  written, and the reports stage stays undone, so `--resume` retries it.
+- The weekly run refuses to start when `--legacy-franchise-fit` meets a ranking method other than
+  Bradley-Terry, and the model rating refuses a fold without a `neutral` column or with it null in
+  every row.
+- A run without the market columns is described as "no game lines" in the CLI help, the docs and
+  its log, which notes the kept win-total groups (`elo`, `own_elo_wt`) at info level instead of
+  warning. The message lives in `ml/`, so every walk-forward checkpoint fingerprint changes.
+
+### Added
+
+- Stage 1 of the weekly run writes `wf_compare/metadata.json` naming its fold checkpoints. A
+  resumed run that reuses stage 1 writes it when missing, from the one fold manifest that records
+  the production configuration and the data's shape, and warns to rerun with `--no-resume` when
+  none or several match.
+
+## [0.57.4] - 2026-10-14
+
+### Added
+
+- Report-only tests of the rating questions `nfl-sos-ratings` left open, each under a protocol
+  committed before anything was scored (`.agents/sos_port/decisions/open_rating_tests.md`,
+  reviewed independently); none changes a rating, and none is adopted before step 6 merges:
+  - kneel-downs and spikes in the team rating (`team_plays_test.py kneel-spike`): leaving them out
+    lowers the next-game margin MAE by 0.021, but the interval reaches +0.0005, so the rule keeps
+    today's rating;
+  - penalty-wiped plays in the team rating (`team_plays_test.py penalty-wiped`): no definition
+    differs from another;
+  - the quarterback rating from all of a quarterback's plays (`qb_plays_test.py`): no candidate
+    beats another;
+  - the botched-snap charge rule (`botched_snaps.py`): removing the 60 snaps charged to a lineman
+    moves the published quarterback ratings by at most 0.0112 EPA per dropback.
+- `.agents/sos_port/rating_tests_common.py` holds what the tests share: the season-cluster and
+  single-game bootstraps, cache-only loaders that cannot download, and a provenance block with the
+  SHA-256 of the code and every input file and the git commit.
+
+## [0.57.3] - 2026-10-14
+
+### Changed
+
+- The phase-1 audit scripts (`.agents/sos_port/inventory.py`, `parity.py`) read this repository's
+  data from `--data-dir` (default `data/`) and judge the integrated code: of 1,736 output columns,
+  1,236 match the source and 500 differ on purpose, none missing, and every one of the 25,564
+  mismatching pair values on the candidate build has a named cause (reviewed independently).
+- The parity check reads the play-by-play through the ETL's loader and its Jacksonville 2001-2002
+  repair, with downloads blocked, and judges 35 pairs, among them the four allowed rates and three
+  pairs read on the opponent's row (`carries_faced`, `attempts_faced`, `completions_allowed`).
+
+### Fixed
+
+- The parity check fails the run on an empty cached schedule instead of raising, and on a
+  team-game without its opponent's row.
+- `parity.json` is the same at any thread count: the wiped-out EPA sums are exact before they are
+  rounded to 9 decimals.
+- The inventory accepts the `[opponent]` marker only on the team-game catalogs (`team_game`,
+  `box_score`, `team_stats`).
+
+## [0.57.2] - 2026-10-14
+
+### Added
+
+- The betting report splits each game's moneyline edge at the spread, with three diagnostic
+  columns: `market_home_prob_spread`, the floor's curve at the market's margin
+  (`Phi(-home_spread / sigma)` at the week's floor sigma); `edge_beyond_spread_home_prob`, what
+  the model adds beyond the spread; and `spread_moneyline_gap_home_prob`, the gap between the
+  spread and the moneyline, which carries nothing from the model. The two parts sum to the edge.
+  The columns are empty for a game without a spread or a report built without a sigma; the report
+  rejects a sigma that is not finite and positive, and the weekly run then passes none. The
+  confidence score and the action label still read the whole edge: under the rule written before
+  scoring, the gap outweighs the model's part in 14.3% of the largest tenth of edges over
+  2007-2025, not in more than half (reviewed independently).
+- `.agents/sos_port/betting_edges.py` writes that measurement (`.agents/sos_port/BETTING_EDGES.md`)
+  from a walk-forward's fold checkpoints.
+
+## [0.57.1] - 2026-10-10
+
+### Added
+
+- `.agents/sos_port/elo_qb_alt.py` scores the ported quarterback rating as the own Elo's
+  quarterback adjustment in place of 538's VALUE (report-only). Under its rule, written before any
+  score, VALUE stays: the ported rating's pre-game probabilities are worse on Brier score and log
+  loss over 2007-2025, at every scale tried (reviewed independently). The season-to-date rating
+  each game reads is the leakage-safe pre-week fit: the published quarterback week-by-week history
+  uses the penalty chosen on the whole season.
+
+## [0.57.0] - 2026-10-10
+
+### Added
+
+- `nfl-predictor rankings --method ported|model|blend` (and the weekly run's
+  `--power-rankings-method`) rank teams on a rating in points known before the week: `ported` on
+  the ported team rating the ETL publishes, `model` on a ridge fit of team strengths and a home
+  term to a walk-forward's pre-game predicted margins (`--model-predictions`: fold checkpoints
+  that cover every completed game the fit reads; week 1 carries the previous season's fit forward
+  by the ported prior's factor), and `blend` on `--blend-weight` times the ported rating plus the
+  rest times the model rating. The default stays the composite. A source that is missing,
+  unreadable or incomplete stops the command with a one-line error and makes the weekly run skip
+  its rankings with a warning.
+- `.agents/sos_port/rankings_eval.py` scores candidate rankings on next-week margins with game and
+  season bootstraps; given several `--run-dir` options, it also scores the model rating on the
+  runs' averaged predictions. On 2008-2025 the blend predicts next-week margins better than the
+  ported rating alone, and the composite and the model rating tie it (reviewed in
+  `models/step6/rankings/REVIEW.md`); changing the default is left to the user.
+
+### Fixed
+
+- `nfl-predictor rankings` reports a missing strength-snapshot week in one line instead of a
+  traceback.
+
+## [0.56.0] - 2026-10-10
+
+### Changed
+
+- The season cache's code fingerprint covers `src/nfl_predictor/season_stats/`, so the first
+  incremental ETL after this release rebuilds every season once and downloads each finished
+  season's official team-stats file once.
+- The team, quarterback, rank-range, head-to-head and Schedules pages' empty states say the ETL
+  writes their tables and to run it.
+
+### Added
+
+- `nfl-predictor data` writes the season statistics ported from `nfl-sos-ratings` to
+  `data/ratings/{season}_{kind}.parquet` beside the ratings tables: the team and quarterback game
+  logs, per-game and season rows, opponent profiles, `combined` and `qb_combined` (with the
+  season's fitted ratings), and the win-probability bins. Every table has the same columns and
+  types in every season, null where a source nflverse has not published yet is missing; nflverse's
+  official weekly team stats are a new cached source. `--incremental` keeps a finished season's
+  tables in its cache entry.
+- `.agents/sos_port/season_stats_etl_parity.py`: all 280 season tables of 1999-2026, built and
+  written through the ETL, match the published files of `nfl-sos-ratings`, and a cache round trip
+  rewrites them byte for byte.
+
+### Fixed
+
+- An incremental ETL run no longer keeps the season-statistics game rows built for a reused
+  season's cache key.
+
+## [0.55.1] - 2026-10-10
+
+### Added
+
+- The ETL warns when `data/qb_elos.csv` has no rows for the week being predicted: those games fall
+  back to each team's latest listed Elo rating, a 0.0 Elo trend and no quarterback trends, values
+  no completed row carries once its teams have played. Refresh the file before the run.
+
+### Fixed
+
+- An upcoming game's `scoring_margin_4wk_trend` and `turnover_margin_4wk_trend` (each side and the
+  difference) carry the team's trend from its games before the week, as its completed row will,
+  instead of 0.0; a playoff game carries the trend over the full regular season. Completed
+  regular-season rows, and so every training row and walk-forward result, are unchanged; weekly
+  predictions change from week 6 on (`.agents/sos_port/decisions/trend_parity.md`).
+
+## [0.55.0] - 2026-10-10
+
+### Changed
+
+- A red-zone trip in the play-by-play features is a drive nflverse flags inside the 20
+  (`drive_inside20` on any of its plays) in which the team ran an offensive snap, a two-point try
+  not counting. Before, any drive with a play at or inside the 20 counted, which made a touchdown
+  drive a converted trip through its extra point or two-point try alone; unlike `nfl-sos-ratings`,
+  a kickoff the kicking team recovers or a try after a return touchdown is not the receiving or
+  scoring team's trip. `red_zone_td_pct` and `opponent_red_zone_td_pct` follow at the next dataset
+  rebuild (`.agents/sos_port/decisions/integration_pbp_elo.md`, entry 2.9).
+
+### Added
+
+- When a current-season play-by-play download fails and the loader falls back to an older cached
+  file, a warning names every requested column the file lacks.
+
+## [0.54.0] - 2026-10-10
+
+### Changed
+
+- Carries in the play-by-play features count designed runs as `nfl-sos-ratings` does (a rush
+  attempt that is not a scramble, kneel-down or two-point try): runs a penalty wiped out leave the
+  rushing sums but stay snaps, so penalty-wiped plays are in neither the dropback nor the carry
+  family.
+- Scrambles nflverse files as run plays count as dropbacks (most scrambles before 2006), a play
+  flagged both a dropback and a rush counts once, down and two-point flags are read on every play,
+  a down flagged both converted and failed counts once, and Jacksonville's 2001-2002 play-by-play
+  player teams are repaired from the season rosters.
+- Every quarterback feature keys on one starter (`qb_stats.expected_starter_ids`): a completed
+  game's play-by-play starter, else the projected starter; a starter's name is matched only
+  against passers of games before the row's week, and scrambles are credited to the scrambler.
+- The ETL loads the players file and weekly rosters once per run and requests the current
+  season's play-by-play once before kickoff.
+- `nfl-predictor data --incremental` keeps each finished season's ratings in the season cache
+  (format version 2, so the first run rebuilds every season once).
+
+### Added
+
+- The ETL fits the ported team and quarterback ratings on this repository's play-by-play, writes
+  their tables to `data/ratings/{season}_{kind}.parquet` (plus the current season's weekly rank
+  ranges) through files written whole, and adds a `ratings` feature group of pre-week ratings:
+  offense, defense, special-teams and team ratings, schedule strength, and the expected starter's
+  quarterback rating with his dropbacks before the week, each per side with a `_diff`. One BLAS
+  thread is pinned around the fits (`threadpoolctl`, now a direct dependency).
+- Both own Elo presets in every dataset (`own_elo`, `own_elo_wt`), with
+  `data/own_elo_metadata.json` recording the win-total file's origin and SHA-256; a build whose
+  win totals cover none of its seasons stops.
+- A warning when a run leaves the market columns out but keeps a market-informed feature group
+  (`elo`, `own_elo_wt`), naming the groups and how to leave them out.
+
+### Removed
+
+- `strength_games_played_diff` from the published schema, and nine play-by-play counts no rate
+  reads.
+
+### Fixed
+
+- A season whose qualified passers have no rating, or a team whose games lack a final score, no
+  longer stops the ratings build.
+
+## [0.53.0] - 2026-10-10
+
+### Changed
+
+- The web sidebar and overview group the pages into sections, and Power Rankings and the new Teams
+  page link to each other.
+- Context columns such as schedule strength shade in a muted slate hue instead of the grade
+  gradient.
+- The API gzips responses of 500 bytes or more at level 6 for clients that accept it; the job log
+  stream is sent uncompressed.
+
+### Added
+
+- Team and quarterback pages over the ported ratings and season statistics: `/teams` and `/qbs`
+  with their detail pages (ratings with rank ranges, weekly rating history, game logs with each
+  opponent's season rating and league tier, opponent profiles), `/schedules` (every team-season
+  since 1999 ranked on schedule strength), `/rank-ranges`, `/head-to-head`, and a team-and-
+  quarterback tab in the Glossary. They read `data/ratings/{season}_{kind}.parquet` through
+  read-only routes under `/api/ratings`, take labels, tooltips and shading from the metric
+  registry, and compare up to four rows side by side. No job writes those tables yet, so the
+  pages show where they read from until one does.
+
+### Removed
+
+- The web API's `sos_data_dir` setting (`NFLP_SOS_DATA_DIR`): the pages read the data directory's
+  `ratings/` folder.
+
+### Fixed
+
+- `web/README.md` names the job interpreter's setting `NFLP_PYTHON_EXECUTABLE` (it said
+  `NFLP_PYTHON`, which the settings ignore).
+
+## [0.52.0] - 2026-10-10
+
+### Changed
+
+- The settings-versus-production report reads production's disabled feature groups from
+  `config/weekly_run.yaml` for both stage 1 and the final fit, and compares groups as a set.
+- The feature-group resolver moved from `ml/walk_forward.py` to `ml/feature_spec.py`
+  (`walk_forward` still imports it); every walk-forward checkpoint fingerprint changes.
+
+### Added
+
+- `disable_feature_groups` in `config/weekly_run.yaml` (default `[]`, so no weekly output
+  changes) and `--disable-feature-groups` on `nfl-predictor weekly` and `nfl-predictor train`:
+  stage 1's walk-forward and the final fit leave out exactly the columns
+  `nfl-predictor backtest --disable-feature-groups` drops for the same groups, through one shared
+  resolver, so a walk-forward arm that leaves groups out can be adopted without a gap between the
+  benchmark and production. An unknown group stops `train` and the weekly run before any data
+  loads, and a group that matches no column of the data is logged as a warning.
+- Every trained model's `metadata.json` records `disabled_feature_groups` and
+  `dropped_feature_group_columns`.
+
+## [0.51.0] - 2026-10-10
+
+### Added
+
+- `nfl_predictor.season_stats`: the season statistics of `nfl-sos-ratings` (frozen at `9081bce`),
+  ported: team and quarterback game logs built from play-by-play, nflverse's official weekly team
+  and player stats and the schedules through this repository's loaders, season rows,
+  head-to-head-excluded opponent profiles, win-probability bins, the all-time schedule-strength
+  leaderboard, and the metric registry (labels, descriptions, polarity, column rules) with its
+  generated stats catalogs. Rebuilt over 1999-2026 from the play-by-play it used, it reproduces
+  every season table that repository published bit for bit
+  (`.agents/sos_port/SEASON_STATS_PARITY.md`). Nothing in the ETL, the model or the web API uses it
+  yet.
+- A cached source for nflverse's official weekly team stats, read by the season statistics.
+- Parity tests on fixtures cut from the published files, tests that pin the passer season summary
+  and the rank-range settings to the ratings package's, and
+  `.agents/sos_port/season_stats_parity.py`, which rebuilds every season and compares every cell.
+
+## [0.50.1] - 2026-10-10
+
+### Added
+
+- A scripted inventory of `nfl-sos-ratings` at its frozen commit against this repository
+  (`.agents/sos_port/inventory.py`, generating `INVENTORY.md` and `inventory.json` from
+  `mapping.yaml`): its data sources, every output column resolved through its metric registry and
+  classified as matched, different or missing here, its ratings, and its web pages and endpoints.
+  The run fails on an unclassified column, a same-name counterpart filed as missing, or a column
+  missing in one file kind but classified in another.
+- A play-by-play parity check against its game logs for 1999-2025 (`.agents/sos_port/parity.py`,
+  `PARITY.md`, `parity.json`, `parity_attributions.parquet`): every mismatching team-game is
+  explained by a named cause through a counterfactual re-aggregation, reading the scramble flag
+  from a snapshot of the play-by-play that repository used, which equals this repository's cache
+  row by row. The differences and the decision taken on each are in `.agents/sos_port/`
+  (`FINDINGS.md`, `DECISIONS.md`).
+
+## [0.50.0] - 2026-10-10
+
+### Changed
+
+- The play-by-play cache holds 139 columns instead of 55: every column the code ported from
+  `nfl-sos-ratings` reads (the scramble and botched-snap flags, rusher, receiver, fumble and tackle
+  credits, game state, drive and series results, the play text). No feature reads them yet. Each
+  cached season downloads once more on the next ETL, which must run online (about 490 MB), and the
+  cache grows from about 39 MB to 104 MB.
+- Every play-by-play team-code column is normalized at load (`constants.PBP_TEAM_COLUMNS`), and
+  each cached column keeps one type across seasons (`goal_to_go` is stored as a float).
+- The 163 games played at the 14 venues the stadium table lacked (Mile High Stadium, the Pontiac
+  Silverdome and other 1999-2002 venues, and five 2026 international venues) get their real
+  elevation instead of 0 ft in `stadium_elevation`, and a city and state.
+
+### Added
+
+- The schedule loader warns when a venue has no stadium-table entry or a game has no venue id,
+  since those games fall back to an elevation of 0 ft.
+
+### Fixed
+
+- Cached schedules take the stadium city and state from the table on every load, so a venue the
+  table gains is located without refreshing the cache.
+
+## [0.49.0] - 2026-10-10
+
+### Added
+
+- `nfl_predictor.ratings`: the team and quarterback ratings of `nfl-sos-ratings` (frozen at
+  `9081bce`), ported: points per game against an average team for offense, defense and special
+  teams from a play-weighted ridge fit with the previous season's cross-validated penalty, the
+  preseason prior inside the fit (fading out by a team's ninth game), schedule strength from
+  refits without the evaluated team's games, quarterback EPA per dropback adjusted for the
+  defenses faced, weekly histories, and bootstrap rank ranges and head-to-head chances (1000
+  resamples). Rebuilt over 1999-2026, it reproduces every ratings file that repository published,
+  rank ranges included (`.agents/sos_port/RATINGS_PARITY.md`).
+- A leakage-safe pre-week entry point (`RatingsHistory.pre_week`): ratings for a week fitted only
+  on earlier games, with penalties chosen before the week. Nothing in the ETL or the model uses the
+  package yet.
+- Parity tests on fixtures cut from the published files (floats to 1e-12, so they hold on any
+  CPU's math kernel) and `.agents/sos_port/ratings_parity.py`, which rebuilds every season and
+  compares every cell.
+
+## [0.48.0] - 2026-10-10
+
+### Added
+
+- The web app's Pool page (`/pool`) with three tabs. Every helper reads the week's prediction
+  files and changes no probability, pick or rank.
+  - A confidence pool sheet: the picks by points, the lock at the week's first kickoff, expected
+    points and, once games end, the points won by the pool rules (a tie scores for neither side).
+    When the week was re-predicted after the lock, the sheet is built and scored from the picks
+    file written before it, with the newer ranks shown as notes.
+  - A tiebreaker card: whole-point entries for two selectable tiebreak games (the Sunday and
+    Monday night games preselected) and the week's highest and lowest team scores.
+  - A survivor planner: one plan per possible pick this week, each solved exactly over the later
+    predicted weeks (an assignment of weeks to teams), with the teams already used kept per
+    season in the browser.
+  - Routes: `GET /api/pool/confidence`, `GET /api/pool/tiebreakers`, `POST /api/pool/survivor`;
+    `GET /api/predictions/picks?format=csv` downloads the picks.
+- A "Margin head only" switch on the Model page's feature importance; `GET /api/model` returns
+  `feature_importance.margin_rows`, every feature ranked by the margin head alone.
+
+### Fixed
+
+- Predicting a later week into the active run no longer hides the run's own week from the week
+  selector and the routes, and a newer weekly run's own week outranks a file predicted ahead into
+  an older pinned run; the selector and the routes now resolve every week to the same file.
+- The week selector changes the week in one URL update; choosing another run's week or a week not
+  yet predicted used to leave the page unchanged.
+- The navigation, the Overview cards and the not-found page no longer show plan labels.
+
+## [0.47.0] - 2026-10-10
+
+### Added
+
+- This repository's own Elo (`utils/polars/elo_ratings.py`): FiveThirtyEight's public framework
+  (K 20, home field 65, a one-third offseason pull toward 1505, the margin-of-victory multiplier),
+  pinned by a test that reproduces 538's published 2017-2019 ratings and probabilities to
+  floating precision, with separate switches for rest and byes, travel, the playoff boost, a
+  rolling ten-season home field, 538's quarterback VALUE adjustment and a preseason pull toward
+  betting win totals (nfelosrs `wt_ratings.csv`, cached with the cache-then-degrade contract, its
+  weight fitted on earlier seasons only). Every pre-game value comes from earlier games; a
+  completed game uses its actual starting quarterback and an upcoming one the projected starter,
+  as the `qb_elos.csv` columns do.
+- Two evaluated presets as feature groups, disjoint from the `qb_elos.csv` Elo group: `own_elo`
+  (travel, rolling home field and the quarterback adjustment, no market information) and
+  `own_elo_wt` (the same plus the win-total pull), each with its own columns and ablation switch.
+  The ETL does not build them yet.
+- `.agents/sos_port/elo_eval.py`, which scores each Elo component on its own pre-game Brier score
+  and log loss over 2007-2025 under a rule written before scoring, and checks the engine against
+  538's published numbers.
+
+## [0.46.0] - 2026-10-10
+
+### Changed
+
+- `nfl-predictor compare` names each interval's resampling unit: games, and (season, week) blocks
+  for confidence-pool points (`pool pts (week blocks)` in the paired tables).
+- Every default run, checkpoint and model-artifact directory reads the new `constants.MODELS_PATH`
+  at call time; `walk_forward.DEFAULT_CHECKPOINT_DIR` is now `walk_forward.default_checkpoint_dir()`.
+
+### Added
+
+- Cached loaders for the nflverse player sources the `nfl-sos-ratings` port needs (weekly player
+  stats, snap counts, the players file, season and weekly rosters), with the cache-then-degrade
+  contract of the other nflverse sources (`utils/polars/nflverse_sources.py`). Nothing in the ETL
+  reads them yet, so a default `nfl-predictor data` downloads nothing new.
+- The season quarterback identity rule (a player listed at QB in the players file or any roster
+  week of the season is a quarterback that season) and the Jacksonville 2001-2002 player-team
+  repair, ported from `nfl-sos-ratings` (`player_identity.py`, `player_team_repair.py`).
+- A cached ESPN QBR loader for validation only (`utils/polars/espn_qbr.py`); the suite fails if any
+  command, the weekly run or the web app imports it.
+- The test data guard also redirects `models/`; the README lists what it still leaves alone.
+
+### Fixed
+
+- `nfl-predictor compare` picks the home side at an exact 0.5 probability, as `metrics.picks_home`
+  and the weekly picks do. No model probability in the reviewed runs is exactly 0.5, so only the
+  betting lines' scores change (`.agents/sos_port/decisions/sources.md`).
+- A source frame that lacks every requested column keeps its rows (it used to collapse to one), and
+  a fractional value bound for a whole-number column is an error instead of being truncated.
+
 ## [0.45.4] - 2026-10-11
 
 ### Changed

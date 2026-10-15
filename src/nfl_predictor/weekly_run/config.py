@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Any, override
 import yaml
 
 from nfl_predictor import constants
-from nfl_predictor.ml import ml_model_core, walk_forward
+from nfl_predictor.cli import options
+from nfl_predictor.ml import feature_spec, ml_model_core, walk_forward
 from nfl_predictor.ml.ml_model_core import OptunaConfig
 from nfl_predictor.ml.ml_model_xgb_utils import (
     XGB_DEVICE_AUTO,
@@ -37,8 +38,17 @@ _PATH_KEYS = {
     "power_rankings_data_schedule",
     "power_rankings_out_dir",
     "power_rankings_strength_snapshots",
+    "power_rankings_ratings_dir",
 }
-_PATH_LIST_KEYS = {"floor_sigma_reference_runs"}
+_PATH_LIST_KEYS = {"floor_sigma_reference_runs", "power_rankings_model_predictions"}
+# The weekly run ranks on the even blend of the ported and model ratings: the user's choice after
+# the rankings measurement, whose pre-registered rule picks this weight for the current season.
+DEFAULT_POWER_RANKINGS_METHOD = "blend"
+# The weight is 0.5 for every season ranked, earlier ones included. The rule gives 0.7 for
+# 2008-2009 and 0.6 for 2012-2014, which matters only when one of those seasons is ranked again.
+DEFAULT_POWER_RANKINGS_BLEND_WEIGHT = 0.5
+# Config keys that list feature groups; the command line takes them comma-separated.
+_FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}
 
 
 # The configuration a weekly run reads when no --config is given.
@@ -128,6 +138,21 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
                 msg = f"Config key {key} must be a list of paths."
                 raise ValueError(msg)
             normalized[key] = [Path(value) for value in normalized[key]]
+    for key in _FEATURE_GROUP_LIST_KEYS:
+        if key not in normalized:
+            continue
+        # A key with no value (YAML null, as when every item is commented out) is refused: it
+        # would otherwise read as either no group or the default. Anything else must be a list.
+        groups = normalized[key]
+        if groups is None or not isinstance(groups, list):
+            msg = (
+                f"Config key {key} has no value: write [] to leave no group out, or remove the "
+                "key for production's default."
+                if groups is None
+                else f"Config key {key} must be a list of feature group names."
+            )
+            raise ValueError(msg)
+        normalized[key] = tuple(str(name).strip() for name in groups)
     return normalized
 
 
@@ -306,8 +331,26 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
         default=defaults.get("wf_market_mode", "hybrid"),
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
-            "the model anchored to them, both (hybrid, the default), or none (market-free: no "
-            "market feature, no anchor and no market transform)."
+            "the model anchored to them, both (hybrid, the default), or none (no game lines: no "
+            "game-line columns, no anchor and no market transform). The default groups keep the "
+            "elo group's preseason win-total prior; for no market information pass "
+            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
+            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
+        ),
+    )
+    parser.add_argument(
+        "--disable-feature-groups",
+        type=options.parse_feature_groups,
+        default=defaults.get(
+            "disable_feature_groups", constants.PRODUCTION_DISABLED_FEATURE_GROUPS
+        ),
+        help=(
+            "Stage 1 and the final fit: feature groups to leave out, every column of each, "
+            "comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a "
+            "list in the config file; default: "
+            f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)}; an empty value leaves "
+            "no group out). The list replaces the default rather than adding to it. An unknown "
+            "group stops the run before the data refresh."
         ),
     )
     parser.add_argument(
@@ -563,11 +606,15 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
     parser.add_argument(
         "--power-rankings-method",
         choices=power_rankings.RANKING_METHODS,
+        # No default here: the default applies after the legacy fit's check (_requested_method).
         default=defaults.get("power_rankings_method"),
         help=(
-            "Power rankings method: 'composite' (default; the ETL's schedule-adjusted "
-            "strength for the week after the through-week) or 'bradley_terry'. "
-            "--legacy-franchise-fit implies bradley_terry."
+            "Power rankings method: 'blend' (default; the ported team rating and the model "
+            "rating weighted by --power-rankings-blend-weight), 'composite' (the ETL's "
+            "schedule-adjusted strength for the week after the through-week), 'bradley_terry', "
+            "'ported' (the ported team rating) or 'model' (a fit to walk-forward predicted "
+            "margins). --legacy-franchise-fit implies bradley_terry when no method is set and "
+            "refuses any other method."
         ),
     )
     parser.add_argument(
@@ -577,6 +624,34 @@ def _add_power_rankings_arguments(parser: WeeklyParser, defaults: dict[str, Any]
             "power_rankings_strength_snapshots", power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
         ),
         help="Per-team weekly strength file the composite method reads.",
+    )
+    parser.add_argument(
+        "--power-rankings-ratings-dir",
+        type=Path,
+        default=defaults.get("power_rankings_ratings_dir", power_rankings.DEFAULT_RATINGS_DIR),
+        help=(
+            "Published ported ratings tables the ported method reads (and the model and blend "
+            "methods in week 1)."
+        ),
+    )
+    parser.add_argument(
+        "--power-rankings-model-predictions",
+        type=Path,
+        nargs="*",
+        default=defaults.get("power_rankings_model_predictions", []),
+        help=(
+            "Walk-forward runs or fold checkpoint directories whose pre-game predictions the "
+            "model and blend methods fit their rating to; they must cover every completed "
+            "regular-season game of the season before the ranked week (the previous season "
+            "for week 1). Default: this run's stage-1 fold checkpoints for the ranked season "
+            "and the --floor-sigma-reference-runs, averaged as one source, for earlier seasons."
+        ),
+    )
+    parser.add_argument(
+        "--power-rankings-blend-weight",
+        type=float,
+        default=defaults.get("power_rankings_blend_weight", DEFAULT_POWER_RANKINGS_BLEND_WEIGHT),
+        help="The blend method's weight on the ported rating, from 0 to 1 (default: 0.5).",
     )
     parser.add_argument(
         "--ratings-window-seasons",
@@ -644,7 +719,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
     try:
-        power_ranking_options(args)
+        # The run directory may not exist yet; only the settings are checked here.
+        power_ranking_options(args, run_dir=args.run_dir or Path(constants.MODELS_PATH))
+        # An unknown feature group stops the run here, before the data refresh.
+        feature_spec.validate_feature_groups(args.disable_feature_groups)
     except ValueError as error:
         parser.error(str(error))
     _warn_on_an_overridden_transform(args)
@@ -652,11 +730,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _warn_on_an_overridden_transform(args: argparse.Namespace) -> None:
-    """Warn when the market-free mode overrides a requested market transform."""
+    """Warn when the mode with no game lines overrides a requested market transform."""
     if args.wf_market_mode == stage1.MARKET_MODE_NONE and args.market_transform is True:
         log.warning(
             "--wf-market-mode none overrides --market-transform (or market_transform: true): "
-            "a market-free run trains with no market transform."
+            "a run with no game lines trains with no market transform."
         )
 
 
@@ -720,6 +798,7 @@ def stage1_options(args: argparse.Namespace) -> stage1.ProductionOptions:
         include_quantiles=bool(args.wf_include_quantiles),
         market_transform=args.market_transform,
         max_cardinality_ratio=float(args.max_cardinality_ratio),
+        disabled_feature_groups=tuple(args.disable_feature_groups),
     )
 
 
@@ -777,6 +856,7 @@ def final_fit_options(
         "max_cardinality_ratio": float(args.max_cardinality_ratio),
         "feature_start": str(args.feature_start),
         "feature_end": str(args.feature_end),
+        "disabled_feature_groups": list(args.disable_feature_groups),
         "xgb_params_overrides": xgb_model_params(args),
         "optuna": {
             "enabled": optuna_config.enabled,
@@ -795,11 +875,50 @@ def final_fit_options(
     return optuna_config, train_config
 
 
-def power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOptions:
-    """Resolve the ranking options the weekly run's flags describe."""
+def _default_prediction_sources(
+    args: argparse.Namespace, run_dir: Path | None
+) -> tuple[tuple[Path, ...], tuple[Path, ...]]:
+    """Return the model and blend methods' walk-forward predictions and reference runs.
+
+    Explicit ``--power-rankings-model-predictions`` win. Otherwise, given the run directory, the
+    ranked season comes from this run's stage-1 fold checkpoints and earlier seasons (week 1's
+    carried-forward fit reads the previous one) from the floor-sigma reference runs, seeds of one
+    configuration averaged into one source.
+    """
+    explicit = tuple(Path(path) for path in args.power_rankings_model_predictions)
+    if explicit or run_dir is None or _requested_method(args) not in {"model", "blend"}:
+        return explicit, ()
+    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or [])
+    return (stage1.predictions_source(run_dir),), reference
+
+
+def _requested_method(args: argparse.Namespace) -> str | None:
+    """Return the ranking method asked for, the default applied after the legacy fit's check.
+
+    ``None`` (no method set) is ``DEFAULT_POWER_RANKINGS_METHOD``, except with the legacy fit,
+    which implies Bradley-Terry: there it stays ``None`` for
+    `power_rankings.resolve_ranking_options` to resolve, so only a method set explicitly
+    conflicts with the legacy fit.
+    """
+    method = args.power_rankings_method
+    if method is None and not args.legacy_franchise_fit:
+        return DEFAULT_POWER_RANKINGS_METHOD
+    return method
+
+
+def power_ranking_options(
+    args: argparse.Namespace, *, run_dir: Path | None = None
+) -> power_rankings.RankingOptions:
+    """Resolve the ranking options the weekly run's flags describe.
+
+    ``run_dir`` is the weekly run's directory; with it, the model and blend methods read their
+    predictions from the run's own sources when none are given (`_default_prediction_sources`).
+    """
+    model_predictions, reference_predictions = _default_prediction_sources(args, run_dir)
+    method = _requested_method(args)
     return power_rankings.resolve_ranking_options(
         power_rankings.RankingRequest(
-            method=args.power_rankings_method,
+            method=method,
             legacy_franchise_fit=bool(args.legacy_franchise_fit),
             window_seasons=int(args.ratings_window_seasons),
             prior_season_weight=float(args.ratings_prior_season_weight),
@@ -807,14 +926,24 @@ def power_ranking_options(args: argparse.Namespace) -> power_rankings.RankingOpt
             include_future=bool(args.ratings_include_future),
             ratings_min_season=args.ratings_min_season,
             strength_snapshots=Path(args.power_rankings_strength_snapshots),
+            ratings_dir=Path(args.power_rankings_ratings_dir),
+            model_predictions=model_predictions,
+            reference_predictions=reference_predictions,
+            blend_weight=args.power_rankings_blend_weight,
         )
     )
 
 
-def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
-    """Return the ranking settings that decide whether a reports stage can be reused."""
-    options = power_ranking_options(args)
-    return {
+def power_rankings_report_config(
+    args: argparse.Namespace, *, run_dir: Path | None = None
+) -> dict[str, Any]:
+    """Return the ranking settings that decide whether a reports stage can be reused.
+
+    The ported, model and blend sources' settings, the resolved prediction sources included,
+    join only when one of those methods ranks, so the other methods' records stay as they were.
+    """
+    options = power_ranking_options(args, run_dir=run_dir)
+    report: dict[str, Any] = {
         "power_rankings_method": options.method,
         "power_rankings_strength_snapshots": str(options.strength_snapshots),
         "ratings_window_seasons": options.window_seasons,
@@ -823,3 +952,13 @@ def power_rankings_report_config(args: argparse.Namespace) -> dict[str, Any]:
         "ratings_include_future": options.include_future,
         "ratings_min_season": options.ratings_min_season,
     }
+    if options.method in power_rankings.POINTS_METHODS:
+        report |= {
+            "power_rankings_ratings_dir": str(options.ratings_dir),
+            "power_rankings_model_predictions": [str(path) for path in options.model_predictions],
+            "power_rankings_reference_predictions": [
+                str(path) for path in options.reference_predictions
+            ],
+            "power_rankings_blend_weight": options.blend_weight,
+        }
+    return report

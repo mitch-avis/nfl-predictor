@@ -190,6 +190,25 @@ Steps:
    1. a scripted inventory (rule 10) of its data sources, metric registry columns, ratings,
       outputs and web pages against this repo's, plus a check that this repo's play-by-play
       aggregates match its game logs for the same seasons;
+      plan accepted by the user on 2026-10-10 (branch `feat/sos-port-inventory`, scripts and
+      their generated reports in `.agents/sos_port/`, following `.agents/m60/inventory.py`):
+      - the inventory covers everything: the nflreadpy sources each repo loads, every column of
+        its per-season output files, its metric registry, its ratings, and its web pages and API
+        endpoints. A checked-in mapping file classifies each of its columns (matched, a different
+        definition, or missing here), and the script fails on any unclassified column;
+      - parity is exact and explained: for 1999-2025, per team-game, counts equal and EPA sums
+        within `1e-6` on the columns both repos define the same way, and every mismatching game
+        assigned to a named cause (pre-2006 scrambles, Jacksonville's 2001-2002 home games, the
+        Rams as `LA`, the three games without play-by-play, a definitional difference); an
+        unexplained mismatch fails;
+      - report only: phase 1 changes no production code or data. Its differences (the pre-2006
+        scramble rule first) become a list of proposed changes for the user, batched with
+        phase 3's feature-value changes so they share one rebuild and one new reference.
+        Changed by the user later on 2026-10-10 (about 02:00): step 6 runs autonomously, and every
+        difference is decided by the session and logged with its reasoning and data in
+        `.agents/sos_port/DECISIONS.md` for the user's review; the adopted changes land on the
+        step-6 integration branch, and the production rebuild and merge stay held for the user's
+        final approval (`.agents/step6_plan.md`, "Authority");
    2. the nflverse sources it uses and this repo lacks (weekly player stats, snap counts, players
       and rosters for quarterback identity; ESPN QBR as a validation reference only), with the
       cache-then-degrade pattern;
@@ -223,10 +242,10 @@ Steps:
    6. its web pages (teams, quarterbacks, schedules, rank ranges, head-to-head) folded into this
       app, together with Milestone 58 phases 4-6.
    Feature ideas to evaluate after phase 4, each a measured arm (raised by the user 2026-10-08,
-   not yet approved): the referee crew (nflverse `referee` since 1999, full crews in
-   `load_officials`), game-day weather (temperature and wind for outdoor games), attendance, and
-   team health (nflverse injury reports since 2009). Each needs a pick-time check: what is known
-   before Thursday for an upcoming game.
+   not yet approved; on 2026-10-10 the user moved them to a later session): the referee crew
+   (nflverse `referee` since 1999, full crews in `load_officials`), game-day weather (temperature
+   and wind for outdoor games), attendance, and team health (nflverse injury reports since 2009).
+   Each needs a pick-time check: what is known before Thursday for an upcoming game.
 7. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
    three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
    (wiring the chosen settings into the weekly run and the benchmark, one shared source).
@@ -490,10 +509,18 @@ happens on a fresh branch off `main` and merges back after each phase.
 
 - [ ] 58.1 Phase 4: pool helpers (confidence pool sheet, tiebreakers, survivor optimizer) per
       `web_ui_plan.md`.
+      Narrowed (2026-10-10): delivered on the step-6 integration branch as `0.48.0`, with the
+      survivor planner solved exactly (an assignment of weeks to teams) in place of the plan's
+      beam search, a substitute method that waits for the user's acceptance; the reason and the
+      reviews' simulations are in `.agents/sos_port/decisions/web.md`, entry 9, and on the step-6
+      approval list in `.agents/sos_port/DECISIONS.md`.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
-- [ ] 58.3 Phase 6 (design only): live betting and live odds.
-- [ ] 58.6 A margin-only toggle on the Model page's feature importance (SHAP headline, total gain
-      secondary, both heads combined by default; decided by the user on 2026-09-27).
+      Narrowed (2026-10-10): the pages, their API and the navigation landed on the step-6
+      integration branch as `0.53.0`, over the ported ratings and season statistics, but the
+      phase's done-criterion (a current-season team page with heatmaps and a game log) waits on
+      the production rebuild of `data/` (held for the user's approval; the ETL step that writes the
+      tables landed in `0.56.0`) and a first look in a browser; four source features are logged
+      as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the

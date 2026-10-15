@@ -13,10 +13,9 @@ import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
 from nfl_predictor.utils.logger import log
+from tests.fakes import returning
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from sklearn.compose import ColumnTransformer
 
 # The suite-wide fixture replaces the module attribute; keep the real cached probe for its test.
@@ -303,11 +302,6 @@ class _ProbeBooster:
         return json.dumps({"learner": {"generic_param": {"device": self.device}}})
 
 
-def _fake_build_info(*, use_cuda: bool) -> Callable[[], dict[str, Any]]:
-    """Return a stand-in for ``xgb.build_info`` reporting whether the build has CUDA."""
-    return lambda: {"USE_CUDA": use_cuda}
-
-
 def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Capture the module's warning messages, formatted."""
     messages: list[str] = []
@@ -319,24 +313,24 @@ def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return messages
 
 
-def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
+def test_detect_xgb_cuda_decides_from_the_probe_fit_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A CPU-only XGBoost build reports no GPU without attempting a fit."""
-    # Arrange
-    monkeypatch.setattr(xgb, "build_info", _fake_build_info(use_cuda=False))
+    """The probe fit decides, not the build flags: a CPU-only build fails or moves it to the CPU."""
 
-    def _no_fit(*_args: object, **_kwargs: object) -> object:
-        msg = "the probe fit must not run on a CPU-only build"
+    # Arrange
+    def _no_build_info() -> dict[str, Any]:
+        msg = "the build flags must not decide"
         raise AssertionError(msg)
 
-    monkeypatch.setattr(xgb, "train", _no_fit)
+    monkeypatch.setattr(xgb, "build_info", _no_build_info)
+    monkeypatch.setattr(xgb, "train", returning(_ProbeBooster("cuda:0")))
 
     # Act
     usable = xgb_utils.detect_xgb_cuda()
 
     # Assert
-    assert usable is False
+    assert usable is True
 
 
 @pytest.mark.parametrize(("probe_device", "expected"), [("cuda:0", True), ("cpu", False)])
@@ -345,7 +339,6 @@ def test_detect_xgb_cuda_reads_the_device_the_probe_fit_used(
 ) -> None:
     """With no visible GPU, XGBoost moves a CUDA fit to the CPU instead of raising."""
     # Arrange
-    monkeypatch.setattr(xgb, "build_info", _fake_build_info(use_cuda=True))
     requested: list[dict[str, Any]] = []
 
     def _fake_train(params: dict[str, Any], *_args: object, **_kwargs: object) -> _ProbeBooster:
@@ -367,7 +360,6 @@ def test_detect_xgb_cuda_reports_no_gpu_when_the_probe_fit_fails(
 ) -> None:
     """An XGBoost error from the probe fit means the GPU is not usable."""
     # Arrange
-    monkeypatch.setattr(xgb, "build_info", _fake_build_info(use_cuda=True))
 
     def _failing_train(*_args: object, **_kwargs: object) -> object:
         msg = "CUDA driver version is insufficient"

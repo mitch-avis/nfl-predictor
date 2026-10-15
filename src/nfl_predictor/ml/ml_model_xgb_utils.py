@@ -152,16 +152,11 @@ def _log_gpu_fallback(message: str) -> None:
 def detect_xgb_cuda() -> bool:
     """Return True when this XGBoost build has CUDA and a GPU it can train on.
 
-    A build without CUDA answers without touching a device. Otherwise a one-round fit on two
-    rows asks for ``cuda`` and reads back the device XGBoost used: with no visible GPU it
-    moves the fit to the CPU with a warning instead of raising, so only the reported device
-    tells the two apart.
+    A one-round fit on two rows asks for ``cuda`` and reads back the device XGBoost used. A
+    build without CUDA raises or moves the fit to the CPU, and with no visible GPU a CUDA build
+    moves it to the CPU with a warning instead of raising, so only the reported device tells
+    a usable GPU apart.
     """
-    try:
-        if not xgb.build_info().get("USE_CUDA", False):
-            return False
-    except xgb.core.XGBoostError:
-        return False
     data = xgb.DMatrix(np.array([[0.0], [1.0]]), label=np.array([0.0, 1.0]))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

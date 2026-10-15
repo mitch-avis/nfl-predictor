@@ -10,7 +10,9 @@ import pandas as pd
 import pytest
 import xgboost as xgb
 
-from nfl_predictor.ml import feature_importance, ml_model_core
+from nfl_predictor.ml import feature_importance, ml_model_core, ml_model_xgb_utils
+from nfl_predictor.utils.logger import log
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from sklearn.compose import ColumnTransformer
@@ -60,10 +62,10 @@ def test_feature_importance_report_margin_total() -> None:
         market_columns=[],
     )
     preprocessor = ml_model_core.build_preprocessor(spec, for_tree=True)
-    x_matrix = ml_model_core.fit_transform_matrix(preprocessor, df)
+    x_matrix = ml_model_xgb_utils.fit_transform_matrix(preprocessor, df)
     y_margin = rng.normal(size=40)
     y_total = rng.normal(size=40)
-    params = ml_model_core.resolve_xgb_params(
+    params = ml_model_xgb_utils.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides={
             "n_estimators": 15,
@@ -233,7 +235,7 @@ def test_build_feature_importance_report_handles_attribute_errors(
         raise AttributeError(msg)
 
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", _raise_attribute_error)
-    monkeypatch.setattr(feature_importance.log, "debug", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(log, "debug", returning(None))
 
     # Act
     report = feature_importance.build_feature_importance_report(DummyMargin())
@@ -244,7 +246,7 @@ def test_build_feature_importance_report_handles_attribute_errors(
 
 def _silence_debug_log(monkeypatch: pytest.MonkeyPatch) -> None:
     """Drop the module's debug log calls."""
-    monkeypatch.setattr(feature_importance.log, "debug", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(log, "debug", returning(None))
 
 
 @pytest.mark.parametrize(
@@ -277,10 +279,15 @@ def test_build_report_from_models_handles_no_base_features(
     """Report building should still report the models when base features are missing."""
     # Arrange
     _silence_debug_log(monkeypatch)
-    booster = SimpleNamespace(get_score=lambda importance_type: {"feat": 1.0})
+
+    def get_score(importance_type: str) -> dict[str, float]:
+        del importance_type
+        return {"feat": 1.0}
+
+    booster = SimpleNamespace(get_score=get_score)
     model = SimpleNamespace(get_booster=lambda: booster, n_features_in_=1)
     preprocessor = SimpleNamespace(get_feature_names_out=lambda: ["feat"])
-    monkeypatch.setattr(feature_importance, "_build_base_features", lambda *_args: None)
+    monkeypatch.setattr(feature_importance, "_build_base_features", returning(None))
 
     # Act
     report = feature_importance._build_report_from_models(
@@ -342,7 +349,11 @@ def test_build_model_importance_covers_fallback_keys() -> None:
     """Model importance aligns named and XGBoost fallback keys per importance type."""
     # Arrange
     scores_by_type = {"gain": {"known": 1.0}, "total_gain": {"known": 6.0}, "weight": {"f0": 2.0}}
-    booster = SimpleNamespace(get_score=lambda importance_type: scores_by_type[importance_type])
+
+    def get_score(importance_type: str) -> dict[str, float]:
+        return scores_by_type[importance_type]
+
+    booster = SimpleNamespace(get_score=get_score)
     model = SimpleNamespace(get_booster=lambda: booster)
 
     # Act
@@ -364,7 +375,7 @@ def test_build_base_features_and_aggregate_without_combined(
     monkeypatch.setattr(
         feature_importance,
         "_build_base_feature_map",
-        lambda *_args: {"num__yards": "yards", "cat__team_A": "team"},
+        returning({"num__yards": "yards", "cat__team_A": "team"}),
     )
 
     # Act
@@ -482,12 +493,14 @@ def test_base_features_rank_by_total_gain_not_summed_average_gain(
     monkeypatch.setattr(
         feature_importance,
         "_build_base_feature_map",
-        lambda *_args: {
-            "num__rest": "rest",
-            "cat__opp_A": "opp",
-            "cat__opp_B": "opp",
-            "cat__opp_C": "opp",
-        },
+        returning(
+            {
+                "num__rest": "rest",
+                "cat__opp_A": "opp",
+                "cat__opp_B": "opp",
+                "cat__opp_C": "opp",
+            }
+        ),
     )
     head = {
         "gain": [4.0, 5.0, 5.0, 5.0],
@@ -534,11 +547,11 @@ def _fit_rest_opp_model(rows: int = 120) -> tuple[ml_model_core.MarginTotalModel
         market_columns=[],
     )
     preprocessor = ml_model_core.build_preprocessor(spec, for_tree=True)
-    x_matrix = ml_model_core.fit_transform_matrix(preprocessor, df)
+    x_matrix = ml_model_xgb_utils.fit_transform_matrix(preprocessor, df)
     opp_effect = df["opp"].map({"A": 2.0, "B": -1.0, "C": 0.5, "D": -1.5}).to_numpy()
     y_margin = 3.0 * df["rest"].to_numpy() + opp_effect + rng.normal(scale=0.1, size=rows)
     y_total = df["rest"].to_numpy() - opp_effect + rng.normal(scale=0.1, size=rows)
-    params = ml_model_core.resolve_xgb_params(
+    params = ml_model_xgb_utils.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides={
             "n_estimators": 10,
@@ -601,7 +614,7 @@ def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
 
 def _preprocessed(model: ml_model_core.MarginTotalModel, df: pd.DataFrame) -> Any:
     """Return ``df`` encoded by the model's own feature spec and preprocessor."""
-    return ml_model_core.transform_matrix(
+    return ml_model_xgb_utils.transform_matrix(
         model.preprocessor, ml_model_core.apply_feature_spec(df, model.feature_spec)
     )
 
@@ -647,7 +660,7 @@ def test_shap_values_add_up_to_each_rows_prediction(head_name: str) -> None:
     assert values.shape == (len(df), 5)
     np.testing.assert_allclose(
         values.sum(axis=1) + base_value,
-        ml_model_core.predict_xgb(head, x_matrix),
+        ml_model_xgb_utils.predict_xgb(head, x_matrix),
         rtol=1e-5,
         atol=1e-5,
     )

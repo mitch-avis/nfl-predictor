@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import dataclasses
+import time
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
+import nflreadpy as nfl
 import polars as pl
 import pytest
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.utils import clock, polars_utils
+from nfl_predictor.utils import clock, game_utils, polars_utils
+from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import (
     loaders,
     nflverse_sources,
@@ -20,6 +24,24 @@ from nfl_predictor.utils.polars import (
     season_stats_build,
     week_rows,
 )
+from tests.fakes import returning
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _unchanged[T](value: T, *_args: object, **_kwargs: object) -> T:
+    """Return the first argument unchanged, standing in for a pass-through transform."""
+    return value
+
+
+def _message_recorder(sink: list[str]) -> Callable[..., None]:
+    """Return a logger method stand-in that appends each formatted message to ``sink``."""
+
+    def record(message: str, *args: object) -> None:
+        sink.append(message % args if args else message)
+
+    return record
 
 
 @pytest.mark.parametrize(("today", "season"), [(date(2024, 9, 1), 2024), (date(2024, 2, 1), 2023)])
@@ -328,7 +350,7 @@ def test_resolve_config_delegates_arguments_to_parse_args(monkeypatch: pytest.Mo
         min_season=2020,
         max_season=2021,
     )
-    monkeypatch.setattr(data_collection, "_parse_args", lambda argv: sentinel)
+    monkeypatch.setattr(data_collection, "_parse_args", returning(sentinel))
 
     # Act
     resolved = data_collection._resolve_config(["--min-season", "2020"])
@@ -357,11 +379,11 @@ def _recorded_info(monkeypatch: pytest.MonkeyPatch, perf_values: list[float]) ->
     """Feed perf_counter the given values and return the info messages logged."""
     values = iter(perf_values)
     info_messages: list[str] = []
-    monkeypatch.setattr(data_collection.time, "perf_counter", lambda: next(values))
+    monkeypatch.setattr(time, "perf_counter", lambda: next(values))
     monkeypatch.setattr(
-        data_collection.log,
+        log,
         "info",
-        lambda message, *args: info_messages.append(message % args if args else message),
+        _message_recorder(info_messages),
     )
     return info_messages
 
@@ -411,7 +433,7 @@ def test_timed_substep_accumulates_totals_only_when_enabled(
     """Timed substeps accumulate elapsed time into the provided totals mapping when enabled."""
     # Arrange
     perf_values = iter([10.0, 12.25])
-    monkeypatch.setattr(week_rows.time, "perf_counter", lambda: next(perf_values))
+    monkeypatch.setattr(time, "perf_counter", lambda: next(perf_values))
 
     # Act
     with week_rows._timed_substep(label, enabled=enabled, totals=totals):
@@ -432,9 +454,9 @@ def test_log_df_stats_respects_debug_flag(
     # Arrange
     messages: list[str] = []
     monkeypatch.setattr(
-        data_collection.log,
+        log,
         "debug",
-        lambda message, *args: messages.append(message % args if args else message),
+        _message_recorder(messages),
     )
     df = pl.DataFrame({"a": [1], "b": [2]})
 
@@ -473,44 +495,38 @@ def test_main_orchestrates_collection_and_output_writes(
         timed_labels.append((label, enabled))
         yield
 
-    monkeypatch.setattr(data_collection, "_resolve_config", lambda _argv: config)
-    monkeypatch.setattr(
-        data_collection,
-        "_configure_logging",
-        lambda *, enable_debug: timed_labels.append(("debug", enable_debug)),
-    )
-    monkeypatch.setattr(clock, "nfl_week", lambda _today: 3)
-    monkeypatch.setattr(data_collection, "_resolve_seasons", lambda start, end: [start, end])
-    monkeypatch.setattr(
-        data_collection,
-        "collect_all_data",
-        lambda seasons, config, records: all_data,
-    )
-    monkeypatch.setattr(data_collection, "_log_df_stats", lambda *_args, **_kwargs: None)
+    def fake_configure_logging(*, enable_debug: bool) -> None:
+        """Record the debug flag the logging setup received."""
+        timed_labels.append(("debug", enable_debug))
+
+    def fake_resolve_seasons(start: int, end: int) -> list[int]:
+        """Return the two season bounds."""
+        return [start, end]
+
+    def fake_save_dataframe(df: pl.DataFrame, name: str, data_dir: Path | None = None) -> None:
+        """Record each saved frame with its name and directory."""
+        saved.append((df, name, data_dir))
+
+    def fake_remove_diff_columns(df: pl.DataFrame) -> pl.DataFrame:
+        """Return the no-diff frame for the full data and the completed frame otherwise."""
+        return no_diff if df is all_data else completed
+
+    def fake_filter_upcoming_games(_df: pl.DataFrame, season: int, week: int) -> pl.DataFrame:
+        """Return the upcoming games for week 3 of 2024 and nothing otherwise."""
+        return upcoming if (season, week) == (2024, 3) else pl.DataFrame()
+
+    monkeypatch.setattr(data_collection, "_resolve_config", returning(config))
+    monkeypatch.setattr(data_collection, "_configure_logging", fake_configure_logging)
+    monkeypatch.setattr(clock, "nfl_week", returning(3))
+    monkeypatch.setattr(data_collection, "_resolve_seasons", fake_resolve_seasons)
+    monkeypatch.setattr(data_collection, "collect_all_data", returning(all_data))
+    monkeypatch.setattr(data_collection, "_log_df_stats", returning(None))
     monkeypatch.setattr(data_collection, "_timed_step", fake_timed_step)
-    monkeypatch.setattr(
-        data_collection,
-        "save_dataframe",
-        lambda df, name, data_dir=None: saved.append((df, name, data_dir)),
-    )
-    monkeypatch.setattr(
-        data_collection.polars_utils,
-        "remove_diff_columns",
-        lambda df: no_diff if df is all_data else completed,
-    )
-    monkeypatch.setattr(
-        data_collection.polars_utils, "filter_completed_games", lambda _df: completed
-    )
-    monkeypatch.setattr(
-        data_collection.polars_utils,
-        "filter_upcoming_games",
-        lambda _df, season, week: upcoming if (season, week) == (2024, 3) else pl.DataFrame(),
-    )
-    monkeypatch.setattr(
-        data_collection.log,
-        "info",
-        lambda message, *args: info_messages.append(message % args if args else message),
-    )
+    monkeypatch.setattr(data_collection, "save_dataframe", fake_save_dataframe)
+    monkeypatch.setattr(polars_utils, "remove_diff_columns", fake_remove_diff_columns)
+    monkeypatch.setattr(polars_utils, "filter_completed_games", returning(completed))
+    monkeypatch.setattr(polars_utils, "filter_upcoming_games", fake_filter_upcoming_games)
+    monkeypatch.setattr(log, "info", _message_recorder(info_messages))
 
     # Today is a fixed in-season date.
     monkeypatch.setattr(clock, "local_today", lambda: date(2024, 9, 18))
@@ -613,7 +629,7 @@ def test_merge_team_rankings_week1_prev() -> None:
     assert out["home_predictive_rating"][0] == 2.5
 
 
-def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
+def test_save_and_load_dataframe(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """DataFrame is saved and loaded correctly."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
@@ -628,7 +644,9 @@ def test_save_and_load_dataframe(tmp_path: Path, monkeypatch) -> None:
     assert loaded.height == 1
 
 
-def test_save_dataframe_uses_an_explicit_data_dir(tmp_path: Path, monkeypatch) -> None:
+def test_save_dataframe_uses_an_explicit_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An explicit data directory wins over the packaged default path when saving."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path / "unused")
@@ -643,7 +661,9 @@ def test_save_dataframe_uses_an_explicit_data_dir(tmp_path: Path, monkeypatch) -
     assert not (tmp_path / "unused").exists()
 
 
-def test_load_dataframe_uses_an_explicit_data_dir(tmp_path: Path, monkeypatch) -> None:
+def test_load_dataframe_uses_an_explicit_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """An explicit data directory wins over the packaged default path when loading."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path / "unused")
@@ -676,7 +696,7 @@ def test_load_dataframe_types_a_column_first_filled_after_a_hundred_rows(tmp_pat
     assert loaded["late"].drop_nulls().to_list() == [1.5] * (rows - 150)
 
 
-def test_load_dataframe_missing(tmp_path: Path, monkeypatch) -> None:
+def test_load_dataframe_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Loading missing DataFrame returns None."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
@@ -708,9 +728,7 @@ def test_determine_nfl_week_in_the_offseason_stays_in_range() -> None:
 
 def _no_play_by_play(monkeypatch: pytest.MonkeyPatch) -> None:
     """Serve an empty play-by-play frame, so a collection test never downloads or caches one."""
-    monkeypatch.setattr(
-        polars_utils, "load_pbp", lambda *_args, **_kwargs: loaders._empty_pbp_frame()
-    )
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(loaders._empty_pbp_frame()))
 
 
 def _stored_lines_config(seasons: list[int]) -> data_collection.DataCollectionConfig:
@@ -724,7 +742,7 @@ def _stored_lines_config(seasons: list[int]) -> data_collection.DataCollectionCo
     )
 
 
-def test_collect_all_data_minimal(monkeypatch) -> None:
+def test_collect_all_data_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
     """Data collection works end-to-end for minimal data."""
     # Arrange
     _no_play_by_play(monkeypatch)
@@ -749,17 +767,17 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
         }
     )
 
-    def fake_load_schedule(seasons, **_kwargs):
+    def fake_load_schedule(seasons: list[int], **_kwargs: object) -> pl.DataFrame:
         """Fake schedule loader for testing."""
         if seasons == [season - 1]:
             return prev_schedule
         return schedule_df
 
     monkeypatch.setattr(polars_utils, "load_schedule", fake_load_schedule)
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_args, **_kwargs: team_stats_df)
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(team_stats_df))
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
 
     def fake_load_raw_elo_data() -> pl.DataFrame:
         """Fake raw Elo loader for testing."""
@@ -767,14 +785,12 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
 
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", fake_load_raw_elo_data)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (season, 1))
-    monkeypatch.setattr(
-        polars_utils, "load_team_rankings", lambda *_args, **_kwargs: pl.DataFrame()
-    )
-    monkeypatch.setattr(data_collection, "process_season", lambda *_args, **_kwargs: schedule_df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_team_rankings", returning(pl.DataFrame()))
+    monkeypatch.setattr(data_collection, "process_season", returning(schedule_df))
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _unchanged)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", _unchanged)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", _unchanged)
+    monkeypatch.setattr(polars_utils, "select_final_columns", _unchanged)
 
     # Act
     combined = data_collection.collect_all_data([season], config=_stored_lines_config([season]))
@@ -784,7 +800,7 @@ def test_collect_all_data_minimal(monkeypatch) -> None:
     assert combined["game_id"][0] == "game1"
 
 
-def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
+def test_collect_all_data_reuses_team_rankings_cache(monkeypatch: pytest.MonkeyPatch) -> None:
     """TeamRankings loads once per season within a collection run."""
     # Arrange
     _no_play_by_play(monkeypatch)
@@ -827,34 +843,36 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     )
     tr_calls: dict[int, int] = {}
 
-    def fake_load_schedule(seasons, **_kwargs):
+    def fake_load_schedule(seasons: list[int], **_kwargs: object) -> pl.DataFrame:
         """Fake schedule loader for testing."""
         if seasons == [season_one - 1]:
             return prev_schedule
         return schedule_df
 
-    def fake_load_team_rankings(season, *_args, **_kwargs):
+    def fake_load_team_rankings(season: int, *_args: object, **_kwargs: object) -> pl.DataFrame:
         """Track TeamRankings loads by season."""
         tr_calls[season] = tr_calls.get(season, 0) + 1
         return tr_df
 
-    def fake_process_season(season, schedule_df, *_args, **_kwargs):
+    def fake_process_season(
+        season: int, schedule_df: pl.DataFrame, *_args: object, **_kwargs: object
+    ) -> pl.DataFrame:
         """Return season-specific schedule rows."""
         return schedule_df.filter(pl.col("season") == season)
 
     monkeypatch.setattr(polars_utils, "load_schedule", fake_load_schedule)
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_args, **_kwargs: team_stats_df)
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(team_stats_df))
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (season_two, 1))
     monkeypatch.setattr(polars_utils, "load_team_rankings", fake_load_team_rankings)
     monkeypatch.setattr(data_collection, "process_season", fake_process_season)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _unchanged)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", _unchanged)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", _unchanged)
+    monkeypatch.setattr(polars_utils, "select_final_columns", _unchanged)
 
     # Act
     combined = data_collection.collect_all_data(
@@ -866,7 +884,7 @@ def test_collect_all_data_reuses_team_rankings_cache(monkeypatch) -> None:
     assert tr_calls == {}
 
 
-def test_process_week_fallback(monkeypatch) -> None:
+def test_process_week_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """Week processing falls back gracefully when lookahead/motivation features fail."""
     # Arrange
     schedule_df = pl.DataFrame(
@@ -915,9 +933,9 @@ def test_process_week_fallback(monkeypatch) -> None:
         }
     )
 
-    monkeypatch.setattr(polars_utils, "add_divisional_matchup_feature", lambda df: df)
+    monkeypatch.setattr(polars_utils, "add_divisional_matchup_feature", _unchanged)
 
-    def raise_value_error(*_args, **_kwargs):
+    def raise_value_error(*_args: object, **_kwargs: object) -> pl.DataFrame:
         """Raise ValueError for testing fallback."""
         msg = "incomplete schedule"
         raise ValueError(msg)
@@ -925,7 +943,7 @@ def test_process_week_fallback(monkeypatch) -> None:
     monkeypatch.setattr(polars_utils, "add_lookahead_features", raise_value_error)
     monkeypatch.setattr(polars_utils, "add_motivation_features", raise_value_error)
     monkeypatch.setattr(polars_utils, "get_stats_for_diff", list)
-    monkeypatch.setattr(polars_utils, "calculate_stat_differentials", lambda df, _stats: df)
+    monkeypatch.setattr(polars_utils, "calculate_stat_differentials", _unchanged)
 
     # Act
     out = week_rows.process_week(
@@ -970,7 +988,7 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
     monkeypatch.setattr(
         polars_utils,
         "load_schedule",
-        lambda seasons, **_kwargs: schedule_df,
+        returning(schedule_df),
     )
 
     def _load_team_stats(seasons: list[int], **_kwargs: object) -> pl.DataFrame:
@@ -986,19 +1004,21 @@ def test_collect_all_data_handles_current_min_season_and_empty_outputs(
         return df
 
     monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _add_scoring)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
+
+    def refuse_team_rankings(*_args: object, **_kwargs: object) -> pl.DataFrame:
+        """Fail the test: the floor season loads no TeamRankings."""
+        msg = "TeamRankings should skip"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(polars_utils, "load_team_rankings", refuse_team_rankings)
+    monkeypatch.setattr(data_collection, "process_season", returning(pl.DataFrame()))
     monkeypatch.setattr(
-        polars_utils,
-        "load_team_rankings",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("TeamRankings should skip")),
-    )
-    monkeypatch.setattr(data_collection, "process_season", lambda *_args, **_kwargs: pl.DataFrame())
-    monkeypatch.setattr(
-        data_collection.log,
+        log,
         "warning",
-        lambda message, *args: warnings.append(message % args if args else message),
+        _message_recorder(warnings),
     )
 
     # Act
@@ -1053,20 +1073,18 @@ def test_collect_all_data_dedupes_without_date_or_game_id(monkeypatch: pytest.Mo
     )
 
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (season, 2))
-    monkeypatch.setattr(polars_utils, "load_schedule", lambda *_args, **_kwargs: schedule_df)
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_args, **_kwargs: team_stats_df)
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(schedule_df))
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(team_stats_df))
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
-    monkeypatch.setattr(
-        polars_utils, "load_team_rankings", lambda *_args, **_kwargs: pl.DataFrame()
-    )
-    monkeypatch.setattr(data_collection, "process_season", lambda *_args, **_kwargs: season_data)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_team_rankings", returning(pl.DataFrame()))
+    monkeypatch.setattr(data_collection, "process_season", returning(season_data))
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _unchanged)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", _unchanged)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", _unchanged)
+    monkeypatch.setattr(polars_utils, "select_final_columns", _unchanged)
 
     # Act
     combined = data_collection.collect_all_data(
@@ -1091,9 +1109,9 @@ def _recorded_logs(monkeypatch: pytest.MonkeyPatch, *levels: str) -> dict[str, l
     recorded: dict[str, list[str]] = {level: [] for level in levels}
     for level, messages in recorded.items():
         monkeypatch.setattr(
-            data_collection.log,
+            log,
             level,
-            lambda message, *args, sink=messages: sink.append(message % args if args else message),
+            _message_recorder(messages),
         )
     return recorded
 
@@ -1132,10 +1150,10 @@ def test_process_season_logs_a_timing_summary_when_enabled(
     )
     seen: list[tuple[int, int]] = []
 
-    monkeypatch.setattr(polars_utils, "build_team_elo_trends", lambda *_args, **_kwargs: trend_df)
-    monkeypatch.setattr(polars_utils, "build_qb_trends", lambda *_args, **_kwargs: qb_df)
-    monkeypatch.setattr(polars_utils, "build_team_stat_trends", lambda *_args, **_kwargs: trend_df)
-    monkeypatch.setattr(polars_utils, "build_coach_features", lambda *_args, **_kwargs: coach_df)
+    monkeypatch.setattr(polars_utils, "build_team_elo_trends", returning(trend_df))
+    monkeypatch.setattr(polars_utils, "build_qb_trends", returning(qb_df))
+    monkeypatch.setattr(polars_utils, "build_team_stat_trends", returning(trend_df))
+    monkeypatch.setattr(polars_utils, "build_coach_features", returning(coach_df))
 
     def _fake_process_week(
         season: int,
@@ -1221,11 +1239,7 @@ def test_process_week_returns_empty_without_aggregated_stats(
     """A week whose team stats aggregate to nothing yields no rows and says why."""
     # Arrange
     logs = _recorded_logs(monkeypatch, "debug")
-    monkeypatch.setattr(
-        polars_utils,
-        "aggregate_team_stats_to_week",
-        lambda *_args, **_kwargs: pl.DataFrame(),
-    )
+    monkeypatch.setattr(polars_utils, "aggregate_team_stats_to_week", returning(pl.DataFrame()))
 
     # Act
     no_stats = week_rows.process_week(
@@ -1354,10 +1368,13 @@ def test_merge_team_rankings_uses_the_latest_week_in_the_playoffs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A playoff week takes the latest regular-season TeamRankings values."""
+
     # Arrange
-    monkeypatch.setattr(
-        polars_utils, "get_latest_team_rankings", lambda df: df.tail(1).drop("week")
-    )
+    def latest_team_rankings(df: pl.DataFrame) -> pl.DataFrame:
+        """Return the last row without its week."""
+        return df.tail(1).drop("week")
+
+    monkeypatch.setattr(polars_utils, "get_latest_team_rankings", latest_team_rankings)
     monkeypatch.setattr(polars_utils, "get_tr_columns", lambda: ["predictive_rating"])
     playoff_tr = pl.DataFrame(
         {
@@ -1451,12 +1468,12 @@ def test_load_team_game_frame_repairs_player_teams_in_one_team_games(
             "gsis_id": [f"was_{i}" for i in range(half)] + [f"jax_{i}" for i in range(half)],
         }
     ).with_columns(pl.col("season").cast(pl.Int32))
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: _one_team_penalties(2001))
-    monkeypatch.setattr(nflverse_sources.nfl, "load_rosters", lambda **_k: rosters)
-    monkeypatch.setattr(data_collection, "_build_team_game_frame", lambda stats, *_a: stats)
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(pl.DataFrame()))
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(_one_team_penalties(2001)))
+    monkeypatch.setattr(nfl, "load_rosters", returning(rosters))
+    monkeypatch.setattr(data_collection, "_build_team_game_frame", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _unchanged)
 
     # Act
     team_stats, _plays = data_collection._load_team_game_frame(
@@ -1478,12 +1495,12 @@ def _empty_upstream(monkeypatch: pytest.MonkeyPatch, requested: list[list[int]])
 
     monkeypatch.setattr(polars_utils, "load_pbp", fake_load_pbp)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (2026, 1))
-    monkeypatch.setattr(polars_utils, "load_schedule", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(data_collection, "_build_team_game_frame", lambda stats, *_a: stats)
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(pl.DataFrame()))
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(pl.DataFrame()))
+    monkeypatch.setattr(data_collection, "_build_team_game_frame", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _unchanged)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
 
 
@@ -1497,7 +1514,7 @@ def test_load_sources_records_every_play_by_play_season_it_requested(
     # Arrange
     requested: list[list[int]] = []
     _empty_upstream(monkeypatch, requested)
-    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: None)
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", returning(None))
 
     # Act
     sources = data_collection._load_sources([2025, 2026], _stored_lines_config([2025, 2026]))
@@ -1527,12 +1544,12 @@ def test_load_sources_keeps_the_ratings_player_sources_for_the_quarterback_ident
     # Arrange
     _empty_upstream(monkeypatch, [])
     loaded = _loaded_sources()
-    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: loaded)
-    monkeypatch.setattr(ratings_build, "ratings_inputs", lambda sources: sources)
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", returning(loaded))
+    monkeypatch.setattr(ratings_build, "ratings_inputs", _unchanged)
     monkeypatch.setattr(
-        season_stats_build, "load_season_stats_sources", lambda *_a, **_k: "season statistics"
+        season_stats_build, "load_season_stats_sources", returning("season statistics")
     )
-    monkeypatch.setattr(ratings_build, "RatingsBuild", lambda inputs, **_kwargs: inputs)
+    monkeypatch.setattr(ratings_build, "RatingsBuild", _unchanged)
 
     # Act
     sources = data_collection._load_sources([2025, 2026], _stored_lines_config([2025, 2026]))
@@ -1550,8 +1567,8 @@ def test_load_sources_builds_the_season_statistics_beside_the_ratings_from_their
     # Arrange
     _empty_upstream(monkeypatch, [])
     loaded = _loaded_sources()
-    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: loaded)
-    monkeypatch.setattr(ratings_build, "ratings_inputs", lambda sources: sources)
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", returning(loaded))
+    monkeypatch.setattr(ratings_build, "ratings_inputs", _unchanged)
     loads: list[tuple[list[int], object, dict[str, object]]] = []
 
     def load_season_stats_sources(
@@ -1591,7 +1608,7 @@ def test_load_sources_without_play_by_play_loads_no_season_statistics(
 ) -> None:
     # Arrange
     _empty_upstream(monkeypatch, [])
-    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: None)
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", returning(None))
 
     def refuse(*_args: object, **_kwargs: object) -> season_stats_build.SeasonStatsSources:
         msg = "the season statistics need the ratings' sources"

@@ -41,11 +41,14 @@ def _four_seasons() -> pd.DataFrame:
 
 def test_sigma_is_the_root_mean_square_error_strictly_before_the_week() -> None:
     """Earlier seasons and the season's earlier weeks count; the week itself and later do not."""
+    # Arrange
     pool = _four_seasons()
     before = (pool["season"] < 2022) | ((pool["season"] == 2022) & (pool["week"] < 3))
 
+    # Act
     estimate = floor_sigma.estimate(pool, 2022, 3)
 
+    # Assert
     assert estimate.sigma == np.sqrt(pool.loc[before, "squared_error"].mean())
     assert estimate.fallback is False
     assert estimate.pool_games == int(before.sum())
@@ -55,21 +58,30 @@ def test_sigma_is_the_root_mean_square_error_strictly_before_the_week() -> None:
 
 def test_later_errors_never_reach_an_earlier_week() -> None:
     """Changing the errors of the week or anything after it leaves the week's sigma alone."""
+    # Arrange
     pool = _four_seasons()
     changed = pool.copy()
     later = (changed["season"] == 2022) & (changed["week"] >= 2)
     changed.loc[later, "squared_error"] = 1e6
+    baseline = floor_sigma.estimate(pool, 2022, 2)
 
-    assert floor_sigma.estimate(changed, 2022, 2) == floor_sigma.estimate(pool, 2022, 2)
+    # Act
+    estimate = floor_sigma.estimate(changed, 2022, 2)
+
+    # Assert
+    assert estimate == baseline
 
 
 def test_fewer_than_the_minimum_earlier_seasons_falls_back_to_the_constant() -> None:
     """Two earlier seasons plus the current one's weeks are not enough: the constant is used."""
+    # Arrange
     pool = _four_seasons()
     pool = pool[pool["season"] >= 2020]
 
+    # Act
     estimate = floor_sigma.estimate(pool, 2022, 3)
 
+    # Assert
     assert constants.FLOOR_SIGMA_MIN_POOL_SEASONS == 3
     assert estimate.sigma == constants.SCORE_DIFF_STD_DEV
     assert estimate.fallback is True
@@ -77,21 +89,29 @@ def test_fewer_than_the_minimum_earlier_seasons_falls_back_to_the_constant() -> 
     assert estimate.pool_seasons == (2020, 2021, 2022)
 
 
-def test_the_minimum_counts_earlier_seasons_only() -> None:
+@pytest.mark.parametrize(("season", "week", "fallback"), [(2022, 1, False), (2021, 3, True)])
+def test_the_minimum_counts_earlier_seasons_only(season: int, week: int, *, fallback: bool) -> None:
     """At a new season's week 1 the three seasons before it are enough; its own weeks are not."""
+    # Arrange
     pool = _four_seasons()
 
-    assert floor_sigma.estimate(pool, 2022, 1).fallback is False
-    assert floor_sigma.estimate(pool, 2021, 3).fallback is True
+    # Act
+    estimate = floor_sigma.estimate(pool, season, week)
+
+    # Assert
+    assert estimate.fallback is fallback
 
 
 def test_an_earlier_season_counts_with_any_of_its_weeks() -> None:
     """A partial earlier season (one week of it) counts toward the three seasons."""
+    # Arrange
     pool = _four_seasons()
     partial = pool[(pool["season"] != 2019) | (pool["week"] == 3)]
 
+    # Act
     estimate = floor_sigma.estimate(partial, 2022, 1)
 
+    # Assert
     assert estimate.fallback is False
     assert estimate.pool_seasons == (2019, 2020, 2021)
     assert estimate.sigma == np.sqrt(partial.loc[partial["season"] < 2022, "squared_error"].mean())
@@ -99,8 +119,10 @@ def test_an_earlier_season_counts_with_any_of_its_weeks() -> None:
 
 def test_an_empty_pool_falls_back_to_the_constant() -> None:
     """With no earlier errors at all the sigma is the constant, marked as the fallback."""
+    # Act
     estimate = floor_sigma.estimate(floor_sigma.empty_errors(), 2024, 1)
 
+    # Assert
     assert estimate.sigma == constants.SCORE_DIFF_STD_DEV
     assert estimate.fallback is True
     assert estimate.pool_games == 0
@@ -109,6 +131,7 @@ def test_an_empty_pool_falls_back_to_the_constant() -> None:
 
 def test_margin_errors_square_actual_minus_predicted_and_skip_missing() -> None:
     """Each game's squared error is (actual - predicted margin) squared; unplayed games drop."""
+    # Arrange
     predictions = pd.DataFrame(
         {
             "game_id": ["a", "b", "c"],
@@ -119,8 +142,10 @@ def test_margin_errors_square_actual_minus_predicted_and_skip_missing() -> None:
         }
     )
 
+    # Act
     errors = floor_sigma.margin_errors(predictions)
 
+    # Assert
     assert list(errors.columns) == list(floor_sigma.ERROR_COLUMNS)
     assert errors["game_id"].tolist() == ["a", "b"]
     assert errors["squared_error"].tolist() == [16.0, 25.0]
@@ -128,11 +153,14 @@ def test_margin_errors_square_actual_minus_predicted_and_skip_missing() -> None:
 
 def test_runs_are_averaged_per_game_so_each_game_counts_once() -> None:
     """Two seeds of one game average their squared errors; a game in one run keeps its own."""
+    # Arrange
     seed_a = _errors([(2020, 1, 2.0), (2020, 1, 4.0)])
     seed_b = _errors([(2020, 1, 6.0)])
 
+    # Act
     combined = floor_sigma.average_over_runs([seed_a, seed_b])
 
+    # Assert
     assert combined.set_index("game_id")["squared_error"].to_dict() == {
         "2020_01_0": (4.0 + 36.0) / 2,
         "2020_01_1": 16.0,
@@ -141,54 +169,77 @@ def test_runs_are_averaged_per_game_so_each_game_counts_once() -> None:
 
 def test_averaging_equals_pooling_when_the_runs_cover_the_same_games() -> None:
     """Over identical games, per-game averaging and pooling every row give one sigma."""
+    # Arrange
     seed_a = _four_seasons()
     seed_b = seed_a.assign(squared_error=seed_a["squared_error"] * 1.5)
-
-    averaged = floor_sigma.estimate(floor_sigma.average_over_runs([seed_a, seed_b]), 2022, 3)
     pooled = floor_sigma.estimate(pd.concat([seed_a, seed_b], ignore_index=True), 2022, 3)
 
+    # Act
+    averaged = floor_sigma.estimate(floor_sigma.average_over_runs([seed_a, seed_b]), 2022, 3)
+
+    # Assert
     assert averaged.sigma == pytest.approx(pooled.sigma, rel=1e-12)
 
 
 def test_a_runs_own_weeks_replace_the_history_for_those_weeks() -> None:
     """History rows at a week the run predicts itself are dropped; other weeks are kept."""
+    # Arrange
     history = _errors([(2020, 1, 1.0), (2020, 2, 2.0)])
     own = _errors([(2020, 2, 5.0)]).assign(game_id="own")
 
+    # Act
     combined = floor_sigma.combine(history, own)
 
+    # Assert
     assert sorted(combined["squared_error"].tolist()) == [1.0, 25.0]
 
 
 def test_filling_gaps_adds_only_weeks_the_base_lacks() -> None:
     """Extra rows join at weeks the base has no rows for; the base keeps its own weeks."""
+    # Arrange
     base = _errors([(2020, 1, 1.0), (2020, 2, 2.0)])
     extra = _errors([(2020, 2, 5.0), (2020, 3, 6.0), (2021, 1, 7.0)]).assign(game_id="x")
 
+    # Act
     combined = floor_sigma.fill_gaps(base, extra)
 
+    # Assert
     assert sorted(combined["squared_error"].tolist()) == [1.0, 4.0, 36.0, 49.0]
 
 
 def test_the_floor_is_the_normal_curve_at_the_given_spread() -> None:
     """Margins map through Phi(margin / sigma); a larger sigma pulls toward a coin flip."""
+    # Arrange
     margin = np.array([-7.0, 0.0, 7.0])
-
-    narrow = floor_sigma.home_win_prob(margin, 10.0)
     wide = floor_sigma.home_win_prob(margin, 20.0)
 
+    # Act
+    narrow = floor_sigma.home_win_prob(margin, 10.0)
+
+    # Assert
     assert narrow[1] == 0.5
     assert narrow[2] > wide[2] > 0.5
+
+
+def test_the_floor_rejects_a_spread_that_is_not_positive() -> None:
+    """A zero sigma has no normal curve and is refused."""
+    # Arrange
+    margin = np.array([-7.0, 0.0, 7.0])
+
+    # Act & Assert
     with pytest.raises(ValueError, match="positive"):
         floor_sigma.home_win_prob(margin, 0.0)
 
 
 def test_the_record_round_trips_through_json() -> None:
     """A sigma record written to metadata reads back as the same record."""
+    # Arrange
     estimate = floor_sigma.estimate(_four_seasons(), 2022, 3, sources=("models/ref",))
 
+    # Act
     payload = json.loads(json.dumps(estimate.to_dict()))
 
+    # Assert
     assert payload["sigma"] == estimate.sigma
     assert payload["min_pool_seasons"] == constants.FLOOR_SIGMA_MIN_POOL_SEASONS
     assert floor_sigma.FloorSigma.from_dict(payload) == estimate
@@ -226,11 +277,14 @@ def _reference_predictions(offset: float) -> pd.DataFrame:
 
 def test_reference_runs_load_from_their_fold_checkpoints(tmp_path: Path) -> None:
     """Every reference run's fold predictions are read and the runs averaged per game."""
+    # Arrange
     seed_a = _write_reference_run(tmp_path, "seed_a", _reference_predictions(0.0))
     seed_b = _write_reference_run(tmp_path, "seed_b", _reference_predictions(2.0))
 
+    # Act
     pool = floor_sigma.load_reference_pool([seed_a, seed_b])
 
+    # Assert
     assert pool.sources == (str(seed_a), str(seed_b))
     errors = pool.errors.set_index("game_id")["squared_error"]
     assert errors["g1"] == (4.0 + 0.0) / 2
@@ -240,48 +294,75 @@ def test_reference_runs_load_from_their_fold_checkpoints(tmp_path: Path) -> None
 
 def test_a_reference_checkpoint_directory_can_be_named_directly(tmp_path: Path) -> None:
     """A directory holding fold checkpoints is read without a metadata file."""
+    # Arrange
     run_dir = _write_reference_run(tmp_path, "seed_a", _reference_predictions(0.0))
     checkpoint_dir = tmp_path / "checkpoints" / "seed_a"
+    from_run_dir = floor_sigma.load_reference_pool([run_dir])
 
-    assert floor_sigma.load_reference_pool([checkpoint_dir]).errors.equals(
-        floor_sigma.load_reference_pool([run_dir]).errors
-    )
+    # Act
+    from_checkpoints = floor_sigma.load_reference_pool([checkpoint_dir])
+
+    # Assert
+    assert from_checkpoints.errors.equals(from_run_dir.errors)
 
 
 def test_relative_reference_paths_resolve_against_the_repository(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A relative path in the config means the same run from any working directory."""
+    # Arrange
     _write_reference_run(tmp_path, "seed_a", _reference_predictions(0.0))
     monkeypatch.setattr(floor_sigma.constants, "ROOT_DIR", tmp_path)
 
+    # Act
     pool = floor_sigma.load_reference_pool([Path("seed_a")])
 
+    # Assert
     assert pool.sources == (str(tmp_path / "seed_a"),)
 
 
 def test_a_missing_reference_run_is_an_error_naming_it(tmp_path: Path) -> None:
     """A configured run that is not on disk stops the run instead of changing the sigma."""
+    # Arrange
     missing = tmp_path / "no_such_run"
 
+    # Act & Assert
     with pytest.raises(FileNotFoundError, match="no_such_run"):
         floor_sigma.load_reference_pool([missing])
 
 
 def test_no_reference_runs_is_an_empty_pool() -> None:
     """An empty list is the explicit way to run without reference errors."""
+    # Act
     pool = floor_sigma.load_reference_pool([])
 
+    # Assert
     assert pool.errors.empty
     assert pool.sources == ()
 
 
-def test_the_pool_digest_follows_its_contents(tmp_path: Path) -> None:
-    """Equal pools share a digest; a changed error changes it."""
+def test_equal_pools_share_a_digest() -> None:
+    """Equal pools share a digest."""
+    # Arrange
     pool = floor_sigma.ErrorPool(_four_seasons(), ("a",))
     same = floor_sigma.ErrorPool(_four_seasons(), ("a",))
+
+    # Act
+    digest = same.digest()
+
+    # Assert
+    assert pool.digest() == digest
+
+
+def test_the_pool_digest_follows_its_contents() -> None:
+    """A changed error changes the digest."""
+    # Arrange
+    pool = floor_sigma.ErrorPool(_four_seasons(), ("a",))
     changed_errors = _four_seasons()
     changed_errors.loc[0, "squared_error"] = changed_errors["squared_error"].iloc[0] + 1.0
 
-    assert pool.digest() == same.digest()
-    assert pool.digest() != floor_sigma.ErrorPool(changed_errors, ("a",)).digest()
+    # Act
+    digest = floor_sigma.ErrorPool(changed_errors, ("a",)).digest()
+
+    # Assert
+    assert pool.digest() != digest

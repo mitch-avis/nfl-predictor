@@ -1287,10 +1287,9 @@ ty check                      # src/ and tests/, from [tool.ty.src]
 pyright                       # src/ and tests/, from [tool.pyright]
 pytest
 coverage report --include="src/*"   # src/ alone at the same 90% bar; the total counts tests/
-nfl-predictor --help          # and nfl-lightgbm-cuda-install --help: every console script
+nfl-predictor --help          # every console script, then every front-door command's --help
 shellcheck                    # every shell script .gitignore doesn't exclude
 markdownlint-cli2 "**/*.md"   # .markdownlint-cli2.yaml: the rules, and .gitignore'd paths skipped
-nfl-predictor <command> --help   # every command the front door lists
 ```
 
 `scripts/gate.sh` and the lint, pre-commit, CI and Dependabot configs come from the Copier template

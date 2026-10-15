@@ -297,14 +297,17 @@ def test_gate_checks_the_environment_without_changing_it() -> None:
 
 
 def test_update_requirements_runs_the_installer_after_sync() -> None:
-    """Refreshing the environment syncs with the CUDA flags, then fixes LightGBM if needed."""
+    """Refreshing the environment syncs with the CUDA flags, then fixes LightGBM if needed.
+
+    The steps live in this repo's hooks file; tests/test_update_requirements_hooks.py runs them.
+    """
     # Act
-    script = (REPO_ROOT / "update_requirements.sh").read_text(encoding="utf-8")
+    hooks = (REPO_ROOT / "update_requirements.hooks.sh").read_text(encoding="utf-8")
 
     # Assert
-    main = script[script.index("main() {") :]
-    sync = main.index('uv sync --active "${lightgbm_cuda_args[@]}"')
-    assert main.index("nfl-lightgbm-cuda-install uv-args") < sync
-    assert sync < main.index("install_lightgbm_cuda_build")
-    builder = script[script.index("install_lightgbm_cuda_build() {") :]
+    sync_args = hooks[hooks.index("hook_sync_args() {") :]
+    assert "nfl-lightgbm-cuda-install uv-args" in sync_args[: sync_args.index("\n}")]
+    after_sync = hooks[hooks.index("hook_after_sync() {") :]
+    assert "install_lightgbm_cuda_build" in after_sync[: after_sync.index("\n}")]
+    builder = hooks[hooks.index("install_lightgbm_cuda_build() {") :]
     assert "nfl-lightgbm-cuda-install install" in builder[: builder.index("\n}")]

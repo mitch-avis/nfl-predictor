@@ -12,14 +12,16 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from nfl_predictor.ml import ml_model_training
+from nfl_predictor.ml import ml_model_core, ml_model_training
 from nfl_predictor.ml.ml_model_core import (
     FeatureSpec,
     MarginTotalModel,
     OptunaConfig,
 )
+from tests.fakes import returning
 
 if TYPE_CHECKING:
+    import pytest
     from sklearn.compose import ColumnTransformer
 
 xgb.set_config(verbosity=0)
@@ -152,14 +154,16 @@ def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> 
     )
 
     # Act
-    info = ml_model_training._early_stopping_info(model)
+    info = ml_model_core._early_stopping_info(model)
 
     # Assert
     assert info["margin_model.best_iteration"] == 11
     assert info["total_model.best_iteration"] == 11
 
 
-def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypatch) -> None:
+def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Production auto calibration should not consult the fitted selector."""
     # Arrange
     df = pd.DataFrame(
@@ -171,68 +175,47 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
             "feat1": [1.0, 2.0],
         }
     )
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(
-        ml_model_training,
-        "build_feature_spec",
-        lambda *_args, **_kwargs: _feature_spec(),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "apply_feature_spec",
-        lambda frame, _spec: frame[["feat1"]],
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "build_preprocessor",
-        lambda *_args, **_kwargs: _DummyPreprocessor(),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "fit_transform_matrix",
-        lambda _preprocessor, frame: np.zeros((len(frame), 1), dtype=float),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "transform_matrix",
-        lambda _preprocessor, frame: np.zeros((len(frame), 1), dtype=float),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "compute_postseason_sample_weight",
-        lambda frame, **_kwargs: np.ones(len(frame), dtype=float),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "compute_recency_sample_weight",
-        lambda frame, **_kwargs: np.ones(len(frame), dtype=float),
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "combine_sample_weights",
-        lambda postseason, _recency: postseason,
-    )
-    monkeypatch.setattr(
-        ml_model_training,
-        "prepare_margin_total_targets_with_anchor",
-        lambda frame, _targets, *, market_anchor: (
+
+    def select_feature(frame: pd.DataFrame, _spec: FeatureSpec) -> pd.DataFrame:
+        return frame[["feat1"]]
+
+    def zero_matrix(_preprocessor: object, frame: pd.DataFrame) -> np.ndarray:
+        return np.zeros((len(frame), 1), dtype=float)
+
+    def unit_weights(frame: pd.DataFrame, **_kwargs: object) -> np.ndarray:
+        return np.ones(len(frame), dtype=float)
+
+    def postseason_only(postseason: np.ndarray, _recency: np.ndarray) -> np.ndarray:
+        return postseason
+
+    def zero_targets(
+        frame: pd.DataFrame, _targets: tuple[str, str], *, market_anchor: bool
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        del market_anchor
+        return (
             np.zeros(len(frame), dtype=float),
             np.full(len(frame), 40.0, dtype=float),
             np.zeros(len(frame), dtype=float),
             np.zeros(len(frame), dtype=float),
-        ),
+        )
+
+    monkeypatch.setattr(ml_model_training, "_load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "build_feature_spec", returning(_feature_spec()))
+    monkeypatch.setattr(ml_model_training, "apply_feature_spec", select_feature)
+    monkeypatch.setattr(ml_model_training, "build_preprocessor", returning(_DummyPreprocessor()))
+    monkeypatch.setattr(ml_model_training, "fit_transform_matrix", zero_matrix)
+    monkeypatch.setattr(ml_model_training, "transform_matrix", zero_matrix)
+    monkeypatch.setattr(ml_model_training, "compute_postseason_sample_weight", unit_weights)
+    monkeypatch.setattr(ml_model_training, "compute_recency_sample_weight", unit_weights)
+    monkeypatch.setattr(ml_model_training, "combine_sample_weights", postseason_only)
+    monkeypatch.setattr(ml_model_training, "prepare_margin_total_targets_with_anchor", zero_targets)
+    monkeypatch.setattr(
+        ml_model_training, "fit_margin_total_models", returning(("margin_model", "total_model"))
     )
     monkeypatch.setattr(
-        ml_model_training,
-        "fit_margin_total_models",
-        lambda *_args, **_kwargs: ("margin_model", "total_model"),
+        ml_model_training, "fit_quantile_models", returning({0.1: "q10", 0.9: "q90"})
     )
-    monkeypatch.setattr(
-        ml_model_training,
-        "fit_quantile_models",
-        lambda *_args, **_kwargs: {0.1: "q10", 0.9: "q90"},
-    )
-    monkeypatch.setattr(ml_model_training, "validate_quantiles", lambda _q: (0.1, 0.9))
+    monkeypatch.setattr(ml_model_training, "validate_quantiles", returning((0.1, 0.9)))
 
     # Act
     model = ml_model_training.train_margin_total_model(

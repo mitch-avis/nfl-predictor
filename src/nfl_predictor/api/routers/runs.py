@@ -12,6 +12,7 @@ from nfl_predictor.api.deps import AdminUser, CurrentUser, DbDep
 from nfl_predictor.api.errors import NotFoundError
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.schemas.runs import RunDetailOut, RunListOut, RunOut
+from nfl_predictor.utils.narrowing import as_list
 
 if TYPE_CHECKING:
     from nfl_predictor.api.runs.indexer import RunIndex, RunSummary
@@ -84,14 +85,14 @@ def run_detail(run_id: str, _user: CurrentUser, db: DbDep, request: Request) -> 
         raise NotFoundError(msg, code="run_not_found")
     current = active.resolve_active_run(db, index)
     metadata = json.loads(run.run_files.metadata.read_text(encoding="utf-8"))
-    features = metadata.get("feature_list")
+    features = as_list(metadata.get("feature_list"))
     base = to_run_out(run, current.run_id if current else None)
     return RunDetailOut(
         **base.model_dump(),
         config=metadata.get("config"),
         splits=metadata.get("splits"),
         library_versions=metadata.get("library_versions"),
-        feature_count=len(features) if isinstance(features, list) else None,
+        feature_count=None if features is None else len(features),
     )
 
 

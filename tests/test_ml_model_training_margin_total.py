@@ -53,6 +53,7 @@ def _import_ml_model_training(monkeypatch):
 
 def test_train_margin_total_model_full_path(monkeypatch) -> None:
     """Margin/total model training works end to end."""
+    # Arrange
     ml_model_training = _import_ml_model_training(monkeypatch)
 
     df = pd.DataFrame(
@@ -131,6 +132,7 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         xgb_n_jobs=1,
     )
 
+    # Act
     model = ml_model_training.train_margin_total_model(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -143,6 +145,7 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         )
     )
 
+    # Assert
     assert model.margin_model == "margin_model"
     assert model.total_model == "total_model"
     assert model.tuned_params == {"max_depth": 2}

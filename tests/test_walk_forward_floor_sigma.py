@@ -96,7 +96,10 @@ def test_a_standalone_run_reproduces_the_measured_expanding_sigma(
     standalone: dict[str, object],
 ) -> None:
     """From the fourth season on, each week's sigma is the measured candidate, bit for bit."""
+    # Act
     predictions = standalone["predictions"]
+
+    # Assert
     assert isinstance(predictions, pd.DataFrame)
     frame = predictions.sort_values("game_id").reset_index(drop=True)
     scored = (
@@ -116,7 +119,10 @@ def test_a_standalone_run_reproduces_the_measured_expanding_sigma(
 
 def test_the_first_three_seasons_use_the_constant(standalone: dict[str, object]) -> None:
     """Before the pool spans three earlier seasons (any weeks) the floor falls back."""
+    # Act
     predictions = standalone["predictions"]
+
+    # Assert
     assert isinstance(predictions, pd.DataFrame)
     early = predictions[predictions["season"] < EVAL_SEASONS[0] + 3]
 
@@ -130,7 +136,10 @@ def test_the_first_three_seasons_use_the_constant(standalone: dict[str, object])
 
 def test_every_week_records_its_sigma(standalone: dict[str, object]) -> None:
     """Each week's metrics carry the sigma, whether it fell back and the pool it came from."""
+    # Act
     per_week = standalone["per_week"]
+
+    # Assert
     assert isinstance(per_week, list)
     first, last = per_week[0], per_week[-1]
 
@@ -148,14 +157,18 @@ def test_every_week_records_its_sigma(standalone: dict[str, object]) -> None:
 
 def test_no_week_sigma_reads_its_own_or_a_later_week() -> None:
     """Changing the results of the last week changes no week's sigma or probability."""
+    # Arrange
     df = _fixture_df()
     last = (df["season"] == SEASONS[-1]) & (df["week"] == WEEKS[-1])
     changed = df.copy()
     changed.loc[last, "home_score"] = changed.loc[last, "home_score"] + 30
 
     base = walk_forward.run_walk_forward_backtest(df, _config())["predictions"]
+
+    # Act
     moved = walk_forward.run_walk_forward_backtest(changed, _config())["predictions"]
 
+    # Assert
     pdt.assert_series_equal(base["floor_sigma"], moved["floor_sigma"])
     pdt.assert_series_equal(
         base["deterministic_home_win_prob"], moved["deterministic_home_win_prob"]
@@ -175,11 +188,15 @@ def _history_before_the_run() -> floor_sigma.ErrorPool:
 
 def test_a_supplied_history_joins_the_pool_and_the_runs_weeks_replace_it() -> None:
     """History before the run counts from the first week; history at the run's weeks does not."""
+    # Arrange
     history = _history_before_the_run()
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(), _config(), floor_sigma_history=history
     )
+
+    # Assert
     predictions = result["predictions"]
     per_week = {(row["season"], row["week"]): row for row in result["per_week"]}
 
@@ -199,9 +216,12 @@ def test_sigma_changes_probabilities_but_never_margins_picks_or_ranks(
     standalone: dict[str, object],
 ) -> None:
     """With and without a history the margins, picks and confidence ranks are identical."""
+    # Act
     with_history = walk_forward.run_walk_forward_backtest(
         _fixture_df(), _config(), floor_sigma_history=_history_before_the_run()
     )["predictions"]
+
+    # Assert
     without = standalone["predictions"]
     assert isinstance(without, pd.DataFrame)
 
@@ -213,18 +233,36 @@ def test_sigma_changes_probabilities_but_never_margins_picks_or_ranks(
 
 def test_the_history_is_part_of_the_checkpoint_fingerprint() -> None:
     """A run with another history never restores this one's weeks."""
+    # Arrange
     df, config = _fixture_df(), _config()
     history = _history_before_the_run()
 
     plain = walk_forward.fold_checkpoint_fingerprint(df, config)
+
+    # Act
     with_history = walk_forward.fold_checkpoint_fingerprint(df, config, history)
 
+    # Assert
     assert plain != with_history
-    assert with_history == walk_forward.fold_checkpoint_fingerprint(df, config, history)
+
+
+def test_the_history_fingerprint_is_stable() -> None:
+    """The same data, config and history fingerprint the same every time."""
+    # Arrange
+    df, config = _fixture_df(), _config()
+    history = _history_before_the_run()
+    with_history = walk_forward.fold_checkpoint_fingerprint(df, config, history)
+
+    # Act
+    again = walk_forward.fold_checkpoint_fingerprint(df, config, history)
+
+    # Assert
+    assert with_history == again
 
 
 def test_restored_weeks_feed_the_pool_like_trained_ones(tmp_path: Path) -> None:
     """A resumed run returns the sigmas of an uninterrupted one."""
+    # Arrange
     df = _fixture_df()
     config = replace(_config(), eval_seasons=list(EVAL_SEASONS[:4]))
     first = walk_forward.run_walk_forward_backtest(
@@ -233,8 +271,10 @@ def test_restored_weeks_feed_the_pool_like_trained_ones(tmp_path: Path) -> None:
     for path in sorted(tmp_path.rglob("fold_2021_*.joblib")):
         path.unlink()
 
+    # Act
     resumed = walk_forward.run_walk_forward_backtest(
         df, config, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
     )
 
+    # Assert
     pdt.assert_frame_equal(first["predictions"], resumed["predictions"])

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from nfl_predictor.ml import wf_compare_utils
 from nfl_predictor.utils import fingerprints
 
@@ -11,45 +13,48 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_candidate_key_stability() -> None:
-    """Candidate keys should be stable for identical inputs."""
-    key_a = wf_compare_utils.build_candidate_key(
-        wf_compare_utils.CandidateSpec(
-            model_kind="margin_total",
-            feature_start="away_rest",
-            feature_end="home_moneyline",
-            market_mode="features",
-            include_quantiles=False,
-            xgb_params_overrides={"n_estimators": 50},
-        )
-    )
-    key_b = wf_compare_utils.build_candidate_key(
-        wf_compare_utils.CandidateSpec(
-            model_kind="margin_total",
-            feature_start="away_rest",
-            feature_end="home_moneyline",
-            market_mode="features",
-            include_quantiles=False,
-            xgb_params_overrides={"n_estimators": 50},
-        )
-    )
-    key_c = wf_compare_utils.build_candidate_key(
-        wf_compare_utils.CandidateSpec(
-            model_kind="margin_total",
-            feature_start="away_rest",
-            feature_end="home_moneyline",
-            market_mode="anchor",
-            include_quantiles=False,
-            xgb_params_overrides={"n_estimators": 50},
-        )
+def _candidate_spec(market_mode: str) -> wf_compare_utils.CandidateSpec:
+    """Return the candidate spec the key tests share, with the given market mode."""
+    return wf_compare_utils.CandidateSpec(
+        model_kind="margin_total",
+        feature_start="away_rest",
+        feature_end="home_moneyline",
+        market_mode=market_mode,
+        include_quantiles=False,
+        xgb_params_overrides={"n_estimators": 50},
     )
 
+
+def test_candidate_key_stability() -> None:
+    """Candidate keys should be stable for identical inputs."""
+    # Arrange
+    key_a = wf_compare_utils.build_candidate_key(_candidate_spec("features"))
+
+    # Act
+    key_b = wf_compare_utils.build_candidate_key(_candidate_spec("features"))
+
+    # Assert
     assert key_a == key_b
+
+
+def test_candidate_key_changes_with_the_market_mode() -> None:
+    """Candidate keys differ when only the market mode differs."""
+    # Arrange
+    key_a = wf_compare_utils.build_candidate_key(_candidate_spec("features"))
+
+    # Act
+    key_c = wf_compare_utils.build_candidate_key(_candidate_spec("anchor"))
+
+    # Assert
     assert key_a != key_c
 
 
-def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides() -> None:
+@pytest.mark.parametrize("overrides", [None, {"gamma": 1.0}], ids=["missing", "unmapped"])
+def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides(
+    overrides: dict[str, float] | None,
+) -> None:
     """Missing or unmapped XGBoost overrides should fall back to the default tag."""
+    # Arrange
     base_kwargs = {
         "model_kind": "margin_total",
         "feature_start": "away_rest",
@@ -58,19 +63,18 @@ def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides() 
         "include_quantiles": False,
     }
 
-    key_none = wf_compare_utils.build_candidate_key(
-        wf_compare_utils.CandidateSpec(**base_kwargs, xgb_params_overrides=None)
-    )
-    key_unmapped = wf_compare_utils.build_candidate_key(
-        wf_compare_utils.CandidateSpec(**base_kwargs, xgb_params_overrides={"gamma": 1.0})
+    # Act
+    key = wf_compare_utils.build_candidate_key(
+        wf_compare_utils.CandidateSpec(**base_kwargs, xgb_params_overrides=overrides)
     )
 
-    assert "_xgb-default_" in key_none
-    assert "_xgb-default_" in key_unmapped
+    # Assert
+    assert "_xgb-default_" in key
 
 
 def test_candidate_key_formats_float_and_string_xgb_overrides() -> None:
     """Recognized float and string XGBoost overrides should be encoded in the key."""
+    # Act
     key = wf_compare_utils.build_candidate_key(
         wf_compare_utils.CandidateSpec(
             model_kind="margin_total",
@@ -82,17 +86,34 @@ def test_candidate_key_formats_float_and_string_xgb_overrides() -> None:
         )
     )
 
+    # Assert
     assert "_xgb-lr0.125-devcuda_" in key
+
+
+def test_dataset_fingerprint_is_stable_for_unchanged_content(tmp_path: Path) -> None:
+    """Dataset fingerprints should match when file contents are unchanged."""
+    # Arrange
+    path = tmp_path / "data.csv"
+    path.write_text("a,b\n1,2\n", encoding="utf-8")
+    fp_a = fingerprints.dataset_fingerprint(path)
+
+    # Act
+    fp_b = fingerprints.dataset_fingerprint(path)
+
+    # Assert
+    assert fp_a["sha256"] == fp_b["sha256"]
 
 
 def test_dataset_fingerprint_changes_on_content_change(tmp_path: Path) -> None:
     """Dataset fingerprints should change when file contents change."""
+    # Arrange
     path = tmp_path / "data.csv"
     path.write_text("a,b\n1,2\n", encoding="utf-8")
     fp_a = fingerprints.dataset_fingerprint(path)
-    fp_b = fingerprints.dataset_fingerprint(path)
-    assert fp_a["sha256"] == fp_b["sha256"]
-
     path.write_text("a,b\n1,3\n", encoding="utf-8")
+
+    # Act
     fp_c = fingerprints.dataset_fingerprint(path)
+
+    # Assert
     assert fp_a["sha256"] != fp_c["sha256"]

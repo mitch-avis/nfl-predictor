@@ -13,6 +13,7 @@ from nfl_predictor.utils import polars_utils
 
 def test_add_lookahead_features_next_week_opponent_and_location_change() -> None:
     """Next-week opponent lookup and location-change flags should match schedule."""
+    # Arrange
     schedule_df = pl.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -38,8 +39,10 @@ def test_add_lookahead_features_next_week_opponent_and_location_change() -> None
         }
     )
 
+    # Act
     out = polars_utils.add_lookahead_features(games_df, schedule_df, season=2024, week=1)
 
+    # Assert
     for col in constants.LOOKAHEAD_FEATURE_COLUMNS:
         assert col in out.columns
 
@@ -64,6 +67,7 @@ def test_add_lookahead_features_next_week_opponent_and_location_change() -> None
 
 def test_add_lookahead_features_missing_next_week_yields_nulls() -> None:
     """When there is no week+1 game, next-week fields should be null."""
+    # Arrange
     schedule_df = pl.DataFrame(
         {
             "season": [2024],
@@ -84,8 +88,10 @@ def test_add_lookahead_features_missing_next_week_yields_nulls() -> None:
         }
     )
 
+    # Act
     out = polars_utils.add_lookahead_features(games_df, schedule_df, season=2024, week=18)
 
+    # Assert
     assert out.schema["away_next_opponent_abbr"] == pl.Utf8
     assert out.schema["away_next_is_home"] == pl.Int32
     assert out.schema["away_days_to_next_game"] == pl.Int32
@@ -104,14 +110,17 @@ def test_add_lookahead_features_missing_next_week_yields_nulls() -> None:
 
 def test_compute_team_next_week_context_validates_schema() -> None:
     """Helper should raise a clear error if required schedule columns are missing."""
+    # Arrange
     bad_schedule_df = pl.DataFrame({"season": [2024], "week": [1]})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="missing required columns"):
         polars_utils.compute_team_next_week_context(bad_schedule_df, season=2024, week=1)
 
 
 def test_add_lookahead_features_uses_historical_divisions_before_2002() -> None:
     """Next-week divisional context should use the pre-2002 alignment."""
+    # Arrange
     schedule_df = pl.DataFrame(
         {
             "season": [2001, 2001, 2001, 2001],
@@ -137,7 +146,10 @@ def test_add_lookahead_features_uses_historical_divisions_before_2002() -> None:
         }
     )
 
+    # Act
     out = polars_utils.add_lookahead_features(games_df, schedule_df, season=2001, week=1)
+
+    # Assert
     row = out.row(0, named=True)
 
     assert row["away_next_opponent_abbr"] == "PHI"

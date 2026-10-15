@@ -92,10 +92,15 @@ def test_weekly_run_outputs_match_snapshots(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every weekly output on the fixed fixture equals its committed snapshot."""
+    # Arrange
     paths = build_fixture(tmp_path)
     output_dir = tmp_path / "out"
-    _run_weekly(write_weekly_config(tmp_path, paths, output_dir), monkeypatch)
+    config_path = write_weekly_config(tmp_path, paths, output_dir)
 
+    # Act
+    _run_weekly(config_path, monkeypatch)
+
+    # Assert
     outputs = _snapshot_outputs(tmp_path, output_dir)
     missing = [name for name, path in outputs.items() if not path.exists()]
     assert not missing, f"weekly run did not write: {missing}"

@@ -14,7 +14,7 @@ import re
 import warnings
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import xgboost as xgb
@@ -99,7 +99,7 @@ def _as_matrix(result: object) -> np.ndarray | spmatrix:
     one of these two, and anything else is a bug worth failing on.
     """
     if isinstance(result, np.ndarray | spmatrix):
-        return result
+        return cast("np.ndarray | spmatrix", result)
     msg = f"Expected an array or sparse matrix from the preprocessor, got {type(result).__name__}"
     raise TypeError(msg)
 
@@ -387,7 +387,8 @@ def fitted_xgb_device(model: object) -> str | None:
         getattr(model, "total_model", None),
     ]
     for attribute in ("margin_quantile_models", "total_quantile_models"):
-        heads.extend((getattr(model, attribute, None) or {}).values())
+        quantile_models: dict[str, object] = getattr(model, attribute, None) or {}
+        heads.extend(quantile_models.values())
     devices = {
         estimator.get_params().get("device")
         for estimator in heads

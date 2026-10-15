@@ -90,29 +90,78 @@ def _public_nodes(body: list[ast.stmt]) -> Iterator[tuple[str, ast.stmt]]:
             yield name, node
 
 
+def _is_property(node: ast.FunctionDef) -> bool:
+    """Return True when a stub method is declared as a property."""
+    return any(
+        isinstance(decorator, ast.Name) and decorator.id == "property"
+        for decorator in node.decorator_list
+    )
+
+
+def _public_methods(node: ast.ClassDef) -> Iterator[ast.FunctionDef]:
+    """Yield a stub class's public methods and properties, its constructor included."""
+    for member in node.body:
+        if isinstance(member, ast.FunctionDef) and (
+            member.name == "__init__" or not member.name.startswith("_")
+        ):
+            yield member
+
+
 def _declared_names(stub: Path | None) -> list[str]:
-    """Return the public top-level functions, classes and constants a stub declares."""
+    """Return the public names a stub declares that the runtime module must define.
+
+    These are the top-level functions, classes and constants, plus each class's public
+    methods and properties as ``Class.member``. Annotated instance attributes are left out:
+    sklearn sets its fitted attributes (``transformers_``) only after ``fit``.
+    """
     if stub is None:
         return []
     tree = ast.parse(stub.read_text(encoding="utf-8"))
-    return sorted({name for name, _node in _public_nodes(tree.body)})
+    names: set[str] = set()
+    for name, node in _public_nodes(tree.body):
+        names.add(name)
+        if isinstance(node, ast.ClassDef):
+            names.update(
+                f"{name}.{member.name}"
+                for member in _public_methods(node)
+                if member.name != "__init__"
+            )
+    return sorted(names)
 
 
 def _declared_functions(stub: Path) -> list[StubFunction]:
-    """Return the public functions and class methods a stub declares, constructors included."""
+    """Return the public functions and class methods a stub declares, constructors included.
+
+    Overloads of one function merge into one entry; properties take no parameters and are
+    checked by name only.
+    """
     tree = ast.parse(stub.read_text(encoding="utf-8"))
-    functions: list[StubFunction] = []
+    parameters: dict[str, list[str]] = {}
     for name, node in _public_nodes(tree.body):
         if isinstance(node, ast.FunctionDef):
-            functions.append(StubFunction(name, _keyword_parameters(node)))
+            members = [(name, node)]
         elif isinstance(node, ast.ClassDef):
-            functions.extend(
-                StubFunction(f"{name}.{member.name}", _keyword_parameters(member))
-                for member in node.body
-                if isinstance(member, ast.FunctionDef)
-                and (member.name == "__init__" or not member.name.startswith("_"))
-            )
-    return functions
+            members = [
+                (f"{name}.{member.name}", member)
+                for member in _public_methods(node)
+                if not _is_property(member)
+            ]
+        else:
+            continue
+        for qualname, function in members:
+            merged = parameters.setdefault(qualname, [])
+            merged.extend(p for p in _keyword_parameters(function) if p not in merged)
+    return [StubFunction(qualname, tuple(names)) for qualname, names in parameters.items()]
+
+
+def _resolve(module_name: str, qualname: str) -> object | None:
+    """Return the runtime object a dotted stub name stands for, or None when it is missing."""
+    target: object = importlib.import_module(module_name)
+    for part in qualname.split("."):
+        if not hasattr(target, part):
+            return None
+        target = getattr(target, part)
+    return target
 
 
 def _runtime_callable(module_name: str, qualname: str) -> Callable[..., object]:
@@ -164,10 +213,9 @@ def test_typings_stub_the_untyped_libraries_exactly() -> None:
 def test_typings_declared_names_exist_at_runtime(module_name: str) -> None:
     # Arrange
     declared = _declared_names(_stub_files().get(module_name))
-    module = importlib.import_module(module_name)
 
     # Act
-    missing = [name for name in declared if not hasattr(module, name)]
+    missing = [name for name in declared if _resolve(module_name, name) is None]
 
     # Assert
     assert declared

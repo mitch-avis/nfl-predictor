@@ -18,6 +18,7 @@ from nfl_predictor.utils.polars.week_rows import _merge_team_rankings, process_w
 
 def test_process_week_uses_fallback_stats_for_week1() -> None:
     """Week 1 uses prior-season fallbacks when no prior games exist."""
+    # Arrange
     schedule_df = pl.DataFrame(
         {
             "season": [2007],
@@ -39,6 +40,7 @@ def test_process_week_uses_fallback_stats_for_week1() -> None:
         }
     )
 
+    # Act
     result = process_week(
         2007,
         1,
@@ -47,6 +49,7 @@ def test_process_week_uses_fallback_stats_for_week1() -> None:
         data_collection.SeasonInputs(min_season=2006, elo_df=None, tr_df=None, prev_tr_df=None),
     )
 
+    # Assert
     assert result.height == 1
     row = result.row(0, named=True)
     assert row["away_pass_yards"] == pytest.approx(283.333, rel=1e-3)
@@ -56,6 +59,7 @@ def test_process_week_uses_fallback_stats_for_week1() -> None:
 
 def test_merge_team_rankings_week1_uses_prev() -> None:
     """Week 1 TeamRankings merge can fall back to prior-season week 18."""
+    # Arrange
     merged = pl.DataFrame({"away_abbr": ["BUF"], "home_abbr": ["KC"]})
     prev_tr_df = pl.DataFrame(
         {
@@ -65,8 +69,10 @@ def test_merge_team_rankings_week1_uses_prev() -> None:
         }
     )
 
+    # Act
     result = _merge_team_rankings(merged, 2007, 1, week_rows.TeamRankingsFrames(None, prev_tr_df))
 
+    # Assert
     row = result.row(0, named=True)
     assert row["away_predictive_rating"] == pytest.approx(5.0)
     assert row["home_predictive_rating"] == pytest.approx(4.0)
@@ -179,9 +185,13 @@ def test_future_week_plays_do_not_change_earlier_week_features() -> None:
     Week-N features may only use games strictly before week N of the season, so
     rewriting every play from week 2 onward must not move a single week-2 value.
     """
+    # Arrange
     baseline = _week_two_features(_three_week_pbp(1.0))
+
+    # Act
     perturbed = _week_two_features(_three_week_pbp(10.0))
 
+    # Assert
     assert baseline, "expected play-by-play features on the week-2 row"
     assert baseline == perturbed
 
@@ -192,6 +202,7 @@ def test_week1_fallback_regresses_pbp_rates_toward_the_league_mean() -> None:
     Rates are ratios of regressed sums, so each regressed rate is a weighted mediant of
     the team's own rate and the league mean rate and must land between the two.
     """
+    # Arrange
     prior = pl.DataFrame(
         {
             "season": [2006, 2006],
@@ -211,6 +222,7 @@ def test_week1_fallback_regresses_pbp_rates_toward_the_league_mean() -> None:
         {"season": [2007], "week": [1], "away_abbr": ["BUF"], "home_abbr": ["KC"]}
     )
 
+    # Act
     result = process_week(
         2007,
         1,
@@ -219,6 +231,7 @@ def test_week1_fallback_regresses_pbp_rates_toward_the_league_mean() -> None:
         data_collection.SeasonInputs(min_season=2006, elo_df=None, tr_df=None, prev_tr_df=None),
     )
 
+    # Assert
     row = result.row(0, named=True)
     league_mean_rate = 15.0 / 60.0  # (12.0 + 3.0) EPA over (30 + 30) dropbacks
     assert league_mean_rate < row["away_epa_per_dropback"] < 0.40
@@ -318,6 +331,7 @@ def test_playoff_row_features_ignore_every_postseason_play() -> None:
     postseason game could leak into its own features. Rewriting every postseason
     play must leave a later playoff row untouched.
     """
+    # Arrange
     regular_weeks = (1, 2, 3)
     playoff_weeks = (18, 19)
     stats = _team_stats_rows(2007, regular_weeks + playoff_weeks)
@@ -332,14 +346,18 @@ def test_playoff_row_features_ignore_every_postseason_play() -> None:
         return _pbp_features_for_week(pbp_df, stats, season=2007, week=19, min_season=2006)
 
     baseline = features(1.0)
+
+    # Act
     perturbed = features(25.0)
 
+    # Assert
     assert baseline, "expected play-by-play features on the playoff row"
     assert baseline == perturbed
 
 
 def test_every_playoff_week_sees_the_same_full_regular_season() -> None:
     """Two playoff rows in one season share features, because both use all of it."""
+    # Arrange
     regular_weeks = (1, 2, 3)
     playoff_weeks = (18, 19)
     stats = _team_stats_rows(2007, regular_weeks + playoff_weeks)
@@ -349,10 +367,12 @@ def test_every_playoff_week_sees_the_same_full_regular_season() -> None:
             _season_pbp(2007, playoff_weeks, epa_scale=3.0, season_type="POST"),
         ]
     )
-
     first_round = _pbp_features_for_week(pbp_df, stats, season=2007, week=18, min_season=2006)
+
+    # Act
     later_round = _pbp_features_for_week(pbp_df, stats, season=2007, week=19, min_season=2006)
 
+    # Assert
     assert first_round, "expected play-by-play features on the playoff row"
     assert first_round == later_round
 
@@ -364,6 +384,7 @@ def test_week1_row_features_ignore_every_current_season_play() -> None:
     week N": it reaches into the previous season instead. Rewriting every play of
     the current season must therefore leave the Week-1 row untouched.
     """
+    # Arrange
     prior_weeks = (1, 2)
     current_weeks = (1, 2, 3)
     stats = pl.concat([_team_stats_rows(2006, prior_weeks), _team_stats_rows(2007, current_weeks)])
@@ -378,8 +399,11 @@ def test_week1_row_features_ignore_every_current_season_play() -> None:
         return _pbp_features_for_week(pbp_df, stats, season=2007, week=1, min_season=2006)
 
     baseline = features(1.0)
+
+    # Act
     perturbed = features(40.0)
 
+    # Assert
     assert baseline, "expected play-by-play features on the week-1 row"
     assert baseline == perturbed
 
@@ -428,6 +452,7 @@ def _strength_features_for_week(
 
 def test_future_week_plays_do_not_change_earlier_week_strength() -> None:
     """Rewriting week 2 onward leaves every week-2 strength value untouched."""
+    # Arrange
     stats = _team_stats_rows(2007, (1, 2, 3))
 
     def features(scale: float) -> dict[str, object]:
@@ -435,11 +460,18 @@ def test_future_week_plays_do_not_change_earlier_week_strength() -> None:
             _three_week_pbp(scale), stats, season=2007, week=2, min_season=2006
         )
 
-    assert features(1.0) == features(10.0)
+    baseline = features(1.0)
+
+    # Act
+    perturbed = features(10.0)
+
+    # Assert
+    assert baseline == perturbed
 
 
 def test_playoff_row_strength_ignores_every_postseason_play() -> None:
     """A playoff row's strength comes from the regular season, never from playoff games."""
+    # Arrange
     regular_weeks = (1, 2, 3)
     playoff_weeks = (18, 19)
     stats = _team_stats_rows(2007, regular_weeks + playoff_weeks)
@@ -453,11 +485,18 @@ def test_playoff_row_strength_ignores_every_postseason_play() -> None:
         )
         return _strength_features_for_week(pbp_df, stats, season=2007, week=19, min_season=2006)
 
-    assert features(1.0) == features(25.0)
+    baseline = features(1.0)
+
+    # Act
+    perturbed = features(25.0)
+
+    # Assert
+    assert baseline == perturbed
 
 
 def test_week1_row_strength_ignores_every_current_season_play() -> None:
     """A Week-1 strength row reaches back to the prior season and never forward."""
+    # Arrange
     prior_weeks = (1, 2)
     current_weeks = (1, 2, 3)
     stats = pl.concat([_team_stats_rows(2006, prior_weeks), _team_stats_rows(2007, current_weeks)])
@@ -471,11 +510,18 @@ def test_week1_row_strength_ignores_every_current_season_play() -> None:
         )
         return _strength_features_for_week(pbp_df, stats, season=2007, week=1, min_season=2006)
 
-    assert features(1.0) == features(40.0)
+    baseline = features(1.0)
+
+    # Act
+    perturbed = features(40.0)
+
+    # Assert
+    assert baseline == perturbed
 
 
 def test_week1_strength_actually_carries_the_prior_season() -> None:
     """The Week-1 leakage test would pass on all-nulls, so prove the prior is really used."""
+    # Arrange
     prior_weeks = (1, 2)
     stats = pl.concat([_team_stats_rows(2006, prior_weeks), _team_stats_rows(2007, (1,))])
     pbp_df = pl.concat(
@@ -485,8 +531,10 @@ def test_week1_strength_actually_carries_the_prior_season() -> None:
         ]
     )
 
+    # Act
     values = _strength_features_for_week(pbp_df, stats, season=2007, week=1, min_season=2006)
 
+    # Assert
     assert any(
         value is not None for name, value in values.items() if "adj_off_pass_epa_snap" in name
     )
@@ -494,6 +542,7 @@ def test_week1_strength_actually_carries_the_prior_season() -> None:
 
 def test_strength_feature_join_collapses_duplicate_team_keys() -> None:
     """A duplicate team key annotates the games rather than multiplying them."""
+    # Arrange
     merged = pl.DataFrame({"away_abbr": ["AAA"], "home_abbr": ["BBB"]})
     features = pl.DataFrame(
         {
@@ -502,14 +551,17 @@ def test_strength_feature_join_collapses_duplicate_team_keys() -> None:
         }
     )
 
+    # Act
     result = week_rows._merge_strength_features(merged, features)
 
+    # Assert
     assert result.height == 1
     assert result.row(0, named=True)["away_adj_srs"] == pytest.approx(1.0)
 
 
 def test_strength_features_are_added_even_when_no_team_matches() -> None:
     """Every published strength column exists on the row even with nothing to join."""
+    # Arrange
     merged = pl.DataFrame({"away_abbr": ["AAA"], "home_abbr": ["BBB"]})
     empty = pl.DataFrame(
         schema={
@@ -518,8 +570,10 @@ def test_strength_features_are_added_even_when_no_team_matches() -> None:
         }
     )
 
+    # Act
     result = week_rows._merge_strength_features(merged, empty)
 
+    # Assert
     assert result.height == 1
     for side in ("away", "home"):
         for column in constants.ADJUSTED_STRENGTH_STATS:
@@ -533,6 +587,7 @@ def test_strength_features_degrade_when_the_schedule_is_incomplete() -> None:
     The ridge snapshot depends only on played games, so it must survive a schedule that
     cannot answer "who is left to play"; only the adjusted schedule-strength pair goes null.
     """
+    # Arrange
     team_games = _team_stats_rows(2007, (1, 2)).with_columns(
         pl.lit(60.0).alias("offensive_snaps"),
         pl.lit(60.0).alias("defensive_snaps"),
@@ -546,10 +601,12 @@ def test_strength_features_degrade_when_the_schedule_is_incomplete() -> None:
     )
     incomplete_schedule = pl.DataFrame({"season": [2007], "week": [3]})
 
+    # Act
     features = strength_table.build_strength_features(
         team_games, incomplete_schedule, season=2007, week=3
     )
 
+    # Assert
     assert features.columns == ["team_abbr", *constants.ADJUSTED_STRENGTH_STATS]
     assert features.height == 2
     # The solve still produced ratings.
@@ -578,6 +635,7 @@ def test_remaining_schedule_strength_ignores_the_postseason_bracket() -> None:
     the bracket is an outcome of the season being predicted. A weak and a strong playoff
     opponent must therefore produce the same week-2 value.
     """
+    # Arrange
     ratings = pl.DataFrame(
         {
             "team_abbr": ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"],
@@ -597,7 +655,13 @@ def test_remaining_schedule_strength_ignores_the_postseason_bracket() -> None:
         )
         return adjusted.filter(pl.col("team_abbr") == "AAA")["sos_remaining_adj"].item()
 
-    assert remaining("BBB") == remaining("DDD")
+    weak_opponent = remaining("BBB")
+
+    # Act
+    strong_opponent = remaining("DDD")
+
+    # Assert
+    assert weak_opponent == strong_opponent
 
 
 def test_week_one_publishes_strength_before_any_game_is_played() -> None:
@@ -607,6 +671,7 @@ def test_week_one_publishes_strength_before_any_game_is_played() -> None:
     the whole point of the prior blend is to serve exactly this week. Publishing nulls
     here would be a train/serve skew against every historical Week-1 training row.
     """
+    # Arrange
     played = _team_stats_rows(2006, (1, 2)).with_columns(
         pl.lit(60.0).alias("offensive_snaps"),
         pl.lit(60.0).alias("defensive_snaps"),
@@ -624,6 +689,7 @@ def test_week_one_publishes_strength_before_any_game_is_played() -> None:
     prior = strength_table.build_prior_strength_snapshot(played, 2007, min_season=2006)
     assert prior is not None, "the prior season should produce a snapshot"
 
+    # Act
     features = strength_table.build_strength_features(
         played,
         new_season_schedule,
@@ -632,6 +698,7 @@ def test_week_one_publishes_strength_before_any_game_is_played() -> None:
         prior=strength_snapshot.StrengthPrior(prior),
     )
 
+    # Assert
     assert sorted(features["team_abbr"].to_list()) == ["AAA", "BBB"]
     assert features["adj_off_pass_epa_snap"].null_count() == 0
     assert features["adj_strength_composite"].null_count() == 0
@@ -673,9 +740,11 @@ def _two_team_prior_stats(season: int) -> pl.DataFrame:
 
 def test_process_week_publishes_no_games_played_for_a_week1_fallback_row() -> None:
     """A week-1 row has played nothing this season, whatever the prior season's count was."""
+    # Arrange
     season = 2007
     schedule_df = _two_team_schedule(season)
 
+    # Act
     result = process_week(
         season,
         1,
@@ -686,6 +755,7 @@ def test_process_week_publishes_no_games_played_for_a_week1_fallback_row() -> No
         ),
     )
 
+    # Assert
     row = result.row(0, named=True)
     assert row["away_games_played"] == 0
     assert row["home_games_played"] == 0
@@ -693,6 +763,7 @@ def test_process_week_publishes_no_games_played_for_a_week1_fallback_row() -> No
 
 def test_process_week_games_played_agrees_with_the_published_record() -> None:
     """`games_played` is wins + losses + ties, the same record its siblings are built from."""
+    # Arrange
     season = 2007
     schedule_df = _two_team_schedule(season)
     team_stats_df = pl.concat(
@@ -713,6 +784,7 @@ def test_process_week_games_played_agrees_with_the_published_record() -> None:
         how="vertical",
     )
 
+    # Act
     result = process_week(
         season,
         2,
@@ -723,8 +795,31 @@ def test_process_week_games_played_agrees_with_the_published_record() -> None:
         ),
     )
 
+    # Assert
     row = result.row(0, named=True)
     for side in ("away", "home"):
         played = row[f"{side}_games_played"]
         assert played == 1
         assert played == row[f"{side}_wins"] + row[f"{side}_losses"] + row[f"{side}_ties"]
+
+
+def test_prior_season_produces_a_strength_snapshot() -> None:
+    """A played prior season yields a strength snapshot for the next season's Week 1."""
+    # Arrange
+    played = _team_stats_rows(2006, (1, 2)).with_columns(
+        pl.lit(60.0).alias("offensive_snaps"),
+        pl.lit(60.0).alias("defensive_snaps"),
+        pl.Series("pass_epa_sum", [6.0, -6.0, 6.0, -6.0]),
+        pl.Series("rush_epa_sum", [3.0, -3.0, 3.0, -3.0]),
+        pl.lit(1.0).alias("pass_epa_allowed_sum"),
+        pl.lit(0.5).alias("rush_epa_allowed_sum"),
+        pl.Series("points_scored", [28.0, 10.0, 28.0, 10.0]),
+        pl.Series("points_allowed", [10.0, 28.0, 10.0, 28.0]),
+        pl.Series("is_home", [True, False, True, False]),
+    )
+
+    # Act
+    prior = strength_table.build_prior_strength_snapshot(played, 2007, min_season=2006)
+
+    # Assert
+    assert prior is not None, "the prior season should produce a snapshot"

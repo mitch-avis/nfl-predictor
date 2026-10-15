@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
 import types
 from typing import TYPE_CHECKING
 
 from nfl_predictor import ml_model
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     import pytest
@@ -17,7 +19,7 @@ def test_ml_model_main_delegates_to_cli(monkeypatch: pytest.MonkeyPatch) -> None
     called = {"ok": False}
 
     dummy = types.SimpleNamespace(main=lambda: called.update(ok=True))
-    monkeypatch.setattr(ml_model.importlib, "import_module", lambda _name: dummy)
+    monkeypatch.setattr(importlib, "import_module", returning(dummy))
 
     # Act
     ml_model.main()

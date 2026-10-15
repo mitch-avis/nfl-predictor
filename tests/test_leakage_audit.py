@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from nfl_predictor import ml_model
 from nfl_predictor.ml import leakage_audit
+from tests.fakes import returning
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _tiny_df() -> pd.DataFrame:
@@ -105,7 +111,7 @@ def test_equality_rate_scores_valid_arrays() -> None:
 
 
 def test_leakage_audit_flags_suspicious_names_and_near_perfect_correlation(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Flags heuristic names and fails for near-perfect label-derived features."""
     # Arrange
@@ -118,15 +124,11 @@ def test_leakage_audit_flags_suspicious_names_and_near_perfect_correlation(
         }
     )
 
+    monkeypatch.setattr(ml_model, "get_target_columns", returning(("away_score", "home_score")))
     monkeypatch.setattr(
-        leakage_audit.ml_model,
-        "get_target_columns",
-        lambda _df: ("away_score", "home_score"),
-    )
-    monkeypatch.setattr(
-        leakage_audit.ml_model,
+        ml_model,
         "build_feature_spec",
-        lambda *_args, **_kwargs: SimpleNamespace(feature_columns=["winner_hint", "total_copy"]),
+        returning(SimpleNamespace(feature_columns=["winner_hint", "total_copy"])),
     )
 
     # Act
@@ -138,7 +140,7 @@ def test_leakage_audit_flags_suspicious_names_and_near_perfect_correlation(
     assert any(item["reason"] == "suspicious_name" for item in report["flagged_columns"])
 
 
-def test_write_report_writes_sorted_json(tmp_path) -> None:
+def test_write_report_writes_sorted_json(tmp_path: Path) -> None:
     """Persists the JSON report to disk using a stable sort order."""
     # Arrange
     report = {"b": 2, "a": 1}
@@ -152,7 +154,9 @@ def test_write_report_writes_sorted_json(tmp_path) -> None:
     assert out_path.read_text(encoding="utf-8").splitlines()[1].strip().startswith('"a"')
 
 
-def test_cli_main_creates_missing_report_directory(tmp_path, monkeypatch) -> None:
+def test_cli_main_creates_missing_report_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The CLI writes its report even when the output directory does not exist yet."""
     # Arrange
     from nfl_predictor.cli import leakage_audit as leakage_audit_cli

@@ -62,7 +62,7 @@ def test_select_objective_score_missing_metrics_defaults() -> None:
     """Uses an infinite Brier when the Brier metric is missing."""
     # Arrange
     metrics = {"margin_mae": 3.0, "total_mae": 7.0, "winner_accuracy": 0.55}
-    pool = {}
+    pool: dict[str, float] = {}
 
     # Act
     score = core._select_objective_score(metrics, pool, "brier")
@@ -75,7 +75,7 @@ def test_select_objective_score_missing_pool_points_defaults_to_zero() -> None:
     """Uses zero expected points when the pool summary is missing them."""
     # Arrange
     metrics = {"margin_mae": 3.0, "total_mae": 7.0, "winner_accuracy": 0.55}
-    pool = {}
+    pool: dict[str, float] = {}
 
     # Act
     score = core._select_objective_score(metrics, pool, "expected_points")

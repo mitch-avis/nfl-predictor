@@ -9,13 +9,15 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from nfl_predictor.ml import ml_model_core, ml_model_predict
+from nfl_predictor.ml import ml_model_core, ml_model_predict, ml_utils
 from nfl_predictor.ml.ml_model_core import (
     FeatureSpec,
     MarginTotalModel,
 )
+from tests.fakes import returning
 
 if TYPE_CHECKING:
+    import pytest
     from sklearn.compose import ColumnTransformer
 
 xgb.set_config(verbosity=0)
@@ -49,7 +51,13 @@ def _feature_spec() -> FeatureSpec:
     )
 
 
-def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch) -> None:
+def _passthrough_feature_spec(df: pd.DataFrame, _spec: FeatureSpec) -> pd.DataFrame:
+    return df
+
+
+def test_core_predict_margin_total_from_model_applies_market_anchor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Core margin/total prediction helper preserves market-anchor post-processing."""
     # Arrange
     games_df = pd.DataFrame({"feat1": [1.0, 2.0]})
@@ -61,16 +69,16 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
         total_model: np.array([40.0, 42.0]),
     }
 
-    monkeypatch.setattr(ml_model_core, "apply_feature_spec", lambda df, spec: df)
-    monkeypatch.setattr(
-        ml_model_core,
-        "predict_xgb",
-        lambda model, _features: predictions[model],
-    )
+    monkeypatch.setattr(ml_model_core, "apply_feature_spec", _passthrough_feature_spec)
+
+    def fake_predict_xgb(model: xgb.XGBRegressor, _features: object) -> np.ndarray:
+        return predictions[model]
+
+    monkeypatch.setattr(ml_model_core, "predict_xgb", fake_predict_xgb)
     monkeypatch.setattr(
         ml_model_core,
         "get_market_baseline",
-        lambda _df: (np.array([1.0, -0.5]), np.array([2.0, 1.0])),
+        returning((np.array([1.0, -0.5]), np.array([2.0, 1.0]))),
     )
 
     model = MarginTotalModel(
@@ -99,7 +107,7 @@ def test_core_predict_margin_total_from_model_applies_market_anchor(monkeypatch)
 
 
 def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Core quantile prediction helper preserves market-anchor post-processing."""
     # Arrange
@@ -116,16 +124,16 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
         total_high: np.array([48.0]),
     }
 
-    monkeypatch.setattr(ml_model_core, "apply_feature_spec", lambda df, spec: df)
-    monkeypatch.setattr(
-        ml_model_core,
-        "predict_xgb",
-        lambda model, _features: predictions[model],
-    )
+    monkeypatch.setattr(ml_model_core, "apply_feature_spec", _passthrough_feature_spec)
+
+    def fake_predict_xgb(model: xgb.XGBRegressor, _features: object) -> np.ndarray:
+        return predictions[model]
+
+    monkeypatch.setattr(ml_model_core, "predict_xgb", fake_predict_xgb)
     monkeypatch.setattr(
         ml_model_core,
         "get_market_baseline",
-        lambda _df: (np.array([0.5]), np.array([1.5])),
+        returning((np.array([0.5]), np.array([1.5]))),
     )
 
     model = MarginTotalModel(
@@ -157,7 +165,9 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
     assert preprocessor.frames[0].equals(games_df)
 
 
-def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -> None:
+def test_predict_week_margin_total_adds_quantiles(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Predict week margin/total adds quantile predictions when models are present."""
     # Arrange
     games_df = pd.DataFrame(
@@ -170,29 +180,31 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
         }
     )
 
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
+    monkeypatch.setattr(ml_model_predict, "_load_games", returning(games_df))
     monkeypatch.setattr(
         ml_model_predict,
         "_predict_margin_total_from_model",
-        lambda _model, _df: (np.array([3.5]), np.array([44.2])),
+        returning((np.array([3.5]), np.array([44.2]))),
     )
     monkeypatch.setattr(
         ml_model_predict,
         "_predict_margin_total_quantiles_from_model",
-        lambda _model, _df: (
-            {0.25: np.array([2.0]), 0.75: np.array([5.0])},
-            {0.25: np.array([40.0]), 0.75: np.array([48.0])},
+        returning(
+            (
+                {0.25: np.array([2.0]), 0.75: np.array([5.0])},
+                {0.25: np.array([40.0]), 0.75: np.array([48.0])},
+            )
         ),
     )
     monkeypatch.setattr(
         ml_model_predict,
         "_derive_scores_from_margin_total",
-        lambda _m, _t: (np.array([20.0]), np.array([23.5])),
+        returning((np.array([20.0]), np.array([23.5]))),
     )
     monkeypatch.setattr(
         ml_model_predict,
         "margin_to_home_win_prob",
-        lambda _m, _sigma: np.array([0.6]),
+        returning(np.array([0.6])),
     )
 
     model = MarginTotalModel(
@@ -232,7 +244,7 @@ def test_predict_week_margin_total_adds_quantiles(monkeypatch, tmp_path: Path) -
     assert float(total_p75) == 48.0
 
 
-def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
+def test_predict_week_margin_total_pretty_output(monkeypatch: pytest.MonkeyPatch) -> None:
     """Predict week margin/total pretty-prints output when requested."""
     # Arrange
     games_df = pd.DataFrame(
@@ -245,34 +257,35 @@ def test_predict_week_margin_total_pretty_output(monkeypatch) -> None:
         }
     )
 
-    monkeypatch.setattr(ml_model_predict, "_load_games", lambda _: games_df)
+    no_quantiles: tuple[dict[float, np.ndarray], dict[float, np.ndarray]] = ({}, {})
+    monkeypatch.setattr(ml_model_predict, "_load_games", returning(games_df))
     monkeypatch.setattr(
         ml_model_predict,
         "_predict_margin_total_from_model",
-        lambda _model, _df: (np.array([2.0]), np.array([30.0])),
+        returning((np.array([2.0]), np.array([30.0]))),
     )
     monkeypatch.setattr(
         ml_model_predict,
         "_predict_margin_total_quantiles_from_model",
-        lambda _model, _df: ({}, {}),
+        returning(no_quantiles),
     )
     monkeypatch.setattr(
         ml_model_predict,
         "_derive_scores_from_margin_total",
-        lambda _m, _t: (np.array([14.0]), np.array([16.0])),
+        returning((np.array([14.0]), np.array([16.0]))),
     )
     monkeypatch.setattr(
         ml_model_predict,
         "margin_to_home_win_prob",
-        lambda _m, _sigma: np.array([0.55]),
+        returning(np.array([0.55])),
     )
 
     captured: dict[str, pd.DataFrame] = {}
-    monkeypatch.setattr(
-        ml_model_predict.ml_utils,
-        "display_weekly_predictions",
-        lambda df: captured.setdefault("df", df),
-    )
+
+    def capture_display(df: pd.DataFrame) -> None:
+        captured.setdefault("df", df)
+
+    monkeypatch.setattr(ml_utils, "display_weekly_predictions", capture_display)
 
     model = MarginTotalModel(
         preprocessor=cast("ColumnTransformer", _DummyPreprocessor()),

@@ -1161,9 +1161,12 @@ nfl-predictor weekly --config path/to/weekly_run.json
 
 The file is JSON (`.json`) or YAML (`.yaml`, `.yml`) holding a mapping; an empty YAML file sets
 nothing. A missing, unparsable or non-mapping file, or another extension, stops the run with an
-error naming the file. A relative path in it (`predict_path`, `data_path`, `run_dir` and the
-other single paths) is taken from the repository root, whatever the working directory; the
-`--config` path itself is read from the working directory.
+error naming the file. A relative path in it, alone (`predict_path`, `data_path`, `run_dir` and
+the other single paths) or in a list (`floor_sigma_reference_runs`,
+`power_rankings_model_predictions`), is taken from the repository root, whatever the working
+directory, and a leading `~` is the home directory; the `--config` path itself is read from the
+working directory. A list such as `disable_feature_groups` is a YAML or JSON list in the file; the
+comma-separated form is the command line's, and the file refuses it with the list to write.
 
 Every XGBoost command (`backtest`, `weekly`, `train`) defaults to `--xgb-device auto`,
 which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the

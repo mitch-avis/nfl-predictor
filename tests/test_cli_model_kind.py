@@ -18,15 +18,41 @@ RANKINGS_ARGV = ["--model-in", "model.joblib", "--season", "2026", "--through-we
 
 def test_the_vocabulary_is_margin_total() -> None:
     """One model kind."""
-    assert options.MODEL_KINDS == ("margin_total",)
-    assert options.model_kind("margin_total") == "margin_total"
+    # Act
+    kinds = options.MODEL_KINDS
+
+    # Assert
+    assert kinds == ("margin_total",)
+
+
+def test_model_kind_accepts_margin_total() -> None:
+    """The one kind parses to itself."""
+    # Act
+    kind = options.model_kind("margin_total")
+
+    # Assert
+    assert kind == "margin_total"
 
 
 def test_train_and_rankings_default_to_margin_total(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without ``--model-kind`` both commands use the one kind."""
+    """Without ``--model-kind`` the train command uses the one kind."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["train"])
-    assert train._parse_args().model_kind == "margin_total"
-    assert rankings._parse_args(RANKINGS_ARGV).model_kind == "margin_total"
+
+    # Act
+    args = train._parse_args()
+
+    # Assert
+    assert args.model_kind == "margin_total"
+
+
+def test_rankings_defaults_to_margin_total() -> None:
+    """Without ``--model-kind`` the rankings command uses the one kind."""
+    # Act
+    args = rankings._parse_args(RANKINGS_ARGV)
+
+    # Assert
+    assert args.model_kind == "margin_total"
 
 
 @pytest.mark.parametrize("given", ["blend", "blended_margin_total"])
@@ -38,8 +64,11 @@ def test_the_retired_blend_kind_is_rejected_with_a_reason(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """``--model-kind blend`` fails in argparse and names the retirement."""
+    # Arrange
     argv = ["--model-kind", given]
     monkeypatch.setattr(sys, "argv", ["prog", *argv])
+
+    # Act & Assert
     with pytest.raises(SystemExit):
         _parse_args(module, argv)
     assert "retired" in capsys.readouterr().err
@@ -48,8 +77,11 @@ def test_the_retired_blend_kind_is_rejected_with_a_reason(
 @pytest.mark.parametrize("module", [train, rankings])
 def test_an_unknown_model_kind_is_rejected(module: object, monkeypatch: pytest.MonkeyPatch) -> None:
     """Anything outside the vocabulary fails in argparse."""
+    # Arrange
     argv = ["--model-kind", "score"]
     monkeypatch.setattr(sys, "argv", ["prog", *argv])
+
+    # Act & Assert
     with pytest.raises(SystemExit):
         _parse_args(module, argv)
 

@@ -75,6 +75,7 @@ def _disabled_optuna() -> OptunaConfig:
 
 def test_filter_to_regular_season_for_training_drops_non_regular_rows() -> None:
     """Drops non-regular-season rows when postseason training is disabled."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2024, 2024, 2024],
@@ -83,38 +84,50 @@ def test_filter_to_regular_season_for_training_drops_non_regular_rows() -> None:
         }
     )
 
+    # Act
     filtered = ml_model_training._filter_to_regular_season_for_training(
         df,
         include_postseason=False,
     )
 
+    # Assert
     assert filtered["week"].tolist() == [1, 3]
 
 
 def test_filter_to_regular_season_for_training_returns_input_when_not_applicable() -> None:
-    """Leaves the input unchanged when postseason rows are allowed or missing."""
+    """Leaves the input unchanged when postseason rows are allowed."""
+    # Arrange
     with_game_type = pd.DataFrame({"game_type": ["POST"]})
+
+    # Act
+    filtered = ml_model_training._filter_to_regular_season_for_training(
+        with_game_type,
+        include_postseason=True,
+    )
+
+    # Assert
+    assert filtered is with_game_type
+
+
+def test_filter_to_regular_season_for_training_returns_input_without_game_type() -> None:
+    """Leaves the input unchanged when the game type column is missing."""
+    # Arrange
     without_game_type = pd.DataFrame({"week": [1]})
 
-    assert (
-        ml_model_training._filter_to_regular_season_for_training(
-            with_game_type,
-            include_postseason=True,
-        )
-        is with_game_type
+    # Act
+    filtered = ml_model_training._filter_to_regular_season_for_training(
+        without_game_type,
+        include_postseason=False,
     )
-    assert (
-        ml_model_training._filter_to_regular_season_for_training(
-            without_game_type,
-            include_postseason=False,
-        )
-        is without_game_type
-    )
+
+    # Assert
+    assert filtered is without_game_type
 
 
 def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> None:
     """Metadata should record a best_iteration even when early stopping is disabled."""
 
+    # Arrange
     class _DummyBooster:
         def num_boosted_rounds(self) -> int:
             return 12
@@ -138,14 +151,17 @@ def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> 
         tuned_cv_summary=None,
     )
 
+    # Act
     info = ml_model_training._early_stopping_info(model)
 
+    # Assert
     assert info["margin_model.best_iteration"] == 11
     assert info["total_model.best_iteration"] == 11
 
 
 def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypatch) -> None:
     """Production auto calibration should not consult the fitted selector."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2022, 2023],
@@ -217,8 +233,8 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
         lambda *_args, **_kwargs: {0.1: "q10", 0.9: "q90"},
     )
     monkeypatch.setattr(ml_model_training, "validate_quantiles", lambda _q: (0.1, 0.9))
-    assert not hasattr(ml_model_training, "_select_auto_calibration_method")
 
+    # Act
     model = ml_model_training.train_margin_total_model(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -231,4 +247,6 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(monkeypa
         )
     )
 
+    # Assert
+    assert not hasattr(ml_model_training, "_select_auto_calibration_method")
     assert not hasattr(model, "calibrator")

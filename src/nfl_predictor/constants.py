@@ -68,6 +68,12 @@ FLOOR_SIGMA_REFERENCE_RUNS = (
 # `qb_elos.csv` Elo (`elo`). The default of the weekly run, `nfl-predictor train` and
 # `nfl-predictor backtest`, so a backtest measures production's features.
 PRODUCTION_DISABLED_FEATURE_GROUPS = ("strength", "own_elo", "own_elo_wt", "qb_adj")
+# The feature groups a run without game lines leaves out by default (the weekly run's market mode
+# `none`; `backtest` or `train` with no market feature, anchor or transform): the reviewed list of
+# the step-6 runs without game lines (`models/step6/elo_marketfree_seed{42,7}`), which trains on
+# the ported team ratings and the own Elo with no win-total prior (`own_elo`), plus `qb_adj` until
+# it is measured. An explicitly given list replaces it.
+NO_GAME_LINES_DISABLED_FEATURE_GROUPS = ("strength", "elo", "own_elo_wt", "qb_adj")
 
 # URL for SurvivorGrid spreads (future games)
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"

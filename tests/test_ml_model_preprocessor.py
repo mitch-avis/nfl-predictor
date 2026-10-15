@@ -69,10 +69,8 @@ def test_preprocessor_handles_missing_numeric() -> None:
     features = fit_transform_matrix(preprocessor, df)
 
     # Assert
-    if sparse.issparse(features):
-        csr = sparse.csr_matrix(features)
-        data = csr.data
-        assert not np.isnan(np.asarray(data, dtype=float)).any()
+    if isinstance(features, sparse.csr_matrix):
+        assert not np.isnan(np.asarray(features.data, dtype=float)).any()
     else:
         dense = np.asarray(features, dtype=float)
         assert not np.isnan(dense).any()

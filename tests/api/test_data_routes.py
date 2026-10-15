@@ -13,10 +13,11 @@ from tests.api import factories
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
 
-def _seed(project_root: Path, app) -> None:
+def _seed(project_root: Path, app: FastAPI) -> None:
     """Create a complete weekly run, a prior-week run, and an unattached prediction file."""
     models = project_root / "models"
     factories.make_run_dir(
@@ -40,7 +41,7 @@ def _seed(project_root: Path, app) -> None:
     app.state.run_index.invalidate()
 
 
-def _add_weekly_w2(project_root: Path, app) -> None:
+def _add_weekly_w2(project_root: Path, app: FastAPI) -> None:
     """Add a week-2 run whose power order swaps DEN and KC against week 1."""
     factories.make_run_dir(
         project_root / "models",
@@ -65,7 +66,7 @@ def test_registry_route(viewer_client: TestClient) -> None:
     assert "Model" in payload["groups"]
 
 
-def test_predictions_routes(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_predictions_routes(project_root: Path, viewer_client: TestClient, app: FastAPI) -> None:
     """The active run is the default and weeks list every source."""
     # Arrange
     _seed(project_root, app)
@@ -87,7 +88,7 @@ def test_predictions_routes(project_root: Path, viewer_client: TestClient, app) 
 
 
 def test_predictions_week_selects_its_run(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """A week with a run resolves to that run."""
     # Arrange
@@ -102,7 +103,7 @@ def test_predictions_week_selects_its_run(
 
 
 def test_predictions_week_without_run_is_unattached(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """A week with only a prediction file resolves to the unattached source."""
     # Arrange
@@ -117,7 +118,7 @@ def test_predictions_week_without_run_is_unattached(
 
 
 def test_predictions_forced_unattached_source(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """Forcing the unattached source picks the unattached prediction file."""
     # Arrange
@@ -130,7 +131,9 @@ def test_predictions_forced_unattached_source(
     assert forced["week"] == 3
 
 
-def test_predictions_explicit_run(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_predictions_explicit_run(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
     """An explicit run id resolves to that run."""
     # Arrange
     _seed(project_root, app)
@@ -144,7 +147,7 @@ def test_predictions_explicit_run(project_root: Path, viewer_client: TestClient,
 
 @pytest.mark.parametrize("params", [{"week": 9}, {"run": "nope"}])
 def test_predictions_unknown_selection_is_404(
-    project_root: Path, viewer_client: TestClient, app, params: dict[str, object]
+    project_root: Path, viewer_client: TestClient, app: FastAPI, params: dict[str, str | int]
 ) -> None:
     """An unknown week or run is a 404."""
     # Arrange
@@ -158,7 +161,7 @@ def test_predictions_unknown_selection_is_404(
 
 
 def test_predictions_weeks_lists_every_source(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """The weeks route lists every prediction source."""
     # Arrange
@@ -172,7 +175,7 @@ def test_predictions_weeks_lists_every_source(
 
 
 def test_predictions_picks_for_active_run(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """The picks route ranks the active run's games."""
     # Arrange
@@ -186,7 +189,7 @@ def test_predictions_picks_for_active_run(
 
 
 def test_predictions_picks_derived_from_unattached_file(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """Picks are derived for a week that only has a prediction file."""
     # Arrange
@@ -211,7 +214,7 @@ def test_predictions_without_any_source(viewer_client: TestClient) -> None:
 
 
 def test_training_run_without_predictions(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """An explicit training run has no predictions file."""
     # Arrange
@@ -226,7 +229,7 @@ def test_training_run_without_predictions(
     assert response.json()["error"]["code"] == "no_predictions"
 
 
-def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_betting_routes(project_root: Path, viewer_client: TestClient, app: FastAPI) -> None:
     """The betting table and ladder work for the active run."""
     # Arrange
     _seed(project_root, app)
@@ -248,7 +251,7 @@ def test_betting_routes(project_root: Path, viewer_client: TestClient, app) -> N
 
 
 def test_betting_workbook_route_is_not_registered(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """The betting workbook route is gone from the app."""
     # Arrange
@@ -262,7 +265,7 @@ def test_betting_workbook_route_is_not_registered(
 
 
 def test_betting_workbook_request_is_404(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """Requesting the betting workbook is a 404."""
     # Arrange
@@ -275,7 +278,9 @@ def test_betting_workbook_request_is_404(
     assert response.status_code == 404
 
 
-def test_betting_unattached_week(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_betting_unattached_week(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
     """The betting table works for a week with only a prediction file."""
     # Arrange
     _seed(project_root, app)
@@ -287,7 +292,7 @@ def test_betting_unattached_week(project_root: Path, viewer_client: TestClient, 
     assert unattached["run_id"] is None
 
 
-def test_power_routes(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_power_routes(project_root: Path, viewer_client: TestClient, app: FastAPI) -> None:
     """Rankings for the active run carry standings tabs and no predecessor for week 0."""
     # Arrange
     _seed(project_root, app)
@@ -306,7 +311,7 @@ def test_power_routes(project_root: Path, viewer_client: TestClient, app) -> Non
 
 
 def test_power_rankings_carry_movement_against_prior_week(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """Rankings carry movement against the prior-week run."""
     # Arrange
@@ -323,7 +328,9 @@ def test_power_rankings_carry_movement_against_prior_week(
     assert rows["KC"]["rank_change"] == -1
 
 
-def test_power_for_training_run_is_404(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_power_for_training_run_is_404(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
     """A training run has no power rankings."""
     # Arrange
     _seed(project_root, app)
@@ -338,7 +345,7 @@ def test_power_for_training_run_is_404(project_root: Path, viewer_client: TestCl
     assert response.status_code == 404
 
 
-def test_model_routes(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_model_routes(project_root: Path, viewer_client: TestClient, app: FastAPI) -> None:
     """The model payload is available for the active run."""
     # Arrange
     _seed(project_root, app)
@@ -355,7 +362,7 @@ def test_model_routes(project_root: Path, viewer_client: TestClient, app) -> Non
     assert payload["feature_importance"]["rows"][0]["feature"] == "away_rest"
 
 
-def test_model_route_by_run_id(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_model_route_by_run_id(project_root: Path, viewer_client: TestClient, app: FastAPI) -> None:
     """The model payload is available by run id."""
     # Arrange
     _seed(project_root, app)
@@ -367,7 +374,9 @@ def test_model_route_by_run_id(project_root: Path, viewer_client: TestClient, ap
     assert by_id["run_id"] == "weekly_w0"
 
 
-def test_model_route_unknown_run_is_404(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_model_route_unknown_run_is_404(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
     """An unknown run has no model payload."""
     # Arrange
     _seed(project_root, app)
@@ -379,7 +388,7 @@ def test_model_route_unknown_run_is_404(project_root: Path, viewer_client: TestC
     assert response.status_code == 404
 
 
-def test_data_routes(project_root: Path, viewer_client: TestClient, app) -> None:
+def test_data_routes(project_root: Path, viewer_client: TestClient, app: FastAPI) -> None:
     """Data status reports files, cache coverage, and unattached outputs."""
     # Arrange
     _seed(project_root, app)
@@ -402,7 +411,7 @@ def test_data_routes(project_root: Path, viewer_client: TestClient, app) -> None
 
 
 def test_data_unattached_lists_prediction_files(
-    project_root: Path, viewer_client: TestClient, app
+    project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:
     """The unattached route lists prediction files that belong to no run."""
     # Arrange
@@ -421,7 +430,7 @@ def test_data_unattached_lists_prediction_files(
 def test_weeks_offer_unpredicted_weeks_of_the_current_season(
     project_root: Path,
     viewer_client: TestClient,
-    app,
+    app: FastAPI,
     monkeypatch,
 ) -> None:
     """Unplayed weeks with no predictions are listed so the UI can offer to generate them."""
@@ -450,7 +459,7 @@ def test_weeks_offer_unpredicted_weeks_of_the_current_season(
 def test_weeks_offer_nothing_when_the_dataset_is_missing(
     project_root: Path,
     viewer_client: TestClient,
-    app,
+    app: FastAPI,
 ) -> None:
     """Without an ML dataset there is nothing to generate from."""
     # Arrange

@@ -64,6 +64,8 @@ from nfl_predictor.utils.polars.strength_snapshot import COMPOSITE_WEIGHTS
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from numpy.typing import NDArray
+
 # Internal column used to carry per-game fit weights; never published.
 _WEIGHT_COLUMN = "__fit_weight"
 
@@ -329,8 +331,12 @@ def composite_points_scale(snapshot: pd.DataFrame) -> float:
     """
     if not {COMPOSITE_COLUMN, "adj_srs"} <= set(snapshot.columns):
         return float("nan")
-    composite = pd.to_numeric(snapshot[COMPOSITE_COLUMN], errors="coerce").to_numpy(dtype=float)
-    srs = pd.to_numeric(snapshot["adj_srs"], errors="coerce").to_numpy(dtype=float)
+    composite: NDArray[np.float64] = pd.to_numeric(
+        snapshot[COMPOSITE_COLUMN], errors="coerce"
+    ).to_numpy(dtype=float)
+    srs: NDArray[np.float64] = pd.to_numeric(snapshot["adj_srs"], errors="coerce").to_numpy(
+        dtype=float
+    )
     usable = np.isfinite(composite) & np.isfinite(srs)
     if int(usable.sum()) < _MIN_TEAMS_FOR_POINTS_SCALE:
         return float("nan")
@@ -350,7 +356,9 @@ def composite_points_vs_average(snapshot: pd.DataFrame) -> np.ndarray:
     snapshot's row order; all NaN when ``beta`` is unavailable. `rank_teams_on_composite`
     publishes these values rounded.
     """
-    composite = pd.to_numeric(snapshot[COMPOSITE_COLUMN], errors="coerce").to_numpy(dtype=float)
+    composite: NDArray[np.float64] = pd.to_numeric(
+        snapshot[COMPOSITE_COLUMN], errors="coerce"
+    ).to_numpy(dtype=float)
     beta = composite_points_scale(snapshot)
     if np.isnan(beta):
         return np.full(len(composite), np.nan)
@@ -564,7 +572,7 @@ def _composite_power_rankings(
     snapshot_weeks = (
         pd.to_numeric(snapshot["week"], errors="coerce").dropna().unique()
         if "week" in snapshot.columns
-        else []
+        else list[float]()
     )
     pr["snapshot_week"] = (
         int(snapshot_weeks[0]) if len(snapshot_weeks) == 1 else int(through_week) + 1

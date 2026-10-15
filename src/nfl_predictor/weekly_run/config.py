@@ -112,8 +112,9 @@ def _load_config(path: Path) -> dict[str, Any]:
     """Load a JSON or YAML config file into a dict; an empty YAML file sets nothing.
 
     Raises:
-        ValueError: If the file is missing, has an extension other than ``.json``, ``.yaml``
-            or ``.yml``, does not parse, or holds something other than a mapping. Every
+        ValueError: If the file is missing or not a file, has an extension other than
+            ``.json``, ``.yaml`` or ``.yml``, is not UTF-8, does not parse, or holds something
+            other than a mapping. Every
             message names the file, as the config's other errors are ``ValueError`` too.
 
     """
@@ -124,14 +125,17 @@ def _load_config(path: Path) -> dict[str, Any]:
             "or YAML (.yaml, .yml)."
         )
         raise ValueError(msg)
-    if not path.is_file():
+    if not path.exists():
         msg = f"Missing config file: {path}"
         raise ValueError(msg)
+    if not path.is_file():
+        msg = f"Config path {path} is not a file."
+        raise ValueError(msg)
 
-    text = path.read_text(encoding="utf-8")
     try:
+        text = path.read_text(encoding="utf-8")
         payload = json.loads(text) if suffix == ".json" else yaml.safe_load(text)
-    except (json.JSONDecodeError, yaml.YAMLError) as error:
+    except (UnicodeDecodeError, json.JSONDecodeError, yaml.YAMLError) as error:
         msg = f"Config file {path} does not parse: {error}"
         raise ValueError(msg) from error
 
@@ -161,15 +165,26 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
     (``ml/floor_sigma.py`` takes the reference runs from the root when it reads them).
     """
     normalized = dict(config)
+    source = f"Config file {config['config']}: " if config.get("config") is not None else ""
     for key in _PATH_KEYS:
-        if key in normalized and normalized[key] is not None:
-            normalized[key] = _from_root(Path(normalized[key]), key)
+        value = normalized.get(key)
+        if value is None:
+            continue
+        if isinstance(value, (str, Path)):
+            normalized[key] = _from_root(Path(value), key)
+            continue
+        msg = f"{source}config key {key} must be a path, not {type(value).__name__}."
+        raise ValueError(msg)
     for key in _PATH_LIST_KEYS:
-        if key in normalized and normalized[key] is not None:
-            if isinstance(normalized[key], str):
-                msg = f"Config key {key} must be a list of paths."
-                raise ValueError(msg)
-            normalized[key] = [Path(value) for value in normalized[key]]
+        values = normalized.get(key)
+        if values is None:
+            continue
+        if not isinstance(values, list) or not all(
+            isinstance(item, (str, Path)) for item in cast("list[object]", values)
+        ):
+            msg = f"{source}config key {key} must be a list of paths."
+            raise ValueError(msg)
+        normalized[key] = [Path(item) for item in cast("list[str | Path]", values)]
     for key in _FEATURE_GROUP_LIST_KEYS:
         if key not in normalized:
             continue
@@ -232,7 +247,7 @@ def _validate_config_choices(config: dict[str, Any], parser: WeeklyParser) -> No
 
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
     """Raise if config includes unsupported keys."""
-    unknown = sorted(set(config) - allowed)
+    unknown = sorted(set(config) - allowed, key=str)
     if unknown:
         msg = f"Unknown config keys: {unknown}"
         raise ValueError(msg)

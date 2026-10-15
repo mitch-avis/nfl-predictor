@@ -167,6 +167,45 @@ def test_a_malformed_file_is_rejected_naming_the_file(tmp_path: Path, name: str,
         _parse_with(path)
 
 
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [("weekly.yaml", b"tune: \xff\xfe\n"), ("weekly.json", b'{"tune": "\xff"}')],
+    ids=["yaml", "json"],
+)
+def test_a_file_that_is_not_utf8_is_rejected_naming_the_file(
+    tmp_path: Path, name: str, content: bytes
+) -> None:
+    # Arrange
+    path = tmp_path / name
+    path.write_bytes(content)
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))):
+        _parse_with(path)
+
+
+def test_a_directory_given_as_the_config_is_rejected_as_not_a_file(tmp_path: Path) -> None:
+    # Arrange
+    path = tmp_path / "weekly.yaml"
+    path.mkdir()
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as rejected:
+        _parse_with(path)
+    assert "not a file" in str(rejected.value)
+
+
+def test_unknown_keys_of_mixed_types_are_all_named(tmp_path: Path) -> None:
+    # Arrange
+    path = _write(tmp_path / "weekly.yaml", "1: a\nnot_an_option: b\n")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="Unknown config keys") as rejected:
+        _parse_with(path)
+    assert "1" in str(rejected.value)
+    assert "not_an_option" in str(rejected.value)
+
+
 # Normalization
 
 
@@ -235,6 +274,38 @@ def test_a_path_list_given_as_one_string_is_refused(tmp_path: Path, key: str) ->
     # Act & Assert
     with pytest.raises(ValueError, match=rf"{key} must be a list of paths"):
         _parse_with(path)
+
+
+@pytest.mark.parametrize("value", [5, True, ["a"], {"a": 1}], ids=["int", "bool", "list", "map"])
+@pytest.mark.parametrize("key", SCALAR_PATH_KEYS)
+def test_a_path_that_is_not_a_string_is_refused_naming_the_file_and_key(
+    tmp_path: Path, key: str, value: object
+) -> None:
+    # Arrange
+    path = _write(tmp_path / "weekly.json", json.dumps({key: value}))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as refused:
+        _parse_with(path)
+    assert key in str(refused.value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [[5], ["a", None], [["a"]], {"a": "b"}, 5],
+    ids=["int-item", "null-item", "nested-list", "mapping", "number"],
+)
+@pytest.mark.parametrize("key", PATH_LIST_KEYS)
+def test_a_path_list_that_is_not_a_list_of_strings_is_refused_naming_the_file_and_key(
+    tmp_path: Path, key: str, value: object
+) -> None:
+    # Arrange
+    path = _write(tmp_path / "weekly.json", json.dumps({key: value}))
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as refused:
+        _parse_with(path)
+    assert key in str(refused.value)
 
 
 @pytest.mark.parametrize("key", NO_PATH_DEFAULT_KEYS)
@@ -473,3 +544,29 @@ def test_the_final_fit_names_the_resolved_device(
 
     # Assert
     assert optuna_config.device == ("cuda" if usable else "cpu")
+
+
+def _resolve_both_stages(args: argparse.Namespace) -> None:
+    """Resolve the run's defaults and build stage 1's and the final fit's options."""
+    config.apply_run_defaults(args)
+    config.stage1_options(args)
+    config.final_fit_options(args, pd.DataFrame(), run_dir=None)
+
+
+@pytest.mark.parametrize("usable", [True, False])
+def test_a_run_probes_for_the_gpu_once(monkeypatch: pytest.MonkeyPatch, *, usable: bool) -> None:
+    # Arrange
+    probes: list[bool] = []
+
+    def _probe() -> bool:
+        probes.append(usable)
+        return usable
+
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", _probe)
+    args = config.parse_args([])
+
+    # Act
+    _resolve_both_stages(args)
+
+    # Assert
+    assert probes == [usable]

@@ -29,7 +29,7 @@ SEASONS = (2021, 2022, 2023)
 def _games() -> pd.DataFrame:
     """Four games a week, weeks 1-4, over three seasons, with seeded scores."""
     rng = np.random.default_rng(5)
-    rows = []
+    rows: list[dict[str, object]] = []
     for season in SEASONS:
         for week in (1, 2, 3, 4):
             for game in range(4):

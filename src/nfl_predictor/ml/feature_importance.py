@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import xgboost as xgb
@@ -16,6 +16,8 @@ from nfl_predictor.ml.ml_model_xgb_utils import transform_matrix
 from nfl_predictor.utils.logger import log
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     import pandas as pd
     from scipy.sparse import spmatrix
     from sklearn.compose import ColumnTransformer
@@ -400,5 +402,5 @@ def _normalize_cols(
             return []
         return [str(col) for col in names_in[cols]]
     if isinstance(cols, (list, tuple, np.ndarray)):
-        return [str(col) for col in cols]
+        return [str(col) for col in cast("Iterable[object]", cols)]
     return [str(cols)]

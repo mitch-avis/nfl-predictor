@@ -31,10 +31,30 @@ def store(runner: JobRunner) -> JobStore:
     return runner.store
 
 
+def _run_validate_offline(admin_client: TestClient, runner: JobRunner) -> dict[str, object]:
+    """Submit the registered ``validate_offline`` job and wait for it to succeed."""
+    job = admin_client.post(
+        "/api/jobs", json={"template_id": "validate_offline", "params": {}}
+    ).json()
+    wait_for_status(runner.store, job["id"], "succeeded")
+    return job
+
+
+def _start_sleeping_job(admin_client: TestClient, runner: JobRunner) -> dict[str, object]:
+    """Submit the registered sleeping ``validate_offline`` job and wait for its first line."""
+    job = admin_client.post(
+        "/api/jobs", json={"template_id": "validate_offline", "params": {}}
+    ).json()
+    wait_for(lambda: any("line 1" in row["line"] for row in runner.store.logs(job["id"])))
+    return job
+
+
 def test_catalog_lists_every_template(admin_client: TestClient) -> None:
     """The catalog exposes each template with its parameter schema."""
+    # Act
     response = admin_client.get("/api/jobs/catalog")
 
+    # Assert
     assert response.status_code == 200
     payload = response.json()
     ids = {template["id"] for template in payload["templates"]}
@@ -47,26 +67,42 @@ def test_catalog_lists_every_template(admin_client: TestClient) -> None:
 
 def test_catalog_requires_a_session(client: TestClient) -> None:
     """Anonymous callers cannot read the catalog."""
-    assert client.get("/api/jobs/catalog").status_code == 401
+    # Act
+    response = client.get("/api/jobs/catalog")
+
+    # Assert
+    assert response.status_code == 401
 
 
 def test_creating_a_job_requires_an_admin(viewer_client: TestClient) -> None:
     """Viewers can watch jobs but not launch them."""
+    # Act
     response = viewer_client.post(
         "/api/jobs", json={"template_id": "validate_offline", "params": {}}
     )
+
+    # Assert
     assert response.status_code == 403
 
 
 def test_creating_a_job_rejects_bad_parameters(admin_client: TestClient) -> None:
     """Parameter problems come back as 422 with a code the form can show."""
+    # Act
     response = admin_client.post(
         "/api/jobs", json={"template_id": "predict", "params": {"season": 2026}}
     )
+
+    # Assert
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "missing_param"
 
+
+def test_creating_an_unknown_job_is_rejected(admin_client: TestClient) -> None:
+    """An unknown template id comes back as 422 with its own code."""
+    # Act
     unknown = admin_client.post("/api/jobs", json={"template_id": "nope", "params": {}})
+
+    # Assert
     assert unknown.status_code == 422
     assert unknown.json()["error"]["code"] == "unknown_job"
 
@@ -76,102 +112,212 @@ def test_submitting_running_and_listing_a_job(
     runner: JobRunner,
     register: Callable[..., None],
 ) -> None:
-    """A submitted job runs, its logs are readable, and it appears in the list."""
+    """A submitted job is queued under the submitting user and then succeeds."""
+    # Arrange
     register(fake_template("validate_offline", args=("--lines", "2")))
 
+    # Act
     response = admin_client.post(
         "/api/jobs", json={"template_id": "validate_offline", "params": {}}
     )
 
+    # Assert
     assert response.status_code == 201
     job = response.json()
     assert job["status"] == "queued"
     assert job["created_by"] == "admin"
     wait_for_status(runner.store, job["id"], "succeeded")
 
+
+def test_finished_job_detail_reports_success(
+    admin_client: TestClient,
+    runner: JobRunner,
+    register: Callable[..., None],
+) -> None:
+    """A finished job's detail reports its status and exit code."""
+    # Arrange
+    register(fake_template("validate_offline", args=("--lines", "2")))
+    job = _run_validate_offline(admin_client, runner)
+
+    # Act
     detail = admin_client.get(f"/api/jobs/{job['id']}").json()
+
+    # Assert
     assert detail["status"] == "succeeded"
     assert detail["exit_code"] == 0
+
+
+def test_finished_job_logs_are_readable(
+    admin_client: TestClient,
+    runner: JobRunner,
+    register: Callable[..., None],
+) -> None:
+    """A finished job's logs are readable with the next cursor."""
+    # Arrange
+    register(fake_template("validate_offline", args=("--lines", "2")))
+    job = _run_validate_offline(admin_client, runner)
+
+    # Act
     logs = admin_client.get(f"/api/jobs/{job['id']}/logs").json()
+
+    # Assert
     assert [line["line"] for line in logs["lines"]][1:] == ["line 1", "line 2"]
     assert logs["next_seq"] == logs["lines"][-1]["seq"]
+
+
+def test_finished_job_appears_in_the_list(
+    admin_client: TestClient,
+    runner: JobRunner,
+    register: Callable[..., None],
+) -> None:
+    """A finished job appears in the job list with its template label."""
+    # Arrange
+    register(fake_template("validate_offline", args=("--lines", "2")))
+    job = _run_validate_offline(admin_client, runner)
+
+    # Act
     listing = admin_client.get("/api/jobs").json()
+
+    # Assert
     assert [item["id"] for item in listing["jobs"]] == [job["id"]]
     assert listing["jobs"][0]["template_label"] == "validate_offline"
 
 
 def test_logs_can_be_read_from_a_cursor(admin_client: TestClient, store: JobStore) -> None:
     """``after`` returns only the lines the client has not seen."""
+    # Arrange
     record = store.create("validate_offline", {})
     store.append_logs(record.id, [LogLine("INFO", "one"), LogLine("INFO", "two")])
 
+    # Act
     payload = admin_client.get(f"/api/jobs/{record.id}/logs?after=1").json()
 
+    # Assert
     assert [line["line"] for line in payload["lines"]] == ["two"]
     assert payload["next_seq"] == 2
 
 
 def test_logs_of_an_unknown_job_are_a_404(admin_client: TestClient) -> None:
     """An unknown job id is reported as such."""
+    # Act
     response = admin_client.get("/api/jobs/nope/logs")
+
+    # Assert
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "job_not_found"
+
+
+def test_a_free_exclusive_group_accepts_a_job(
+    admin_client: TestClient, runner: JobRunner, register: Callable[..., None]
+) -> None:
+    """The first walk-forward submission is accepted."""
+    # Arrange
+    register(fake_template("weekly_run", args=("--sleep", "10"), group="walk_forward"))
+
+    # Act
+    first = admin_client.post("/api/jobs", json={"template_id": "weekly_run", "params": {}})
+
+    # Assert
+    assert first.status_code == 201
+    admin_client.post(f"/api/jobs/{first.json()['id']}/cancel")
 
 
 def test_a_busy_exclusive_group_is_a_conflict(
     admin_client: TestClient, runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """A second walk-forward submission is refused while one is active."""
+    # Arrange
     register(fake_template("weekly_run", args=("--sleep", "10"), group="walk_forward"))
-
     first = admin_client.post("/api/jobs", json={"template_id": "weekly_run", "params": {}})
-    assert first.status_code == 201
+
+    # Act
     second = admin_client.post("/api/jobs", json={"template_id": "weekly_run", "params": {}})
 
+    # Assert
     assert second.status_code == 409
     assert second.json()["error"]["code"] == "group_busy"
-    assert admin_client.get("/api/jobs/catalog").json()["busy_groups"] == ["walk_forward"]
+    admin_client.post(f"/api/jobs/{first.json()['id']}/cancel")
 
+
+def test_the_catalog_reports_a_busy_group(
+    admin_client: TestClient, runner: JobRunner, register: Callable[..., None]
+) -> None:
+    """The catalog lists the exclusive group a running job holds."""
+    # Arrange
+    register(fake_template("weekly_run", args=("--sleep", "10"), group="walk_forward"))
+    first = admin_client.post("/api/jobs", json={"template_id": "weekly_run", "params": {}})
+    admin_client.post("/api/jobs", json={"template_id": "weekly_run", "params": {}})
+
+    # Act
+    payload = admin_client.get("/api/jobs/catalog").json()
+
+    # Assert
+    assert payload["busy_groups"] == ["walk_forward"]
     admin_client.post(f"/api/jobs/{first.json()['id']}/cancel")
 
 
 def test_cancelling_a_running_job(
     admin_client: TestClient, runner: JobRunner, register: Callable[..., None]
 ) -> None:
-    """An admin can cancel a running job; cancelling a finished one is a conflict."""
+    """An admin can cancel a running job."""
+    # Arrange
     register(fake_template("validate_offline", args=("--sleep", "20")))
-    job = admin_client.post(
-        "/api/jobs", json={"template_id": "validate_offline", "params": {}}
-    ).json()
-    wait_for(lambda: any("line 1" in row["line"] for row in runner.store.logs(job["id"])))
+    job = _start_sleeping_job(admin_client, runner)
 
+    # Act
     response = admin_client.post(f"/api/jobs/{job['id']}/cancel")
 
+    # Assert
     assert response.status_code == 200
     wait_for_status(runner.store, job["id"], "canceled")
+
+
+def test_cancelling_a_finished_job_is_a_conflict(
+    admin_client: TestClient, runner: JobRunner, register: Callable[..., None]
+) -> None:
+    """Cancelling a job that has already finished is a conflict."""
+    # Arrange
+    register(fake_template("validate_offline", args=("--sleep", "20")))
+    job = _start_sleeping_job(admin_client, runner)
+    admin_client.post(f"/api/jobs/{job['id']}/cancel")
+    wait_for_status(runner.store, job["id"], "canceled")
+
+    # Act
     again = admin_client.post(f"/api/jobs/{job['id']}/cancel")
+
+    # Assert
     assert again.status_code == 409
     assert again.json()["error"]["code"] == "job_finished"
 
 
 def test_cancelling_requires_an_admin(viewer_client: TestClient, store: JobStore) -> None:
     """Viewers cannot cancel other people's jobs."""
+    # Arrange
     record = store.create("validate_offline", {})
-    assert viewer_client.post(f"/api/jobs/{record.id}/cancel").status_code == 403
+
+    # Act
+    response = viewer_client.post(f"/api/jobs/{record.id}/cancel")
+
+    # Assert
+    assert response.status_code == 403
 
 
 def test_stream_replays_logs_and_ends_with_the_final_status(
     admin_client: TestClient, store: JobStore
 ) -> None:
     """The SSE stream replays stored lines, reports the status, and closes when terminal."""
+    # Arrange
     record = store.create("validate_offline", {})
     store.append_logs(record.id, [LogLine("INFO", "one"), LogLine("WARNING", "two")])
     store.finish(record.id, "succeeded", exit_code=0)
 
+    # Act
     with admin_client.stream("GET", f"/api/jobs/{record.id}/stream") as response:
-        assert response.status_code == 200
+        status_code = response.status_code
         body = "".join(response.iter_text())
 
+    # Assert
+    assert status_code == 200
     events = [line for line in body.splitlines() if line.startswith(("event:", "data:"))]
     assert "event: log" in events
     assert "event: end" in events
@@ -182,13 +328,16 @@ def test_stream_replays_logs_and_ends_with_the_final_status(
 
 def test_stream_resumes_from_a_cursor(admin_client: TestClient, store: JobStore) -> None:
     """A reconnecting client passes ``after`` and does not receive lines twice."""
+    # Arrange
     record = store.create("validate_offline", {})
     store.append_logs(record.id, [LogLine("INFO", "one"), LogLine("INFO", "two")])
     store.finish(record.id, "failed", exit_code=1, error="boom")
 
+    # Act
     with admin_client.stream("GET", f"/api/jobs/{record.id}/stream?after=1") as response:
         body = "".join(response.iter_text())
 
+    # Assert
     assert "one" not in body
     assert "two" in body
     assert "boom" in body
@@ -196,12 +345,19 @@ def test_stream_resumes_from_a_cursor(admin_client: TestClient, store: JobStore)
 
 def test_stream_rejects_an_unknown_job(admin_client: TestClient) -> None:
     """Streaming a job that does not exist fails before the stream opens."""
-    assert admin_client.get("/api/jobs/nope/stream").status_code == 404
+    # Act
+    response = admin_client.get("/api/jobs/nope/stream")
+
+    # Assert
+    assert response.status_code == 404
 
 
 def test_the_catalog_the_app_serves_is_the_real_one(admin_client: TestClient) -> None:
     """Every real template is exposed, so the UI can launch all of them."""
+    # Act
     payload = admin_client.get("/api/jobs/catalog").json()
+
+    # Assert
     assert {template["id"] for template in payload["templates"]} == {
         template.id for template in catalog.TEMPLATES
     }

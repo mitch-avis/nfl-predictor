@@ -184,7 +184,8 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
                 else f"Config key {key} must be a list of feature group names."
             )
             raise ValueError(msg)
-        normalized[key] = tuple(str(name).strip() for name in groups)
+        names = cast("list[object]", groups)
+        normalized[key] = tuple(str(name).strip() for name in names)
     return normalized
 
 
@@ -920,7 +921,7 @@ def _default_prediction_sources(
     explicit = tuple(Path(path) for path in args.power_rankings_model_predictions)
     if explicit or run_dir is None or _requested_method(args) not in {"model", "blend"}:
         return explicit, ()
-    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or [])
+    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or ())
     return (stage1.predictions_source(run_dir),), reference
 
 

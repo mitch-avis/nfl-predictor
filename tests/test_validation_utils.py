@@ -5,7 +5,8 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from nfl_predictor.utils import validation_utils
+from nfl_predictor import constants
+from nfl_predictor.utils import polars_utils, validation_utils
 
 
 @pytest.mark.parametrize(("errors", "expected"), [([], True), (["bad"], False)])
@@ -294,10 +295,10 @@ def test_validate_dataframe_collects_errors() -> None:
 def test_validate_dataframe_valid_returns_no_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     """A valid frame should return an empty ValidationResult."""
     # Arrange
-    monkeypatch.setattr(validation_utils.constants, "METADATA_COLUMNS", ["season", "week"])
-    monkeypatch.setattr(validation_utils.constants, "LINES_COLUMNS", ["away_abbr", "home_abbr"])
+    monkeypatch.setattr(constants, "METADATA_COLUMNS", ["season", "week"])
+    monkeypatch.setattr(constants, "LINES_COLUMNS", ["away_abbr", "home_abbr"])
     monkeypatch.setattr(
-        validation_utils.constants,
+        constants,
         "RESULT_COLUMNS",
         ["away_score", "home_score"],
     )
@@ -327,10 +328,10 @@ def test_validate_dataframe_collects_duplicate_and_score_issues(
 ) -> None:
     """DataFrame validation should surface duplicate-game and score issue summaries."""
     # Arrange
-    monkeypatch.setattr(validation_utils.constants, "METADATA_COLUMNS", ["season", "week"])
-    monkeypatch.setattr(validation_utils.constants, "LINES_COLUMNS", ["away_abbr", "home_abbr"])
+    monkeypatch.setattr(constants, "METADATA_COLUMNS", ["season", "week"])
+    monkeypatch.setattr(constants, "LINES_COLUMNS", ["away_abbr", "home_abbr"])
     monkeypatch.setattr(
-        validation_utils.constants,
+        constants,
         "RESULT_COLUMNS",
         ["away_score", "home_score"],
     )
@@ -395,7 +396,7 @@ def test_compare_latest_week_scores_without_completed_games_returns_empty() -> N
     assert mismatches.height == 0
 
 
-def test_compare_latest_week_scores_load_failure(monkeypatch) -> None:
+def test_compare_latest_week_scores_load_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """Schedule load failure is handled gracefully."""
     # Arrange
     df = pl.DataFrame(
@@ -409,11 +410,11 @@ def test_compare_latest_week_scores_load_failure(monkeypatch) -> None:
         }
     )
 
-    monkeypatch.setattr(
-        validation_utils.polars_utils,
-        "load_schedule",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionError("fail")),
-    )
+    def load_schedule(*_args: object, **_kwargs: object) -> pl.DataFrame:
+        msg = "fail"
+        raise ConnectionError(msg)
+
+    monkeypatch.setattr(polars_utils, "load_schedule", load_schedule)
 
     # Act
     mismatches = validation_utils.compare_latest_week_scores(df, None)
@@ -484,7 +485,9 @@ def test_compare_latest_week_scores_without_matching_game_join_returns_empty() -
     assert mismatches.height == 0
 
 
-def test_compare_latest_week_scores_surfaces_unexpected_load_errors(monkeypatch) -> None:
+def test_compare_latest_week_scores_surfaces_unexpected_load_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Only I/O and data errors from the schedule load degrade; a bug still surfaces."""
     # Arrange
     df = pl.DataFrame(
@@ -497,11 +500,12 @@ def test_compare_latest_week_scores_surfaces_unexpected_load_errors(monkeypatch)
             "home_score": [17],
         }
     )
-    monkeypatch.setattr(
-        validation_utils.polars_utils,
-        "load_schedule",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bug")),
-    )
+
+    def load_schedule(*_args: object, **_kwargs: object) -> pl.DataFrame:
+        msg = "bug"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(polars_utils, "load_schedule", load_schedule)
 
     # Act & Assert
     with pytest.raises(RuntimeError, match="bug"):

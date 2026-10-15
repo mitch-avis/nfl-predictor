@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import inspect
 from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
+from nfl_predictor import constants
 from nfl_predictor.ml import feature_spec
+from nfl_predictor.utils.logger import log
+from tests.fakes import returning
 
 _RANGE_FRAME_COLUMNS = ["meta", "feat_a", "feat_b", "feat_c", "tail"]
 
@@ -261,9 +266,9 @@ def test_build_feature_spec_handles_market_transform_pruning_and_drop_categories
 ) -> None:
     """Feature-spec construction should track market, pruning, ID, constant, and high-card drops."""
     # Arrange
-    monkeypatch.setattr(feature_spec.log, "debug", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(feature_spec.constants, "RESULT_COLUMNS", ["home_score"])
-    monkeypatch.setattr(feature_spec.constants, "PRUNED_FEATURE_COLUMNS", ["feat_pruned"])
+    monkeypatch.setattr(log, "debug", returning(None))
+    monkeypatch.setattr(constants, "RESULT_COLUMNS", ["home_score"])
+    monkeypatch.setattr(constants, "PRUNED_FEATURE_COLUMNS", ["feat_pruned"])
     df = pd.DataFrame(
         {
             "season": [2024, 2024, 2024],
@@ -315,8 +320,8 @@ def _pruning_spec(
     monkeypatch: pytest.MonkeyPatch, *, disable_pruning: bool
 ) -> feature_spec.FeatureSpec:
     """Build the spec over three feature columns, one of them on the pruned list."""
-    monkeypatch.setattr(feature_spec.log, "debug", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(feature_spec.constants, "PRUNED_FEATURE_COLUMNS", ["feat_pruned"])
+    monkeypatch.setattr(log, "debug", returning(None))
+    monkeypatch.setattr(constants, "PRUNED_FEATURE_COLUMNS", ["feat_pruned"])
     df = pd.DataFrame(
         {
             "meta": [1, 2],
@@ -368,7 +373,7 @@ def test_apply_feature_spec_adds_market_transforms_and_reindexes_missing_columns
 ) -> None:
     """Applying a feature spec should derive market columns and fill missing columns with NaN."""
     # Arrange
-    monkeypatch.setattr(feature_spec.log, "debug", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(log, "debug", returning(None))
     spec = feature_spec.FeatureSpec(
         feature_columns=["market_home_margin", "missing_feature"],
         categorical_columns=[],
@@ -437,6 +442,7 @@ def test_build_preprocessor_scales_numeric_features_for_dense_models() -> None:
     numeric_pipeline = next(
         transformer for name, transformer, _cols in dense_preprocessor.transformers if name == "num"
     )
+    assert isinstance(numeric_pipeline, Pipeline)
     assert numeric_pipeline.steps[-1][0] == "scaler"
 
 
@@ -455,7 +461,7 @@ def test_build_preprocessor_passes_the_legacy_sparse_flag(
             """Store the kwargs passed by build_preprocessor."""
             self.kwargs = kwargs
 
-    monkeypatch.setattr(feature_spec.inspect, "signature", lambda _obj: legacy_signature)
+    monkeypatch.setattr(inspect, "signature", returning(legacy_signature))
     monkeypatch.setattr(feature_spec, "OneHotEncoder", _LegacyOneHot)
 
     # Act
@@ -467,7 +473,10 @@ def test_build_preprocessor_passes_the_legacy_sparse_flag(
         for name, transformer, _cols in legacy_preprocessor.transformers
         if name == "cat"
     )
-    assert legacy_categorical_pipeline.steps[-1][1].kwargs["sparse"] is False
+    assert isinstance(legacy_categorical_pipeline, Pipeline)
+    legacy_encoder = legacy_categorical_pipeline.steps[-1][1]
+    assert isinstance(legacy_encoder, _LegacyOneHot)
+    assert legacy_encoder.kwargs["sparse"] is False
 
 
 def test_build_preprocessor_rejects_an_empty_spec() -> None:

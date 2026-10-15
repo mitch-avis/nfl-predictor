@@ -69,7 +69,9 @@ def require_win_totals(win_totals: pl.DataFrame, seasons: Sequence[int]) -> None
         ValueError: When no row of ``win_totals`` falls in ``seasons``.
 
     """
-    covered = set(win_totals.get_column("season").to_list()) if win_totals.height else set()
+    covered: set[int] = (
+        set(win_totals.get_column("season").to_list()) if win_totals.height else set()
+    )
     built = sorted(set(seasons))
     if not covered & set(built):
         msg = (

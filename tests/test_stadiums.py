@@ -7,10 +7,12 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import nflreadpy as nfl
 import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     import pytest
@@ -178,14 +180,14 @@ def test_load_schedule_locates_a_cached_venue_the_table_gained_later(
 ) -> None:
     """A cached schedule takes a venue's city and state from the table as it is now."""
     # Arrange
-    monkeypatch.setattr(loaders.nfl, "load_schedules", lambda seasons: _raw_schedule("ZZZ00"))
+    monkeypatch.setattr(nfl, "load_schedules", returning(_raw_schedule("ZZZ00")))
     loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
     monkeypatch.setitem(
         constants.STADIUMS,
         "ZZZ00",
         {"name": "Test Field", "city": "Testville", "state": "TS", "elevation_ft": 1234.0},
     )
-    monkeypatch.setattr(loaders.nfl, "load_schedules", _fail_load_schedules)
+    monkeypatch.setattr(nfl, "load_schedules", _fail_load_schedules)
 
     # Act
     schedule = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)

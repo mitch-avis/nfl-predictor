@@ -8,7 +8,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants
-from nfl_predictor.ml.walk_forward import resolve_feature_group_columns
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.utils.polars import qb_starters, qb_stats
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 
@@ -279,7 +279,9 @@ def test_attach_qb_features_uses_only_earlier_weeks_and_shrinks_to_the_league() 
     assert week3["home_qb_dropback_epa_recent"] == pytest.approx(league_epa_w3)
 
 
-def test_attach_qb_features_recent_window_shrinks_toward_career(monkeypatch) -> None:
+def test_attach_qb_features_recent_window_shrinks_toward_career(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The recent window keeps the last games only and is shrunk toward the career rate."""
     # Arrange
     monkeypatch.setattr(constants, "QB_RECENT_GAMES", 1)

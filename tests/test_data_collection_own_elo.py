@@ -5,17 +5,33 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import polars as pl
 import pytest
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.utils import clock, polars_utils
+from nfl_predictor.utils import clock, game_utils, polars_utils
 from nfl_predictor.utils.polars import elo_win_totals, loaders, qb_starters
 from nfl_predictor.utils.polars.finalize import build_final_column_order
+from tests.fakes import returning
 
 _TEAMS = (("NE", "BOS00"), ("LAC", "LAX01"))
+
+
+def _same_frame(df: pl.DataFrame) -> pl.DataFrame:
+    """Return ``df`` unchanged."""
+    return df
+
+
+def _same_frame_of_three(df: pl.DataFrame, _second: object, _third: object) -> pl.DataFrame:
+    """Return ``df`` unchanged, ignoring the other two arguments."""
+    return df
+
+
+def _same_frame_of_two(df: pl.DataFrame, _other: object) -> pl.DataFrame:
+    """Return ``df`` unchanged, ignoring the second argument."""
+    return df
 
 
 def _schedule(seasons: tuple[int, ...]) -> pl.DataFrame:
@@ -93,8 +109,8 @@ def _win_totals(seasons: tuple[int, ...]) -> Any:
 def _patch_inputs(monkeypatch: pytest.MonkeyPatch, *, win_total_seasons: tuple[int, ...]) -> None:
     """Serve the win totals and, for the seasons the run does not build, no history."""
     monkeypatch.setattr(elo_win_totals, "load_win_totals", _win_totals(win_total_seasons))
-    monkeypatch.setattr(polars_utils, "load_schedule", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda *_a, **_k: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(pl.DataFrame()))
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
 
 
 def test_attach_own_elo_publishes_both_families_on_every_game_row(
@@ -126,7 +142,11 @@ def test_attach_own_elo_without_the_schedule_columns_it_reads_changes_nothing(
 ) -> None:
     # Arrange
     schedule = _schedule((2019, 2020)).drop("stadium_id")
-    monkeypatch.setattr(elo_win_totals, "load_win_totals", lambda **_k: pytest.fail("loaded"))
+
+    def load_win_totals(**_k: object) -> NoReturn:
+        pytest.fail("loaded")
+
+    monkeypatch.setattr(elo_win_totals, "load_win_totals", load_win_totals)
     games = _games(schedule)
 
     # Act
@@ -197,21 +217,21 @@ _RECORD = {"win_total_file": {"origin": "download", "sha256": "f00d"}, "seasons"
 
 def _patch_collection(monkeypatch: pytest.MonkeyPatch, schedule: pl.DataFrame) -> None:
     """Serve ``schedule`` as the only source and stub every step after the season builds."""
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: loaders._empty_pbp_frame())
-    monkeypatch.setattr(polars_utils, "load_schedule", lambda *_a, **_k: schedule)
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _s: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(loaders._empty_pbp_frame()))
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(schedule))
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(pl.DataFrame()))
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", _same_frame_of_two)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", _same_frame)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(pl.DataFrame()))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (2020, 1))
-    monkeypatch.setattr(polars_utils, "load_team_rankings", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
-    monkeypatch.setattr(data_collection, "process_season", lambda *_a, **_k: _games(schedule))
-    monkeypatch.setattr(data_collection, "_quarterback_history", lambda *_a, **_k: None)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
+    monkeypatch.setattr(polars_utils, "load_team_rankings", returning(pl.DataFrame()))
+    monkeypatch.setattr(polars_utils, "select_final_columns", _same_frame)
+    monkeypatch.setattr(data_collection, "process_season", returning(_games(schedule)))
+    monkeypatch.setattr(data_collection, "_quarterback_history", returning(None))
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _same_frame_of_two)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", _same_frame)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", _same_frame)
 
 
 def test_collect_all_data_hands_its_record_to_the_own_elo_build(
@@ -245,9 +265,9 @@ def test_collect_all_data_hands_its_record_to_the_own_elo_build(
 def _patch_main(monkeypatch: pytest.MonkeyPatch, record: dict[str, object]) -> None:
     """Run main without writing datasets; the collection fills in ``record`` as its own Elo's."""
     monkeypatch.setattr(clock, "local_today", lambda: date(2026, 9, 30))
-    monkeypatch.setattr(data_collection, "save_dataframe", lambda *_a, **_k: None)
-    monkeypatch.setattr(polars_utils, "filter_completed_games", lambda df: df)
-    monkeypatch.setattr(polars_utils, "filter_upcoming_games", lambda df, _s, _w: df)
+    monkeypatch.setattr(data_collection, "save_dataframe", returning(None))
+    monkeypatch.setattr(polars_utils, "filter_completed_games", _same_frame)
+    monkeypatch.setattr(polars_utils, "filter_upcoming_games", _same_frame_of_three)
 
     def fake_collect(
         _seasons: list[int], *, records: data_collection.CollectionRecords, **_kwargs: Any

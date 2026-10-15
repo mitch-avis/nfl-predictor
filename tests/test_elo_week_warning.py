@@ -15,7 +15,9 @@ import polars as pl
 
 from nfl_predictor import constants, data_collection
 from nfl_predictor.utils import polars_utils
+from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import loaders, ratings_build, week_rows
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     import pytest
@@ -63,11 +65,11 @@ def _elo(*, listed_through: int) -> pl.DataFrame:
 def _recorded_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record the project logger's warnings, formatted."""
     messages: list[str] = []
-    monkeypatch.setattr(
-        week_rows.log,
-        "warning",
-        lambda message, *args: messages.append(message % args if args else message),
-    )
+
+    def record(message: str, *args: object) -> None:
+        messages.append(message % args if args else message)
+
+    monkeypatch.setattr(log, "warning", record)
     return messages
 
 
@@ -151,20 +153,29 @@ def test_load_sources_warns_when_the_elo_file_lacks_the_week_being_predicted(
     """The source load checks the ELO rows against the current week, once."""
     # Arrange
     schedule = _schedule(played_through=5)
+
+    def load_schedule(seasons: list[int], **_kwargs: object) -> pl.DataFrame:
+        return schedule.filter(pl.col("season").is_in(seasons))
+
+    def build_team_game_frame(stats: pl.DataFrame, *_a: object) -> pl.DataFrame:
+        return stats
+
+    def add_scoring_data(df: pl.DataFrame, _sched: pl.DataFrame) -> pl.DataFrame:
+        return df
+
+    def add_opponent_stats(df: pl.DataFrame) -> pl.DataFrame:
+        return df
+
     monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (_SEASON, _PREDICTED_WEEK))
-    monkeypatch.setattr(
-        polars_utils,
-        "load_schedule",
-        lambda seasons, **_kwargs: schedule.filter(pl.col("season").is_in(seasons)),
-    )
-    monkeypatch.setattr(polars_utils, "load_team_stats", lambda *_a, **_k: pl.DataFrame())
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_a, **_k: loaders._empty_pbp_frame())
-    monkeypatch.setattr(data_collection, "_build_team_game_frame", lambda stats, *_a: stats)
-    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", lambda df, _sched: df)
-    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", lambda df: df)
-    monkeypatch.setattr(polars_utils, "load_elo_ratings", lambda _seasons: _elo(listed_through=5))
+    monkeypatch.setattr(polars_utils, "load_schedule", load_schedule)
+    monkeypatch.setattr(polars_utils, "load_team_stats", returning(pl.DataFrame()))
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(loaders._empty_pbp_frame()))
+    monkeypatch.setattr(data_collection, "_build_team_game_frame", build_team_game_frame)
+    monkeypatch.setattr(polars_utils, "add_scoring_data_to_team_stats", add_scoring_data)
+    monkeypatch.setattr(polars_utils, "add_per_game_opponent_stats", add_opponent_stats)
+    monkeypatch.setattr(polars_utils, "load_elo_ratings", returning(_elo(listed_through=5)))
     monkeypatch.setattr(polars_utils, "load_raw_elo_data", pl.DataFrame)
-    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_a, **_k: None)
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", returning(None))
     warnings = _recorded_warnings(monkeypatch)
     config = dataclasses.replace(
         data_collection._default_config([_SEASON]), line_source=constants.LINE_SOURCE_STORED

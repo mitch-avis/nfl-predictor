@@ -114,8 +114,8 @@ def _load_config(path: Path) -> dict[str, Any]:
     Raises:
         ValueError: If the file is missing or not a file, has an extension other than
             ``.json``, ``.yaml`` or ``.yml``, is not UTF-8, does not parse, or holds something
-            other than a mapping. Every
-            message names the file, as the config's other errors are ``ValueError`` too.
+            other than a mapping. Every message names the file, as the config's other errors
+            are ``ValueError`` too.
 
     """
     suffix = path.suffix.lower()

@@ -143,12 +143,27 @@ def _load_config(path: Path) -> dict[str, Any]:
     raise ValueError(msg)
 
 
+def _from_root(path: Path, key: str) -> Path:
+    """Return a config file's ``path`` for ``key``, a relative one taken from the repository root.
+
+    ``config`` is the file's own path, as given on the command line, and stays as it is.
+    """
+    if key == "config" or path.is_absolute():
+        return path
+    return Path(constants.ROOT_DIR) / path
+
+
 def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
-    """Normalize config defaults for argparse."""
+    """Normalize config defaults for argparse.
+
+    A relative single path (``data_path``, ``run_dir`` and the like) is taken from the
+    repository root, not the working directory. Path lists stay as written
+    (``ml/floor_sigma.py`` takes the reference runs from the root when it reads them).
+    """
     normalized = dict(config)
     for key in _PATH_KEYS:
         if key in normalized and normalized[key] is not None:
-            normalized[key] = Path(normalized[key])
+            normalized[key] = _from_root(Path(normalized[key]), key)
     for key in _PATH_LIST_KEYS:
         if key in normalized and normalized[key] is not None:
             if isinstance(normalized[key], str):

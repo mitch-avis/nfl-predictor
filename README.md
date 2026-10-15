@@ -1159,6 +1159,12 @@ Run it with:
 nfl-predictor weekly --config path/to/weekly_run.json
 ```
 
+The file is JSON (`.json`) or YAML (`.yaml`, `.yml`) holding a mapping; an empty YAML file sets
+nothing. A missing, unparsable or non-mapping file, or another extension, stops the run with an
+error naming the file. A relative path in it (`predict_path`, `data_path`, `run_dir` and the
+other single paths) is taken from the repository root, whatever the working directory; the
+`--config` path itself is read from the working directory.
+
 Every XGBoost command (`backtest`, `weekly`, `train`) defaults to `--xgb-device auto`,
 which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the
 CPU otherwise. Pass `--xgb-device cpu` to force the CPU; the accepted values are `auto`, `cpu`,

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.ml import ml_model_xgb_utils
 from nfl_predictor.weekly_run import config
 
@@ -170,6 +171,23 @@ def test_a_malformed_file_is_rejected_naming_the_file(tmp_path: Path, name: str,
 
 
 @pytest.mark.parametrize("key", SCALAR_PATH_KEYS)
+def test_a_relative_path_resolves_against_the_repository_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    # Arrange
+    path = _write(tmp_path / "weekly.json", json.dumps({key: "some/dir/file.csv"}))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    # Act
+    args = _parse_with(path)
+
+    # Assert
+    assert getattr(args, key) == Path(constants.ROOT_DIR) / "some" / "dir" / "file.csv"
+
+
+@pytest.mark.parametrize("key", SCALAR_PATH_KEYS)
 def test_an_absolute_path_stays_as_given(tmp_path: Path, key: str) -> None:
     # Arrange
     target = tmp_path / "abs" / "file.csv"
@@ -180,6 +198,20 @@ def test_an_absolute_path_stays_as_given(tmp_path: Path, key: str) -> None:
 
     # Assert
     assert getattr(args, key) == target
+
+
+def test_a_relative_config_path_is_read_from_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    _write(tmp_path / "weekly.yaml", "wf_eval_last_n_seasons: 4\n")
+    monkeypatch.chdir(tmp_path)
+
+    # Act
+    args = config.parse_args(["--config", "weekly.yaml"])
+
+    # Assert
+    assert (args.config, args.wf_eval_last_n_seasons) == (Path("weekly.yaml"), 4)
 
 
 @pytest.mark.parametrize("key", PATH_LIST_KEYS)

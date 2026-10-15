@@ -36,6 +36,7 @@ from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -285,7 +286,7 @@ def summarize_eval_window(
             "regular_season_weeks": int(regular_weeks),
             "max_week_in_data": max_week,
             "eval_start_week": int(start_week),
-            "eval_end_week": int(eval_end_week) if eval_end_week is not None else None,
+            "eval_end_week": int(eval_end_week),
             "incomplete_regular_season": bool(incomplete_regular),
         }
 
@@ -724,22 +725,23 @@ class _FoldCheckpointStore:
         ) as error:
             log.warning("Ignoring unreadable checkpoint %s (%s); training again.", path, error)
             return None
+        record = as_str_dict(payload)
         if not (
-            isinstance(payload, dict)
-            and payload.get("version") == FOLD_CHECKPOINT_VERSION
-            and payload.get("fingerprint") == self.fingerprint
-            and payload.get("season") == int(fold.season)
-            and payload.get("week") == int(fold.week)
-            and isinstance(payload.get("metrics"), dict)
-            and isinstance(payload.get("predictions"), pd.DataFrame)
-            and isinstance(payload.get("feature_columns"), list)
+            record is not None
+            and record.get("version") == FOLD_CHECKPOINT_VERSION
+            and record.get("fingerprint") == self.fingerprint
+            and record.get("season") == int(fold.season)
+            and record.get("week") == int(fold.week)
+            and isinstance(record.get("metrics"), dict)
+            and isinstance(record.get("predictions"), pd.DataFrame)
+            and isinstance(record.get("feature_columns"), list)
         ):
             log.warning("Ignoring checkpoint %s: it belongs to another run; training again.", path)
             return None
         return _RestoredFold(
-            metrics=payload["metrics"],
-            predictions=payload["predictions"],
-            feature_columns=list(payload["feature_columns"]),
+            metrics=record["metrics"],
+            predictions=record["predictions"],
+            feature_columns=list(record["feature_columns"]),
         )
 
     def save(
@@ -1099,9 +1101,9 @@ def _week_sigma(
 class _FoldProgress:
     """What the fold loop has gathered so far."""
 
-    per_week_metrics: list[dict[str, Any]] = field(default_factory=list)
-    prediction_frames: list[pd.DataFrame] = field(default_factory=list)
-    own_errors: list[pd.DataFrame] = field(default_factory=list)
+    per_week_metrics: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    prediction_frames: list[pd.DataFrame] = field(default_factory=list[pd.DataFrame])
+    own_errors: list[pd.DataFrame] = field(default_factory=list[pd.DataFrame])
     feature_list: list[str] | None = None
     restored_folds: int = 0
     computed_folds: int = 0
@@ -1591,11 +1593,11 @@ def _build_metrics_summary_table(
 ) -> list[dict[str, Any]]:
     """Build a summary table for first-class metrics."""
     rows: list[dict[str, Any]] = []
-    fold_metrics = fold_summary.get("metrics", {}) if fold_summary else {}
+    fold_metrics: dict[str, Any] = fold_summary.get("metrics", {}) if fold_summary else {}
     for priority, specs in metrics_utils.METRIC_STRATEGY.items():
         for spec in specs:
             metric = spec["metric"]
-            stats = fold_metrics.get(metric, {})
+            stats: dict[str, Any] = fold_metrics.get(metric, {})
             rows.append(
                 {
                     "metric": metric,

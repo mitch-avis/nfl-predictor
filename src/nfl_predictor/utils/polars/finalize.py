@@ -39,7 +39,7 @@ def build_final_column_order() -> list[str]:
         Ordered list of column names
 
     """
-    columns = []
+    columns: list[str] = []
 
     # 1. Metadata columns (fixed order)
     columns.extend(constants.METADATA_COLUMNS)
@@ -55,7 +55,7 @@ def build_final_column_order() -> list[str]:
     # schedule-adjusted strength stats. Play-by-play and strength stats name their allowed
     # and defensive variants explicitly, so they never receive the generic opponent_ mirror
     # generated below for nflreadpy stats.
-    base_stats = []
+    base_stats: list[str] = []
     base_stats.extend(elo_cols)
     base_stats.extend(tr_cols)
     base_stats.extend(constants.TREND_FEATURE_COLUMNS)
@@ -68,8 +68,8 @@ def build_final_column_order() -> list[str]:
     base_stats.extend(constants.RATINGS_FEATURE_STATS)
 
     # Deduplicate
-    seen = set()
-    unique_base = []
+    seen: set[str] = set()
+    unique_base: list[str] = []
     for col in base_stats:
         if col not in seen:
             seen.add(col)

@@ -140,7 +140,7 @@ def _drop_high_cardinality_columns(
 ) -> tuple[pd.DataFrame, list[str]]:
     """Drop categorical columns with high cardinality ratios."""
     cat_cols = df.select_dtypes(include=["object", "str", "category"]).columns
-    dropped = []
+    dropped: list[str] = []
     row_count = max(len(df), 1)
     for col in cat_cols:
         unique_ratio = df[col].nunique(dropna=True) / row_count

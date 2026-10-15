@@ -202,7 +202,7 @@ def _week_team_stats(week: _Week, week_games: pl.DataFrame) -> pl.DataFrame:
         week_games.select("away_abbr").to_series().to_list()
         + week_games.select("home_abbr").to_series().to_list()
     )
-    teams_with_stats = set()
+    teams_with_stats: set[str] = set()
     if agg_stats.height > 0 and "team_abbr" in agg_stats.columns:
         teams_with_stats = set(agg_stats.select("team_abbr").to_series().to_list())
     teams_needing_fallback = teams_this_week - teams_with_stats
@@ -454,7 +454,7 @@ def _add_strength_features(merged: pl.DataFrame, week: _Week) -> pl.DataFrame:
 
 def _fill_trend_and_coach_defaults(merged: pl.DataFrame) -> pl.DataFrame:
     """Fill missing trend features and coach history with neutral defaults."""
-    trend_cols = []
+    trend_cols: list[str] = []
     for base in constants.TREND_FEATURE_COLUMNS:
         trend_cols.extend([f"away_{base}", f"home_{base}", f"{base}_diff"])
     merged = merged.with_columns(

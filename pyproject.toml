@@ -158,6 +158,15 @@ extend-allowed-calls = ["polars.lit"]
 "src/nfl_predictor/api/auth/cli.py" = [
     "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
 ]
+"typings/joblib.pyi" = [
+    "ANN401", # joblib.load unpickles an object of any type, as typeshed types pickle.load
+]
+"typings/sklearn/*.pyi" = [
+    "N803", # sklearn names its data argument `X`; the stub keeps the keyword callers can pass
+]
+"typings/threadpoolctl.pyi" = [
+    "N801", # the stub keeps the library's own lowercase class name, threadpool_limits
+]
 
 # --------------------------------------------------------------------------------------------
 # Type checking: ty and pyright (strict)

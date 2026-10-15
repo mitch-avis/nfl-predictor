@@ -56,6 +56,7 @@ import numpy as np
 import pandas as pd
 
 from nfl_predictor.ml.metrics import confidence_ranks, picks_home
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -123,7 +124,7 @@ class LoadedRun:
 
     run: RunInput
     games: pd.DataFrame
-    provenance: dict[str, Any] = field(default_factory=dict)
+    provenance: dict[str, Any] = field(default_factory=dict[str, Any])
 
 
 def resolve_run(path: Path) -> RunInput:
@@ -136,7 +137,8 @@ def resolve_run(path: Path) -> RunInput:
     metadata_path = path / "metadata.json"
     if metadata_path.is_file():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        checkpoint = (metadata.get("config") or {}).get("checkpoint") or {}
+        config: dict[str, Any] = metadata.get("config") or {}
+        checkpoint: dict[str, Any] = config.get("checkpoint") or {}
         if not checkpoint.get("dir"):
             msg = f"{metadata_path} names no walk-forward checkpoint directory"
             raise ValueError(msg)
@@ -170,7 +172,7 @@ def load_run(run: RunInput) -> LoadedRun:
     files = _fold_files(run.checkpoint_dir)
     for path in files:
         payload = joblib.load(path)
-        metrics = payload.get("metrics") or {}
+        metrics: dict[str, Any] = payload.get("metrics") or {}
         for head in _HEADS:
             best_iterations.add((head, metrics.get(f"{head}.best_iteration")))
             early_stopped = early_stopped or bool(metrics.get(f"{head}.early_stopped"))
@@ -187,7 +189,7 @@ def load_run(run: RunInput) -> LoadedRun:
         msg = f"{run.label}: fold checkpoints repeat a game"
         raise ValueError(msg)
     metadata = run.metadata or {}
-    config = metadata.get("config") or {}
+    config: dict[str, Any] = metadata.get("config") or {}
     provenance = {
         "checkpoint_dir": str(run.checkpoint_dir),
         "folds": len(files),
@@ -387,8 +389,9 @@ def _flatten(config: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     flat: dict[str, Any] = {}
     for key, value in config.items():
         name = f"{prefix}{key}"
-        if isinstance(value, dict):
-            flat.update(_flatten(value, f"{name}."))
+        nested = as_str_dict(value)
+        if nested is not None:
+            flat.update(_flatten(nested, f"{name}."))
         else:
             flat[name] = value
     return flat

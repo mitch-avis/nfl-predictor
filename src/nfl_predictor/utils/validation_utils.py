@@ -41,7 +41,7 @@ def validate_team_abbrs(
 ) -> list[str]:
     """Return a list of invalid team abbreviations in the given columns."""
     valid = set(constants.TEAM_ABBR)
-    invalid = []
+    invalid: list[str] = []
     for col in columns:
         if col not in df.columns:
             continue
@@ -63,7 +63,7 @@ def validate_week_range(
     if season_col not in df.columns or week_col not in df.columns:
         return []
 
-    issues = []
+    issues: list[str] = []
     for row in df.select([season_col, week_col]).iter_rows(named=True):
         season = row.get(season_col)
         week = row.get(week_col)
@@ -87,7 +87,7 @@ def validate_unique_games(df: pl.DataFrame) -> list[str]:
         if duplicates.height == 0:
             return []
 
-        issues = []
+        issues: list[str] = []
         for game_id in duplicates.select("game_id").to_series().to_list():
             subset = df.filter(pl.col("game_id") == game_id)
             if subset.unique().height > 1:
@@ -102,7 +102,7 @@ def validate_unique_games(df: pl.DataFrame) -> list[str]:
     if duplicates.height == 0:
         return []
 
-    issues = []
+    issues: list[str] = []
     for row in duplicates.iter_rows(named=True):
         subset = df.filter(
             (pl.col("season") == row["season"])
@@ -120,7 +120,7 @@ def validate_unique_games(df: pl.DataFrame) -> list[str]:
 
 def validate_scores(df: pl.DataFrame) -> list[str]:
     """Return a list of score-related issues."""
-    issues = []
+    issues: list[str] = []
     for col in ("away_score", "home_score"):
         if col not in df.columns:
             continue
@@ -132,8 +132,8 @@ def validate_scores(df: pl.DataFrame) -> list[str]:
 
 def validate_dataframe(df: pl.DataFrame) -> ValidationResult:
     """Run a standard validation suite for a collected dataset."""
-    errors = []
-    warnings = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     required = constants.METADATA_COLUMNS + constants.LINES_COLUMNS + constants.RESULT_COLUMNS
     missing = validate_required_columns(df, required)

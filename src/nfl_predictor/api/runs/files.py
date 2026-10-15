@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from nfl_predictor.ml.artifacts import resolve_run_paths
+from nfl_predictor.utils.narrowing import as_list, as_str_dict
 
 STAGES: tuple[str, ...] = ("wf_compare", "train", "predictions", "reports")
 WEEK_FILE_RE = re.compile(
@@ -51,8 +52,10 @@ class RunFiles:
     week: int | None = None
     power_season: int | None = None
     power_week: int | None = None
-    stage_markers: dict[str, Path] = field(default_factory=dict)
-    week_predictions: dict[tuple[int, int], Path] = field(default_factory=dict)
+    stage_markers: dict[str, Path] = field(default_factory=dict[str, Path])
+    week_predictions: dict[tuple[int, int], Path] = field(
+        default_factory=dict[tuple[int, int], Path]
+    )
     """Every predictions file in the directory by ``(season, week)``, the run's own included."""
     predictions_marked: bool = False
     """Whether ``predictions`` is the file the run's predictions stage wrote, not the newest."""
@@ -130,8 +133,9 @@ def _marked_predictions(
         payload = json.loads(marker.read_text(encoding="utf-8"))
     except OSError, ValueError:
         return None
-    outputs = payload.get("outputs") if isinstance(payload, dict) else None
-    if not isinstance(outputs, list):
+    record = as_str_dict(payload)
+    outputs = None if record is None else as_list(record.get("outputs"))
+    if outputs is None:
         return None
     by_name = {path.name: (path, season, week) for (season, week), path in predictions.items()}
     for output in outputs:

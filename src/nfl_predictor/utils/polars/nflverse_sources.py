@@ -155,7 +155,7 @@ class SeasonSource:
     season_type_column: str | None = None
     regular_season_value: str = "REG"
     team_columns: tuple[str, ...] = ()
-    team_codes: Mapping[str, str] = field(default_factory=dict)
+    team_codes: Mapping[str, str] = field(default_factory=dict[str, str])
 
     @property
     def columns(self) -> tuple[str, ...]:

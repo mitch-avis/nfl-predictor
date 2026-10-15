@@ -40,6 +40,7 @@ from nfl_predictor.ml.ml_model_xgb_utils import (
     transform_matrix,
 )
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
@@ -1013,11 +1014,11 @@ def _saved_xgboost_version(meta_path: Path) -> str | None:
     if not meta_path.exists():
         return None
     try:
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = as_str_dict(json.loads(meta_path.read_text(encoding="utf-8")))
     except OSError, ValueError:
         return None
-    versions = meta.get("library_versions") if isinstance(meta, dict) else None
-    saved = versions.get("xgboost") if isinstance(versions, dict) else None
+    versions = as_str_dict(meta.get("library_versions")) if meta is not None else None
+    saved = versions.get("xgboost") if versions is not None else None
     return str(saved) if saved else None
 
 

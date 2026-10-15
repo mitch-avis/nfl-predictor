@@ -6,10 +6,11 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 and `models/qb_elos_measure/HYPOTHESIS.md` (main checkout; `models/` is not in git) before reading
 the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 14:25 MDT)
+## State (written 2026-10-15, 15:00 MDT)
 
-- `main` is at `659199b` (not pushed): the step-6 port (`0.59.0`, adopted in production) plus
-  the merged `chore/pyproject-standards` (`0.59.1`).
+- `main` is at `0.59.4` (not pushed): the step-6 port (`0.59.0`, adopted in production), the
+  merged `chore/pyproject-standards` (`0.59.1`, `659199b`) and the merged
+  `chore/adopt-python-template` (`0.59.2` to `0.59.4`, `b596807`), both user-approved 2026-10-15.
   `data/` was rebuilt on 2026-10-14 (record in `.agents/benchmarks.md`, "Data state and ETL
   rebuild records"; backups in `~/scratch/data_backups/2026-10-14_pre_step6_merge/` and
   `2026-10-14_pre_week6/`). The Week 6 run is `models/weekly_20261015_022416_9a4c092c`.
@@ -24,7 +25,7 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 - **`chore/pyproject-standards` merged into `main`** at `659199b` (user-approved 2026-10-15,
   `--no-ff`). `ml/feature_spec.py` changed (the `str` dtype), so every walk-forward checkpoint is
   invalid; the user accepted that and will rerun everything.
-- **`chore/adopt-python-template` (`0.59.3`, the main checkout, off `main`, not merged)** adopts
+- **The template adoption (on `main`)** adopts
   the Copier template `~/workspace/python-template` at its tag `0.1.2` (`.copier-answers.yml`,
   `has_cli=false`): the template's `scripts/gate.sh`, pre-commit, markdownlint-cli2, CI and
   Dependabot files, with this repo's own steps in `scripts/gate.hooks.sh` (the CUDA sync flags,
@@ -32,8 +33,11 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   worktrees need no `VIRTUAL_ENV`. `0.59.3` fixes the weekly config's paths: the power rankings
   read relative entries of the two path lists from the repository root (as `ml/floor_sigma.py`
   already did), a leading `~` is the home directory, and a comma-separated feature-group string
-  in a config file is refused with the list to write. The gate fails only on pyright (strict,
-  about 3,150 errors), the user's separate cleanup; every other step passes.
+  in a config file is refused with the list to write. `0.59.4` removes the GitHub release
+  workflow (the project publishes no releases); `src/nfl_predictor/utils/changelog.py` and its
+  tests served only that workflow and are now unused, a removal the user has not decided. The
+  gate fails only on pyright (strict, 3,146 errors), the user's separate cleanup; every other
+  step passes (3,764 tests).
 - **The `qb_adj` review is done.** `feat/qb-adj-features` (`0.60.0`, `c637fc0`, harness worktree
   `.claude/worktrees/agent-afad3cf465d5bcba7`) passed an independent review against
   `.agents/qb_adj_task.md` with minor findings, all docs and tests. They are fixed on
@@ -172,9 +176,8 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Open for the user
 
-- Approve merging `chore/adopt-python-template` (`0.59.3`) into `main`; it changes CI
-  (`validation.yml` from the template) and the gate script, not a weekly run's outputs, except
-  that a weekly run directory started before `0.59.3` reruns its reports stage once.
+- Remove `src/nfl_predictor/utils/changelog.py` and `tests/test_changelog_utils.py`, unused
+  since the release workflow went in `0.59.4`? Recommended: yes, a patch release.
 - Approve fast-forwarding `feat/qb-adj-features` to `6bacd5e`, together with its merge after the
   Monday game.
 - Step 3's list includes `qb_adj` (`strength,elo,own_elo_wt,qb_adj`), where the 2026-10-14

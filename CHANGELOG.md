@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.59.4] - 2026-10-15
+
+### Removed
+
+- Remove the GitHub release workflow: the project is private and publishes no releases.
+
 ## [0.59.3] - 2026-10-15
 
 ### Fixed

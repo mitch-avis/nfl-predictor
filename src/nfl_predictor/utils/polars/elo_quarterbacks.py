@@ -254,10 +254,10 @@ class _Book:
     """Every quarterback's and team's state and the league's per-season start values."""
 
     first_season: int
-    quarterbacks: dict[str, _Quarterback] = field(default_factory=dict)
-    teams: dict[str, _Team] = field(default_factory=dict)
-    start_totals: dict[int, list[float]] = field(default_factory=dict)
-    debut_totals: dict[int, list[float]] = field(default_factory=dict)
+    quarterbacks: dict[str, _Quarterback] = field(default_factory=dict[str, _Quarterback])
+    teams: dict[str, _Team] = field(default_factory=dict[str, _Team])
+    start_totals: dict[int, list[float]] = field(default_factory=dict[int, list[float]])
+    debut_totals: dict[int, list[float]] = field(default_factory=dict[int, list[float]])
 
     def debut_rating(self, season: int) -> float:
         """Return the mean adjusted first start of earlier seasons (the first excluded), or 0."""

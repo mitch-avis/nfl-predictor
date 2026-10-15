@@ -2,11 +2,10 @@
 
 ``config/weekly_run.yaml`` documents the contract: the weekly run reads that file by default,
 ``--config <path>`` reads another one instead, and command-line options override either. A
-relative single path in the file is taken from the repository root; path lists keep their paths
-as written for the code that reads them (``ml/floor_sigma.py`` resolves the reference runs against
-the root). A file read with ``--config`` sets its own value or none, so a key it leaves out takes
-the code default rather than the shipped value. Every config-file problem stops the run with a
-``ValueError`` that names the file, before any data refresh.
+relative path in the file, alone or in a list, is taken from the repository root, and a leading
+``~`` is the home directory. A file read with ``--config`` sets its own value or none, so a key it
+leaves out takes the code default rather than the shipped value. Every config-file problem stops
+the run with a ``ValueError`` that names the file, before any data refresh.
 """
 
 from __future__ import annotations
@@ -254,16 +253,67 @@ def test_a_relative_config_path_is_read_from_the_working_directory(
 
 
 @pytest.mark.parametrize("key", PATH_LIST_KEYS)
-def test_a_path_list_keeps_its_paths_in_order(tmp_path: Path, key: str) -> None:
+def test_a_path_list_resolves_relative_paths_against_the_repository_root_in_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
     # Arrange
     absolute = tmp_path / "abs_run"
     path = _write(tmp_path / "weekly.json", json.dumps({key: ["runs/a", str(absolute)]}))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
 
     # Act
     args = _parse_with(path)
 
     # Assert
-    assert list(getattr(args, key)) == [Path("runs/a"), absolute]
+    assert list(getattr(args, key)) == [Path(constants.ROOT_DIR) / "runs" / "a", absolute]
+
+
+@pytest.mark.parametrize("key", SCALAR_PATH_KEYS)
+def test_a_leading_tilde_is_the_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    # Arrange
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    path = _write(tmp_path / "weekly.json", json.dumps({key: "~/data/file.csv"}))
+
+    # Act
+    args = _parse_with(path)
+
+    # Assert
+    assert getattr(args, key) == tmp_path / "home" / "data" / "file.csv"
+
+
+@pytest.mark.parametrize("key", PATH_LIST_KEYS)
+def test_a_leading_tilde_in_a_path_list_is_the_home_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    # Arrange
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    path = _write(tmp_path / "weekly.json", json.dumps({key: ["~/runs/a"]}))
+
+    # Act
+    args = _parse_with(path)
+
+    # Assert
+    assert list(getattr(args, key)) == [tmp_path / "home" / "runs" / "a"]
+
+
+@pytest.mark.parametrize("key", ["data_path", "floor_sigma_reference_runs"])
+def test_an_unknown_users_home_is_refused_naming_the_file_and_key(tmp_path: Path, key: str) -> None:
+    # Arrange
+    value = "~no_such_user_nfl_predictor/file.csv"
+    path = _write(
+        tmp_path / "weekly.json",
+        json.dumps({key: [value] if key == "floor_sigma_reference_runs" else value}),
+    )
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as refused:
+        _parse_with(path)
+    assert key in str(refused.value)
+    assert "~no_such_user_nfl_predictor" in str(refused.value)
 
 
 @pytest.mark.parametrize("key", PATH_LIST_KEYS)
@@ -340,6 +390,17 @@ def test_an_empty_yaml_group_list_leaves_no_group_out(tmp_path: Path) -> None:
 
     # Assert
     assert args.disable_feature_groups == ()
+
+
+def test_a_comma_separated_group_string_is_refused_showing_the_list_form(tmp_path: Path) -> None:
+    # Arrange
+    path = _write(tmp_path / "weekly.yaml", "disable_feature_groups: strength,own_elo\n")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match=re.escape(str(path))) as refused:
+        _parse_with(path)
+    assert "[strength, own_elo]" in str(refused.value)
+    assert "comma-separated string is the command-line form" in str(refused.value)
 
 
 def test_an_empty_group_string_in_a_config_is_refused_as_not_a_list(tmp_path: Path) -> None:

@@ -698,7 +698,14 @@ def test_check_opponent_rows_complete_game_passes(parity: ModuleType) -> None:
 
 def test_load_pairs_unknown_row_fails_the_audit(parity: ModuleType) -> None:
     # Arrange
-    entry = {"id": "x", "ours": "a", "theirs": "b", "kind": "count", "causes": [], "row": "home"}
+    entry: dict[str, object] = {
+        "id": "x",
+        "ours": "a",
+        "theirs": "b",
+        "kind": "count",
+        "causes": [],
+        "row": "home",
+    }
     audit = parity.Audit()
 
     # Act

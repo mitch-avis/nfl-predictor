@@ -8,6 +8,8 @@ import polars as pl
 import pytest
 
 from nfl_predictor import lines_refresh
+from nfl_predictor.utils import polars_utils
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -144,7 +146,7 @@ def fake_schedule(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
         calls.append({"seasons": seasons, **kwargs})
         return _schedule_frame()
 
-    monkeypatch.setattr(lines_refresh.polars_utils, "load_schedule", _load_schedule)
+    monkeypatch.setattr(polars_utils, "load_schedule", _load_schedule)
     return calls
 
 
@@ -153,7 +155,9 @@ def _read(path: Path) -> pl.DataFrame:
     return pl.read_csv(path)
 
 
-def test_refresh_lines_updates_only_line_columns(data_dir: Path, fake_schedule: list) -> None:
+def test_refresh_lines_updates_only_line_columns(
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """Line columns take the schedule's values; every other column and the row order survive."""
     # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
@@ -170,7 +174,7 @@ def test_refresh_lines_updates_only_line_columns(data_dir: Path, fake_schedule: 
 
 
 def test_refresh_lines_fills_missing_moneylines_from_spreads(
-    data_dir: Path, fake_schedule: list
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
 ) -> None:
     """A schedule row with spreads but no moneylines is completed before the write."""
     # Act
@@ -184,7 +188,9 @@ def test_refresh_lines_fills_missing_moneylines_from_spreads(
     assert row["away_moneyline"] < 0 < row["home_moneyline"]
 
 
-def test_refresh_lines_leaves_unmatched_rows_alone(data_dir: Path, fake_schedule: list) -> None:
+def test_refresh_lines_leaves_unmatched_rows_alone(
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """Rows the schedule does not cover, and rows from another season, keep their lines."""
     # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
@@ -198,7 +204,9 @@ def test_refresh_lines_leaves_unmatched_rows_alone(data_dir: Path, fake_schedule
     assert other_season["home_moneyline"] == -300
 
 
-def test_refresh_lines_touches_every_target_file(data_dir: Path, fake_schedule: list) -> None:
+def test_refresh_lines_touches_every_target_file(
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """The week file and both all-data datasets are refreshed; completed games are not."""
     # Arrange
     before = (data_dir / "completed_games_ml.csv").read_text(encoding="utf-8")
@@ -216,7 +224,9 @@ def test_refresh_lines_touches_every_target_file(data_dir: Path, fake_schedule: 
     assert (data_dir / "completed_games_ml.csv").read_text(encoding="utf-8") == before
 
 
-def test_refresh_lines_reports_per_file_counts(data_dir: Path, fake_schedule: list) -> None:
+def test_refresh_lines_reports_per_file_counts(
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """The result carries matched and changed row counts per file."""
     # Act
     result = lines_refresh.refresh_lines(2026, 2, data_dir=data_dir)
@@ -242,9 +252,7 @@ def test_refresh_lines_rewrites_nothing_when_lines_are_unchanged(
         .filter(pl.col("season") == 2026)
         .select(["game_id", "season", "week", *lines_refresh.LINE_COLUMNS])
     )
-    monkeypatch.setattr(
-        lines_refresh.polars_utils, "load_schedule", lambda seasons, **kwargs: unchanged
-    )
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(unchanged))
     before = (data_dir / "all_data_ml.csv").read_text(encoding="utf-8")
 
     # Act
@@ -256,7 +264,9 @@ def test_refresh_lines_rewrites_nothing_when_lines_are_unchanged(
     assert (data_dir / "all_data_ml.csv").read_text(encoding="utf-8") == before
 
 
-def test_refresh_lines_skips_files_that_do_not_exist(tmp_path: Path, fake_schedule: list) -> None:
+def test_refresh_lines_skips_files_that_do_not_exist(
+    tmp_path: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """Missing datasets are reported as skipped rather than raising."""
     # Arrange
     _dataset_frame().write_csv(tmp_path / "all_data.csv")
@@ -270,7 +280,9 @@ def test_refresh_lines_skips_files_that_do_not_exist(tmp_path: Path, fake_schedu
     assert by_name["all_data.csv"].exists is True
 
 
-def test_refresh_lines_forces_a_schedule_refresh(data_dir: Path, fake_schedule: list) -> None:
+def test_refresh_lines_forces_a_schedule_refresh(
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """The schedule is re-fetched for the target season rather than read from the cache."""
     # Act
     lines_refresh.refresh_lines(2026, 2, data_dir=data_dir, cache_dir=data_dir / "cache")
@@ -291,9 +303,7 @@ def test_refresh_lines_raises_when_the_schedule_has_no_games(
 ) -> None:
     """An empty schedule is an error, not a silent no-op."""
     # Arrange
-    monkeypatch.setattr(
-        lines_refresh.polars_utils, "load_schedule", lambda seasons, **kwargs: pl.DataFrame()
-    )
+    monkeypatch.setattr(polars_utils, "load_schedule", returning(pl.DataFrame()))
 
     # Act & Assert
     with pytest.raises(ValueError, match="no games"):
@@ -301,7 +311,7 @@ def test_refresh_lines_raises_when_the_schedule_has_no_games(
 
 
 def test_main_refreshes_the_requested_week(
-    data_dir: Path, fake_schedule: list, monkeypatch: pytest.MonkeyPatch
+    data_dir: Path, fake_schedule: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The CLI passes its arguments through to :func:`refresh_lines`."""
     # Act
@@ -313,11 +323,11 @@ def test_main_refreshes_the_requested_week(
 
 
 def test_main_defaults_to_the_current_season_and_week(
-    data_dir: Path, fake_schedule: list, monkeypatch: pytest.MonkeyPatch
+    data_dir: Path, fake_schedule: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without ``--season``/``--week`` the CLI uses the project's NFL calendar."""
     # Arrange
-    monkeypatch.setattr(lines_refresh.polars_utils, "get_current_nfl_week", lambda: (2026, 2))
+    monkeypatch.setattr(polars_utils, "get_current_nfl_week", lambda: (2026, 2))
     monkeypatch.setattr(lines_refresh, "DEFAULT_DATA_DIR", data_dir)
 
     # Act
@@ -353,7 +363,7 @@ def test_join_keys_prefers_game_id_then_the_matchup(
 
 
 def test_refresh_lines_matches_week_files_that_have_no_game_id(
-    data_dir: Path, fake_schedule: list
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
 ) -> None:
     """The weekly games-to-predict files are keyed by season, week, and both teams."""
     # Arrange
@@ -371,7 +381,9 @@ def test_refresh_lines_matches_week_files_that_have_no_game_id(
     assert frame["total_line"].to_list() == [45.5, 41.0, 40.0]  # the 2025 row keeps its lines
 
 
-def test_refresh_lines_skips_a_file_it_cannot_key(data_dir: Path, fake_schedule: list) -> None:
+def test_refresh_lines_skips_a_file_it_cannot_key(
+    data_dir: Path, fake_schedule: list[dict[str, Any]]
+) -> None:
     """A dataset without a usable key is reported as unchanged rather than guessed at."""
     # Arrange
     week_file = data_dir / "predict" / "week_02_games_to_predict.csv"

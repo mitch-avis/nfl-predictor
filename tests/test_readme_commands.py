@@ -30,7 +30,8 @@ def readme_commands() -> list[str]:
         joined = re.sub(r"\\\n\s*", " ", block)
         stripped = (line.strip() for line in joined.splitlines())
         commands.extend(line for line in stripped if line.startswith("nfl-predictor"))
-    return commands
+    # A command the README shows twice is checked once, under one test ID.
+    return list(dict.fromkeys(commands))
 
 
 def test_the_readme_shows_front_door_commands() -> None:

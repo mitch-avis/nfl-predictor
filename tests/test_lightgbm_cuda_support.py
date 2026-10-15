@@ -285,15 +285,19 @@ def test_pyproject_exposes_the_installer_entrypoint() -> None:
 
 
 def test_gate_checks_the_environment_without_changing_it() -> None:
-    """The gate neither syncs nor rebuilds; its strict sync check gets the CUDA build flags."""
+    """The gate neither syncs nor rebuilds; its strict sync check gets the CUDA build flags.
+
+    The flags come from this repo's gate hooks file, which the shared gate sources.
+    """
     # Act
-    gate = (REPO_ROOT / "scripts" / "gate.sh").read_text(encoding="utf-8")
+    hooks = (REPO_ROOT / "scripts" / "gate.hooks.sh").read_text(encoding="utf-8")
 
     # Assert
-    assert "nfl-lightgbm-cuda-install install" not in gate
-    assert 'run_step "uv sync --active"' not in gate
-    assert "nfl-lightgbm-cuda-install uv-args" in gate
-    assert 'uv sync --check --active "${LIGHTGBM_CUDA_ARGS[@]}"' in gate
+    gate = (REPO_ROOT / "scripts" / "gate.sh").read_text(encoding="utf-8")
+    assert "nfl-lightgbm-cuda-install install" not in gate + hooks
+    assert 'uv sync --check "${SYNC_ARGS[@]}"' in gate
+    sync_args = hooks[hooks.index("gate_sync_args() {") :]
+    assert "nfl-lightgbm-cuda-install uv-args" in sync_args[: sync_args.index("\n}")]
 
 
 def test_update_requirements_runs_the_installer_after_sync() -> None:

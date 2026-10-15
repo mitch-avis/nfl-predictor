@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
-version = "0.59.1"
+version = "0.59.4"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -167,7 +167,6 @@ extend-allowed-calls = ["polars.lit"]
 python = ".venv"
 
 [tool.ty.src]
-# Limit ty to the checked-in source roots we validate in CI.
 include = ["src", "tests"]
 
 [tool.pyright]
@@ -204,6 +203,7 @@ branch = true
 source = ["src", "tests"]
 
 [tool.coverage.report]
+# scripts/gate.sh also holds src/ alone to this bar, since tests/ lifts the total.
 fail_under = 90
 show_missing = true
 skip_empty = true

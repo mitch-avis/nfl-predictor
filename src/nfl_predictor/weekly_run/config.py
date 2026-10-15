@@ -147,34 +147,46 @@ def _load_config(path: Path) -> dict[str, Any]:
     raise ValueError(msg)
 
 
-def _from_root(path: Path, key: str) -> Path:
-    """Return a config file's ``path`` for ``key``, a relative one taken from the repository root.
+def _expand_home(path: Path, key: str, source: str) -> Path:
+    """Return a config file's ``path`` for ``key`` with a leading ``~`` as the home directory.
+
+    ``source`` names the file for the error message.
+
+    Raises:
+        ValueError: If the path starts with ``~user`` for a user this machine doesn't know.
+
+    """
+    try:
+        return path.expanduser()
+    except RuntimeError as error:
+        msg = f"{source}config key {key} names the home of an unknown user: {str(path)!r}."
+        raise ValueError(msg) from error
+
+
+def _from_root(path: Path) -> Path:
+    """Return ``path``, a relative one taken from the repository root."""
+    return path if path.is_absolute() else Path(constants.ROOT_DIR) / path
+
+
+def _normalize_paths(normalized: dict[str, Any], source: str) -> None:
+    """Expand ``~`` in the single paths and take relative ones from the repository root.
 
     ``config`` is the file's own path, as given on the command line, and stays as it is.
     """
-    if key == "config" or path.is_absolute():
-        return path
-    return Path(constants.ROOT_DIR) / path
-
-
-def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
-    """Normalize config defaults for argparse.
-
-    A relative single path (``data_path``, ``run_dir`` and the like) is taken from the
-    repository root, not the working directory. Path lists stay as written
-    (``ml/floor_sigma.py`` takes the reference runs from the root when it reads them).
-    """
-    normalized = dict(config)
-    source = f"Config file {config['config']}: " if config.get("config") is not None else ""
     for key in _PATH_KEYS:
         value = normalized.get(key)
         if value is None:
             continue
         if isinstance(value, (str, Path)):
-            normalized[key] = _from_root(Path(value), key)
+            if key != "config":
+                normalized[key] = _from_root(_expand_home(Path(value), key, source))
             continue
         msg = f"{source}config key {key} must be a path, not {type(value).__name__}."
         raise ValueError(msg)
+
+
+def _normalize_path_lists(normalized: dict[str, Any], source: str) -> None:
+    """Expand ``~`` in the path lists, keeping relative entries for their readers to resolve."""
     for key in _PATH_LIST_KEYS:
         values = normalized.get(key)
         if values is None:
@@ -184,13 +196,26 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
         ):
             msg = f"{source}config key {key} must be a list of paths."
             raise ValueError(msg)
-        normalized[key] = [Path(item) for item in cast("list[str | Path]", values)]
+        normalized[key] = [
+            _expand_home(Path(item), key, source) for item in cast("list[str | Path]", values)
+        ]
+
+
+def _normalize_feature_groups(normalized: dict[str, Any], source: str) -> None:
+    """Turn the feature group lists into tuples of names, refusing any other shape."""
     for key in _FEATURE_GROUP_LIST_KEYS:
         if key not in normalized:
             continue
         # A key with no value (YAML null, as when every item is commented out) is refused: it
         # would otherwise read as either no group or the default. Anything else must be a list.
         groups = normalized[key]
+        if isinstance(groups, str) and groups.strip():
+            listed = ", ".join(name.strip() for name in groups.split(","))
+            msg = (
+                f"{source}config key {key} must be a list of feature group names, such as "
+                f"[{listed}]; a comma-separated string is the command-line form."
+            )
+            raise ValueError(msg)
         if groups is None or not isinstance(groups, list):
             msg = (
                 f"Config key {key} has no value: write [] to leave no group out, or remove the "
@@ -201,6 +226,22 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(msg)
         names = cast("list[object]", groups)
         normalized[key] = tuple(str(name).strip() for name in names)
+
+
+def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
+    """Normalize config defaults for argparse.
+
+    A leading ``~`` in any path is the home directory. A relative single path (``data_path``,
+    ``run_dir`` and the like) is taken from the repository root, not the working directory.
+    Path lists keep relative entries as written, and their readers take them from the root
+    (``ml/floor_sigma.py`` for the reference runs, `_default_prediction_sources` for the power
+    rankings).
+    """
+    normalized = dict(config)
+    source = f"Config file {config['config']}: " if config.get("config") is not None else ""
+    _normalize_paths(normalized, source)
+    _normalize_path_lists(normalized, source)
+    _normalize_feature_groups(normalized, source)
     return normalized
 
 
@@ -931,12 +972,13 @@ def _default_prediction_sources(
     Explicit ``--power-rankings-model-predictions`` win. Otherwise, given the run directory, the
     ranked season comes from this run's stage-1 fold checkpoints and earlier seasons (week 1's
     carried-forward fit reads the previous one) from the floor-sigma reference runs, seeds of one
-    configuration averaged into one source.
+    configuration averaged into one source. A relative path in either list is taken from the
+    repository root, as `ml.floor_sigma` reads the reference runs.
     """
-    explicit = tuple(Path(path) for path in args.power_rankings_model_predictions)
+    explicit = tuple(_from_root(Path(path)) for path in args.power_rankings_model_predictions)
     if explicit or run_dir is None or _requested_method(args) not in {"model", "blend"}:
         return explicit, ()
-    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or ())
+    reference = tuple(_from_root(Path(path)) for path in args.floor_sigma_reference_runs or ())
     return (stage1.predictions_source(run_dir),), reference
 
 

@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.59.4] - 2026-10-15
+
+### Removed
+
+- Remove the GitHub release workflow: the project is private and publishes no releases.
+
+## [0.59.3] - 2026-10-15
+
+### Fixed
+
+- The power rankings read relative entries of `floor_sigma_reference_runs` and
+  `power_rankings_model_predictions`, from a config file or the command line, from the repository
+  root, as the floor sigma already read the reference runs, so a weekly run started outside the
+  repo root finds the predictions the blend ranking reads. The recorded settings name those runs by
+  absolute path, so a weekly run directory started before this release reruns its reports stage
+  once.
+- A leading `~` in a config file path is the home directory; a `~user` this machine doesn't know
+  stops the run naming the file and the key.
+- A comma-separated `disable_feature_groups` string in a config file is refused with the list to
+  write instead, since the comma form is the command line's.
+
+## [0.59.2] - 2026-10-15
+
+### Changed
+
+- The repo takes its shared tooling from the Copier template `~/workspace/python-template`
+  (version `0.1.2`, recorded in `.copier-answers.yml`): `scripts/gate.sh`, the pre-commit,
+  markdownlint, CI and Dependabot configs. This repo's own gate steps (the LightGBM CUDA sync
+  flags, every front-door command's `--help` and `--web`) move to `scripts/gate.hooks.sh`.
+- The gate adds shellcheck over every shell script `.gitignore` doesn't exclude and checks every
+  console script's `--help`; its sync check targets the checkout's own `.venv`, so a worktree no
+  longer needs `VIRTUAL_ENV` set.
+- markdownlint runs as `markdownlint-cli2` from `.markdownlint-cli2.yaml` (locally and in CI),
+  which replaces `.markdownlint.json` and `.markdownlintignore` and skips what `.gitignore`
+  excludes.
+- CI lets uv install Python, drops the editable-install step that `uv sync` already covers, and
+  moves to `actions/checkout@v7`, `actions/setup-node@v7` and `astral-sh/setup-uv@v10.2.0`;
+  Dependabot also watches the GitHub Actions versions.
+- Pre-commit adds the shebang and executable-bit checks and normalizes line endings to LF.
+
+### Added
+
+- The `py.typed` marker, and a test that the installed package is the version `pyproject.toml`
+  declares.
+
 ## [0.59.1] - 2026-10-15
 
 ### Changed

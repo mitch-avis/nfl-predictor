@@ -253,5 +253,12 @@ web/coverage/
 web/*.tsbuildinfo
 data/web/
 
-# Claude Code subagent worktrees (each is a full checkout; ruff would lint them twice)
+# Claude Code subagent worktrees (each is a full checkout; ruff would lint them twice) and local
+# settings
 .claude/worktrees/
+.claude/settings.local.json
+
+# Editors and OS files
+.idea/
+.DS_Store
+Thumbs.db

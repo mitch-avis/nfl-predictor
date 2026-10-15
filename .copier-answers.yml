@@ -1,0 +1,14 @@
+# Changes here will be overwritten by Copier; edit the answers with `copier update`.
+_commit: 0.1.2
+_src_path: /home/mitch/workspace/python-template
+author_email: mitchavis@gmail.com
+author_name: Mitch Avis
+description: NFL game score and outcome prediction with a margin/total ML model, calibrated
+    win probabilities, and tooling for Pick 'Em and Confidence Pools.
+github_ci: true
+has_cli: false
+license: MIT
+package_name: nfl_predictor
+private: true
+project_name: nfl-predictor
+python_version: '3.14'

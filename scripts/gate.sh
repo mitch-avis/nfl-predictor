@@ -1,44 +1,64 @@
 #!/usr/bin/env bash
-# The one validation gate. CI (.github/workflows/validation.yml) runs this script after setting
-# up the environment, so a local run and CI run the same checks. It uses the repo's own .venv and
-# reports every step before exiting non-zero, so a single run shows everything that is wrong
-# rather than the first failure. The frontend steps (--web) run in CI as their own job.
+# The one validation gate. CI runs this script after syncing the environment, so a local run and
+# CI run the same checks. It uses the repo's own .venv (never `uv run`, which re-syncs the
+# environment first) and runs every selected step before exiting, so one run reports everything
+# that is wrong rather than only the first failure.
 #
 # Usage:
-#   scripts/gate.sh          Python gate: lock, sync, ruff format, ruff, ty, pyright, pytest,
-#                            src coverage, markdownlint, CLI help smoke checks.
-#   scripts/gate.sh --web    Also run the frontend gate in web/ (pnpm install --frozen-lockfile,
-#                            lint, typecheck, vitest, build); needs nvm, the Node version CI
-#                            uses, and pnpm on PATH.
-#   scripts/gate.sh --quick  Skip pytest and the frontend gate (static checks only).
+#   scripts/gate.sh          lock and sync checks, ruff format, ruff, ty, pyright, pytest, the
+#                            src/ coverage bar, every console script's --help, shellcheck,
+#                            markdownlint
+#   scripts/gate.sh --quick  skip pytest and the coverage bar (static checks only; for
+#                            iteration, never the report)
 #
-# Exit status is 0 only when every selected step passed. No chunk of work is "done" until this
-# script exits 0 on the final tree (AGENTS.md, "Delegation guardrails").
+# A project's own steps live in scripts/gate.hooks.sh, which this script sources when present, so
+# this file stays the same in every project; --help prints the hooks file's header comment too.
+# The hooks file may define:
+#   gate_option <arg>   Handles an option this script doesn't know; returns non-zero for an
+#                       option the project doesn't know either.
+#   gate_sync_args      Prints extra `uv sync --check` arguments, one per line.
+#   gate_extra_steps    Runs after the standard steps: call `run_step <name> <command...>`, and
+#                       skip slow steps when RUN_TESTS is 0 (--quick).
+#
+# Exit status is 0 only when every selected step passed.
 
 set -u
 set -o pipefail
 
 cd "$(dirname "$0")/.." || exit 2
 
-RUN_WEB=0
+HOOKS_FILE="scripts/gate.hooks.sh"
+gate_option() { return 1; }
+gate_sync_args() { :; }
+gate_extra_steps() { :; }
+if [[ -f "$HOOKS_FILE" ]]; then
+	# shellcheck source=/dev/null
+	source "$HOOKS_FILE"
+fi
+
 RUN_TESTS=1
 for arg in "$@"; do
 	case "$arg" in
-	--web) RUN_WEB=1 ;;
 	--quick) RUN_TESTS=0 ;;
 	-h | --help)
-		sed -n '2,16p' "$0"
+		# This header, then the hooks file's, each up to its first blank line.
+		sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+		if [[ -f "$HOOKS_FILE" ]]; then
+			sed -n '2,/^$/p' "$HOOKS_FILE" | sed 's/^# \{0,1\}//'
+		fi
 		exit 0
 		;;
 	*)
-		echo "unknown option: $arg" >&2
-		exit 2
+		if ! gate_option "$arg"; then
+			echo "gate: unknown option: $arg" >&2
+			exit 2
+		fi
 		;;
 	esac
 done
 
-if [ ! -x .venv/bin/python ]; then
-	echo "gate: .venv/bin/python not found; run 'uv sync' first" >&2
+if [[ ! -x .venv/bin/python ]]; then
+	echo "gate: .venv/bin/python not found; create it with 'uv sync'" >&2
 	exit 2
 fi
 
@@ -52,93 +72,82 @@ run_step() {
 	shift
 	echo
 	echo "==> ${name}"
+	NAMES+=("$name")
 	if "$@"; then
-		NAMES+=("$name")
 		STATUSES+=("ok")
 	else
-		NAMES+=("$name")
 		STATUSES+=("FAIL")
 		FAILED=1
 	fi
 }
 
-markdownlint_step() {
-	# CI runs `markdownlint .` (markdownlint-cli). Locally either binary is accepted; the
-	# cli2 form mirrors .markdownlintignore explicitly because symlinked trees escape it.
-	if command -v markdownlint >/dev/null 2>&1; then
-		markdownlint .
-	elif command -v markdownlint-cli2 >/dev/null 2>&1; then
-		markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#web/node_modules" \
-			"#web/dist" "#.agents/*transcript*.md" "#.claude/worktrees" "#models"
-	else
-		echo "neither markdownlint nor markdownlint-cli2 is installed" >&2
+console_scripts_step() {
+	# Every console script in pyproject.toml must print its help, so a new one is covered without
+	# editing this script. A project without console scripts passes.
+	local -a scripts
+	local script
+	mapfile -t scripts < <(
+		.venv/bin/python -c 'import tomllib
+with open("pyproject.toml", "rb") as file:
+    print("\n".join(tomllib.load(file)["project"].get("scripts", {})))'
+	) || return 1
+	for script in "${scripts[@]}"; do
+		[[ -n "$script" ]] || continue
+		if ! ".venv/bin/$script" --help >/dev/null; then
+			echo "$script --help failed" >&2
+			return 1
+		fi
+	done
+}
+
+shellcheck_step() {
+	local -a files
+	if ! command -v shellcheck >/dev/null 2>&1; then
+		echo "shellcheck is not installed (apt install shellcheck)" >&2
 		return 1
+	fi
+	# Tracked and new files alike, but nothing .gitignore excludes (the venv, run directories).
+	mapfile -t files < <(git ls-files --cached --others --exclude-standard -- '*.sh' | sort -u)
+	if [[ ${#files[@]} -gt 0 ]]; then
+		shellcheck "${files[@]}"
 	fi
 }
 
-cli_smoke_step() {
-	# Every front-door command must print its help. The list comes from the front door itself,
-	# so a new command is checked without editing this script.
-	local commands command
-	commands="$(.venv/bin/python -c 'from nfl_predictor.cli.main import COMMANDS
-print("\n".join(command.name for command in COMMANDS))')" || return 1
-	.venv/bin/nfl-predictor --help >/dev/null || return 1
-	while read -r command; do
-		.venv/bin/nfl-predictor "$command" --help >/dev/null || {
-			echo "nfl-predictor $command --help failed" >&2
-			return 1
-		}
-	done <<<"$commands"
+markdownlint_step() {
+	# .markdownlint-cli2.yaml holds the rules and keeps .gitignore'd paths such as .venv/ out.
+	if ! command -v markdownlint-cli2 >/dev/null 2>&1; then
+		echo "markdownlint-cli2 is not installed (npm install --global markdownlint-cli2)" >&2
+		return 1
+	fi
+	markdownlint-cli2 "**/*.md"
 }
 
-web_step() {
-	# shellcheck disable=SC1091
-	[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
-	command -v pnpm >/dev/null || {
-		echo "gate: pnpm not found on PATH; the frontend uses pnpm (web/pnpm-lock.yaml)" >&2
-		return 1
-	}
-	(
-		cd web &&
-			pnpm install --frozen-lockfile &&
-			pnpm run lint &&
-			pnpm run typecheck &&
-			pnpm exec vitest run &&
-			pnpm run build
-	)
-}
+declare -a SYNC_ARGS=()
+mapfile -t SYNC_ARGS < <(gate_sync_args)
 
 run_step "uv lock --check" uv lock --check
-# On a machine with a CUDA toolkit, LightGBM is a local CUDA build of the locked version (see
-# src/nfl_predictor/lightgbm_cuda.py); the sync check is told the same build flags, so it stays
-# strict. The helper prints nothing on CPU-only machines and in CI.
-LIGHTGBM_CUDA_ARGS=()
-if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then
-	mapfile -t LIGHTGBM_CUDA_ARGS < <(.venv/bin/nfl-lightgbm-cuda-install uv-args 2>/dev/null)
-fi
-run_step "uv sync --check --active" uv sync --check --active "${LIGHTGBM_CUDA_ARGS[@]}"
+run_step "uv sync --check" uv sync --check "${SYNC_ARGS[@]}"
 run_step "ruff format --check" .venv/bin/ruff format --check
 run_step "ruff check" .venv/bin/ruff check
 run_step "ty check" .venv/bin/ty check
 run_step "pyright" .venv/bin/pyright
-if [ "$RUN_TESTS" -eq 1 ]; then
-	run_step "pytest" .venv/bin/python -m pytest -q -p no:cacheprovider
-	# The total in pyproject.toml counts tests/ as well, which would let src/ slip under the bar.
-	run_step "src coverage" .venv/bin/coverage report --include="src/*" --fail-under=90 \
-		--format=total
+if [[ "$RUN_TESTS" -eq 1 ]]; then
+	run_step "pytest" .venv/bin/pytest -q -p no:cacheprovider
+	# The total in pyproject.toml counts tests/ as well, which would let src/ slip under the bar;
+	# `coverage report` applies the same fail_under to src/ alone.
+	run_step "src coverage" .venv/bin/coverage report --include="src/*" --format=total
 fi
+run_step "console scripts --help" console_scripts_step
+run_step "shellcheck" shellcheck_step
 run_step "markdownlint" markdownlint_step
-run_step "CLI help smoke checks" cli_smoke_step
-if [ "$RUN_WEB" -eq 1 ] && [ "$RUN_TESTS" -eq 1 ]; then
-	run_step "web gate" web_step
-fi
+gate_extra_steps
 
 echo
 echo "==> gate summary"
 for i in "${!NAMES[@]}"; do
-	printf '  %-40s %s\n' "${NAMES[$i]}" "${STATUSES[$i]}"
+	printf '  %-32s %s\n' "${NAMES[$i]}" "${STATUSES[$i]}"
 done
-if [ "$FAILED" -ne 0 ]; then
+if [[ "$FAILED" -ne 0 ]]; then
 	echo "gate: FAILED"
 	exit 1
 fi

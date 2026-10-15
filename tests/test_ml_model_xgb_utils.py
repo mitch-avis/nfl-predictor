@@ -12,6 +12,7 @@ import pytest
 import xgboost as xgb
 
 from nfl_predictor.ml import ml_model_xgb_utils as xgb_utils
+from nfl_predictor.utils.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,6 +23,14 @@ if TYPE_CHECKING:
 real_xgb_cuda_usable = xgb_utils.xgb_cuda_usable
 
 xgb.set_config(verbosity=0)
+
+
+def _always_supported(_param: str) -> bool:
+    return True
+
+
+def _never_supported(_param: str) -> bool:
+    return False
 
 
 def _reset_runtime_state() -> None:
@@ -83,7 +92,7 @@ def test_a_preprocessor_output_that_is_not_a_matrix_is_refused() -> None:
         xgb_utils._as_matrix([[1.0]])
 
 
-def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
+def test_resolve_xgb_params_gpu_tree_method(monkeypatch: pytest.MonkeyPatch) -> None:
     """GPU tree_method and device are coerced properly."""
     # Arrange
     _reset_runtime_state()
@@ -107,10 +116,10 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
     assert params["eval_metric"] == "mae"
 
 
-def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
+def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch: pytest.MonkeyPatch) -> None:
     """XGB fit kwargs include early stopping when supported."""
     # Arrange
-    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: True)
+    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", _always_supported)
 
     # Act
     kwargs = xgb_utils._build_xgb_fit_kwargs(
@@ -125,7 +134,9 @@ def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
     assert kwargs["early_stopping_rounds"] == 5
 
 
-def test_with_xgb_early_stopping_params_uses_the_init_param_only(monkeypatch) -> None:
+def test_with_xgb_early_stopping_params_uses_the_init_param_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Early stopping goes in the init param and never in a callback object.
 
     A callback object in the params dict is shared by every estimator built from that dict
@@ -134,7 +145,7 @@ def test_with_xgb_early_stopping_params_uses_the_init_param_only(monkeypatch) ->
     # Arrange
     _reset_runtime_state()
 
-    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
+    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", _never_supported)
 
     def fake_param_supported(param: str) -> bool:
         return param in {"early_stopping_rounds", "callbacks"}
@@ -178,13 +189,13 @@ def test_estimators_built_from_early_stopping_params_carry_no_callback() -> None
     assert second_model.get_params()["callbacks"] is None
 
 
-def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
+def test_with_xgb_early_stopping_params_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """XGB params early stopping fallback logs when needed."""
     # Arrange
     _reset_runtime_state()
 
-    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
-    monkeypatch.setattr(xgb_utils, "_xgb_param_supported", lambda _p: False)
+    monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", _never_supported)
+    monkeypatch.setattr(xgb_utils, "_xgb_param_supported", _never_supported)
 
     messages: list[str] = []
     monkeypatch.setattr(xgb_utils, "_log_early_stopping_fallback", messages.append)
@@ -252,7 +263,9 @@ def test_predict_xgb_uses_best_iteration(
         def __init__(self) -> None:
             self.calls: list[Any] = []
 
-        def predict(self, dmatrix, iteration_range=None):
+        def predict(
+            self, dmatrix: xgb.DMatrix, iteration_range: tuple[int, int] | None = None
+        ) -> np.ndarray:
             """Capture iteration_range calls for inspection."""
             self.calls.append(iteration_range)
             return np.zeros(dmatrix.num_row())
@@ -260,11 +273,11 @@ def test_predict_xgb_uses_best_iteration(
     class DummyModel:
         """Dummy model to simulate XGB model behavior."""
 
-        def __init__(self, best_iteration=None) -> None:
+        def __init__(self, best_iteration: int | None = None) -> None:
             self.best_iteration = best_iteration
             self._booster = DummyBooster()
 
-        def get_booster(self):
+        def get_booster(self) -> DummyBooster:
             """Return the dummy booster."""
             return self._booster
 
@@ -302,7 +315,7 @@ def _record_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     def _capture(msg: str, *args: object) -> None:
         messages.append(msg % args if args else msg)
 
-    monkeypatch.setattr(xgb_utils.log, "warning", _capture)
+    monkeypatch.setattr(log, "warning", _capture)
     return messages
 
 
@@ -311,13 +324,13 @@ def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
 ) -> None:
     """A CPU-only XGBoost build reports no GPU without attempting a fit."""
     # Arrange
-    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=False))
+    monkeypatch.setattr(xgb, "build_info", _fake_build_info(use_cuda=False))
 
     def _no_fit(*_args: object, **_kwargs: object) -> object:
         msg = "the probe fit must not run on a CPU-only build"
         raise AssertionError(msg)
 
-    monkeypatch.setattr(xgb_utils.xgb, "train", _no_fit)
+    monkeypatch.setattr(xgb, "train", _no_fit)
 
     # Act
     usable = xgb_utils.detect_xgb_cuda()
@@ -332,14 +345,14 @@ def test_detect_xgb_cuda_reads_the_device_the_probe_fit_used(
 ) -> None:
     """With no visible GPU, XGBoost moves a CUDA fit to the CPU instead of raising."""
     # Arrange
-    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=True))
+    monkeypatch.setattr(xgb, "build_info", _fake_build_info(use_cuda=True))
     requested: list[dict[str, Any]] = []
 
     def _fake_train(params: dict[str, Any], *_args: object, **_kwargs: object) -> _ProbeBooster:
         requested.append(params)
         return _ProbeBooster(probe_device)
 
-    monkeypatch.setattr(xgb_utils.xgb, "train", _fake_train)
+    monkeypatch.setattr(xgb, "train", _fake_train)
 
     # Act
     usable = xgb_utils.detect_xgb_cuda()
@@ -354,13 +367,13 @@ def test_detect_xgb_cuda_reports_no_gpu_when_the_probe_fit_fails(
 ) -> None:
     """An XGBoost error from the probe fit means the GPU is not usable."""
     # Arrange
-    monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=True))
+    monkeypatch.setattr(xgb, "build_info", _fake_build_info(use_cuda=True))
 
     def _failing_train(*_args: object, **_kwargs: object) -> object:
         msg = "CUDA driver version is insufficient"
         raise xgb.core.XGBoostError(msg)
 
-    monkeypatch.setattr(xgb_utils.xgb, "train", _failing_train)
+    monkeypatch.setattr(xgb, "train", _failing_train)
 
     # Act
     usable = xgb_utils.detect_xgb_cuda()
@@ -497,7 +510,11 @@ def test_resolve_xgb_params_gpu_tree_method_without_a_gpu_uses_the_cpu(
     """A GPU tree method asks for CUDA, which falls back to the CPU when no GPU is usable."""
     # Arrange
     _reset_runtime_state()
-    monkeypatch.setattr(xgb_utils, "_xgb_param_supported", lambda p: p in {"device", "predictor"})
+
+    def fake_supported(param: str) -> bool:
+        return param in {"device", "predictor"}
+
+    monkeypatch.setattr(xgb_utils, "_xgb_param_supported", fake_supported)
 
     # Act
     params = xgb_utils.resolve_xgb_params({"max_depth": 3}, tree_method="gpu", device="auto")

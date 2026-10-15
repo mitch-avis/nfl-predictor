@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.59.6] - 2026-10-15
+
+### Changed
+
+- Strict pyright passes over `src/` and `tests/` with no errors (3,146 before), with no inline
+  suppressions: local stubs in `typings/` for joblib, threadpoolctl, nflreadpy and six sklearn
+  modules, pinned to the runtime by `tests/test_typings.py`; typed arrays and frames in the model
+  code; and typed test stand-ins, mostly through `tests/fakes.returning`. Tests may import their
+  module's private helpers (python-template `0.1.3`).
+- Helpers that another module imports are public: in `ml/ml_model_core.py` `load_games`,
+  `summarize_missing_data`, `filter_season_bounds`, `split_by_season`,
+  `evaluate_margin_total_predictions`, `predict_margin_total_quantiles_from_model`,
+  `summarize_confidence_pool`, `early_stopping_info` and `run_optuna_search`; in
+  `ml/ml_model_xgb_utils.py` `build_xgb_fit_kwargs`, `with_xgb_early_stopping_params` and
+  `coerce_tree_method_on_error`; in `utils/polars/loaders.py` `read_cached_frame`,
+  `write_cached_frame`, `resolve_cache_dir`, `resolve_current_season` and `is_numeric_dtype`.
+  `ml_model_predict` and `ml_model_training` call the existing public wrappers for the
+  prediction output, score derivation, margin/total prediction and target columns.
+- The XGBoost GPU check decides from its one-round probe fit alone instead of first reading
+  `xgb.build_info()`: a build without CUDA fails that fit or moves it to the CPU, so the answer is
+  the same.
+- Every test is written as Arrange-Act-Assert with one action; tests that repeated an action
+  over several inputs are parametrized cases.
+- The model code changed, so every walk-forward checkpoint fingerprint changes and the next
+  walk-forward retrains from scratch.
+
+### Added
+
+- `nfl_predictor.utils.narrowing` (`as_str_dict`, `as_list`) types parsed JSON and unpickled
+  values as the containers their readers expect.
+- `cryptography` in the dev group, so PyJWT's key types resolve for the type checkers.
+
+### Removed
+
+- Remove the unused season fold builder in `ml/ml_model_core.py` and its tests; tuning folds
+  come from the season-week blocked folds and walk-forward from `build_walk_forward_folds`.
+
 ## [0.59.5] - 2026-10-15
 
 ### Removed

@@ -158,6 +158,9 @@ extend-allowed-calls = ["polars.lit"]
 "src/nfl_predictor/api/auth/cli.py" = [
     "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
 ]
+"typings/joblib.pyi" = [
+    "ANN401", # joblib.load unpickles an object of any type, as typeshed types pickle.load
+]
 
 # --------------------------------------------------------------------------------------------
 # Type checking: ty and pyright (strict)

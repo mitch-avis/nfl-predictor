@@ -9,6 +9,7 @@ from nfl_predictor import ml_model
 
 def test_margin_total_early_stopping_wired() -> None:
     """Early stopping should be wired through to XGBoost training."""
+    # Arrange
     rng = np.random.default_rng(42)
     x_train = rng.normal(size=(20, 3))
     x_eval = rng.normal(size=(6, 3))
@@ -28,6 +29,7 @@ def test_margin_total_early_stopping_wired() -> None:
         },
     )
 
+    # Act
     margin_model, total_model = ml_model.fit_margin_total_models(
         ml_model.FitData(x_train, y_margin, y_total),
         params,
@@ -35,5 +37,6 @@ def test_margin_total_early_stopping_wired() -> None:
         early_stopping_rounds=5,
     )
 
+    # Assert
     assert hasattr(margin_model, "evals_result_")
     assert hasattr(total_model, "evals_result_")

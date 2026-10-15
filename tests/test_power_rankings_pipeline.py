@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
     """Records should exclude postseason games when computing current standings."""
+    # Arrange
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -47,9 +48,12 @@ def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
         ]
     ).to_csv(schedule_path, index=False)
 
+    # Act
     records = power_rankings._load_current_records(
         schedule_path, season=2024, through_week=5, include_postseason=False
     )
+
+    # Assert
     records = records.set_index("team_abbr")
 
     assert records.loc["AAA", "wins"] == 0
@@ -60,6 +64,7 @@ def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
 
 def test_load_current_records_can_include_postseason(tmp_path) -> None:
     """Records should include postseason games when requested."""
+    # Arrange
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -84,9 +89,12 @@ def test_load_current_records_can_include_postseason(tmp_path) -> None:
         ]
     ).to_csv(schedule_path, index=False)
 
+    # Act
     records = power_rankings._load_current_records(
         schedule_path, season=2024, through_week=19, include_postseason=True
     )
+
+    # Assert
     records = records.set_index("team_abbr")
 
     assert records.loc["AAA", "wins"] == 1
@@ -97,6 +105,7 @@ def test_load_current_records_can_include_postseason(tmp_path) -> None:
 
 def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
     """Missing feature columns should raise a clear validation error."""
+    # Arrange
     data_path = tmp_path / "ml.csv"
     pd.DataFrame(
         [
@@ -115,6 +124,7 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
         SimpleNamespace(feature_spec=SimpleNamespace(feature_columns=["feat_required"])),
     )
 
+    # Act & Assert
     with pytest.raises(ValueError, match="Missing required feature columns \\(1\\): feat_required"):
         power_rankings._predict_future_games(
             model,
@@ -128,6 +138,7 @@ def test_predict_future_games_reads_a_feature_typed_after_a_hundred_rows(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A feature empty for the first 150 rows still reaches the model as a number."""
+    # Arrange
     data_path = tmp_path / "ml.csv"
     past = [
         {"season": 2024, "week": 1, "game_type": "REG", "away_abbr": "AAA", "home_abbr": "BBB"}
@@ -158,6 +169,7 @@ def test_predict_future_games_reads_a_feature_typed_after_a_hundred_rows(
 
     monkeypatch.setattr(power_rankings.ml_model_core, "predict_margin_total_from_model", capture)
 
+    # Act
     power_rankings._predict_future_games(
         model,
         power_rankings.RankingInputs(
@@ -165,6 +177,7 @@ def test_predict_future_games_reads_a_feature_typed_after_a_hundred_rows(
         ),
     )
 
+    # Assert
     assert pd.api.types.is_float_dtype(seen[0]["late_feature"])
     assert seen[0]["late_feature"].tolist() == [1.5]
 
@@ -187,20 +200,25 @@ def _schedule_with_a_late_decimal_line(path: Path) -> None:
 
 def test_load_current_records_reads_a_schedule_typed_after_a_hundred_rows(tmp_path) -> None:
     """A column whose type changes after the first 100 rows does not break the records."""
+    # Arrange
     schedule_path = tmp_path / "schedule.csv"
     _schedule_with_a_late_decimal_line(schedule_path)
 
+    # Act
     records = power_rankings._load_current_records(schedule_path, season=2024, through_week=2)
 
+    # Assert
     assert records.set_index("team_abbr").loc["BBB", "wins"] == 151
 
 
 def test_build_games_for_ratings_reads_a_schedule_typed_after_a_hundred_rows(tmp_path) -> None:
     """A column whose type changes after the first 100 rows does not break the ratings fit."""
+    # Arrange
     schedule_path = tmp_path / "schedule.csv"
     _schedule_with_a_late_decimal_line(schedule_path)
     no_future = pd.DataFrame(columns=["season", "week", "away_abbr", "home_abbr", "home_win_prob"])
 
+    # Act
     games = power_rankings._build_games_for_ratings(
         power_rankings.RankingInputs(
             data_ml=schedule_path, data_schedule=schedule_path, season=2024, through_week=2
@@ -209,11 +227,13 @@ def test_build_games_for_ratings_reads_a_schedule_typed_after_a_hundred_rows(tmp
         no_future,
     )
 
+    # Assert
     assert len(games) == 151
 
 
 def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
     """Ratings diagnostics should log once per invocation."""
+    # Arrange
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -242,6 +262,8 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
     )
 
     caplog.set_level(logging.INFO)
+
+    # Act
     power_rankings._build_games_for_ratings(
         power_rankings.RankingInputs(
             data_ml=schedule_path,
@@ -254,6 +276,7 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
         future_games,
     )
 
+    # Assert
     messages = [record.message for record in caplog.records]
     diag = [msg for msg in messages if msg.startswith("Ratings fit diagnostics:")]
     assert len(diag) == 1
@@ -261,6 +284,7 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
 
 def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
     """Ratings fit should include postseason games when requested."""
+    # Arrange
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame(
         [
@@ -285,6 +309,7 @@ def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
         ]
     ).to_csv(schedule_path, index=False)
 
+    # Act
     games = power_rankings._build_games_for_ratings(
         power_rankings.RankingInputs(
             data_ml=schedule_path,
@@ -297,12 +322,14 @@ def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
         pd.DataFrame(),
     )
 
+    # Assert
     assert len(games) == 2
     assert set(games["week"]) == {1, 19}
 
 
 def test_legacy_franchise_fit_restores_the_all_seasons_equal_weight_fit() -> None:
     """The legacy flag reproduces the historical fit: all seasons, equal weight, binary."""
+    # Arrange
     pr = power_rankings
 
     schedule = pl.DataFrame(
@@ -320,6 +347,7 @@ def test_legacy_franchise_fit_restores_the_all_seasons_equal_weight_fit() -> Non
         path = Path(tmp) / "schedule.csv"
         schedule.write_csv(path)
 
+        # Act
         legacy = pr._build_games_for_ratings(
             pr.RankingInputs(
                 data_ml=path,
@@ -338,6 +366,7 @@ def test_legacy_franchise_fit_restores_the_all_seasons_equal_weight_fit() -> Non
             pd.DataFrame(),
         )
 
+    # Assert
     # Every season is in the fit and every game weighs the same.
     assert sorted(legacy["season"].unique().tolist()) == [2022, 2023]
     assert legacy["fit_weight"].to_numpy() == pytest.approx(1.0)
@@ -347,6 +376,7 @@ def test_legacy_franchise_fit_restores_the_all_seasons_equal_weight_fit() -> Non
 
 def test_default_ratings_fit_windows_seasons_and_downweights_the_past() -> None:
     """The default fit sees a short window and weighs earlier seasons down."""
+    # Arrange
     pr = power_rankings
 
     schedule = pl.DataFrame(
@@ -364,6 +394,7 @@ def test_default_ratings_fit_windows_seasons_and_downweights_the_past() -> None:
         path = Path(tmp) / "schedule.csv"
         schedule.write_csv(path)
 
+        # Act
         games = pr._build_games_for_ratings(
             pr.RankingInputs(
                 data_ml=path,
@@ -376,6 +407,7 @@ def test_default_ratings_fit_windows_seasons_and_downweights_the_past() -> None:
             pd.DataFrame(),
         )
 
+    # Assert
     # 2020 falls outside the default two-season window.
     assert sorted(games["season"].unique().tolist()) == [2022, 2023]
     weights = dict(zip(games["season"], games["fit_weight"], strict=True))
@@ -387,6 +419,7 @@ def test_default_ratings_fit_windows_seasons_and_downweights_the_past() -> None:
 
 def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
     """The strength fit describes results; the model's own forecasts are excluded."""
+    # Arrange
     pr = power_rankings
 
     schedule = pl.DataFrame(
@@ -412,6 +445,8 @@ def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "schedule.csv"
         schedule.write_csv(path)
+
+        # Act
         default = pr._build_games_for_ratings(
             pr.RankingInputs(
                 data_ml=path,
@@ -423,6 +458,41 @@ def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
             pr.RankingOptions(ratings_min_season=None),
             future,
         )
+
+    # Assert
+    assert default["week"].tolist() == [1]
+
+
+def test_future_games_join_the_strength_fit_when_asked() -> None:
+    """With ``include_future`` the model's forecasts join the strength fit."""
+    # Arrange
+    pr = power_rankings
+
+    schedule = pl.DataFrame(
+        {
+            "season": [2023],
+            "week": [1],
+            "game_type": ["REG"],
+            "away_abbr": ["AAA"],
+            "home_abbr": ["BBB"],
+            "away_score": [10.0],
+            "home_score": [30.0],
+        }
+    )
+    future = pd.DataFrame(
+        {
+            "season": [2023],
+            "week": [2],
+            "away_abbr": ["BBB"],
+            "home_abbr": ["AAA"],
+            "home_win_prob": [0.9],
+        }
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "schedule.csv"
+        schedule.write_csv(path)
+
+        # Act
         with_future = pr._build_games_for_ratings(
             pr.RankingInputs(
                 data_ml=path,
@@ -435,7 +505,7 @@ def test_future_games_stay_out_of_the_strength_fit_by_default() -> None:
             future,
         )
 
-    assert default["week"].tolist() == [1]
+    # Assert
     assert sorted(with_future["week"].tolist()) == [1, 2]
 
 
@@ -445,6 +515,7 @@ def test_load_current_records_compares_scores_as_numbers(tmp_path: Path) -> None
     The ETL writes newest games first, so the rows Polars samples to infer types can all
     have blank scores; compared as text, a 9-31 loss would read as a win.
     """
+    # Arrange
     unplayed = [
         {
             "season": 2025,
@@ -471,10 +542,12 @@ def test_load_current_records_compares_scores_as_numbers(tmp_path: Path) -> None
     schedule_path = tmp_path / "schedule.csv"
     pd.DataFrame([*unplayed, *played]).to_csv(schedule_path, index=False)
 
+    # Act
     records = power_rankings._load_current_records(
         schedule_path, season=2024, through_week=5
     ).set_index("team_abbr")
 
+    # Assert
     assert records.loc["BBB", "wins"] == 1
     assert records.loc["AAA", "losses"] == 1
     assert records.loc["AAA", "wins"] == 0
@@ -554,12 +627,15 @@ def test_bradley_terry_method_reproduces_the_current_season_fit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Pinned from the ranking the script produced before the composite became the default."""
+    # Arrange
     options = power_rankings.resolve_ranking_options(
         power_rankings.RankingRequest(method="bradley_terry", legacy_franchise_fit=False)
     )
 
+    # Act
     rankings = _rank_fixture(tmp_path, monkeypatch, options)
 
+    # Assert
     assert rankings.columns.tolist() == [
         "team_abbr",
         "division",
@@ -593,6 +669,7 @@ def test_composite_method_ranks_on_the_snapshot_for_the_next_week(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Through week 2 means going into week 3, so week 3's snapshot decides the order."""
+    # Arrange
     snapshots = _write_snapshots(
         tmp_path / "snapshots.csv",
         {
@@ -607,8 +684,10 @@ def test_composite_method_ranks_on_the_snapshot_for_the_next_week(
         )
     )
 
+    # Act
     rankings = _rank_fixture(tmp_path, monkeypatch, options)
 
+    # Assert
     assert rankings["team_abbr"].tolist() == ["CCC", "BBB", "AAA", "DDD"]
     assert rankings["snapshot_week"].unique().tolist() == [3]
     # Records still come from the results through week 2.
@@ -617,50 +696,61 @@ def test_composite_method_ranks_on_the_snapshot_for_the_next_week(
 
 def test_later_snapshot_weeks_never_reach_the_ranking(tmp_path: Path) -> None:
     """Rewriting every week after the one being ranked changes nothing."""
+    # Arrange
     base = {3: {"AAA": -0.5, "BBB": 0.5}}
     later = {**base, 4: {"AAA": 50.0, "BBB": -50.0}, 5: {"AAA": 9.0, "BBB": 9.0}}
 
     without_later = power_rankings.load_strength_snapshot(
         _write_snapshots(tmp_path / "base.csv", base), season=2024, through_week=2
     )
+
+    # Act
     with_later = power_rankings.load_strength_snapshot(
         _write_snapshots(tmp_path / "later.csv", later), season=2024, through_week=2
     )
 
+    # Assert
     pd.testing.assert_frame_equal(without_later, with_later)
     assert with_later["week"].unique().tolist() == [3]
 
 
 def test_a_missing_snapshot_week_is_a_clear_error(tmp_path: Path) -> None:
     """Ranking a week the ETL never solved fails loudly and names the alternatives."""
+    # Arrange
     path = _write_snapshots(tmp_path / "snapshots.csv", {3: {"AAA": 0.5, "BBB": -0.5}})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="bradley_terry"):
         power_rankings.load_strength_snapshot(path, season=2024, through_week=9)
 
 
 def test_a_duplicated_team_in_a_snapshot_week_is_rejected(tmp_path: Path) -> None:
     """Two rows for one team in one week would make the rank ambiguous."""
+    # Arrange
     path = tmp_path / "snapshots.csv"
     rows = pl.read_csv(_write_snapshots(path, {3: {"AAA": 0.5, "BBB": -0.5}}))
     pl.concat([rows, rows.head(1)]).write_csv(path)
 
+    # Act & Assert
     with pytest.raises(ValueError, match="duplicate"):
         power_rankings.load_strength_snapshot(path, season=2024, through_week=2)
 
 
 def test_ranking_options_default_to_the_composite() -> None:
     """With no method named, rankings read the adjusted composite."""
+    # Act
     options = power_rankings.resolve_ranking_options(
         power_rankings.RankingRequest(method=None, legacy_franchise_fit=False)
     )
 
+    # Assert
     assert options.method == "composite"
     assert options.strength_snapshots == power_rankings.DEFAULT_STRENGTH_SNAPSHOTS
 
 
 def test_legacy_franchise_fit_selects_the_old_bradley_terry_settings() -> None:
     """The legacy flag implies Bradley-Terry with every historical setting restored."""
+    # Act
     options = power_rankings.resolve_ranking_options(
         power_rankings.RankingRequest(
             method=None,
@@ -673,6 +763,7 @@ def test_legacy_franchise_fit_selects_the_old_bradley_terry_settings() -> None:
         )
     )
 
+    # Assert
     assert options.method == "bradley_terry"
     assert options.window_seasons == 0
     assert options.prior_season_weight == pytest.approx(1.0)
@@ -683,6 +774,7 @@ def test_legacy_franchise_fit_selects_the_old_bradley_terry_settings() -> None:
 
 def test_legacy_franchise_fit_cannot_be_combined_with_the_composite() -> None:
     """Asking for both is contradictory, so it is refused rather than guessed."""
+    # Act & Assert
     with pytest.raises(ValueError, match="legacy"):
         power_rankings.resolve_ranking_options(
             power_rankings.RankingRequest(method="composite", legacy_franchise_fit=True)
@@ -691,6 +783,7 @@ def test_legacy_franchise_fit_cannot_be_combined_with_the_composite() -> None:
 
 def test_an_unknown_ranking_method_is_rejected() -> None:
     """Only the documented methods are accepted."""
+    # Act & Assert
     with pytest.raises(ValueError, match="method"):
         power_rankings.resolve_ranking_options(
             power_rankings.RankingRequest(method="elo", legacy_franchise_fit=False)
@@ -701,6 +794,7 @@ def test_predict_future_games_use_the_models_recorded_floor_sigma(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Projected-standings probabilities go through the sigma the model predicts with."""
+    # Arrange
     data_path = tmp_path / "ml.csv"
     pd.DataFrame(
         [
@@ -727,6 +821,7 @@ def test_predict_future_games_use_the_models_recorded_floor_sigma(
         lambda _model, _games: (np.array([5.0]), np.array([44.0])),
     )
 
+    # Act
     out = power_rankings._predict_future_games(
         model,
         power_rankings.RankingInputs(
@@ -734,4 +829,5 @@ def test_predict_future_games_use_the_models_recorded_floor_sigma(
         ),
     )
 
+    # Assert
     assert out["home_win_prob"].tolist() == [norm.cdf(0.5)]

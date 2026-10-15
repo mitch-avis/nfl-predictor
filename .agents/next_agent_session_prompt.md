@@ -64,21 +64,31 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
     `models/qb_elos_measure/`) reruns the ladder and finished runs resume from their checkpoints.
     To stop it: `kill 903662`, then `pgrep -af "nfl-predictor backtest"` and `kill` that PID
     (never `pkill -f`, which matches the watching shells).
-- **Step 3, the "no game lines" groups change**, is with an `implementer` subagent in its own
-  harness worktree, stacked on `c7eb30f` (an earlier commit of `fix/qb-adj-review-findings`), as
-  `0.61.0`, pytest at `-n 8`. The contract: an explicit group list (command line or the config
-  key) always wins; otherwise the configuration without game lines (`--wf-market-mode none`, or
-  the three market options off) leaves out `strength,elo,own_elo_wt,qb_adj`, and the shipped
-  `config/weekly_run.yaml` stops pinning the key. Production's default run does not change.
+- **Step 3, the "no game lines" groups change, is reviewed and approved** (`0.61.0`, branch
+  `feat/no-game-lines-groups` at `5c33978`, worktree `~/scratch/step3`, twelve commits on
+  `6bacd5e`). `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` =
+  `strength,elo,own_elo_wt,qb_adj`; one resolution in `cli/options.py` serves `backtest`, `train`
+  and the weekly run: an explicit list (command line or config key, `''`/`[]` included) wins,
+  otherwise a run without game lines (weekly `--wf-market-mode none`; `backtest`/`train` with
+  market features, anchor and transform all off) gets that list and every other run production's.
+  `config/weekly_run.yaml` no longer sets `disable_feature_groups`. Production is pinned
+  unchanged (groups, stage-1 options, stage hash `ef442e1e`, run fingerprint `d9189345...`); the
+  `constants.py` edit moves every walk-forward checkpoint fingerprint, so this merges only after
+  the measurement finishes. The independent review approved with findings (its gate: exit `0`,
+  3,675 tests, 95.01%; adversarial tests uncommitted in
+  `~/scratch/step3_review/tests/test_step3_review_adversarial.py`, 13 pass and 2 fail, both the
+  user's questions below); the wording and test-layout fixes (`022e555..5c33978`) passed a
+  re-check reviewer and the gate on `5c33978` (exit `0`, 3,675 tests, 95.01%,
+  `~/scratch/gate_step3_5c33978.log`, and the re-checker's own run).
 
 ## Next, in order
 
 1. **Watch the measurement.** Check `driver.log` after each transition; on a failed run, read its
    `run.log` before resuming. Never start another walk-forward or ETL while it runs.
-2. **Step 3:** when the implementer reports, rebase its branch onto `6bacd5e` (the commits since
-   `c7eb30f` are docs only), run its gate (`VIRTUAL_ENV` set to its venv, `-n 8`), then a
-   `reviewer` in a fresh context (adversarial tests, uncommitted), fixes through an implementer
-   (test first) and a re-check. Nothing merged.
+2. **Step 3** waits for the user's answers below and the merge after the Monday game. The
+   older roadmap labels the re-check found outside the branch (`README.md:897` "task 55.8",
+   `README.md:1067` and `config/weekly_run.yaml:144` "decision 12") go with the step-6 docs
+   close-out.
 3. **After the eight runs:** a `reviewer` rescores from the fold checkpoints and writes
    `models/qb_elos_measure/REVIEW.md` (rule 3) before any number reaches a doc. Then the
    check-in (rule 7) with the three comparisons of `HYPOTHESIS.md`, applied as written (rule 12):
@@ -150,6 +160,17 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   approval named `strength,elo,own_elo_wt`. Recommended: keep it, since `qb_adj` is off in
   production until measured and the `--wf-market-mode` help already advises this list; dropping
   it is a one-line change. If the measurement turns `qb_adj` on, the list follows.
+- Step 3, `train`: its anchor and transform were already off by default, so
+  `train --exclude-market` alone now counts as a run without game lines and leaves out `elo`
+  (before: production's list). The implementer added `--no-market-anchor` and
+  `--no-market-transform` to `train` (`BooleanOptionalAction`, still off by default) so the
+  three-flag command matches `backtest`'s. Both reviewers recommend accepting it; nothing in
+  `src/`, `scripts/` or the web API calls `train` with these flags.
+- Step 3, `backtest --exclude-market --no-market-anchor` without `--no-market-transform` keeps
+  production's list (the contract's "all three off", taken literally), although with no market
+  columns the transform changes nothing. The reviewer recommends dropping the transform from the
+  test (`cli/options.py:115`, one line plus tests; moderately-to-highly sure); the weekly run and
+  `train` are unaffected either way. Your call, since the contract named all three.
 - The inherited `_fill_side_qb` behaviour (above): a fix changes upcoming-week feature values.
 - After the measurement: replace the floor-sigma reference runs (a default change, per
   `HYPOTHESIS.md`).
@@ -191,7 +212,9 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   `pgrep -af "nfl-predictor (backtest|weekly|data)"` first.
 - A backtest that judges probabilities runs from 2007 week 1 or passes
   `--floor-sigma-reference-runs` with the GPU reference, and passes `--wf-start-week 1`.
-- Worktrees: `~/scratch/qb_measure` (detached at `c637fc0`, the measurement's code and `data/`),
+- Worktrees: `~/scratch/step3` (`feat/no-game-lines-groups`), `~/scratch/step3_review`
+  (detached at `5c33978`, the step-3 review's adversarial file),
+  `~/scratch/qb_measure` (detached at `c637fc0`, the measurement's code and `data/`),
   `~/scratch/qb_adj_docs` (`fix/qb-adj-review-findings`), `~/scratch/qb_adj_review` (detached at
   `6bacd5e`, the review's adversarial file), `~/scratch/step6` (`feat/step6-sos-port`, merged)
   and `~/scratch/step6_runs` (detached at `d6064eb`, the step-6 runs' code); the

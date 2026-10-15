@@ -2,21 +2,37 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import polars as pl
 import pytest
 
 from nfl_predictor import constants, data_collection
-from nfl_predictor.ml import walk_forward
-from nfl_predictor.utils import polars_utils
+from nfl_predictor.ml import feature_spec
+from nfl_predictor.utils import game_utils, polars_utils
 from nfl_predictor.utils.polars import nflverse_sources, player_identity, qb_starters
 from nfl_predictor.utils.polars.finalize import build_final_column_order
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from nfl_predictor.utils.polars import ratings_build
+
+
+def _same_frame(df: pl.DataFrame) -> pl.DataFrame:
+    """Return ``df`` unchanged."""
+    return df
+
+
+def _same_frame_of_two(df: pl.DataFrame, _other: object) -> pl.DataFrame:
+    """Return ``df`` unchanged, ignoring the second argument."""
+    return df
+
+
+def _same_games(games: pl.DataFrame, *_args: object, **_kwargs: object) -> pl.DataFrame:
+    """Return ``games`` unchanged, ignoring every other argument."""
+    return games
 
 
 def _dropbacks(
@@ -111,7 +127,7 @@ def test_attach_qb_features_keys_a_completed_game_on_its_play_by_play_starter(
         _first_quarter_game(2001, 1, "BUF", ["JA"] * 12)
         + _first_quarter_game(2001, 2, "BUF", ["BK", "JA"])
     )
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(pl.DataFrame()))
     monkeypatch.setattr(
         nflverse_sources, "load_season_qb_identity", _season_identity({"JA": "QB", "BK": "QB"})
     )
@@ -216,11 +232,11 @@ def test_quarterback_history_reads_the_shared_identity_sources_without_loading_t
     # Arrange
     monkeypatch.setattr(constants, "NFLREADPY_MIN_SEASON", 2001)
     in_memory = pl.DataFrame(_dropbacks(2001, 1, "NE", "TB", 5))
-    monkeypatch.setattr(
-        nflverse_sources,
-        "load_season_qb_identity",
-        lambda *_a, **_k: pytest.fail("the identity was loaded again"),
-    )
+
+    def load_again(*_a: object, **_k: object) -> NoReturn:
+        pytest.fail("the identity was loaded again")
+
+    monkeypatch.setattr(nflverse_sources, "load_season_qb_identity", load_again)
 
     # Act
     history = data_collection._quarterback_history(
@@ -245,12 +261,12 @@ def test_finish_games_hands_the_quarterback_history_the_shared_identity_sources(
         handed.append(kwargs.get("identity_sources"))
 
     monkeypatch.setattr(data_collection, "_quarterback_history", history)
-    monkeypatch.setattr(data_collection, "_attach_qb_features", lambda games, *_a, **_k: games)
-    monkeypatch.setattr(data_collection, "_attach_own_elo", lambda games, *_a, **_k: games)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    monkeypatch.setattr(data_collection, "_attach_qb_features", _same_games)
+    monkeypatch.setattr(data_collection, "_attach_own_elo", _same_games)
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _same_frame_of_two)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", _same_frame)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", _same_frame)
+    monkeypatch.setattr(polars_utils, "select_final_columns", _same_frame)
     sources = data_collection._EtlSources(
         current_season=2025,
         current_week=1,
@@ -281,7 +297,7 @@ def test_attach_qb_features_joins_both_sides(
     monkeypatch.setattr(
         polars_utils,
         "load_pbp",
-        lambda *_args, **_kwargs: pl.DataFrame(_dropbacks(2000, 5, "NE", "TB", 30)),
+        returning(pl.DataFrame(_dropbacks(2000, 5, "NE", "TB", 30))),
     )
     _no_identity(monkeypatch)
     history = data_collection._quarterback_history(in_memory, max_season=2001, current_season=2026)
@@ -314,7 +330,7 @@ def test_attach_qb_features_reads_the_nfeloqb_identity_file_by_default(
     """Without an explicit path, the identity map comes from ``DATA_PATH/meta_data.csv``."""
     # Arrange
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(pl.DataFrame()))
     _no_identity(monkeypatch)
     _identity_file(tmp_path)
     in_memory = pl.DataFrame(
@@ -386,13 +402,13 @@ def test_finish_games_hands_the_ratings_the_runs_play_by_play_starters(
     history = qb_starters.QuarterbackHistory(
         pl.DataFrame(), pl.DataFrame(), qb_starters.season_positions({}), starters
     )
-    monkeypatch.setattr(data_collection, "_quarterback_history", lambda *_a, **_k: history)
-    monkeypatch.setattr(data_collection, "_attach_qb_features", lambda games, *_a, **_k: games)
-    monkeypatch.setattr(data_collection, "_attach_own_elo", lambda games, *_a, **_k: games)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_qb_data", lambda df, _elo: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_future_game_lines", lambda df: df)
-    monkeypatch.setattr(data_collection.game_utils, "fill_missing_moneylines", lambda df: df)
-    monkeypatch.setattr(polars_utils, "select_final_columns", lambda df: df)
+    monkeypatch.setattr(data_collection, "_quarterback_history", returning(history))
+    monkeypatch.setattr(data_collection, "_attach_qb_features", _same_games)
+    monkeypatch.setattr(data_collection, "_attach_own_elo", _same_games)
+    monkeypatch.setattr(game_utils, "fill_future_qb_data", _same_frame_of_two)
+    monkeypatch.setattr(game_utils, "fill_future_game_lines", _same_frame)
+    monkeypatch.setattr(game_utils, "fill_missing_moneylines", _same_frame)
+    monkeypatch.setattr(polars_utils, "select_final_columns", _same_frame)
     ratings = _RecordingRatings()
     sources = data_collection._EtlSources(
         current_season=2025,
@@ -430,4 +446,4 @@ def test_defense_adjusted_quarterback_group_is_not_a_feature_group() -> None:
 
     # Act & Assert
     with pytest.raises(ValueError, match="Unknown feature group"):
-        walk_forward.resolve_feature_group_columns(order, ["qb_def_adj"])
+        feature_spec.resolve_feature_group_columns(order, ["qb_def_adj"])

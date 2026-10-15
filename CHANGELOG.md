@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.59.3] - 2026-10-15
+
+### Fixed
+
+- The power rankings read relative entries of `floor_sigma_reference_runs` and
+  `power_rankings_model_predictions`, from a config file or the command line, from the repository
+  root, as the floor sigma already read the reference runs, so a weekly run started outside the
+  repo root finds the predictions the blend ranking reads. The recorded settings name those runs by
+  absolute path, so a weekly run directory started before this release reruns its reports stage
+  once.
+- A leading `~` in a config file path is the home directory; a `~user` this machine doesn't know
+  stops the run naming the file and the key.
+- A comma-separated `disable_feature_groups` string in a config file is refused with the list to
+  write instead, since the comma form is the command line's.
+
 ## [0.59.2] - 2026-10-15
 
 ### Changed

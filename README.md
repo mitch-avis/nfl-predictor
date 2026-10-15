@@ -1335,8 +1335,7 @@ LightGBM). Keep the change groups in this order:
 - `Fixed`
 
 Keep each change to a single imperative line and skip routine formatting noise. The project is
-private, so versions are not tagged and no GitHub release is published;
-`.github/workflows/release.yml` only runs when a `0.x.y` or `v0.x.y` tag is pushed.
+private, so versions are not tagged and no GitHub release is published.
 
 ## Artifacts
 

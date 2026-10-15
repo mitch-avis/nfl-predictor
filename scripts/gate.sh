@@ -12,7 +12,8 @@
 #                            iteration, never the report)
 #
 # A project's own steps live in scripts/gate.hooks.sh, which this script sources when present, so
-# this file stays the same in every project. The hooks file may define:
+# this file stays the same in every project; --help prints the hooks file's header comment too.
+# The hooks file may define:
 #   gate_option <arg>   Handles an option this script doesn't know; returns non-zero for an
 #                       option the project doesn't know either.
 #   gate_sync_args      Prints extra `uv sync --check` arguments, one per line.
@@ -40,7 +41,11 @@ for arg in "$@"; do
 	case "$arg" in
 	--quick) RUN_TESTS=0 ;;
 	-h | --help)
+		# This header, then the hooks file's, each up to its first blank line.
 		sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+		if [[ -f "$HOOKS_FILE" ]]; then
+			sed -n '2,/^$/p' "$HOOKS_FILE" | sed 's/^# \{0,1\}//'
+		fi
 		exit 0
 		;;
 	*)

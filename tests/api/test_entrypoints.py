@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from nfl_predictor.api.settings import Settings
 
 
-def test_main_runs_uvicorn(monkeypatch, tmp_path: Path) -> None:
+def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The entrypoint passes host/port through and builds an app."""
     # Arrange
     calls: list[tuple[object, dict[str, object]]] = []
@@ -32,7 +32,9 @@ def test_main_runs_uvicorn(monkeypatch, tmp_path: Path) -> None:
     assert calls[0][1] == {"host": "192.0.2.10", "port": 1234}
 
 
-def test_main_reload_runs_uvicorn_with_app_factory_path(monkeypatch, tmp_path: Path) -> None:
+def test_main_reload_runs_uvicorn_with_app_factory_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """With ``--reload`` the entrypoint passes the app factory import path to uvicorn."""
     # Arrange
     calls: list[tuple[object, dict[str, object]]] = []
@@ -61,7 +63,9 @@ def test_cli_create_user_with_password_flag(settings: Settings) -> None:
     assert user_store.authenticate(db, "mitch", "password123") is not None
 
 
-def test_cli_create_user_with_password_env(settings: Settings, monkeypatch) -> None:
+def test_cli_create_user_with_password_env(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The CLI creates a user from the password environment variable."""
     # Arrange
     cli.main(["create-user", "mitch", "--role", "admin", "--password", "password123"], settings)
@@ -74,7 +78,7 @@ def test_cli_create_user_with_password_env(settings: Settings, monkeypatch) -> N
     assert code == 0
 
 
-def test_cli_set_password_from_prompt(settings: Settings, monkeypatch) -> None:
+def test_cli_set_password_from_prompt(settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
     """The CLI resets a password from the prompt when no env value is set."""
     # Arrange
     cli.main(["create-user", "mitch", "--role", "admin", "--password", "password123"], settings)
@@ -93,7 +97,9 @@ def test_cli_set_password_from_prompt(settings: Settings, monkeypatch) -> None:
     assert user_store.authenticate(db, "viewer", "promptpassword") is not None
 
 
-def test_cli_set_password_unknown_user_fails(settings: Settings, monkeypatch) -> None:
+def test_cli_set_password_unknown_user_fails(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Resetting the password of a user that does not exist exits with 1."""
     # Arrange
     cli.main(["create-user", "mitch", "--role", "admin", "--password", "password123"], settings)
@@ -106,7 +112,9 @@ def test_cli_set_password_unknown_user_fails(settings: Settings, monkeypatch) ->
     assert code == 1
 
 
-def test_cli_list_users_logs_usernames(settings: Settings, caplog) -> None:
+def test_cli_list_users_logs_usernames(
+    settings: Settings, caplog: pytest.LogCaptureFixture
+) -> None:
     """Listing users succeeds and logs the created usernames."""
     # Arrange
     caplog.set_level(logging.INFO)

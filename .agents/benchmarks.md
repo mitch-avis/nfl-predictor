@@ -627,9 +627,10 @@ The reference production adopts on 2026-10-14: `models/step6/ratings_anchored_se
 `ratings_anchored_seed7/` (checkpoints `d97fab54e7261f18e349`, `2f7442e89fd6ff3981f4`), the ported
 ratings in place of the strength snapshot with the own Elo off (`--disable-feature-groups
 strength,own_elo,own_elo_wt`, production's default until `0.60.0`, 449 features). They also supply
-the floor's sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`). Input `models/step6/inputs/candidate.csv`
-(`74b21113d167...`, the through-2025 cut of the step-6 build: the ported ratings, the own Elo and
-the play-by-play corrections), code `d6064eb`, and otherwise the 2026-10-09 reference's command
+the floor's sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`). Input
+`models/step6/inputs/candidate.csv` (`74b21113d167...`, the through-2025 cut of the step-6 build:
+the ported ratings, the own Elo and the play-by-play corrections), code `d6064eb`, and otherwise
+the 2026-10-09 reference's command
 (2007-2025 from week 1, 328 folds, 4943 games, market anchor and transform on, 200 trees,
 unweighted, every fold `cuda`). Rules: `HYPOTHESIS.md` there and `nogamelines_wt/HYPOTHESIS.md`;
 second key: `REVIEW.md` in each, by reviewers that did not produce the runs. Two seeds averaged

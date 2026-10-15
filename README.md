@@ -805,8 +805,8 @@ without the option leaves out what production leaves out. A run without game lin
 (`disable_feature_groups: []`, or `--disable-feature-groups ''`) leaves no group out, and a list
 given replaces the default rather than adding to it (`--disable-feature-groups pbp` keeps the
 strength, own-Elo and quarterback-adjustment columns). Every one of them turns groups into
-columns through one function (`feature_spec.resolve_feature_group_columns`), so the same groups remove the same columns
-everywhere, and each saved model's `metadata.json` names the groups it was trained without
+columns through one function (`feature_spec.resolve_feature_group_columns`), so the same groups
+remove the same columns everywhere, and each saved model's `metadata.json` names the groups it was trained without
 (`disabled_feature_groups`) and the columns they removed (`dropped_feature_group_columns`, the key
 the backtest records in its config). `train` and the weekly run check the group names before any
 data loads. A group that matches no column of the data drops nothing, and every run logs it as a

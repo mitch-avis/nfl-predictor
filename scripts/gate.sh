@@ -6,7 +6,7 @@
 #
 # Usage:
 #   scripts/gate.sh          Python gate: lock, sync, ruff format, ruff, ty, pyright, pytest,
-#                            markdownlint, CLI help smoke checks.
+#                            src coverage, markdownlint, CLI help smoke checks.
 #   scripts/gate.sh --web    Also run the frontend gate in web/ (pnpm install --frozen-lockfile,
 #                            lint, typecheck, vitest, build); needs nvm, the Node version CI
 #                            uses, and pnpm on PATH.
@@ -117,12 +117,15 @@ if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then
 	mapfile -t LIGHTGBM_CUDA_ARGS < <(.venv/bin/nfl-lightgbm-cuda-install uv-args 2>/dev/null)
 fi
 run_step "uv sync --check --active" uv sync --check --active "${LIGHTGBM_CUDA_ARGS[@]}"
-run_step "ruff format --check" .venv/bin/ruff format --check .
-run_step "ruff check" .venv/bin/ruff check .
-run_step "ty check" .venv/bin/ty check .
-run_step "pyright" .venv/bin/pyright .
+run_step "ruff format --check" .venv/bin/ruff format --check
+run_step "ruff check" .venv/bin/ruff check
+run_step "ty check" .venv/bin/ty check
+run_step "pyright" .venv/bin/pyright
 if [ "$RUN_TESTS" -eq 1 ]; then
 	run_step "pytest" .venv/bin/python -m pytest -q -p no:cacheprovider
+	# The total in pyproject.toml counts tests/ as well, which would let src/ slip under the bar.
+	run_step "src coverage" .venv/bin/coverage report --include="src/*" --fail-under=90 \
+		--format=total
 fi
 run_step "markdownlint" markdownlint_step
 run_step "CLI help smoke checks" cli_smoke_step

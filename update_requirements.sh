@@ -10,13 +10,25 @@ cd "$REPO_ROOT"
 
 # uv is treated as an external tool on PATH rather than as a project dependency inside .venv.
 
+# A project's own steps live in update_requirements.hooks.sh beside this script, so this file
+# stays the same in every project. The hooks file may define:
+#   hook_smoke_imports  Prints Python statements the synced .venv must run, such as
+#                       "import numpy, pandas"; printing nothing (the default) skips the check.
+#   hook_sync_args      Prints extra `uv sync` arguments, one per line.
+#   hook_after_sync     Runs after the sync and before the import check.
+HOOKS_FILE_NAME="update_requirements.hooks.sh"
+hook_smoke_imports() { :; }
+hook_sync_args() { :; }
+hook_after_sync() { :; }
+
 usage() {
 	cat <<'EOF'
 Usage: ./update_requirements.sh [--python <version-request>]
 
-Updates the project's uv lockfile and syncs the active .venv.
-With a local CUDA toolkit, it then tries to rebuild LightGBM with CUDA if the synced build lacks
-it; a failed CUDA build only warns and keeps the CPU build.
+Upgrades every dependency in the project's uv lockfile, syncs .venv from it (creating .venv
+after a prompt when it is missing), refreshes the pre-commit hook versions when the project
+uses pre-commit, and runs the steps in update_requirements.hooks.sh when the project has one.
+The venv does not need to be activated.
 
 If compatibility requirements files are present, they are refreshed from uv.lock:
 - requirements.txt -> runtime dependencies only
@@ -40,8 +52,8 @@ die() {
 	exit 1
 }
 
-canonical_path() {
-	cd "$1" >/dev/null 2>&1 && pwd -P
+report_failed_command() {
+	echo "Error: '$2' failed (update_requirements.sh line $1)." >&2
 }
 
 venv_python() {
@@ -95,19 +107,13 @@ ensure_pyproject_exists() {
 	[[ -f "$REPO_ROOT/pyproject.toml" ]] || die "A pyproject.toml file is required at the repo root."
 }
 
-create_venv() {
-	local -a command=(uv venv .venv)
-
-	if [[ -n "$PYTHON_REQUEST" ]]; then
-		command+=(--python "$PYTHON_REQUEST")
+load_hooks() {
+	local hooks_file="$REPO_ROOT/$HOOKS_FILE_NAME"
+	if [[ -f "$hooks_file" ]]; then
+		# shellcheck source=/dev/null
+		source "$hooks_file"
 	fi
-
-	"${command[@]}"
 }
-
-# The installed project and its dependencies are hardlinks into uv's cache, so a damaged cache
-# entry survives a plain reinstall; this import catches it before the tools fail one by one.
-PACKAGE_SMOKE_IMPORTS="import numpy, pandas, polars, scipy, sklearn, xgboost"
 
 venv_python_request() {
 	if [[ -n "$PYTHON_REQUEST" ]]; then
@@ -157,69 +163,67 @@ ensure_venv_python_is_healthy() {
 	repair_venv_python
 }
 
+# The installed project and its dependencies are hardlinks into uv's cache, so a damaged cache
+# entry survives a plain reinstall; this import catches it before the tools fail one by one.
 ensure_venv_packages_import() {
-	if "$(venv_python)" -c "$PACKAGE_SMOKE_IMPORTS" >/dev/null 2>&1; then
+	local imports
+
+	imports="$(hook_smoke_imports)"
+	if [[ -z "$imports" ]] || "$(venv_python)" -c "$imports" >/dev/null 2>&1; then
 		return
 	fi
 
-	echo "Error: the synced .venv cannot import its core packages (${PACKAGE_SMOKE_IMPORTS#import })." >&2
+	echo "Error: the synced .venv cannot run: $imports" >&2
 	echo "Installed files are hardlinks into uv's cache, so a damaged cache entry survives a" >&2
 	echo "plain reinstall. Repair with:" >&2
-	echo "  uv cache clean && uv sync --active --reinstall" >&2
+	echo "  uv cache clean && uv sync --reinstall" >&2
 	exit 1
 }
 
-# The CUDA build of LightGBM is best effort: a failed build leaves the CPU build in place, so the
-# rest of the refresh (the import check, the requirements export) still runs.
-install_lightgbm_cuda_build() {
-	if .venv/bin/nfl-lightgbm-cuda-install install; then
-		return
-	fi
-
-	echo "Warning: LightGBM could not be made a CUDA build; the CPU build stays installed." >&2
-	echo "Check it later with: .venv/bin/nfl-lightgbm-cuda-install status" >&2
-}
-
 ensure_venv_exists() {
-	local create_command="uv venv .venv"
-
-	if [[ -n "$PYTHON_REQUEST" ]]; then
-		create_command+=" --python $PYTHON_REQUEST"
-	fi
+	local -a command=(uv venv .venv)
 
 	if [[ -d "$VENV_PATH" ]]; then
 		return
 	fi
 
+	if [[ -n "$PYTHON_REQUEST" ]]; then
+		command+=(--python "$PYTHON_REQUEST")
+	fi
+
 	info "No .venv directory was found."
-	if ! confirm "Create one now with '$create_command'?"; then
+	if ! confirm "Create one now with '${command[*]}'?"; then
 		die "A project virtual environment is required to continue."
 	fi
 
-	create_venv
-	ensure_venv_python_is_healthy
-	info "Created .venv. Activate it with: source .venv/bin/activate"
-	info "Then rerun ./update_requirements.sh"
-	exit 0
+	"${command[@]}"
 }
 
-ensure_venv_is_active() {
-	local active_venv=""
+# `uv self update` only works for uv's standalone installer; other installs keep their version.
+update_uv() {
+	local before after
 
-	if [[ -n "${VIRTUAL_ENV:-}" ]] && [[ -d "${VIRTUAL_ENV}" ]]; then
-		active_venv="$(canonical_path "$VIRTUAL_ENV")"
-	fi
-
-	if [[ "$active_venv" == "$VENV_PATH" ]]; then
+	before="$(uv --version)"
+	if ! uv self update >/dev/null 2>&1; then
+		info "'uv self update' failed or is unavailable for this install; keeping ${before}"
 		return
 	fi
 
-	info "The project virtual environment exists but is not active."
-	echo "Activate it in your current shell with:" >&2
-	echo "  source .venv/bin/activate" >&2
-	echo "Then rerun this script:" >&2
-	echo "  ./update_requirements.sh" >&2
-	exit 1
+	after="$(uv --version)"
+	if [[ "$before" == "$after" ]]; then
+		info "uv is up to date (${after})"
+	else
+		info "Updated ${before} -> ${after}"
+	fi
+}
+
+refresh_pre_commit_hooks() {
+	if [[ ! -f .pre-commit-config.yaml || ! -x .venv/bin/pre-commit ]]; then
+		return
+	fi
+
+	info "Updating the pre-commit hook versions in .pre-commit-config.yaml"
+	.venv/bin/pre-commit autoupdate
 }
 
 export_runtime_requirements() {
@@ -253,8 +257,8 @@ refresh_compatibility_requirements() {
 		export_runtime_requirements
 	fi
 
+	# nullglob drops a pattern that matches nothing.
 	for file in requirements-*.in requirements-*.txt; do
-		[[ -e "$file" ]] || continue
 		group_name="${file#requirements-}"
 		group_name="${group_name%.in}"
 		group_name="${group_name%.txt}"
@@ -269,38 +273,31 @@ refresh_compatibility_requirements() {
 }
 
 main() {
+	local -a sync_args=()
+
+	trap 'report_failed_command "$LINENO" "$BASH_COMMAND"' ERR
 	parse_args "$@"
 	ensure_uv
 	ensure_pyproject_exists
+	load_hooks
 	ensure_venv_exists
-	ensure_venv_is_active
 	ensure_venv_python_is_healthy
-
-	# If supported, keep uv itself up to date (no-op on older uv builds).
-	uv self update >/dev/null 2>&1 || true
+	update_uv
 
 	info "Locking project dependencies (upgrade all)"
 	uv lock --upgrade
 
-	# With a CUDA toolkit, sync with the LightGBM CUDA build flags so an unchanged LightGBM
-	# keeps its CUDA build and a new version is built with CUDA (see lightgbm_cuda.py).
-	local -a lightgbm_cuda_args=()
-	if [[ -x .venv/bin/nfl-lightgbm-cuda-install ]]; then
-		mapfile -t lightgbm_cuda_args < <(.venv/bin/nfl-lightgbm-cuda-install uv-args 2>/dev/null)
-	fi
+	mapfile -t sync_args < <(hook_sync_args)
+	info "Syncing .venv from uv.lock"
+	uv sync "${sync_args[@]}"
+	hook_after_sync
 
-	info "Syncing the active virtual environment from uv.lock"
-	uv sync --active "${lightgbm_cuda_args[@]}"
-
-	info "Making LightGBM a CUDA build if this machine can build one (no-op when it already is)"
-	install_lightgbm_cuda_build
-
-	info "Checking that the core packages import"
 	ensure_venv_packages_import
 
+	refresh_pre_commit_hooks
 	refresh_compatibility_requirements
 
-	info "Done."
+	info "Done. Run the project's gate before committing the refreshed lockfile."
 }
 
 # Sourcing the script (as the tests do) defines its functions without running it.

@@ -74,15 +74,18 @@ source .venv/bin/activate
 uv sync
 ```
 
-To refresh the lockfile and sync the active virtual environment:
+To upgrade every locked dependency and sync `.venv` from the new lockfile:
 
 ```bash
 ./update_requirements.sh
 ```
 
-The helper expects `uv` on your `PATH` and an activated project virtual environment. If `.venv` is
-missing, it offers to create one with `uv venv .venv` and then exits so you can activate the
-environment before re-running it.
+The helper expects `uv` on your `PATH`; the virtual environment does not need to be activated. If
+`.venv` is missing, it offers to create one with `uv venv .venv` and carries on. It also reports
+whether `uv self update` changed uv's version and refreshes the hook versions in
+`.pre-commit-config.yaml` with `pre-commit autoupdate`. The script is the same in every project;
+this project's own steps (the LightGBM build below and an import check of the core packages) live
+in `update_requirements.hooks.sh`, which it sources.
 
 The lockfile installs the CPU-only LightGBM wheel. On a Linux machine with a CUDA toolkit, the
 helper instead keeps a CUDA build of the same LightGBM version: it syncs with the flags that
@@ -1156,6 +1159,12 @@ Run it with:
 nfl-predictor weekly --config path/to/weekly_run.json
 ```
 
+The file is JSON (`.json`) or YAML (`.yaml`, `.yml`) holding a mapping; an empty YAML file sets
+nothing. A missing, unparsable or non-mapping file, or another extension, stops the run with an
+error naming the file. A relative path in it (`predict_path`, `data_path`, `run_dir` and the
+other single paths) is taken from the repository root, whatever the working directory; the
+`--config` path itself is read from the working directory.
+
 Every XGBoost command (`backtest`, `weekly`, `train`) defaults to `--xgb-device auto`,
 which trains on the GPU when the XGBoost build has CUDA and a usable GPU is present, and on the
 CPU otherwise. Pass `--xgb-device cpu` to force the CPU; the accepted values are `auto`, `cpu`,
@@ -1272,11 +1281,12 @@ It runs the steps below and reports every one before exiting non-zero:
 ```bash
 uv lock --check
 uv sync --check --active
-ruff format --check .
-ruff check .
-ty check .
-pyright .
+ruff format --check
+ruff check
+ty check                      # src/ and tests/, from [tool.ty.src]
+pyright                       # src/ and tests/, from [tool.pyright]
 python -m pytest
+coverage report --include="src/*" --fail-under=90   # src/ alone; the total counts tests/
 markdownlint .
 nfl-predictor --help          # then every command's --help, listed by the front door
 ```

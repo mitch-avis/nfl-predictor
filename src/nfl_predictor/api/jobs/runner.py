@@ -278,9 +278,11 @@ class JobRunner:
         with self._lock:
             self._processes[job_id] = process
         try:
-            if process.stdout is not None:
-                self._drain(job_id, process.stdout)
-            exit_code = process.wait()
+            # Leaving the block closes the output pipe as well as waiting for the process.
+            with process:
+                if process.stdout is not None:
+                    self._drain(job_id, process.stdout)
+                exit_code = process.wait()
         finally:
             with self._lock:
                 self._processes.pop(job_id, None)

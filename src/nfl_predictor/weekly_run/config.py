@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import yaml
 
@@ -50,6 +50,9 @@ DEFAULT_POWER_RANKINGS_BLEND_WEIGHT = 0.5
 # Config keys that list feature groups; the command line takes them comma-separated.
 _FEATURE_GROUP_LIST_KEYS = {"disable_feature_groups"}
 
+
+# The config file extensions the weekly run reads: JSON, and YAML under either extension.
+_CONFIG_SUFFIXES = frozenset({".json", ".yaml", ".yml"})
 
 # The configuration a weekly run reads when no --config is given.
 DEFAULT_CONFIG_PATH = Path(constants.ROOT_DIR) / "config" / "weekly_run.yaml"
@@ -106,38 +109,82 @@ def _rename_config_keys(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _load_config(path: Path) -> dict[str, Any]:
-    """Load a JSON or YAML config file into a dict."""
+    """Load a JSON or YAML config file into a dict; an empty YAML file sets nothing.
+
+    Raises:
+        ValueError: If the file is missing or not a file, has an extension other than
+            ``.json``, ``.yaml`` or ``.yml``, is not UTF-8, does not parse, or holds something
+            other than a mapping. Every message names the file, as the config's other errors
+            are ``ValueError`` too.
+
+    """
+    suffix = path.suffix.lower()
+    if suffix not in _CONFIG_SUFFIXES:
+        msg = (
+            f"Config file {path} has an unsupported extension {path.suffix!r}: use JSON (.json) "
+            "or YAML (.yaml, .yml)."
+        )
+        raise ValueError(msg)
     if not path.exists():
         msg = f"Missing config file: {path}"
-        raise FileNotFoundError(msg)
-
-    suffix = path.suffix.lower()
-    if suffix == ".json":
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    elif suffix in {".yaml", ".yml"}:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    else:
-        msg = f"Unsupported config extension: {path.suffix}"
+        raise ValueError(msg)
+    if not path.is_file():
+        msg = f"Config path {path} is not a file."
         raise ValueError(msg)
 
-    if not isinstance(payload, dict):
-        msg = "Config file must parse to a JSON/YAML object."
-        raise TypeError(msg)
-    return payload
+    try:
+        text = path.read_text(encoding="utf-8")
+        payload = json.loads(text) if suffix == ".json" else yaml.safe_load(text)
+    except (UnicodeDecodeError, json.JSONDecodeError, yaml.YAMLError) as error:
+        msg = f"Config file {path} does not parse: {error}"
+        raise ValueError(msg) from error
+
+    if payload is None and suffix != ".json":
+        return {}
+    if isinstance(payload, dict):
+        return cast("dict[str, Any]", payload)
+    msg = f"Config file {path} must hold a mapping of settings, not {type(payload).__name__}."
+    raise ValueError(msg)
+
+
+def _from_root(path: Path, key: str) -> Path:
+    """Return a config file's ``path`` for ``key``, a relative one taken from the repository root.
+
+    ``config`` is the file's own path, as given on the command line, and stays as it is.
+    """
+    if key == "config" or path.is_absolute():
+        return path
+    return Path(constants.ROOT_DIR) / path
 
 
 def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
-    """Normalize config defaults for argparse."""
+    """Normalize config defaults for argparse.
+
+    A relative single path (``data_path``, ``run_dir`` and the like) is taken from the
+    repository root, not the working directory. Path lists stay as written
+    (``ml/floor_sigma.py`` takes the reference runs from the root when it reads them).
+    """
     normalized = dict(config)
+    source = f"Config file {config['config']}: " if config.get("config") is not None else ""
     for key in _PATH_KEYS:
-        if key in normalized and normalized[key] is not None:
-            normalized[key] = Path(normalized[key])
+        value = normalized.get(key)
+        if value is None:
+            continue
+        if isinstance(value, (str, Path)):
+            normalized[key] = _from_root(Path(value), key)
+            continue
+        msg = f"{source}config key {key} must be a path, not {type(value).__name__}."
+        raise ValueError(msg)
     for key in _PATH_LIST_KEYS:
-        if key in normalized and normalized[key] is not None:
-            if isinstance(normalized[key], str):
-                msg = f"Config key {key} must be a list of paths."
-                raise ValueError(msg)
-            normalized[key] = [Path(value) for value in normalized[key]]
+        values = normalized.get(key)
+        if values is None:
+            continue
+        if not isinstance(values, list) or not all(
+            isinstance(item, (str, Path)) for item in cast("list[object]", values)
+        ):
+            msg = f"{source}config key {key} must be a list of paths."
+            raise ValueError(msg)
+        normalized[key] = [Path(item) for item in cast("list[str | Path]", values)]
     for key in _FEATURE_GROUP_LIST_KEYS:
         if key not in normalized:
             continue
@@ -152,7 +199,8 @@ def _normalize_config_defaults(config: dict[str, Any]) -> dict[str, Any]:
                 else f"Config key {key} must be a list of feature group names."
             )
             raise ValueError(msg)
-        normalized[key] = tuple(str(name).strip() for name in groups)
+        names = cast("list[object]", groups)
+        normalized[key] = tuple(str(name).strip() for name in names)
     return normalized
 
 
@@ -199,7 +247,7 @@ def _validate_config_choices(config: dict[str, Any], parser: WeeklyParser) -> No
 
 def _validate_config_keys(config: dict[str, Any], allowed: set[str]) -> None:
     """Raise if config includes unsupported keys."""
-    unknown = sorted(set(config) - allowed)
+    unknown = sorted(set(config) - allowed, key=str)
     if unknown:
         msg = f"Unknown config keys: {unknown}"
         raise ValueError(msg)
@@ -888,7 +936,7 @@ def _default_prediction_sources(
     explicit = tuple(Path(path) for path in args.power_rankings_model_predictions)
     if explicit or run_dir is None or _requested_method(args) not in {"model", "blend"}:
         return explicit, ()
-    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or [])
+    reference = tuple(Path(path) for path in args.floor_sigma_reference_runs or ())
     return (stage1.predictions_source(run_dir),), reference
 
 

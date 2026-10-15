@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.59.1] - 2026-10-15
+
+### Changed
+
+- pytest runs in strict mode (`strict = true` in the native `[tool.pytest]` table) with every
+  warning an error, and coverage measures `src/` and `tests/` together; `scripts/gate.sh` adds a
+  `src coverage` step that holds `src/` alone to the same 90% bar. `weekly_run/config.py` is no
+  longer left out of coverage.
+- `scripts/gate.sh` runs ruff, ty and pyright on the roots configured in `pyproject.toml`
+  (`src/` and `tests/`) instead of the whole checkout.
+- `pyproject.toml` declares the license the PEP 639 way, carries the `Private :: Do Not Upload`
+  classifier and bounds `uv_build` to `0.13`; the dev group drops `colorama`, `pytest-html` and
+  `pytest-metadata` and adds `scipy-stubs`.
+- `update_requirements.sh` no longer needs an activated venv, creates `.venv` and carries on when
+  it is missing, reports the uv version change, refreshes the pre-commit hook versions, and names
+  the command when a step fails. This repo's own steps (the LightGBM CUDA build and the core
+  import check) move to `update_requirements.hooks.sh`, so the script and its tests are the same
+  files as in the python-template Copier template.
+- `ml/feature_spec.py` selects pandas string columns by naming the `str` dtype, so every
+  walk-forward checkpoint fingerprint and the weekly stage hashes change and the first weekly run
+  after the upgrade retrains stage 1. The selected columns are the same.
+
+### Fixed
+
+- A bad weekly config file (missing, not a file, not UTF-8, unparsable, not a mapping, or with
+  an extension other than `.json`, `.yaml` or `.yml`) stops the run with a `ValueError` naming
+  the file, which a run report's production-settings section reports instead of crashing; an empty
+  YAML file sets nothing. A value that is not a path or a list of paths is refused naming the
+  file and the key, and unknown keys that are not strings are named instead of crashing the
+  message.
+- Relative single paths in a weekly config file resolve against the repository root, not the
+  working directory, as `config/weekly_run.yaml` documents. The shipped config sets none, so a
+  default weekly run is unchanged.
+- A finished web job closes its output pipe instead of leaving it to the garbage collector.
+
 ## [0.59.0] - 2026-10-14
 
 ### Changed

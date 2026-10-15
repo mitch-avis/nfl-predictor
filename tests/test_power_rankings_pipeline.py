@@ -15,13 +15,14 @@ import pytest
 from scipy.stats import norm
 
 from nfl_predictor import constants
+from nfl_predictor.ml import ml_model_core
 from nfl_predictor.reporting import power_rankings
 
 if TYPE_CHECKING:
     from nfl_predictor.ml.ml_model_core import MarginTotalModel
 
 
-def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
+def test_load_current_records_filters_to_reg_only(tmp_path: Path) -> None:
     """Records should exclude postseason games when computing current standings."""
     # Arrange
     schedule_path = tmp_path / "schedule.csv"
@@ -62,7 +63,7 @@ def test_load_current_records_filters_to_reg_only(tmp_path) -> None:
     assert records.loc["BBB", "losses"] == 0
 
 
-def test_load_current_records_can_include_postseason(tmp_path) -> None:
+def test_load_current_records_can_include_postseason(tmp_path: Path) -> None:
     """Records should include postseason games when requested."""
     # Arrange
     schedule_path = tmp_path / "schedule.csv"
@@ -103,7 +104,7 @@ def test_load_current_records_can_include_postseason(tmp_path) -> None:
     assert records.loc["BBB", "losses"] == 1
 
 
-def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
+def test_predict_future_games_requires_feature_columns(tmp_path: Path) -> None:
     """Missing feature columns should raise a clear validation error."""
     # Arrange
     data_path = tmp_path / "ml.csv"
@@ -135,7 +136,7 @@ def test_predict_future_games_requires_feature_columns(tmp_path) -> None:
 
 
 def test_predict_future_games_reads_a_feature_typed_after_a_hundred_rows(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A feature empty for the first 150 rows still reaches the model as a number."""
     # Arrange
@@ -167,7 +168,7 @@ def test_predict_future_games_reads_a_feature_typed_after_a_hundred_rows(
         seen.append(games)
         return np.zeros(len(games)), np.zeros(len(games))
 
-    monkeypatch.setattr(power_rankings.ml_model_core, "predict_margin_total_from_model", capture)
+    monkeypatch.setattr(ml_model_core, "predict_margin_total_from_model", capture)
 
     # Act
     power_rankings._predict_future_games(
@@ -198,7 +199,7 @@ def _schedule_with_a_late_decimal_line(path: Path) -> None:
     pd.DataFrame(rows).to_csv(path, index=False)
 
 
-def test_load_current_records_reads_a_schedule_typed_after_a_hundred_rows(tmp_path) -> None:
+def test_load_current_records_reads_a_schedule_typed_after_a_hundred_rows(tmp_path: Path) -> None:
     """A column whose type changes after the first 100 rows does not break the records."""
     # Arrange
     schedule_path = tmp_path / "schedule.csv"
@@ -211,7 +212,9 @@ def test_load_current_records_reads_a_schedule_typed_after_a_hundred_rows(tmp_pa
     assert records.set_index("team_abbr").loc["BBB", "wins"] == 151
 
 
-def test_build_games_for_ratings_reads_a_schedule_typed_after_a_hundred_rows(tmp_path) -> None:
+def test_build_games_for_ratings_reads_a_schedule_typed_after_a_hundred_rows(
+    tmp_path: Path,
+) -> None:
     """A column whose type changes after the first 100 rows does not break the ratings fit."""
     # Arrange
     schedule_path = tmp_path / "schedule.csv"
@@ -231,7 +234,9 @@ def test_build_games_for_ratings_reads_a_schedule_typed_after_a_hundred_rows(tmp
     assert len(games) == 151
 
 
-def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
+def test_build_games_for_ratings_logs_diagnostics(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     """Ratings diagnostics should log once per invocation."""
     # Arrange
     schedule_path = tmp_path / "schedule.csv"
@@ -282,7 +287,7 @@ def test_build_games_for_ratings_logs_diagnostics(tmp_path, caplog) -> None:
     assert len(diag) == 1
 
 
-def test_build_games_for_ratings_includes_postseason(tmp_path) -> None:
+def test_build_games_for_ratings_includes_postseason(tmp_path: Path) -> None:
     """Ratings fit should include postseason games when requested."""
     # Arrange
     schedule_path = tmp_path / "schedule.csv"
@@ -791,7 +796,7 @@ def test_an_unknown_ranking_method_is_rejected() -> None:
 
 
 def test_predict_future_games_use_the_models_recorded_floor_sigma(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Projected-standings probabilities go through the sigma the model predicts with."""
     # Arrange
@@ -815,11 +820,11 @@ def test_predict_future_games_use_the_models_recorded_floor_sigma(
             feature_spec=SimpleNamespace(feature_columns=["feat1"]), floor_sigma=record
         ),
     )
-    monkeypatch.setattr(
-        power_rankings.ml_model_core,
-        "predict_margin_total_from_model",
-        lambda _model, _games: (np.array([5.0]), np.array([44.0])),
-    )
+
+    def fake_predict(_model: object, _games: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        return np.array([5.0]), np.array([44.0])
+
+    monkeypatch.setattr(ml_model_core, "predict_margin_total_from_model", fake_predict)
 
     # Act
     out = power_rankings._predict_future_games(

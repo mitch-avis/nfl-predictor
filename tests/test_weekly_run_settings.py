@@ -17,6 +17,7 @@ import pytest
 from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, ml_model_xgb_utils, walk_forward
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import pipeline, stage1
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,19 +69,23 @@ def _capture_weekly_settings(
         }
         raise _StopAtFinalFitError
 
+    def fake_load_games(_path: Path) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def fake_fingerprint(_path: Path) -> dict[str, Any]:
+        return {"sha256": "fp"}
+
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: False)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", fake_load_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(artifacts, "git_commit_hash", lambda: "commit")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", fake_fingerprint)
     monkeypatch.setattr(pipeline, "_stage_can_reuse", fake_reuse)
     monkeypatch.setattr(stage1, "evaluate_production", fake_stage1)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", fake_train)
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: REFERENCE_POOL)
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", returning(REFERENCE_POOL))
     monkeypatch.setattr(
-        pipeline,
-        "_production_floor_sigma",
-        lambda _args, _run_dir, _reference: (PRODUCTION_POOL, (2025, 2)),
+        pipeline, "_production_floor_sigma", returning((PRODUCTION_POOL, (2025, 2)))
     )
     monkeypatch.setattr(
         sys,

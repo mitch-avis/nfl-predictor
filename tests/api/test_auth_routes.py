@@ -12,6 +12,8 @@ from nfl_predictor.api.settings import COOKIE_NAME
 from tests.api.conftest import ADMIN_PASSWORD, CSRF_HEADERS, TEST_SECRET
 
 if TYPE_CHECKING:
+    from fastapi import FastAPI
+
     from nfl_predictor.api.db import Database
 
 OTHER_SECRET = "other-secret-" * 4
@@ -69,7 +71,7 @@ def test_login_rejects_bad_password(client: TestClient, db: Database) -> None:
     assert COOKIE_NAME not in client.cookies
 
 
-def test_login_rate_limited(client: TestClient, app) -> None:
+def test_login_rate_limited(client: TestClient, app: FastAPI) -> None:
     """After the failure budget is spent the login returns 429."""
     # Arrange
     app.state.login_limiter = LoginRateLimiter(max_attempts=2, window_seconds=60)
@@ -145,7 +147,7 @@ def test_requests_after_logout_are_anonymous(admin_client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_csrf_header_required(app, db: Database) -> None:
+def test_csrf_header_required(app: FastAPI, db: Database) -> None:
     """Mutating API calls without the custom header are refused."""
     # Act
     with TestClient(app) as bare:

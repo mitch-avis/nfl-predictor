@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import getpass
 import logging
 from typing import TYPE_CHECKING
 
 import pytest
+import uvicorn
 
 from nfl_predictor.api import __main__ as entry
 from nfl_predictor.api.auth import cli
 from nfl_predictor.api.auth import users as user_store
 from nfl_predictor.api.db import Database
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,7 +25,11 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     """The entrypoint passes host/port through and builds an app."""
     # Arrange
     calls: list[tuple[object, dict[str, object]]] = []
-    monkeypatch.setattr(entry.uvicorn, "run", lambda app, **kw: calls.append((app, kw)))
+
+    def fake_run(app: object, **kw: object) -> None:
+        calls.append((app, kw))
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
     monkeypatch.setenv("NFLP_ROOT_DIR", str(tmp_path))
 
     # Act
@@ -38,7 +45,11 @@ def test_main_reload_runs_uvicorn_with_app_factory_path(
     """With ``--reload`` the entrypoint passes the app factory import path to uvicorn."""
     # Arrange
     calls: list[tuple[object, dict[str, object]]] = []
-    monkeypatch.setattr(entry.uvicorn, "run", lambda app, **kw: calls.append((app, kw)))
+
+    def fake_run(app: object, **kw: object) -> None:
+        calls.append((app, kw))
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
     monkeypatch.setenv("NFLP_ROOT_DIR", str(tmp_path))
     entry.main(["--host", "192.0.2.10", "--port", "1234"])
 
@@ -85,7 +96,7 @@ def test_cli_set_password_from_prompt(settings: Settings, monkeypatch: pytest.Mo
     monkeypatch.setenv(cli.PASSWORD_ENV, "envpassword")
     cli.main(["create-user", "viewer"], settings)
     monkeypatch.delenv(cli.PASSWORD_ENV)
-    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "promptpassword")
+    monkeypatch.setattr(getpass, "getpass", returning("promptpassword"))
 
     # Act
     code = cli.main(["set-password", "viewer"], settings)
@@ -103,7 +114,7 @@ def test_cli_set_password_unknown_user_fails(
     """Resetting the password of a user that does not exist exits with 1."""
     # Arrange
     cli.main(["create-user", "mitch", "--role", "admin", "--password", "password123"], settings)
-    monkeypatch.setattr(cli.getpass, "getpass", lambda _prompt: "promptpassword")
+    monkeypatch.setattr(getpass, "getpass", returning("promptpassword"))
 
     # Act
     code = cli.main(["set-password", "nobody"], settings)

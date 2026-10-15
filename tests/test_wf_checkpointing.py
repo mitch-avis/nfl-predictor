@@ -54,18 +54,16 @@ def test_candidate_key_uses_default_xgb_tag_for_missing_or_unmapped_overrides(
     overrides: dict[str, float] | None,
 ) -> None:
     """Missing or unmapped XGBoost overrides should fall back to the default tag."""
-    # Arrange
-    base_kwargs = {
-        "model_kind": "margin_total",
-        "feature_start": "away_rest",
-        "feature_end": "home_moneyline",
-        "market_mode": "features",
-        "include_quantiles": False,
-    }
-
     # Act
     key = wf_compare_utils.build_candidate_key(
-        wf_compare_utils.CandidateSpec(**base_kwargs, xgb_params_overrides=overrides)
+        wf_compare_utils.CandidateSpec(
+            model_kind="margin_total",
+            feature_start="away_rest",
+            feature_end="home_moneyline",
+            market_mode="features",
+            include_quantiles=False,
+            xgb_params_overrides=overrides,
+        )
     )
 
     # Assert

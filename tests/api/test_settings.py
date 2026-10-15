@@ -37,7 +37,7 @@ def test_explicit_paths_win(tmp_path: Path) -> None:
     assert settings.ratings_path == tmp_path / "elsewhere" / "ratings"
 
 
-def test_environment_overrides(tmp_path: Path, monkeypatch) -> None:
+def test_environment_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``NFLP_``-prefixed variables override defaults."""
     # Arrange
     monkeypatch.setenv("NFLP_ROOT_DIR", str(tmp_path))

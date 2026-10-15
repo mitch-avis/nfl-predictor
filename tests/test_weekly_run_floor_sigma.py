@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
@@ -18,6 +18,7 @@ from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, ml_model_tra
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import pipeline, stage1
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -263,10 +264,17 @@ def _main_argv(tmp_path: Path, *extra: str) -> list[str]:
 
 def _stub_run_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub the dataset reads and every stage marker."""
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+
+    def fake_load_games(_path: Path) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def fake_fingerprint(_path: Path) -> dict[str, Any]:
+        return {"sha256": "fp"}
+
+    monkeypatch.setattr(walk_forward, "load_games", fake_load_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", fake_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
 
 
 def test_a_missing_reference_run_stops_the_weekly_run_before_stage1(
@@ -275,8 +283,12 @@ def test_a_missing_reference_run_stops_the_weekly_run_before_stage1(
     """The probability path never changes silently: a missing run is an error, not a fallback."""
     # Arrange
     walked: list[object] = []
+
+    def fake_evaluate(*a: object, **_k: object) -> None:
+        walked.append(a)
+
     _stub_run_inputs(monkeypatch)
-    monkeypatch.setattr(stage1, "evaluate_production", lambda *a, **k: walked.append(a))
+    monkeypatch.setattr(stage1, "evaluate_production", fake_evaluate)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -314,11 +326,9 @@ def test_stage1_and_the_final_fit_receive_the_floor_sigma_pools(
         raise _StopAtFinalFitError
 
     _stub_run_inputs(monkeypatch)
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: reference)
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", returning(reference))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_stage1)
-    monkeypatch.setattr(
-        pipeline, "_production_floor_sigma", lambda _a, _d, ref: (production, (2025, 2))
-    )
+    monkeypatch.setattr(pipeline, "_production_floor_sigma", returning((production, (2025, 2))))
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(sys, "argv", _main_argv(tmp_path))
 

@@ -11,11 +11,12 @@ import pytest
 import yaml
 
 from nfl_predictor import constants
-from nfl_predictor.ml import walk_forward
+from nfl_predictor.ml import ml_model_core, walk_forward
 from nfl_predictor.reporting import power_rankings, rating_sources
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import pipeline, stage1
 from tests import snapshots
+from tests.fakes import returning
 from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 from tests.test_weekly_run_characterization import (
     SNAPSHOT_DIR,
@@ -150,8 +151,8 @@ def test_weekly_rankings_skip_an_unavailable_rating_source(
         msg = "no ported team rating for 2024 week 4"
         raise rating_sources.RatingSourceUnavailableError(msg)
 
-    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
-    monkeypatch.setattr(pipeline.power_rankings, "compute_power_rankings", unavailable)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
+    monkeypatch.setattr(power_rankings, "compute_power_rankings", unavailable)
     monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
@@ -199,7 +200,7 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
         dataset_fingerprint={},
         config_payload={},
     )
-    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
@@ -326,7 +327,7 @@ def test_weekly_rankings_skip_without_stage_one_folds(
         dataset_fingerprint={},
         config_payload={},
     )
-    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
@@ -355,7 +356,7 @@ def test_stage_one_records_its_fold_checkpoints_as_a_prediction_source(
         ),
         "checkpoint": {"dir": str(folds), "restored_folds": 0, "computed_folds": 1},
     }
-    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", lambda *_a, **_k: result)
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", returning(result))
     options = stage1.ProductionOptions(
         eval_last_n_seasons=1,
         wf_start_week=1,

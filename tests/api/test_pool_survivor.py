@@ -75,7 +75,8 @@ def _exact_optimum(weeks: list[list[Option]]) -> tuple[float, str]:
         for option in week:
             cost[row, teams.index(option.team)] = -math.log(option.win_prob)
     rows, columns = linear_sum_assignment(cost)
-    first = teams[columns[list(rows).index(0)]]
+    assigned_rows = [int(row) for row in rows]
+    first = teams[int(columns[assigned_rows.index(0)])]
     return math.exp(-float(cost[rows, columns].sum())), first
 
 
@@ -87,7 +88,7 @@ def _random_weeks(seed: int, weeks: int, teams: int) -> list[list[Option]]:
     for week in range(1, weeks + 1):
         order = rng.permutation(teams)
         games = [
-            (names[order[i]], names[order[i + 1]], float(rng.uniform(0.15, 0.9)))
+            (names[int(order[i])], names[int(order[i + 1])], float(rng.uniform(0.15, 0.9)))
             for i in range(0, teams, 2)
         ]
         schedule.append(_week(week, *games))

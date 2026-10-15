@@ -9,7 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
@@ -31,9 +31,11 @@ from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
 from tests.api import factories
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Sequence
 
     from nfl_predictor.ml.ml_model_training import TrainingOptions
 
@@ -45,12 +47,27 @@ def _no_floor_sigma_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     These tests stub the stages around them; the pools are tested in
     ``tests/test_weekly_run_floor_sigma.py``.
     """
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: floor_sigma.ErrorPool())
-    monkeypatch.setattr(
-        pipeline,
-        "_production_floor_sigma",
-        lambda _args, _run_dir, _reference: (floor_sigma.ErrorPool(), (2025, 2)),
-    )
+
+    def empty_reference(_paths: Sequence[Path]) -> floor_sigma.ErrorPool:
+        return floor_sigma.ErrorPool()
+
+    def empty_production(
+        _args: argparse.Namespace, _run_dir: Path, _reference: floor_sigma.ErrorPool
+    ) -> tuple[floor_sigma.ErrorPool, tuple[int, int]]:
+        return floor_sigma.ErrorPool(), (2025, 2)
+
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", empty_reference)
+    monkeypatch.setattr(pipeline, "_production_floor_sigma", empty_production)
+
+
+def _empty_games(_path: Path) -> pd.DataFrame:
+    """Return an empty dataset in place of reading one."""
+    return pd.DataFrame()
+
+
+def _fixed_fingerprint(_path: Path) -> dict[str, Any]:
+    """Return a constant dataset fingerprint in place of hashing a file."""
+    return {"sha256": "fp"}
 
 
 def test_load_config_json(tmp_path: Path) -> None:
@@ -288,9 +305,11 @@ def test_the_model_page_reads_the_production_walk_forward_of_a_weekly_run(
 ) -> None:
     """The web Model page shows stage 1's one row and its reliability bins."""
     # Arrange
-    monkeypatch.setattr(
-        walk_forward, "run_walk_forward_backtest", lambda *_a, **_k: _stub_walk_forward_results()
-    )
+
+    def fake_walk_forward(*_a: object, **_k: object) -> dict[str, object]:
+        return _stub_walk_forward_results()
+
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_walk_forward)
     run_dir = factories.make_run_dir(tmp_path, "weekly_floor")
     shutil.rmtree(run_dir / "wf_compare", ignore_errors=True)
     summary = stage1.evaluate_production(
@@ -346,15 +365,17 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
         captured.update(vars(options))
         raise _StopAtFinalFitError
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(
-        stage1,
-        "evaluate_production",
-        lambda _df, options, _run: {"market_mode": options.market_mode},
-    )
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
+
+    def fake_evaluate(
+        _df: pd.DataFrame, options: stage1.ProductionOptions, _run: stage1.Stage1Run
+    ) -> dict[str, object]:
+        return {"market_mode": options.market_mode}
+
+    monkeypatch.setattr(stage1, "evaluate_production", fake_evaluate)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(
         sys,
@@ -437,11 +458,11 @@ def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinali
         captured.append(config)
         raise _StopAfterStage1Error
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(
         sys,
         "argv",
@@ -728,14 +749,10 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
         captured.update(options.xgb_params_overrides)
         raise _StopAfterStage1Error
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(
-        fingerprints,
-        "dataset_fingerprint",
-        lambda _path: {"sha256": "fp"},
-    )
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
 
     old_argv = sys.argv
@@ -760,7 +777,7 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
     finally:
         sys.argv = old_argv
 
-    resolved = ml_model_core.resolve_xgb_params(
+    resolved = ml_model_xgb_utils.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides=captured,
     )
@@ -961,10 +978,10 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
         captured["stage1"] = options.xgb_params_overrides["n_jobs"]
         raise _StopAfterTrainingConfigError
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
 
     argv = _thread_count_argv(tmp_path, extra_argv)
@@ -1058,11 +1075,11 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
         return "weekly_test"
 
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(artifacts, "generate_run_id", _fake_run_id)
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(

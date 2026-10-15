@@ -2,7 +2,7 @@
 
 A run without game lines (the weekly run's ``--wf-market-mode none``; ``backtest`` or ``train``
 with no market feature, no anchor and no market transform) leaves out the reviewed list of the
-step-6 runs without game lines by default; every other run leaves out production's groups. An
+walk-forwards without game lines by default; every other run leaves out production's groups. An
 explicit list always wins. Production's own resolution, with the shipped config and the default
 market mode, is pinned exactly.
 """
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt", "qb_adj")
-# The reviewed list of the step-6 runs without game lines, plus the unmeasured qb_adj.
+# The reviewed list of the walk-forwards without game lines, plus the unmeasured qb_adj.
 NO_GAME_LINES_GROUPS = ("strength", "elo", "own_elo_wt", "qb_adj")
 NO_GAME_LINES = ("--exclude-market", "--no-market-anchor", "--no-market-transform")
 # Fixed thread count, so the stage settings do not depend on the machine's cores.

@@ -247,7 +247,10 @@ def _schema(frame: pl.DataFrame) -> dict[str, str]:
 
 def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
     """Guard the fixture: the pinned rows carry real values for every family."""
+    # Act
     games = build.games
+
+    # Assert
     for column in (
         "away_pass_yards",
         "home_wins",
@@ -282,6 +285,7 @@ def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
 
 
 def test_season_build_rows_match_snapshots(build: _Build) -> None:
+    # Act & Assert
     snapshots.check_csv("games.csv", _as_pandas(build.games), SNAPSHOT_DIR / "games.csv")
     snapshots.check_json(
         "games_schema.json", _schema(build.games), SNAPSHOT_DIR / "games_schema.json"

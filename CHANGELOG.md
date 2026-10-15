@@ -5,7 +5,7 @@
 ### Changed
 
 - A run without game lines leaves out `strength,elo,own_elo_wt,qb_adj` by default
-  (`constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`): the reviewed list of the step-6 runs
+  (`constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`): the reviewed list of the walk-forwards
   `models/step6/elo_marketfree_seed{42,7}`, plus `qb_adj` until it is measured. Such a run (the
   weekly run's `--wf-market-mode none`; `backtest` with `--exclude-market --no-market-anchor
   --no-market-transform`; `train` with `--exclude-market` and its anchor and transform off) now

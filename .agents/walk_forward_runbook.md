@@ -42,7 +42,12 @@ walk-forward at a time, `launch.sh` with `nohup setsid`, the OpenMP wait policy)
   leaves out production's groups (`strength,own_elo,own_elo_wt,qb_adj`), so a command recorded
   before it reproduces with `--disable-feature-groups qb_adj` added, and a group list recorded
   before 0.60.0 (for example the step-6 arms' `strength,elo,own_elo_wt`, or `''`) reproduces with
-  `qb_adj` added to it.
+  `qb_adj` added to it. From 0.61.0 a run without game lines (`--exclude-market
+  --no-market-anchor --no-market-transform`) with no group option leaves out
+  `strength,elo,own_elo_wt,qb_adj` instead; such a command recorded before 0.61.0 with no group
+  option reproduces with the list it then defaulted to given explicitly
+  (`--disable-feature-groups strength,own_elo,own_elo_wt,qb_adj` from the adoption on,
+  `--disable-feature-groups qb_adj` before it).
 - Progress: every finished week prints a `Walk-forward fold N/M done` line with elapsed and
   remaining time. After a stop, re-running the identical command resumes at the next unfinished
   week (`--no-resume` retrains everything). A `weekly_run`'s own walk-forward of the production

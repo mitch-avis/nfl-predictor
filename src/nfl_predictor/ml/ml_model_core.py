@@ -315,35 +315,6 @@ def split_by_season(
     return train_df, holdout_df, holdout
 
 
-def _build_time_series_folds(
-    seasons: Sequence[int],
-    n_splits: int,
-    val_window: int = 1,
-    min_train_seasons: int = 3,
-) -> list[tuple[list[int], list[int]]]:
-    seasons = sorted(seasons)
-    if n_splits <= 0:
-        msg = "n_splits must be positive."
-        raise ValueError(msg)
-    if len(seasons) < (min_train_seasons + n_splits * val_window):
-        msg = "Not enough seasons to create requested CV folds."
-        raise ValueError(msg)
-
-    folds: list[tuple[list[int], list[int]]] = []
-    for split_idx in range(n_splits):
-        val_start = len(seasons) - n_splits * val_window + split_idx * val_window
-        val_end = val_start + val_window
-        val_seasons = seasons[val_start:val_end]
-        train_seasons = seasons[:val_start]
-        if len(train_seasons) < min_train_seasons:
-            continue
-        folds.append((train_seasons, val_seasons))
-    if not folds:
-        msg = "Unable to create valid CV folds with the provided settings."
-        raise ValueError(msg)
-    return folds
-
-
 def _build_season_week_timepoints(df: pd.DataFrame) -> list[int]:
     if "season" not in df.columns or "week" not in df.columns:
         msg = "Expected 'season' and 'week' columns for time-series CV."

@@ -5,6 +5,7 @@ from datetime import datetime
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.utils import game_utils
 
 
@@ -283,7 +284,7 @@ def test_fill_future_qb_data_adds_qb_name_columns_when_absent() -> None:
     assert row["home_qb"] == "P. Mahomes"
 
 
-def test_fill_future_game_lines(monkeypatch) -> None:
+def test_fill_future_game_lines(monkeypatch: pytest.MonkeyPatch) -> None:
     """Future games are filled from SurvivorGrid spreads."""
     # Arrange
     df = pl.DataFrame(
@@ -311,7 +312,7 @@ def test_fill_future_game_lines(monkeypatch) -> None:
     row = filled.row(0, named=True)
     assert row["home_spread"] == pytest.approx(-3.5)
     assert row["away_spread"] == pytest.approx(3.5)
-    assert row["total_line"] == pytest.approx(game_utils.constants.DEFAULT_TOTAL_LINE)
+    assert row["total_line"] == pytest.approx(constants.DEFAULT_TOTAL_LINE)
     assert row["home_moneyline"] is not None
 
 
@@ -343,7 +344,9 @@ def test_fill_future_game_lines_passthrough_branches(frame: pl.DataFrame) -> Non
     assert result is frame
 
 
-def test_fill_future_game_lines_passes_through_without_spreads(monkeypatch) -> None:
+def test_fill_future_game_lines_passes_through_without_spreads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Future-line filling skips future rows when SurvivorGrid has no spreads."""
     # Arrange
     future_without_spreads = pl.DataFrame(
@@ -364,7 +367,9 @@ def test_fill_future_game_lines_passes_through_without_spreads(monkeypatch) -> N
     assert result is future_without_spreads
 
 
-def test_fill_future_game_lines_uses_away_perspective_when_home_spread_missing(monkeypatch) -> None:
+def test_fill_future_game_lines_uses_away_perspective_when_home_spread_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Away-team SurvivorGrid spreads are negated into the home-team perspective."""
     # Arrange
     df = pl.DataFrame(
@@ -391,7 +396,9 @@ def test_fill_future_game_lines_uses_away_perspective_when_home_spread_missing(m
     assert row["away_spread"] == pytest.approx(2.5)
 
 
-def test_fill_future_game_lines_derives_moneylines_with_the_given_filler(monkeypatch) -> None:
+def test_fill_future_game_lines_derives_moneylines_with_the_given_filler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A caller-supplied filler, not the fixed conversion, prices the SurvivorGrid spreads."""
     # Arrange
     df = pl.DataFrame(

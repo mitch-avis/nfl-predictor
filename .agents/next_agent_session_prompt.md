@@ -47,23 +47,23 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   - One: `week_rows._merge_elo` leaves `_right` duplicates when the frame already carries the
     columns. Its only call site (`utils/polars/week_rows.py:552`) never passes them, and the Elo
     columns behave the same way: no action proposed.
-- **The grouped measurement is running** (`models/qb_elos_measure/`: `build.sh`, `check_cuts.py`,
-  `driver.sh`, `launch.sh`, `build_record.txt`, `launch_record.txt`). Worktree
-  `~/scratch/qb_measure` is detached at `c637fc0` with its own venv and `data/`; the main
-  checkout's `data/` was only read.
-  - Builds done: new cut `b9772e3e...`, old cut `b59366e2...`, 7,261 rows and 544 columns each,
+- **The grouped measurement finished; its rule-3 review is running** (`models/qb_elos_measure/`:
+  `build.sh`, `check_cuts.py`, `driver.sh`, `launch.sh`, `build_record.txt`,
+  `launch_record.txt`). Worktree `~/scratch/qb_measure` is detached at `c637fc0` with its own venv
+  and `data/`; the main checkout's `data/` was only read.
+  - Builds: new cut `b9772e3e...`, old cut `b59366e2...`, 7,261 rows and 544 columns each,
     leakage audits ok. `inputs/cut_diff.json` is ok: 12 `elo` columns differ, only in 2023-2025
     rows (from 2023-09-07); the `qb_adj` columns are identical in the two builds. The hypothesis
     stands unamended (sha256 `d682a0c0...`).
-  - The driver started 2026-10-15 01:37:13 (pid `903662`): old file, new file, `qb_adj`, strength,
-    each with seeds 42 then 7, one at a time on the GPU. Each run writes
-    `models/qb_elos_measure/<arm>_seed<seed>/` (`run.log`, `metrics_report.json`); `driver.log`
-    has a `start` and an `end ... exit ... seconds` line per run and `driver done` at the end. The
-    first run took about 32 minutes (fold 53 of 328 at 307 s), so all eight should end near 06:00.
-  - A failed run is counted and the driver moves on; `./launch.sh driver c637fc0` (from
-    `models/qb_elos_measure/`) reruns the ladder and finished runs resume from their checkpoints.
-    To stop it: `kill 903662`, then `pgrep -af "nfl-predictor backtest"` and `kill` that PID
-    (never `pkill -f`, which matches the watching shells).
+  - Runs: all eight exited `0` between 01:37 and 05:47 (`driver.log`, 1,845-1,942 s each), in
+    `models/qb_elos_measure/<arm>_seed<seed>/`. The producer's two-seed `compare` outputs (not
+    yet reviewed numbers) are in `checkins/` (`new_file_vs_old_file`, `qb_adj_vs_new_file`,
+    `strength_vs_new_file`, `_two_seeds.{md,json}`).
+  - An independent `reviewer` is rescoring from the fold checkpoints and writing `REVIEW.md`
+    (rule 3); no measured number goes into a doc before it.
+  - The transition watcher grepped a relative `driver.log` from the wrong directory, so it never
+    matched; the check-in the user asked for at the first run-to-run transition (02:09) did not
+    happen. Watchers poll the PID and use absolute paths.
 - **Step 3, the "no game lines" groups change, is reviewed and approved** (`0.61.0`, branch
   `feat/no-game-lines-groups` at `5c33978`, worktree `~/scratch/step3`, twelve commits on
   `6bacd5e`). `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` =
@@ -83,15 +83,13 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Next, in order
 
-1. **Watch the measurement.** Check `driver.log` after each transition; on a failed run, read its
-   `run.log` before resuming. Never start another walk-forward or ETL while it runs.
+1. **The measurement's review:** when `REVIEW.md` lands, read it, then the check-in (rule 7)
+   with the three comparisons below and the user's decisions.
 2. **Step 3** waits for the user's answers below and the merge after the Monday game. The
    older roadmap labels the re-check found outside the branch (`README.md:897` "task 55.8",
    `README.md:1067` and `config/weekly_run.yaml:144` "decision 12") go with the step-6 docs
    close-out.
-3. **After the eight runs:** a `reviewer` rescores from the fold checkpoints and writes
-   `models/qb_elos_measure/REVIEW.md` (rule 3) before any number reaches a doc. Then the
-   check-in (rule 7) with the three comparisons of `HYPOTHESIS.md`, applied as written (rule 12):
+3. **The three comparisons** of `HYPOTHESIS.md`, applied as written (rule 12), from `REVIEW.md`:
    - the new file against the old (seasons 2023-2025, all weeks): no Brier or log-loss loss keeps
      it;
    - the `qb_adj` group against the new file (all weeks): a Brier win with no log-loss loss

@@ -1280,27 +1280,29 @@ It runs the steps below and reports every one before exiting non-zero:
 
 ```bash
 uv lock --check
-uv sync --check --active
+uv sync --check               # with the LightGBM CUDA build flags on a CUDA machine
 ruff format --check
 ruff check
 ty check                      # src/ and tests/, from [tool.ty.src]
 pyright                       # src/ and tests/, from [tool.pyright]
-python -m pytest
-coverage report --include="src/*" --fail-under=90   # src/ alone; the total counts tests/
-markdownlint .
-nfl-predictor --help          # then every command's --help, listed by the front door
+pytest
+coverage report --include="src/*"   # src/ alone at the same 90% bar; the total counts tests/
+nfl-predictor --help          # and nfl-lightgbm-cuda-install --help: every console script
+shellcheck                    # every shell script .gitignore doesn't exclude
+markdownlint-cli2 "**/*.md"   # .markdownlint-cli2.yaml: the rules, and .gitignore'd paths skipped
+nfl-predictor <command> --help   # every command the front door lists
 ```
 
-CI installs `markdownlint-cli` for the `markdownlint .` step; on a machine that has
-`markdownlint-cli2` instead, the equivalent is:
+`scripts/gate.sh` and the lint, pre-commit, CI and Dependabot configs come from the Copier template
+in `~/workspace/python-template`, which keeps them the same across projects; `.copier-answers.yml`
+records the template version and answers. This repo's own gate steps (the CUDA sync flags, the
+front-door commands and `--web`) live in `scripts/gate.hooks.sh`, and its dependency-refresh steps
+in `update_requirements.hooks.sh`. To take a later template version, run `copier update` on a
+clean tree, review the merged diff and run the gate.
 
-```bash
-markdownlint-cli2 "**/*.md" "#.venv" "#nfl-sos-ratings" "#web/node_modules" "#web/dist" "#.agents/*transcript*.md"
-```
-
-GitHub Actions (`.github/workflows/validation.yml`) sets up the environment, runs the
-editable-install smoke check, and then runs `scripts/gate.sh` itself, so CI and a local run check
-the same things; the frontend steps run there as a separate `web` job.
+GitHub Actions (`.github/workflows/validation.yml`) syncs the locked environment and runs
+`scripts/gate.sh` itself, so CI and a local run check the same things; the frontend steps run
+there as a separate `web` job.
 
 ## Leakage audit
 
@@ -1588,8 +1590,8 @@ the simultaneous ridge that generalizes it, with XGBoost margin/total remaining 
 - Claude Code subagents are defined in `.claude/agents/`: `implementer` works in its own git
   worktree under `.claude/worktrees/` (branched from the current `HEAD`, per
   `.claude/settings.json`), and `reviewer` checks finished work it did not produce. Both follow
-  `AGENTS.md`. Inside a worktree, run `uv sync` once, then run the gate with
-  `VIRTUAL_ENV="$PWD/.venv"` so it uses the worktree's environment.
+  `AGENTS.md`. Inside a worktree, run `uv sync` once; the gate then uses the worktree's own
+  `.venv`.
 
 For users reading this documentation: commands are shown assuming your project virtual environment
 is already activated. Agent-specific files keep the fully qualified `.venv/bin/...` forms for

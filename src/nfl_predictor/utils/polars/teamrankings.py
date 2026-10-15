@@ -26,6 +26,7 @@ from nfl_predictor.utils.scraping_utils import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 
@@ -170,12 +171,16 @@ def _weeks_to_load(season: int, current: tuple[int, int], min_week: int) -> list
 class _WeekLoadPlan:
     """The weeks a season load has read, and the weeks it still has to scrape."""
 
-    existing: list[pl.DataFrame] = field(default_factory=list)
+    existing: list[pl.DataFrame] = field(default_factory=list[pl.DataFrame])
     # Weeks that need complete scraping (no file, an empty or unreadable file, or the
     # current week), each with its cached rows as a fallback when there are any.
-    full_scrape: list[tuple[int, pl.DataFrame | None]] = field(default_factory=list)
+    full_scrape: list[tuple[int, pl.DataFrame | None]] = field(
+        default_factory=list[tuple[int, pl.DataFrame | None]]
+    )
     # Weeks whose files need additional columns.
-    partial_scrape: list[tuple[int, pl.DataFrame]] = field(default_factory=list)
+    partial_scrape: list[tuple[int, pl.DataFrame]] = field(
+        default_factory=list[tuple[int, pl.DataFrame]]
+    )
 
 
 def _plan_week(
@@ -438,7 +443,8 @@ def aggregate_team_stats_to_week(
     numeric_cols = [
         col
         for col in prior_games.columns
-        if col not in exclude_cols and prior_games[col].dtype in [pl.Float64, pl.Int32, pl.Int64]
+        if col not in exclude_cols
+        and isinstance(prior_games[col].dtype, pl.Float64 | pl.Int32 | pl.Int64)
     ]
 
     # Aggregate by team
@@ -874,11 +880,12 @@ def calculate_league_means(team_stats_df: pl.DataFrame, season: int) -> dict[str
     numeric_cols = [
         col
         for col in season_stats.columns
-        if col not in exclude_cols and season_stats[col].dtype in [pl.Float64, pl.Int32, pl.Int64]
+        if col not in exclude_cols
+        and isinstance(season_stats[col].dtype, pl.Float64 | pl.Int32 | pl.Int64)
     ]
 
     # Calculate means
-    means = {}
+    means: dict[str, float] = {}
     for col in numeric_cols:
         mean_val = season_stats.select(pl.col(col).mean()).item()
         if mean_val is not None:
@@ -911,7 +918,7 @@ def regress_to_mean(
     if not league_means:
         return team_stats
 
-    regression_exprs = []
+    regression_exprs: list[pl.Expr] = []
     for col in team_stats.columns:
         if col in league_means and col not in {"team_abbr", "games_played"}:
             # Regress toward the league mean: team_value * (1 - factor) + league_mean * factor
@@ -979,7 +986,7 @@ def get_tr_columns() -> list[str]:
     return constants.TR_RATINGS.copy() + constants.TR_STATS.copy()
 
 
-def calculate_game_result(row_dict: dict) -> float | None:
+def calculate_game_result(row_dict: Mapping[str, float | None]) -> float | None:
     """Calculate game result from away team perspective.
 
     Args:
@@ -1085,8 +1092,7 @@ def get_team_name(abbr: str) -> str | None:
     team_info = constants.TEAM_MAPPING.get(canonical)
     if team_info is None:
         return None
-    team_name = team_info.get("name")
-    return str(team_name) if team_name is not None else None
+    return team_info["name"]
 
 
 def filter_completed_games(schedule_df: pl.DataFrame) -> pl.DataFrame:
@@ -1153,7 +1159,7 @@ def get_stats_for_diff() -> list[str]:
         List of stat names (without prefix) to calculate diffs for
 
     """
-    all_stats = []
+    all_stats: list[str] = []
 
     # nflreadpy stats (base stats)
     all_stats.extend(get_stat_columns())
@@ -1179,7 +1185,7 @@ def get_stats_for_diff() -> list[str]:
 
     # Deduplicate, leaving out the stats published per side only
     seen = set(constants.STATS_WITHOUT_DIFF)
-    unique_stats = []
+    unique_stats: list[str] = []
     for stat in all_stats:
         if stat not in seen:
             seen.add(stat)

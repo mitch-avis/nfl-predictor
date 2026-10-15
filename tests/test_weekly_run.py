@@ -770,11 +770,11 @@ def test_the_shipped_config_is_read_by_default_and_matches_the_code_defaults() -
     """
     # Arrange
     bare_args = run_config._build_parser().parse_args([])
+    bare_args.disable_feature_groups = run_config.resolve_feature_groups(bare_args)
+    bare = vars(bare_args)
 
     # Act
     loaded = vars(run_config._parse_args([]))
-    bare_args.disable_feature_groups = run_config.resolve_feature_groups(bare_args)
-    bare = vars(bare_args)
 
     # Assert
     differences = {key for key in bare if loaded[key] != bare[key]}

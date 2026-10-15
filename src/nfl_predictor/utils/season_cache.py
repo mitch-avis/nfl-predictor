@@ -66,7 +66,7 @@ class SeasonBuild:
 
     games: pl.DataFrame
     snapshots: pl.DataFrame
-    ratings: dict[str, pl.DataFrame] = field(default_factory=dict)
+    ratings: dict[str, pl.DataFrame] = field(default_factory=dict[str, pl.DataFrame])
 
 
 def _sha256(data: bytes) -> str:
@@ -154,7 +154,7 @@ class _ThroughSeasonDigests:
             return {**self._header, "rows": self._whole}
         prefix = self.frame.filter(pl.col("season") <= season)
         seasons = prefix.get_column("season")
-        partitions = []
+        partitions: list[list[int | str]] = []
         for value in sorted(seasons.unique().to_list()):
             if value not in self._partitions:
                 self._partitions[value] = _rows_digest(self.frame.filter(pl.col("season") == value))
@@ -252,7 +252,7 @@ class SeasonCache:
                 log.info("Season cache: %d is stale; rebuilding it", season)
                 return None
             ratings = [f"{_RATINGS_PREFIX}{name}.arrow" for name in manifest["ratings"]]
-            frames = {}
+            frames: dict[str, pl.DataFrame] = {}
             for name in (_GAMES, _SNAPSHOTS, *ratings):
                 data = (entry / name).read_bytes()
                 if _sha256(data) != manifest["files"][name]:
@@ -285,7 +285,7 @@ class SeasonCache:
             (entry / _MANIFEST).unlink(missing_ok=True)
             for stale in entry.glob(f"{_RATINGS_PREFIX}*.arrow"):
                 stale.unlink()
-            checksums = {}
+            checksums: dict[str, str] = {}
             frames = [
                 (_GAMES, build.games),
                 (_SNAPSHOTS, build.snapshots),

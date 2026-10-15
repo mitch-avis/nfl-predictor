@@ -28,11 +28,16 @@ def _as_regressor(value: object) -> xgb.XGBRegressor:
 
 def test_coerce_score_value_sums_sequence_inputs() -> None:
     """Sequence-based score values are summed before conversion to float."""
-    assert feature_importance._coerce_score_value([1.25, 2.75]) == 4.0
+    # Act
+    value = feature_importance._coerce_score_value([1.25, 2.75])
+
+    # Assert
+    assert value == 4.0
 
 
 def test_feature_importance_report_margin_total() -> None:
     """Feature importance report returns aligned gain/weight arrays."""
+    # Arrange
     rng = np.random.default_rng(7)
     df = pd.DataFrame(
         {
@@ -79,7 +84,10 @@ def test_feature_importance_report_margin_total() -> None:
         target_columns=("away_score", "home_score"),
     )
 
+    # Act
     report = feature_importance.build_feature_importance_report(model)
+
+    # Assert
     assert report is not None
     assert report["model_kind"] == "margin_total"
     assert "feature_names" in report
@@ -91,69 +99,63 @@ def test_feature_importance_report_margin_total() -> None:
         assert len(report["models"][key]["weight"]) == len(feature_names)
 
 
-def test_resolve_feature_names_falls_back_on_errors_and_mismatches() -> None:
+class _FailingPreprocessor:
+    """Preprocessor whose feature-name resolution fails."""
+
+    def get_feature_names_out(self) -> list[str]:
+        """Raise to exercise the fallback path."""
+        msg = "boom"
+        raise AttributeError(msg)
+
+
+class _Model:
+    """Minimal model exposing only n_features_in_."""
+
+    def __init__(self, n_features_in_: int | None) -> None:
+        """Store the synthetic feature count."""
+        self.n_features_in_ = n_features_in_
+
+
+@pytest.mark.parametrize(
+    ("preprocessor", "n_features_in", "expected"),
+    [
+        pytest.param(_FailingPreprocessor(), 3, ["f0", "f1", "f2"], id="names_fail"),
+        pytest.param(
+            SimpleNamespace(get_feature_names_out=lambda: ["only_one"]),
+            2,
+            ["f0", "f1"],
+            id="names_mismatch",
+        ),
+        pytest.param(
+            SimpleNamespace(get_feature_names_out=lambda: ["a", "b"]),
+            None,
+            ["a", "b"],
+            id="no_feature_count",
+        ),
+        pytest.param(SimpleNamespace(), None, [], id="nothing_available"),
+    ],
+)
+def test_resolve_feature_names_falls_back_on_errors_and_mismatches(
+    preprocessor: object, n_features_in: int | None, expected: list[str]
+) -> None:
     """Feature-name resolution should fall back cleanly when names are unavailable or mismatched."""
-
-    class _FailingPreprocessor:
-        """Preprocessor whose feature-name resolution fails."""
-
-        def get_feature_names_out(self) -> list[str]:
-            """Raise to exercise the fallback path."""
-            msg = "boom"
-            raise AttributeError(msg)
-
-    class _Model:
-        """Minimal model exposing only n_features_in_."""
-
-        def __init__(self, n_features_in_: int | None) -> None:
-            """Store the synthetic feature count."""
-            self.n_features_in_ = n_features_in_
-
-    assert feature_importance.resolve_feature_names(
-        _as_preprocessor(_FailingPreprocessor()),
-        _as_regressor(_Model(3)),
-    ) == [
-        "f0",
-        "f1",
-        "f2",
-    ]
-
-    mismatch_preprocessor = SimpleNamespace(get_feature_names_out=lambda: ["only_one"])
-    assert feature_importance.resolve_feature_names(
-        _as_preprocessor(mismatch_preprocessor),
-        _as_regressor(_Model(2)),
-    ) == [
-        "f0",
-        "f1",
-    ]
-
-    no_feature_count_preprocessor = SimpleNamespace(get_feature_names_out=lambda: ["a", "b"])
-    assert feature_importance.resolve_feature_names(
-        _as_preprocessor(no_feature_count_preprocessor),
-        _as_regressor(_Model(None)),
-    ) == [
-        "a",
-        "b",
-    ]
-
-    assert (
-        feature_importance.resolve_feature_names(
-            _as_preprocessor(SimpleNamespace()),
-            _as_regressor(_Model(None)),
-        )
-        == []
+    # Act
+    names = feature_importance.resolve_feature_names(
+        _as_preprocessor(preprocessor),
+        _as_regressor(_Model(n_features_in)),
     )
 
+    # Assert
+    assert names == expected
 
-def test_build_feature_importance_report_dispatches_supported_model_types(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Only margin/total models get a report; a saved blend model of the retired kind gets none."""
 
-    class DummyMargin:
-        """Synthetic margin/total model class for dispatch testing."""
+class _DispatchMargin:
+    """Synthetic margin/total model class for dispatch testing."""
 
-    monkeypatch.setattr(feature_importance, "MarginTotalModel", DummyMargin)
+
+def _patch_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Swap in a synthetic margin/total class and a report builder keyed off its input."""
+    monkeypatch.setattr(feature_importance, "MarginTotalModel", _DispatchMargin)
 
     def fake_margin_report(model: object, _shap_rows: object = None) -> dict[str, object] | None:
         """Return a synthetic report keyed off the input object."""
@@ -163,18 +165,53 @@ def test_build_feature_importance_report_dispatches_supported_model_types(
 
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", fake_margin_report)
 
+
+def test_build_feature_importance_report_dispatches_supported_model_types(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only margin/total models get a report; a saved blend model of the retired kind gets none."""
+    # Arrange
+    _patch_dispatch(monkeypatch)
     blend = ml_model_core.BlendedMarginTotalModel(
         team_model=cast("ml_model_core.MarginTotalModel", "team"),
         blend_layer=cast("ml_model_core.BlendLayer", None),
         calibrator=None,
         target_columns=("away_score", "home_score"),
     )
-    assert feature_importance.build_feature_importance_report(blend) is None
 
-    margin_report = feature_importance.build_feature_importance_report(DummyMargin())
+    # Act
+    report = feature_importance.build_feature_importance_report(blend)
+
+    # Assert
+    assert report is None
+
+
+def test_build_feature_importance_report_reports_a_margin_total_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A margin/total model gets its report tagged with the model kind."""
+    # Arrange
+    _patch_dispatch(monkeypatch)
+
+    # Act
+    margin_report = feature_importance.build_feature_importance_report(_DispatchMargin())
+
+    # Assert
     assert margin_report == {"margin": True, "model_kind": "margin_total"}
 
-    assert feature_importance.build_feature_importance_report(object()) is None
+
+def test_build_feature_importance_report_skips_an_unsupported_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An object that is not a model gets no report."""
+    # Arrange
+    _patch_dispatch(monkeypatch)
+
+    # Act
+    report = feature_importance.build_feature_importance_report(object())
+
+    # Assert
+    assert report is None
 
 
 def test_build_feature_importance_report_handles_attribute_errors(
@@ -182,6 +219,7 @@ def test_build_feature_importance_report_handles_attribute_errors(
 ) -> None:
     """Attribute errors from report building should be swallowed into a skipped report."""
 
+    # Arrange
     class DummyMargin:
         """Synthetic margin/total model class for error-path testing."""
 
@@ -197,35 +235,60 @@ def test_build_feature_importance_report_handles_attribute_errors(
     monkeypatch.setattr(feature_importance, "_build_margin_total_report", _raise_attribute_error)
     monkeypatch.setattr(feature_importance.log, "debug", lambda *_args, **_kwargs: None)
 
-    assert feature_importance.build_feature_importance_report(DummyMargin()) is None
+    # Act
+    report = feature_importance.build_feature_importance_report(DummyMargin())
+
+    # Assert
+    assert report is None
 
 
-def test_build_report_from_models_handles_empty_unsupported_and_no_base_features(
+def _silence_debug_log(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the module's debug log calls."""
+    monkeypatch.setattr(feature_importance.log, "debug", lambda *_args, **_kwargs: None)
+
+
+@pytest.mark.parametrize(
+    "models",
+    [
+        pytest.param({}, id="empty"),
+        pytest.param({"margin": object()}, id="unsupported"),
+    ],
+)
+def test_build_report_from_models_handles_empty_and_unsupported(
+    monkeypatch: pytest.MonkeyPatch, models: dict[str, object]
+) -> None:
+    """Report building should return no report for empty or unsupported models."""
+    # Arrange
+    _silence_debug_log(monkeypatch)
+
+    # Act
+    report = feature_importance._build_report_from_models(
+        _as_preprocessor(SimpleNamespace()),
+        cast("dict[str, xgb.XGBRegressor]", models),
+    )
+
+    # Assert
+    assert report is None
+
+
+def test_build_report_from_models_handles_no_base_features(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Report building should handle empty models, unsupported models, and missing base features."""
-    monkeypatch.setattr(feature_importance.log, "debug", lambda *_args, **_kwargs: None)
-    assert (
-        feature_importance._build_report_from_models(_as_preprocessor(SimpleNamespace()), {})
-        is None
-    )
-    assert (
-        feature_importance._build_report_from_models(
-            _as_preprocessor(SimpleNamespace()),
-            cast("dict[str, xgb.XGBRegressor]", {"margin": object()}),
-        )
-        is None
-    )
-
+    """Report building should still report the models when base features are missing."""
+    # Arrange
+    _silence_debug_log(monkeypatch)
     booster = SimpleNamespace(get_score=lambda importance_type: {"feat": 1.0})
     model = SimpleNamespace(get_booster=lambda: booster, n_features_in_=1)
     preprocessor = SimpleNamespace(get_feature_names_out=lambda: ["feat"])
     monkeypatch.setattr(feature_importance, "_build_base_features", lambda *_args: None)
 
+    # Act
     report = feature_importance._build_report_from_models(
         _as_preprocessor(preprocessor),
         cast("dict[str, xgb.XGBRegressor]", {"margin": model}),
     )
+
+    # Assert
     assert report == {
         "schema_version": feature_importance.SCHEMA_VERSION,
         "measures": feature_importance.MEASURES,
@@ -234,21 +297,59 @@ def test_build_report_from_models_handles_empty_unsupported_and_no_base_features
     }
 
 
-def test_score_dict_to_list_and_model_importance_cover_fallback_keys() -> None:
+def test_score_dict_to_list_covers_fallback_keys() -> None:
     """Importance helpers should align named and XGBoost fallback keys into ordered lists."""
+    # Arrange
     scores = {"known": 1.5, "f1": [2.0, 3.0], "f9": 99.0}
-    assert feature_importance._score_dict_to_list(scores, ["known", "other"]) == [1.5, 5.0]
-    assert feature_importance._coerce_score_value(2.5) == 2.5
-    assert feature_importance._models_support_importance(
+
+    # Act
+    values = feature_importance._score_dict_to_list(scores, ["known", "other"])
+
+    # Assert
+    assert values == [1.5, 5.0]
+
+
+def test_coerce_score_value_keeps_a_scalar() -> None:
+    """A scalar score value converts to the same float."""
+    # Act
+    value = feature_importance._coerce_score_value(2.5)
+
+    # Assert
+    assert value == 2.5
+
+
+def test_models_support_importance_with_a_booster() -> None:
+    """A model exposing ``get_booster`` supports importance."""
+    # Act
+    supported = feature_importance._models_support_importance(
         [SimpleNamespace(get_booster=lambda: None)]
     )
-    assert not feature_importance._models_support_importance([object()])
 
+    # Assert
+    assert supported
+
+
+def test_models_support_importance_without_a_booster() -> None:
+    """A model without ``get_booster`` does not support importance."""
+    # Act
+    supported = feature_importance._models_support_importance([object()])
+
+    # Assert
+    assert not supported
+
+
+def test_build_model_importance_covers_fallback_keys() -> None:
+    """Model importance aligns named and XGBoost fallback keys per importance type."""
+    # Arrange
     scores_by_type = {"gain": {"known": 1.0}, "total_gain": {"known": 6.0}, "weight": {"f0": 2.0}}
     booster = SimpleNamespace(get_score=lambda importance_type: scores_by_type[importance_type])
     model = SimpleNamespace(get_booster=lambda: booster)
 
-    assert feature_importance._build_model_importance(_as_regressor(model), ["known"]) == {
+    # Act
+    importance = feature_importance._build_model_importance(_as_regressor(model), ["known"])
+
+    # Assert
+    assert importance == {
         "gain": [1.0],
         "total_gain": [6.0],
         "weight": [2.0],
@@ -259,65 +360,63 @@ def test_build_base_features_and_aggregate_without_combined(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Base-feature aggregation should work for single-model reports without a combined section."""
+    # Arrange
     monkeypatch.setattr(
         feature_importance,
         "_build_base_feature_map",
         lambda *_args: {"num__yards": "yards", "cat__team_A": "team"},
     )
 
+    # Act
     base_features = feature_importance._build_base_features(
         _as_preprocessor(SimpleNamespace()),
         ["num__yards", "cat__team_A"],
         {"margin": {"gain": [1.5, 2.0], "total_gain": [4.5, 8.0], "weight": [3.0, 4.0]}},
     )
 
+    # Assert
     assert base_features == {
         "feature_names": ["team", "yards"],
         "margin": {"total_gain": [8.0, 4.5], "weight": [4.0, 3.0]},
     }
 
 
-def test_build_base_feature_map_handles_guard_paths_and_success() -> None:
-    """Base-feature mapping should return None for unsupported preprocessors and map valid ones."""
-    assert (
-        feature_importance._build_base_feature_map(
-            _as_preprocessor(SimpleNamespace()),
-            ["feat"],
-        )
-        is None
-    )
-    assert (
-        feature_importance._build_base_feature_map(
-            _as_preprocessor(SimpleNamespace(transformers_=[])),
-            ["feat"],
-        )
-        is None
-    )
-
-    failing_preprocessor = SimpleNamespace(
-        transformers_=[],
-        get_feature_names_out=lambda: (_ for _ in ()).throw(AttributeError("boom")),
-    )
-    assert (
-        feature_importance._build_base_feature_map(
-            _as_preprocessor(failing_preprocessor),
-            ["feat"],
-        )
-        is None
-    )
-
-    mismatch_preprocessor = SimpleNamespace(
-        transformers_=[],
-        get_feature_names_out=lambda: ["other"],
-    )
-    assert (
-        feature_importance._build_base_feature_map(
-            _as_preprocessor(mismatch_preprocessor),
-            ["feat"],
-        )
-        is None
+@pytest.mark.parametrize(
+    "preprocessor",
+    [
+        pytest.param(SimpleNamespace(), id="no_transformers"),
+        pytest.param(SimpleNamespace(transformers_=[]), id="no_feature_names"),
+        pytest.param(
+            SimpleNamespace(
+                transformers_=[],
+                get_feature_names_out=lambda: (_ for _ in ()).throw(AttributeError("boom")),
+            ),
+            id="feature_names_fail",
+        ),
+        pytest.param(
+            SimpleNamespace(
+                transformers_=[],
+                get_feature_names_out=lambda: ["other"],
+            ),
+            id="feature_names_mismatch",
+        ),
+    ],
+)
+def test_build_base_feature_map_handles_guard_paths(preprocessor: object) -> None:
+    """Base-feature mapping should return None for unsupported preprocessors."""
+    # Act
+    mapping = feature_importance._build_base_feature_map(
+        _as_preprocessor(preprocessor),
+        ["feat"],
     )
 
+    # Assert
+    assert mapping is None
+
+
+def test_build_base_feature_map_maps_a_valid_preprocessor() -> None:
+    """Base-feature mapping should map every output column of a valid preprocessor."""
+    # Arrange
     onehot = SimpleNamespace(categories_=[["A", "B"]])
     valid_preprocessor = SimpleNamespace(
         feature_names_in_=np.array(["yards", "team", "week", "unused"], dtype=object),
@@ -331,10 +430,14 @@ def test_build_base_feature_map_handles_guard_paths_and_success() -> None:
         get_feature_names_out=lambda: ["num__yards", "cat__team_A", "cat__team_B", "scalar__week"],
     )
 
-    assert feature_importance._build_base_feature_map(
+    # Act
+    mapping = feature_importance._build_base_feature_map(
         _as_preprocessor(valid_preprocessor),
         ["num__yards", "cat__team_A", "cat__team_B", "scalar__week"],
-    ) == {
+    )
+
+    # Assert
+    assert mapping == {
         "num__yards": "yards",
         "cat__team_A": "team",
         "cat__team_B": "team",
@@ -342,30 +445,28 @@ def test_build_base_feature_map_handles_guard_paths_and_success() -> None:
     }
 
 
-def test_normalize_cols_handles_slice_list_and_scalar_inputs() -> None:
-    """Column selector normalization should support slices, sequences, and scalar values."""
-    preprocessor = SimpleNamespace(feature_names_in_=np.array(["a", "b", "c"], dtype=object))
+_ABC_PREPROCESSOR = SimpleNamespace(feature_names_in_=np.array(["a", "b", "c"], dtype=object))
 
-    assert feature_importance._normalize_cols(slice(0, 2), _as_preprocessor(preprocessor)) == [
-        "a",
-        "b",
-    ]
-    assert feature_importance._normalize_cols(
-        ["x", "y"],
-        _as_preprocessor(preprocessor),
-    ) == ["x", "y"]
-    assert feature_importance._normalize_cols(
-        np.array(["x", "y"]),
-        _as_preprocessor(preprocessor),
-    ) == ["x", "y"]
-    assert feature_importance._normalize_cols("week", _as_preprocessor(preprocessor)) == ["week"]
-    assert (
-        feature_importance._normalize_cols(
-            slice(0, 1),
-            _as_preprocessor(SimpleNamespace()),
-        )
-        == []
-    )
+
+@pytest.mark.parametrize(
+    ("columns", "preprocessor", "expected"),
+    [
+        pytest.param(slice(0, 2), _ABC_PREPROCESSOR, ["a", "b"], id="slice"),
+        pytest.param(["x", "y"], _ABC_PREPROCESSOR, ["x", "y"], id="list"),
+        pytest.param(np.array(["x", "y"]), _ABC_PREPROCESSOR, ["x", "y"], id="array"),
+        pytest.param("week", _ABC_PREPROCESSOR, ["week"], id="scalar"),
+        pytest.param(slice(0, 1), SimpleNamespace(), [], id="slice_without_names"),
+    ],
+)
+def test_normalize_cols_handles_slice_list_and_scalar_inputs(
+    columns: object, preprocessor: object, expected: list[str]
+) -> None:
+    """Column selector normalization should support slices, sequences, and scalar values."""
+    # Act
+    normalized = feature_importance._normalize_cols(columns, _as_preprocessor(preprocessor))
+
+    # Assert
+    assert normalized == expected
 
 
 def test_base_features_rank_by_total_gain_not_summed_average_gain(
@@ -376,6 +477,7 @@ def test_base_features_rank_by_total_gain_not_summed_average_gain(
     Summing each one-hot column's average gain would put the categorical feature first
     (3 x 5.0 = 15.0 against 4.0); total gain (average gain times splits) does not.
     """
+    # Arrange
     columns = ["num__rest", "cat__opp_A", "cat__opp_B", "cat__opp_C"]
     monkeypatch.setattr(
         feature_importance,
@@ -393,12 +495,14 @@ def test_base_features_rank_by_total_gain_not_summed_average_gain(
         "total_gain": [120.0, 5.0, 5.0, 5.0],
     }
 
+    # Act
     base = feature_importance._build_base_features(
         _as_preprocessor(SimpleNamespace()),
         columns,
         {"margin": head, "total": head},
     )
 
+    # Assert
     assert base is not None
     assert base["feature_names"] == ["opp", "rest"]
     assert base["margin"] == {"total_gain": [15.0, 120.0], "weight": [3.0, 30.0]}
@@ -459,11 +563,14 @@ def _fit_rest_opp_model(rows: int = 120) -> tuple[ml_model_core.MarginTotalModel
 
 def test_fitted_report_sums_total_gain_over_one_hot_columns_and_heads() -> None:
     """Base-feature total gain is the booster's per-column total gain summed per base feature."""
+    # Arrange
     model, _ = _fit_rest_opp_model()
     margin_model, total_model = model.margin_model, model.total_model
 
+    # Act
     report = feature_importance.build_feature_importance_report(model)
 
+    # Assert
     assert report is not None
     assert report["schema_version"] == feature_importance.SCHEMA_VERSION
     assert set(report["measures"]) == {"gain", "total_gain", "weight"}
@@ -516,31 +623,34 @@ def _early_stopped_head(x_matrix: Any, rows: int) -> xgb.XGBRegressor:
     return head
 
 
-@pytest.mark.parametrize("early_stopped", [False, True])
-def test_shap_values_add_up_to_each_rows_prediction(*, early_stopped: bool) -> None:
+@pytest.mark.parametrize("head_name", ["margin", "total", "early_stopped"])
+def test_shap_values_add_up_to_each_rows_prediction(head_name: str) -> None:
     """Each row's SHAP values plus the base value reproduce the head's prediction.
 
     An early-stopped head is explained over the trees it predicts with, up to its best
     iteration, not over every tree it grew.
     """
+    # Arrange
     model, df = _fit_rest_opp_model()
     x_matrix = _preprocessed(model, df)
-    heads = (
-        (_early_stopped_head(x_matrix, len(df)),)
-        if early_stopped
-        else (model.margin_model, model.total_model)
+    heads = {
+        "margin": lambda: model.margin_model,
+        "total": lambda: model.total_model,
+        "early_stopped": lambda: _early_stopped_head(x_matrix, len(df)),
+    }
+    head = heads[head_name]()
+
+    # Act
+    values, base_value = feature_importance.shap_values(head, x_matrix)
+
+    # Assert
+    assert values.shape == (len(df), 5)
+    np.testing.assert_allclose(
+        values.sum(axis=1) + base_value,
+        ml_model_core.predict_xgb(head, x_matrix),
+        rtol=1e-5,
+        atol=1e-5,
     )
-
-    for head in heads:
-        values, base_value = feature_importance.shap_values(head, x_matrix)
-
-        assert values.shape == (len(df), 5)
-        np.testing.assert_allclose(
-            values.sum(axis=1) + base_value,
-            ml_model_core.predict_xgb(head, x_matrix),
-            rtol=1e-5,
-            atol=1e-5,
-        )
 
 
 def test_mean_abs_shap_sums_a_base_features_columns_before_the_absolute_value() -> None:
@@ -549,24 +659,30 @@ def test_mean_abs_shap_sums_a_base_features_columns_before_the_absolute_value() 
     Row 1 gives ``opp`` +1 and -1 (net 0), row 2 gives +2: the mean is 1, where averaging each
     column's absolute value and summing would report 2.
     """
+    # Arrange
     values = np.array([[1.0, -1.0, 0.5], [2.0, 0.0, -1.5]])
 
+    # Act
     result = feature_importance.mean_abs_shap_by_base(
         values,
         ["cat__opp_A", "cat__opp_B", "num__rest"],
         {"cat__opp_A": "opp", "cat__opp_B": "opp", "num__rest": "rest"},
     )
 
+    # Assert
     assert result == {"opp": pytest.approx(1.0), "rest": pytest.approx(1.0)}
 
 
 def test_fitted_report_records_mean_abs_shap_per_head_and_combined() -> None:
     """With rows to explain, each head and the combined block carry mean |SHAP| per base feature."""
+    # Arrange
     model, df = _fit_rest_opp_model()
     x_matrix = _preprocessed(model, df)
 
+    # Act
     report = feature_importance.build_feature_importance_report(model, shap_rows=df)
 
+    # Assert
     assert report is not None
     assert report["schema_version"] == 3
     assert "mean_abs_shap" in report["measures"]
@@ -591,36 +707,59 @@ def test_fitted_report_records_mean_abs_shap_per_head_and_combined() -> None:
 
 def test_report_records_the_explained_rows_seasons() -> None:
     """The SHAP block names the seasons of the rows it explains when they carry a season."""
+    # Arrange
     model, df = _fit_rest_opp_model()
     rows = df.assign(season=[2020] * 60 + [2022] * 60)
 
+    # Act
     report = feature_importance.build_feature_importance_report(model, shap_rows=rows)
 
+    # Assert
     assert report is not None
     assert report["shap"]["seasons"] == [2020, 2022]
 
 
 def test_empty_shap_rows_leave_the_report_without_shap() -> None:
     """No rows to explain means no SHAP section, and the gain measures still load."""
+    # Arrange
     model, df = _fit_rest_opp_model()
+    rows = df.iloc[:0]
 
-    report = feature_importance.build_feature_importance_report(model, shap_rows=df.iloc[:0])
+    # Act
+    report = feature_importance.build_feature_importance_report(model, shap_rows=rows)
 
+    # Assert
     assert report is not None
     assert "shap" not in report
     assert "mean_abs_shap" not in report["base_features"]["combined"]
     assert "total_gain" in report["base_features"]["combined"]
 
 
-def test_feature_name_resolution_surfaces_unexpected_errors() -> None:
-    """Only a missing or unfitted feature-name method falls back; other errors surface."""
-    broken = SimpleNamespace(
+def _broken_preprocessor() -> SimpleNamespace:
+    """Return a preprocessor whose feature-name method fails with an unexpected error."""
+    return SimpleNamespace(
         transformers_=[],
         get_feature_names_out=lambda: (_ for _ in ()).throw(RuntimeError("broken")),
     )
+
+
+def test_feature_name_resolution_surfaces_unexpected_errors() -> None:
+    """Only a missing or unfitted feature-name method falls back; other errors surface."""
+    # Arrange
+    broken = _broken_preprocessor()
+
+    # Act & Assert
     with pytest.raises(RuntimeError, match="broken"):
         feature_importance.resolve_feature_names(
             _as_preprocessor(broken), _as_regressor(SimpleNamespace(n_features_in_=1))
         )
+
+
+def test_base_feature_map_surfaces_unexpected_errors() -> None:
+    """The base-feature map lets an unexpected feature-name error surface."""
+    # Arrange
+    broken = _broken_preprocessor()
+
+    # Act & Assert
     with pytest.raises(RuntimeError, match="broken"):
         feature_importance._build_base_feature_map(_as_preprocessor(broken), ["feat"])

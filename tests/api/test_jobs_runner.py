@@ -30,14 +30,21 @@ def runner(settings: Settings, db: Database) -> Iterator[JobRunner]:
 
 def test_strip_ansi_removes_color_codes() -> None:
     """The color codes the project logger writes never reach the store."""
-    assert runner_module.strip_ansi("\x1b[32mhello\x1b[0m") == "hello"
+    # Act
+    stripped = runner_module.strip_ansi("\x1b[32mhello\x1b[0m")
+
+    # Assert
+    assert stripped == "hello"
 
 
 def test_parse_log_line_splits_the_project_prefix() -> None:
     """A project log line yields its level, timestamp, and bare message."""
+    # Act
     line = runner_module.parse_log_line(
         "\x1b[32m[2026-09-10 12:00:00.123][WARNING][mod:func:12] be careful\x1b[0m"
     )
+
+    # Assert
     assert line.level == "WARNING"
     assert line.ts == "2026-09-10 12:00:00.123"
     assert line.message == "be careful"
@@ -45,7 +52,10 @@ def test_parse_log_line_splits_the_project_prefix() -> None:
 
 def test_parse_log_line_keeps_unprefixed_output() -> None:
     """Output from a library that does not use the project logger is kept verbatim."""
+    # Act
     line = runner_module.parse_log_line("Traceback (most recent call last):")
+
+    # Assert
     assert line.level == "INFO"
     assert line.message == "Traceback (most recent call last):"
 
@@ -61,7 +71,10 @@ def test_parse_log_line_keeps_unprefixed_output() -> None:
 )
 def test_parse_progress(message: str, expected: dict[str, int] | None) -> None:
     """Progress is read from the fold and candidate counters, and only from those."""
+    # Act
     progress = runner_module.parse_progress(message)
+
+    # Assert
     if expected is None:
         assert progress is None
     else:
@@ -72,12 +85,15 @@ def test_parse_progress(message: str, expected: dict[str, int] | None) -> None:
 
 def test_runner_records_logs_and_success(runner: JobRunner, register: Callable[..., None]) -> None:
     """A job's output is stored line by line, stripped and parsed, and the job succeeds."""
+    # Arrange
     register(fake_template(args=("--lines", "3", "--stderr", "--plain")))
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
-    wait_for_status(runner.store, record.id, "succeeded")
 
+    # Assert
+    wait_for_status(runner.store, record.id, "succeeded")
     finished = runner.store.require(record.id)
     assert finished.exit_code == 0
     assert finished.error is None
@@ -94,12 +110,15 @@ def test_runner_records_logs_and_success(runner: JobRunner, register: Callable[.
 
 def test_runner_tracks_progress(runner: JobRunner, register: Callable[..., None]) -> None:
     """The candidate counter drives the job's progress payload."""
+    # Arrange
     register(fake_template(args=("--lines", "1", "--progress", "4")))
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
-    wait_for_status(runner.store, record.id, "succeeded")
 
+    # Assert
+    wait_for_status(runner.store, record.id, "succeeded")
     progress = runner.store.require(record.id).progress
     assert progress == {"current": 4, "total": 4, "label": "WF candidate 4/4 done in 0m1.0s"}
 
@@ -108,12 +127,15 @@ def test_runner_marks_a_nonzero_exit_as_failed(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """A job that exits non-zero fails and keeps its exit code."""
+    # Arrange
     register(fake_template(args=("--exit-code", "3")))
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
-    wait_for_status(runner.store, record.id, "failed")
 
+    # Assert
+    wait_for_status(runner.store, record.id, "failed")
     finished = runner.store.require(record.id)
     assert finished.exit_code == 3
     assert finished.error is not None
@@ -125,6 +147,7 @@ def test_runner_reports_a_command_that_cannot_start(
 ) -> None:
     """A missing interpreter fails the job instead of killing the worker."""
 
+    # Arrange
     def build(_ctx: JobContext) -> list[str]:
         """Return a command that does not exist."""
         return [str(settings.root_dir / "no-such-binary")]
@@ -140,9 +163,11 @@ def test_runner_reports_a_command_that_cannot_start(
     )
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
-    wait_for_status(runner.store, record.id, "failed")
 
+    # Assert
+    wait_for_status(runner.store, record.id, "failed")
     assert "Could not start" in (runner.store.require(record.id).error or "")
 
 
@@ -151,6 +176,7 @@ def test_runner_fails_a_job_whose_command_cannot_be_built(
 ) -> None:
     """A template needing an active run fails cleanly when none is pinned."""
 
+    # Arrange
     def build(ctx: JobContext) -> list[str]:
         """Require an active run that the empty models directory cannot provide."""
         run = ctx.require_run()
@@ -168,9 +194,11 @@ def test_runner_fails_a_job_whose_command_cannot_be_built(
     )
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
-    wait_for_status(runner.store, record.id, "failed")
 
+    # Assert
+    wait_for_status(runner.store, record.id, "failed")
     assert "active run" in (runner.store.require(record.id).error or "")
     assert runner.store.logs(record.id)[0]["level"] == "ERROR"
 
@@ -179,32 +207,56 @@ def test_runner_refuses_a_second_job_in_a_busy_exclusive_group(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """The API-facing guard rejects a walk-forward job while one is already active."""
+    # Arrange
     register(fake_template(args=("--sleep", "5"), group="walk_forward"))
     runner.start()
     template = catalog.TEMPLATES[0]
-
     first = runner.submit(Submission(template=template, params={}))
-    with pytest.raises(ConflictError):
-        runner.submit(Submission(template=template, params={}))
 
-    runner.cancel(first.id)
+    # Act & Assert
+    try:
+        with pytest.raises(ConflictError):
+            runner.submit(Submission(template=template, params={}))
+    finally:
+        runner.cancel(first.id)
+
+
+def test_exclusive_group_queues_the_second_job_while_the_first_runs(
+    runner: JobRunner, register: Callable[..., None]
+) -> None:
+    """A second job queued on an exclusive group waits while the first one runs."""
+    # Arrange
+    register(fake_template(args=("--sleep", "0.5"), group="walk_forward"))
+    runner.start()
+    template = catalog.TEMPLATES[0]
+    first = runner.store.create(template.id, {})
+    second = runner.store.create(template.id, {})
+    runner._enqueue(template, first.id)
+
+    # Act
+    runner._enqueue(template, second.id)
+
+    # Assert
+    wait_for(lambda: runner.store.require(first.id).status == "running")
+    assert runner.store.require(second.id).status == "queued"
 
 
 def test_exclusive_group_jobs_never_overlap(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """Two jobs queued on an exclusive group run one after the other, not together."""
+    # Arrange
     register(fake_template(args=("--sleep", "0.5"), group="walk_forward"))
     runner.start()
     template = catalog.TEMPLATES[0]
     first = runner.store.create(template.id, {})
     second = runner.store.create(template.id, {})
-
     runner._enqueue(template, first.id)
-    runner._enqueue(template, second.id)
-    wait_for(lambda: runner.store.require(first.id).status == "running")
-    assert runner.store.require(second.id).status == "queued"
 
+    # Act
+    runner._enqueue(template, second.id)
+
+    # Assert
     wait_for_status(runner.store, second.id, "succeeded")
     first_finished = runner.store.require(first.id).finished_at
     second_started = runner.store.require(second.id).started_at
@@ -215,27 +267,33 @@ def test_exclusive_group_jobs_never_overlap(
 
 def test_cancel_terminates_a_running_job(runner: JobRunner, register: Callable[..., None]) -> None:
     """A running job is signalled and ends up canceled."""
+    # Arrange
     register(fake_template(args=("--sleep", "30")))
     runner.start()
-
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
     wait_for_log(runner.store, record.id, "line 1")
-    runner.cancel(record.id)
-    wait_for_status(runner.store, record.id, "canceled")
 
+    # Act
+    runner.cancel(record.id)
+
+    # Assert
+    wait_for_status(runner.store, record.id, "canceled")
     assert runner.store.require(record.id).error == "Canceled by an administrator."
 
 
 def test_cancel_escalates_to_sigkill(runner: JobRunner, register: Callable[..., None]) -> None:
     """A job that ignores SIGTERM is killed after the grace period."""
+    # Arrange
     register(fake_template(args=("--sleep", "30", "--ignore-sigterm")))
     runner.start()
-
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
     wait_for_log(runner.store, record.id, "line 1")
-    runner.cancel(record.id)
-    wait_for_status(runner.store, record.id, "canceled")
 
+    # Act
+    runner.cancel(record.id)
+
+    # Assert
+    wait_for_status(runner.store, record.id, "canceled")
     messages = [row["line"] for row in runner.store.logs(record.id)]
     assert "Still running; sending SIGKILL." in messages
 
@@ -244,6 +302,7 @@ def test_cancel_a_queued_job_never_starts_it(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """Cancelling before a worker picks the job up marks it canceled without running it."""
+    # Arrange
     register(fake_template(args=("--sleep", "5"), group="walk_forward"))
     runner.start()
     template = catalog.TEMPLATES[0]
@@ -253,21 +312,26 @@ def test_cancel_a_queued_job_never_starts_it(
     wait_for(lambda: runner.store.require(first.id).status == "running")
     runner._enqueue(template, queued.id)
 
-    canceled = runner.cancel(queued.id)
+    # Act
+    try:
+        canceled = runner.cancel(queued.id)
+    finally:
+        runner.cancel(first.id)
 
+    # Assert
     assert canceled.status == "canceled"
     assert canceled.started_at is None
-    runner.cancel(first.id)
 
 
 def test_cancel_rejects_a_finished_job(runner: JobRunner, register: Callable[..., None]) -> None:
     """Cancelling a job that already finished is a conflict."""
+    # Arrange
     register(fake_template(args=("--lines", "1")))
     runner.start()
-
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
     wait_for_status(runner.store, record.id, "succeeded")
 
+    # Act & Assert
     with pytest.raises(ConflictError):
         runner.cancel(record.id)
 
@@ -276,16 +340,19 @@ def test_a_successful_job_chains_its_follow_up(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """A template with ``chain_template_id`` queues the follow-up once it succeeds."""
+    # Arrange
     register(
         fake_template("first", args=("--lines", "1"), chain="second"),
         fake_template("second", args=("--lines", "1")),
     )
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES_BY_ID["first"], params={}))
+
+    # Assert
     wait_for_status(runner.store, record.id, "succeeded")
     wait_for(lambda: any(job.template_id == "second" for job in runner.store.recent()))
-
     chained = next(job for job in runner.store.recent() if job.template_id == "second")
     assert chained.parent_job_id == record.id
     wait_for_status(runner.store, chained.id, "succeeded")
@@ -293,15 +360,18 @@ def test_a_successful_job_chains_its_follow_up(
 
 def test_a_failed_job_does_not_chain(runner: JobRunner, register: Callable[..., None]) -> None:
     """The follow-up only runs when the first job succeeded."""
+    # Arrange
     register(
         fake_template("first", args=("--exit-code", "1"), chain="second"),
         fake_template("second", args=("--lines", "1")),
     )
     runner.start()
 
+    # Act
     record = runner.submit(Submission(template=catalog.TEMPLATES_BY_ID["first"], params={}))
-    wait_for_status(runner.store, record.id, "failed")
 
+    # Assert
+    wait_for_status(runner.store, record.id, "failed")
     assert all(job.template_id != "second" for job in runner.store.recent())
 
 
@@ -309,12 +379,15 @@ def test_start_fails_jobs_left_behind_by_a_restart(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """Rows still marked running when the process starts are failed, freeing their group."""
+    # Arrange
     register(fake_template(group="walk_forward"))
     orphan = runner.store.create("fake", {})
     runner.store.mark_running(orphan.id)
 
+    # Act
     runner.start()
 
+    # Assert
     recovered = runner.store.require(orphan.id)
     assert recovered.status == "failed"
     assert recovered.error is not None
@@ -322,17 +395,33 @@ def test_start_fails_jobs_left_behind_by_a_restart(
     assert runner.busy_groups() == set()
 
 
-def test_start_and_stop_are_idempotent(runner: JobRunner, register: Callable[..., None]) -> None:
-    """Starting twice adds no workers and stopping an unstarted runner does nothing."""
+def test_start_is_idempotent(runner: JobRunner, register: Callable[..., None]) -> None:
+    """Starting twice adds no workers, after stopping an unstarted runner did nothing."""
+    # Arrange
     register(fake_template())
     runner.stop()
     runner.start()
     workers = len(runner._workers)
+
+    # Act
     runner.start()
 
+    # Assert
     assert len(runner._workers) == workers
+
+
+def test_stop_is_idempotent(runner: JobRunner, register: Callable[..., None]) -> None:
+    """Stopping a runner that is already stopped does nothing."""
+    # Arrange
+    register(fake_template())
+    runner.start()
     runner.stop(timeout=5.0)
+
+    # Act
     runner.stop(timeout=5.0)
+
+    # Assert
+    assert runner._workers == []
 
 
 def test_a_runner_without_workers_executes_inline(
@@ -342,11 +431,14 @@ def test_a_runner_without_workers_executes_inline(
 
     This keeps a job submitted during startup from being silently dropped.
     """
+    # Arrange
     register(fake_template(args=("--lines", "1")))
     inline = JobRunner(db, settings)
 
+    # Act
     record = inline.submit(Submission(template=catalog.TEMPLATES[0], params={}))
 
+    # Assert
     assert inline.store.require(record.id).status == "succeeded"
 
 
@@ -354,11 +446,14 @@ def test_signalling_a_process_that_already_exited_is_harmless(
     runner: JobRunner, register: Callable[..., None]
 ) -> None:
     """Racing a cancel against a job that just finished does not raise."""
+    # Arrange
     register(fake_template(args=("--lines", "1")))
     runner.start()
     record = runner.submit(Submission(template=catalog.TEMPLATES[0], params={}))
     wait_for_status(runner.store, record.id, "succeeded")
 
+    # Act
     runner._force_kill(record.id)  # no process is registered any more
 
+    # Assert
     assert runner.store.require(record.id).status == "succeeded"

@@ -135,8 +135,10 @@ def package_copy(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_the_import_walk_reaches_the_etl_modules() -> None:
+    # Act
     reached = _etl_modules(_PACKAGE)
 
+    # Assert
     assert {
         _ENTRY,
         f"{_ROOT}.constants",
@@ -148,12 +150,18 @@ def test_the_import_walk_reaches_the_etl_modules() -> None:
 
 def test_the_root_package_runs_no_code() -> None:
     """Every ETL import runs the root ``__init__``, which the fingerprint leaves out."""
-    assert _is_docstring_only(_PACKAGE / "__init__.py")
+    # Act
+    docstring_only = _is_docstring_only(_PACKAGE / "__init__.py")
+
+    # Assert
+    assert docstring_only
 
 
 def test_every_module_the_etl_imports_is_in_the_code_fingerprint(package_copy: Path) -> None:
+    # Act
     uncovered = _uncovered_modules(package_copy)
 
+    # Assert
     assert uncovered == [], f"ETL modules outside the code fingerprint: {uncovered}"
 
 
@@ -170,9 +178,14 @@ def test_every_module_the_etl_imports_is_in_the_code_fingerprint(package_copy: P
 def test_a_relatively_imported_module_outside_the_fingerprint_is_flagged(
     tmp_path: Path, importer: str, statement: str
 ) -> None:
+    # Arrange
     package = _copy_package(tmp_path)
     (package / "stray.py").write_text('"""Outside the fingerprint."""\n\nVALUE = 1\n')
     importing_file = package / importer
     importing_file.write_text(importing_file.read_text(encoding="utf-8") + f"\n{statement}\n")
 
-    assert _uncovered_modules(package) == [f"{_ROOT}.stray"]
+    # Act
+    uncovered = _uncovered_modules(package)
+
+    # Assert
+    assert uncovered == [f"{_ROOT}.stray"]

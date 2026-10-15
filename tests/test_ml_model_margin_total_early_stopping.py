@@ -54,17 +54,10 @@ def _params() -> dict[str, Any]:
 
 def test_total_head_stops_on_its_own_validation_curve() -> None:
     """The paired total head keeps the rounds it would keep alone and predicts a spread."""
+    # Arrange
     x, margin, total = _synthetic_margin_total()
     split = 2400
     x_train, x_eval = x[:split], x[split:]
-
-    _margin_model, total_model = core.fit_margin_total_models(
-        core.FitData(x_train, margin[:split], total[:split]),
-        _params(),
-        eval_data=core.FitData(x_eval, margin[split:], total[split:]),
-        early_stopping_rounds=_EARLY_STOPPING_ROUNDS,
-    )
-
     solo_params = xgb_utils._with_xgb_early_stopping_params(_params(), _EARLY_STOPPING_ROUNDS)
     solo_total = xgb.XGBRegressor(**solo_params)
     solo_total.fit(
@@ -73,6 +66,15 @@ def test_total_head_stops_on_its_own_validation_curve() -> None:
         **xgb_utils._build_xgb_fit_kwargs(x_eval, total[split:], _EARLY_STOPPING_ROUNDS),
     )
 
+    # Act
+    _margin_model, total_model = core.fit_margin_total_models(
+        core.FitData(x_train, margin[:split], total[:split]),
+        _params(),
+        eval_data=core.FitData(x_eval, margin[split:], total[split:]),
+        early_stopping_rounds=_EARLY_STOPPING_ROUNDS,
+    )
+
+    # Assert
     paired_rounds = total_model.get_booster().num_boosted_rounds()
     assert paired_rounds > 1
     assert paired_rounds == solo_total.get_booster().num_boosted_rounds()

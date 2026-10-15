@@ -86,7 +86,10 @@ def test_shap_report_matches_snapshot(
     snapshot_name: str,
 ) -> None:
     """Each head and component reports the same features and mean absolute SHAP as before."""
+    # Arrange
     out_json = tmp_path / "shap_report.json"
+
+    # Act
     code = _run_shap(
         [
             "--model-path",
@@ -99,6 +102,8 @@ def test_shap_report_matches_snapshot(
         ],
         monkeypatch,
     )
+
+    # Assert
     report = json.loads(out_json.read_text(encoding="utf-8"))
     assert code == 0
     assert report["rows"], "the report lists no features"
@@ -109,11 +114,16 @@ def test_shap_report_defaults_to_the_model_directory(
     trained: dict[str, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without ``--output-path`` the report is written beside the model."""
+    # Arrange
     default_path = trained["margin_total"].parent / "shap_report.json"
+
+    # Act
     code = _run_shap(
         ["--model-path", str(trained["margin_total"]), "--data-path", str(trained["data"])],
         monkeypatch,
     )
+
+    # Assert
     assert code == 0
     assert json.loads(default_path.read_text(encoding="utf-8"))["target"] == "margin"
 
@@ -122,6 +132,7 @@ def test_shap_rejects_a_score_target(
     trained: dict[str, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Only the margin and total heads exist, so a home/away target is a usage error."""
+    # Act & Assert
     with pytest.raises(SystemExit):
         _run_shap(
             [
@@ -140,6 +151,7 @@ def test_shap_rejects_a_score_target(
 
 def test_shap_reports_a_missing_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A missing model file raises before anything is written."""
+    # Act & Assert
     with pytest.raises(FileNotFoundError, match="Missing model"):
         _run_shap(
             [

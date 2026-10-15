@@ -153,11 +153,14 @@ def _train(holdout_seasons: int = 0) -> MarginTotalModel:
 
 def test_final_fit_trains_on_every_completed_week(monkeypatch: pytest.MonkeyPatch) -> None:
     """At week 2 the trees see 2026 week 1 and the end of 2025, as a walk-forward fold does."""
+    # Arrange
     df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18, 2026: 1})
     recorded = _stub_fitting(monkeypatch, df)
 
+    # Act
     _train()
 
+    # Assert
     assert _pairs(recorded["train"]) == _pairs(df)
     (train_targets,) = recorded["target_frames"]
     assert _pairs(train_targets) == _pairs(df)
@@ -165,11 +168,14 @@ def test_final_fit_trains_on_every_completed_week(monkeypatch: pytest.MonkeyPatc
 
 def test_final_fit_hands_xgboost_no_eval_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """No head receives an eval frame, so none can early-stop on one or report metrics for it."""
+    # Arrange
     df = _season_weeks_frame({2025: 18, 2026: 1})
     recorded = _stub_fitting(monkeypatch, df)
 
+    # Act
     _train()
 
+    # Assert
     assert len(recorded["fit_kwargs"]) == 3
     for kwargs in recorded["fit_kwargs"]:
         assert kwargs.get("eval_data") is None
@@ -179,12 +185,15 @@ def test_final_fit_leaves_only_the_evaluation_holdout_out(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The newest whole season is the evaluation holdout; every other game trains."""
+    # Arrange
     df = _season_weeks_frame({2023: 18, 2024: 18, 2025: 18})
     recorded = _stub_fitting(monkeypatch, df)
     caplog.set_level(logging.INFO)
 
+    # Act
     _train(holdout_seasons=1)
 
+    # Assert
     assert _pairs(recorded["train"]) == _pairs(df[df["season"] < 2025])
     assert "Training seasons: [2023, 2024]" in caplog.messages
     assert "Holdout seasons: [2025]" in caplog.messages
@@ -193,8 +202,10 @@ def test_final_fit_leaves_only_the_evaluation_holdout_out(
 
 def test_a_negative_holdout_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """A negative season count is an input error, not an empty holdout."""
+    # Arrange
     _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
 
+    # Act & Assert
     with pytest.raises(ValueError, match="non-negative"):
         _train(holdout_seasons=-1)
 
@@ -203,9 +214,11 @@ def test_final_fit_trains_with_the_given_xgboost_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Tree budget, depth and learning rate passed in reach every head and the saved params."""
+    # Arrange
     recorded = _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
     overrides = {"n_estimators": 7, "max_depth": 2, "learning_rate": 0.3}
 
+    # Act
     model = ml_model_training.train_margin_total_model(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -219,6 +232,7 @@ def test_final_fit_trains_with_the_given_xgboost_overrides(
         )
     )
 
+    # Assert
     assert model.xgb_params is not None
     assert {name: model.xgb_params[name] for name in overrides} == overrides
     assert len(recorded["fit_params"]) == 3
@@ -232,6 +246,7 @@ def test_tuned_params_take_precedence_over_the_given_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A tuning run's parameters replace the configured ones; the untuned ones stay."""
+    # Arrange
     recorded = _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
     monkeypatch.setattr(
         ml_model_training,
@@ -239,6 +254,7 @@ def test_tuned_params_take_precedence_over_the_given_overrides(
         lambda *_args, **_kwargs: ({"n_estimators": 11}, None, None),
     )
 
+    # Act
     model = ml_model_training.train_margin_total_model(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -252,6 +268,7 @@ def test_tuned_params_take_precedence_over_the_given_overrides(
         )
     )
 
+    # Assert
     assert model.xgb_params is not None
     assert (model.xgb_params["n_estimators"], model.xgb_params["max_depth"]) == (11, 2)
     assert recorded["fit_params"][0]["n_estimators"] == 11
@@ -261,10 +278,13 @@ def test_final_fit_defaults_to_the_default_xgboost_params(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Without overrides the heads train with the default tree budget, depth and rate."""
+    # Arrange
     _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
 
+    # Act
     model = _train()
 
+    # Assert
     assert model.xgb_params is not None
     for name in ("n_estimators", "max_depth", "learning_rate"):
         assert model.xgb_params[name] == DEFAULT_XGB_PARAMS[name]

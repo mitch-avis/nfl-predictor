@@ -38,8 +38,10 @@ def data_dir(tmp_path: Path) -> Path:
 
 def test_build_writes_only_the_upcoming_games_of_that_week(data_dir: Path) -> None:
     """The file holds the season's unplayed games for the requested week, with every column."""
+    # Act
     result = week_builder.build_week_file(2026, 3, data_dir=data_dir)
 
+    # Assert
     assert result.created is True
     assert result.games == 2
     frame = pl.read_csv(result.path)
@@ -50,8 +52,10 @@ def test_build_writes_only_the_upcoming_games_of_that_week(data_dir: Path) -> No
 
 def test_build_reports_the_market_columns_that_are_still_empty(data_dir: Path) -> None:
     """A future week has no lines yet; the caller is told which columns are blank."""
+    # Act
     result = week_builder.build_week_file(2026, 3, data_dir=data_dir)
 
+    # Assert
     assert set(result.missing_market_columns) == {
         "total_line",
         "away_spread",
@@ -62,41 +66,73 @@ def test_build_reports_the_market_columns_that_are_still_empty(data_dir: Path) -
 
 
 def test_build_keeps_an_existing_file_unless_asked_to_overwrite(data_dir: Path) -> None:
-    """An existing week file is left alone by default and replaced with ``overwrite``."""
+    """An existing week file is left alone by default."""
+    # Arrange
     path = data_dir / "predict" / "week_03_games_to_predict.csv"
     path.write_text("hand-made\n", encoding="utf-8")
 
+    # Act
     kept = week_builder.build_week_file(2026, 3, data_dir=data_dir)
+
+    # Assert
     assert kept.created is False
     assert path.read_text(encoding="utf-8") == "hand-made\n"
 
+
+def test_build_replaces_an_existing_file_when_asked_to_overwrite(data_dir: Path) -> None:
+    """An existing week file is replaced with ``overwrite``."""
+    # Arrange
+    path = data_dir / "predict" / "week_03_games_to_predict.csv"
+    path.write_text("hand-made\n", encoding="utf-8")
+
+    # Act
     replaced = week_builder.build_week_file(2026, 3, data_dir=data_dir, overwrite=True)
+
+    # Assert
     assert replaced.created is True
     assert pl.read_csv(path).height == 2
 
 
 def test_build_refuses_a_week_with_no_upcoming_games(data_dir: Path) -> None:
     """Week 1 is already played, so there is nothing to predict."""
+    # Act & Assert
     with pytest.raises(ValueError, match="no upcoming games"):
         week_builder.build_week_file(2026, 1, data_dir=data_dir)
 
 
 def test_build_reports_a_missing_dataset(tmp_path: Path) -> None:
     """Without the ML dataset there is nothing to build from."""
+    # Act & Assert
     with pytest.raises(FileNotFoundError, match=r"all_data_ml\.csv"):
         week_builder.build_week_file(2026, 3, data_dir=tmp_path)
 
 
-def test_available_weeks_lists_the_seasons_unplayed_weeks(data_dir: Path) -> None:
+@pytest.mark.parametrize(
+    ("season", "use_dataset", "expected"),
+    [
+        pytest.param(2026, True, [3], id="current_season"),
+        pytest.param(2025, True, [3], id="earlier_season"),
+        pytest.param(2024, True, [], id="season_without_upcoming_games"),
+        pytest.param(2026, False, [], id="missing_directory"),
+    ],
+)
+def test_available_weeks_lists_the_seasons_unplayed_weeks(
+    data_dir: Path, season: int, *, use_dataset: bool, expected: list[int]
+) -> None:
     """The API needs to know which weeks could be generated."""
-    assert week_builder.available_weeks(2026, data_dir=data_dir) == [3]
-    assert week_builder.available_weeks(2025, data_dir=data_dir) == [3]
-    assert week_builder.available_weeks(2024, data_dir=data_dir) == []
-    assert week_builder.available_weeks(2026, data_dir=Path("/nonexistent")) == []
+    # Arrange
+    directory = data_dir if use_dataset else Path("/nonexistent")
+
+    # Act
+    weeks = week_builder.available_weeks(season, data_dir=directory)
+
+    # Assert
+    assert weeks == expected
 
 
 def test_available_weeks_reads_a_score_column_typed_after_a_hundred_rows(tmp_path: Path) -> None:
     """Scores written as whole numbers for 150 rows and as decimals later still load."""
+    # Arrange
     played = [{"season": 2025, "week": 1, "away_score": "17", "home_score": "24"}] * 150
     later = [
         {"season": 2026, "week": 1, "away_score": "20.5", "home_score": "21.0"},
@@ -109,13 +145,19 @@ def test_available_weeks_reads_a_score_column_typed_after_a_hundred_rows(tmp_pat
     ]
     (tmp_path / "all_data_ml.csv").write_text("\n".join(lines) + "\n")
 
-    assert week_builder.available_weeks(2026, data_dir=tmp_path) == [2]
+    # Act
+    weeks = week_builder.available_weeks(2026, data_dir=tmp_path)
+
+    # Assert
+    assert weeks == [2]
 
 
 def test_main_builds_the_requested_week(data_dir: Path) -> None:
     """The CLI writes the file and reports success."""
+    # Act
     exit_code = week_builder.main(["--season", "2026", "--week", "3", "--data-dir", str(data_dir)])
 
+    # Assert
     assert exit_code == 0
     assert (data_dir / "predict" / "week_03_games_to_predict.csv").is_file()
 
@@ -124,8 +166,13 @@ def test_main_defaults_to_the_current_season_and_week(
     data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without arguments the CLI uses the project's NFL calendar and data directory."""
+    # Arrange
     monkeypatch.setattr(week_builder.polars_utils, "get_current_nfl_week", lambda: (2026, 3))
     monkeypatch.setattr(week_builder, "DEFAULT_DATA_DIR", data_dir)
 
-    assert week_builder.main([]) == 0
+    # Act
+    exit_code = week_builder.main([])
+
+    # Assert
+    assert exit_code == 0
     assert (data_dir / "predict" / "week_03_games_to_predict.csv").is_file()

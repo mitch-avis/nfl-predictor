@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -49,34 +50,42 @@ class _DummyMatrixPreprocessor:
 
 def test_fit_transform_matrix_delegates_to_preprocessor() -> None:
     """fit-transform wrapper preserves the preprocessor result and input."""
+    # Arrange
     preprocessor = _DummyMatrixPreprocessor()
     payload = pd.DataFrame({"feat": [1.0, 2.0]})
 
+    # Act
     result = xgb_utils.fit_transform_matrix(cast("ColumnTransformer", preprocessor), payload)
 
+    # Assert
     assert result.shape == (2, 1)
     assert preprocessor.fit_inputs[0] is payload
 
 
 def test_transform_matrix_delegates_to_preprocessor() -> None:
     """Transform wrapper preserves the preprocessor result and input."""
+    # Arrange
     preprocessor = _DummyMatrixPreprocessor()
     payload = pd.DataFrame({"feat": [1.0, 2.0, 3.0]})
 
+    # Act
     result = xgb_utils.transform_matrix(cast("ColumnTransformer", preprocessor), payload)
 
+    # Assert
     assert result.shape == (3, 1)
     assert preprocessor.transform_inputs[0] is payload
 
 
 def test_a_preprocessor_output_that_is_not_a_matrix_is_refused() -> None:
     """Anything but a dense array or a sparse matrix is a bug, not a matrix to train on."""
+    # Act & Assert
     with pytest.raises(TypeError, match="got list"):
         xgb_utils._as_matrix([[1.0]])
 
 
 def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
     """GPU tree_method and device are coerced properly."""
+    # Arrange
     _reset_runtime_state()
 
     def fake_supported(param: str) -> bool:
@@ -85,12 +94,14 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", fake_supported)
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
+    # Act
     params = xgb_utils.resolve_xgb_params(
         {"max_depth": 3},
         tree_method="gpu",
         device="auto",
     )
 
+    # Assert
     assert params["device"] == "cuda"
     assert params["tree_method"] == "hist"
     assert params["eval_metric"] == "mae"
@@ -98,14 +109,17 @@ def test_resolve_xgb_params_gpu_tree_method(monkeypatch) -> None:
 
 def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch) -> None:
     """XGB fit kwargs include early stopping when supported."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: True)
 
+    # Act
     kwargs = xgb_utils._build_xgb_fit_kwargs(
         np.zeros((2, 1)),
         np.array([1.0, 2.0]),
         early_stopping_rounds=5,
     )
 
+    # Assert
     assert "eval_set" in kwargs
     assert kwargs["verbose"] is False
     assert kwargs["early_stopping_rounds"] == 5
@@ -117,6 +131,7 @@ def test_with_xgb_early_stopping_params_uses_the_init_param_only(monkeypatch) ->
     A callback object in the params dict is shared by every estimator built from that dict
     and carries its best score and patience from one fit into the next.
     """
+    # Arrange
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -127,29 +142,45 @@ def test_with_xgb_early_stopping_params_uses_the_init_param_only(monkeypatch) ->
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", fake_param_supported)
 
     params = {"max_depth": 2}
+
+    # Act
     updated = xgb_utils._with_xgb_early_stopping_params(params, 7)
 
+    # Assert
     assert updated == {"max_depth": 2, "early_stopping_rounds": 7}
     assert params == {"max_depth": 2}
 
 
 def test_with_xgb_early_stopping_params_never_shares_a_callback() -> None:
     """On the installed XGBoost, two estimators' params carry no callback object at all."""
+    # Act
     first = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
     second = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
 
+    # Assert
     assert first["early_stopping_rounds"] == 5
     assert "callbacks" not in first
     assert "callbacks" not in second
 
+
+def test_estimators_built_from_early_stopping_params_carry_no_callback() -> None:
+    """Two estimators built from early-stopping params hold no callback object."""
+    # Arrange
+    first = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
+    second = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
+
+    # Act
     first_model = xgb.XGBRegressor(**first)
     second_model = xgb.XGBRegressor(**second)
+
+    # Assert
     assert first_model.get_params()["callbacks"] is None
     assert second_model.get_params()["callbacks"] is None
 
 
 def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
     """XGB params early stopping fallback logs when needed."""
+    # Arrange
     _reset_runtime_state()
 
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", lambda _p: False)
@@ -159,19 +190,26 @@ def test_with_xgb_early_stopping_params_fallback(monkeypatch) -> None:
     monkeypatch.setattr(xgb_utils, "_log_early_stopping_fallback", messages.append)
 
     params = {"max_depth": 2}
+
+    # Act
     updated = xgb_utils._with_xgb_early_stopping_params(params, 3)
 
+    # Assert
     assert updated == params
     assert messages
 
 
 def test_coerce_tree_method_on_error_device_cuda() -> None:
     """tree_method and device are coerced on RuntimeError with device=cuda."""
+    # Arrange
     _reset_runtime_state()
 
     params = {"device": "cuda", "tree_method": "hist", "predictor": "gpu_predictor"}
+
+    # Act
     updated = xgb_utils._coerce_tree_method_on_error(params, RuntimeError("No visible GPU"))
 
+    # Assert
     assert updated is not None
     assert updated["device"] == "cpu"
     assert updated["tree_method"] == "hist"
@@ -180,20 +218,34 @@ def test_coerce_tree_method_on_error_device_cuda() -> None:
 
 def test_coerce_tree_method_on_error_gpu_tree_method() -> None:
     """tree_method and device are coerced on ValueError with GPU tree_method."""
+    # Arrange
     _reset_runtime_state()
 
     params = {"tree_method": "gpu", "predictor": "gpu_predictor"}
+
+    # Act
     updated = xgb_utils._coerce_tree_method_on_error(params, ValueError("tree_method"))
 
+    # Assert
     assert updated is not None
     assert updated["tree_method"] == "hist"
     assert "device" not in updated
     assert "predictor" not in updated
 
 
-def test_predict_xgb_uses_best_iteration() -> None:
+@pytest.mark.parametrize(
+    ("best_iteration", "expected_calls"),
+    [
+        pytest.param(3, [(0, 4)], id="best_iteration"),
+        pytest.param(None, [None], id="no_best_iteration"),
+    ],
+)
+def test_predict_xgb_uses_best_iteration(
+    best_iteration: int | None, expected_calls: list[tuple[int, int] | None]
+) -> None:
     """XGB predictions use best_iteration when available."""
 
+    # Arrange
     class DummyBooster:
         """Dummy booster to capture predict calls."""
 
@@ -217,16 +269,14 @@ def test_predict_xgb_uses_best_iteration() -> None:
             return self._booster
 
     data = np.zeros((2, 1))
-    model = DummyModel(best_iteration=3)
+    model = DummyModel(best_iteration=best_iteration)
+
+    # Act
     preds = xgb_utils.predict_xgb(cast("xgb.XGBRegressor", model), data)
 
+    # Assert
     assert preds.shape == (2,)
-    assert model.get_booster().calls == [(0, 4)]
-
-    model = DummyModel(best_iteration=None)
-    preds = xgb_utils.predict_xgb(cast("xgb.XGBRegressor", model), data)
-    assert preds.shape == (2,)
-    assert model.get_booster().calls == [None]
+    assert model.get_booster().calls == expected_calls
 
 
 class _ProbeBooster:
@@ -260,6 +310,7 @@ def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A CPU-only XGBoost build reports no GPU without attempting a fit."""
+    # Arrange
     monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=False))
 
     def _no_fit(*_args: object, **_kwargs: object) -> object:
@@ -268,7 +319,11 @@ def test_detect_xgb_cuda_skips_the_probe_when_the_build_lacks_cuda(
 
     monkeypatch.setattr(xgb_utils.xgb, "train", _no_fit)
 
-    assert xgb_utils.detect_xgb_cuda() is False
+    # Act
+    usable = xgb_utils.detect_xgb_cuda()
+
+    # Assert
+    assert usable is False
 
 
 @pytest.mark.parametrize(("probe_device", "expected"), [("cuda:0", True), ("cpu", False)])
@@ -276,6 +331,7 @@ def test_detect_xgb_cuda_reads_the_device_the_probe_fit_used(
     monkeypatch: pytest.MonkeyPatch, probe_device: str, *, expected: bool
 ) -> None:
     """With no visible GPU, XGBoost moves a CUDA fit to the CPU instead of raising."""
+    # Arrange
     monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=True))
     requested: list[dict[str, Any]] = []
 
@@ -285,7 +341,11 @@ def test_detect_xgb_cuda_reads_the_device_the_probe_fit_used(
 
     monkeypatch.setattr(xgb_utils.xgb, "train", _fake_train)
 
-    assert xgb_utils.detect_xgb_cuda() is expected
+    # Act
+    usable = xgb_utils.detect_xgb_cuda()
+
+    # Assert
+    assert usable is expected
     assert requested[0]["device"] == "cuda"
 
 
@@ -293,6 +353,7 @@ def test_detect_xgb_cuda_reports_no_gpu_when_the_probe_fit_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An XGBoost error from the probe fit means the GPU is not usable."""
+    # Arrange
     monkeypatch.setattr(xgb_utils.xgb, "build_info", _fake_build_info(use_cuda=True))
 
     def _failing_train(*_args: object, **_kwargs: object) -> object:
@@ -301,11 +362,16 @@ def test_detect_xgb_cuda_reports_no_gpu_when_the_probe_fit_fails(
 
     monkeypatch.setattr(xgb_utils.xgb, "train", _failing_train)
 
-    assert xgb_utils.detect_xgb_cuda() is False
+    # Act
+    usable = xgb_utils.detect_xgb_cuda()
+
+    # Assert
+    assert usable is False
 
 
 def test_xgb_cuda_usable_probes_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
     """The probe runs on the first call only; later calls reuse its answer."""
+    # Arrange
     calls: list[int] = []
 
     def _counting_detect() -> bool:
@@ -314,12 +380,17 @@ def test_xgb_cuda_usable_probes_once_per_process(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(xgb_utils, "detect_xgb_cuda", _counting_detect)
     real_xgb_cuda_usable.cache_clear()
+
+    # Act
     try:
-        assert real_xgb_cuda_usable() is True
-        assert real_xgb_cuda_usable() is True
+        first = real_xgb_cuda_usable()
+        second = real_xgb_cuda_usable()
     finally:
         real_xgb_cuda_usable.cache_clear()
 
+    # Assert
+    assert first is True
+    assert second is True
     assert len(calls) == 1
 
 
@@ -329,9 +400,14 @@ def test_resolve_xgb_device_auto_prefers_a_usable_gpu(
     monkeypatch: pytest.MonkeyPatch, requested: str | None, *, usable: bool, expected: str
 ) -> None:
     """``auto`` (and no device at all) resolves to CUDA when a GPU is usable, else the CPU."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
 
-    assert xgb_utils.resolve_xgb_device(requested) == expected
+    # Act
+    device = xgb_utils.resolve_xgb_device(requested)
+
+    # Assert
+    assert device == expected
 
 
 def test_resolve_xgb_device_keeps_an_explicit_cpu_without_probing(
@@ -339,32 +415,47 @@ def test_resolve_xgb_device_keeps_an_explicit_cpu_without_probing(
 ) -> None:
     """An explicit CPU request never looks for a GPU."""
 
+    # Arrange
     def _no_probe() -> bool:
         msg = "an explicit cpu request must not probe for a GPU"
         raise AssertionError(msg)
 
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", _no_probe)
 
-    assert xgb_utils.resolve_xgb_device("cpu") == "cpu"
+    # Act
+    device = xgb_utils.resolve_xgb_device("cpu")
+
+    # Assert
+    assert device == "cpu"
 
 
 def test_resolve_xgb_device_keeps_an_explicit_cuda_when_a_gpu_is_usable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An explicit CUDA request stands when the GPU can train."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
-    assert xgb_utils.resolve_xgb_device("cuda") == "cuda"
+    # Act
+    device = xgb_utils.resolve_xgb_device("cuda")
+
+    # Assert
+    assert device == "cuda"
 
 
 def test_resolve_xgb_device_moves_an_explicit_cuda_to_the_cpu_with_a_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Without a usable GPU an explicit CUDA request trains, and is recorded, on the CPU."""
+    # Arrange
     _reset_runtime_state()
     warnings_logged = _record_warnings(monkeypatch)
 
-    assert xgb_utils.resolve_xgb_device("cuda") == "cpu"
+    # Act
+    device = xgb_utils.resolve_xgb_device("cuda")
+
+    # Assert
+    assert device == "cpu"
     assert len(warnings_logged) == 1
     assert "cuda" in warnings_logged[0]
 
@@ -374,10 +465,13 @@ def test_resolve_xgb_params_defaults_to_the_auto_device(
     monkeypatch: pytest.MonkeyPatch, *, usable: bool, expected: str
 ) -> None:
     """Params resolved without a device name the concrete device ``auto`` picked."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
 
+    # Act
     params = xgb_utils.resolve_xgb_params({"max_depth": 3})
 
+    # Assert
     assert params["device"] == expected
     if usable:
         assert params["tree_method"] == "hist"
@@ -387,10 +481,13 @@ def test_resolve_xgb_params_resolves_an_auto_device_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A device passed through the overrides is resolved like the device argument."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
+    # Act
     params = xgb_utils.resolve_xgb_params({"max_depth": 3}, overrides={"device": "auto"})
 
+    # Assert
     assert params["device"] == "cuda"
 
 
@@ -398,37 +495,47 @@ def test_resolve_xgb_params_gpu_tree_method_without_a_gpu_uses_the_cpu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A GPU tree method asks for CUDA, which falls back to the CPU when no GPU is usable."""
+    # Arrange
     _reset_runtime_state()
     monkeypatch.setattr(xgb_utils, "_xgb_param_supported", lambda p: p in {"device", "predictor"})
 
+    # Act
     params = xgb_utils.resolve_xgb_params({"max_depth": 3}, tree_method="gpu", device="auto")
 
+    # Assert
     assert params["device"] == "cpu"
     assert params["tree_method"] == "hist"
 
 
 def test_coerce_tree_method_on_error_build_without_gpu_support() -> None:
     """A CUDA request on a build compiled without GPU support falls back to the CPU."""
+    # Arrange
     _reset_runtime_state()
 
     params = {"device": "cuda", "tree_method": "hist"}
+
+    # Act
     updated = xgb_utils._coerce_tree_method_on_error(
         params, xgb.core.XGBoostError("XGBoost version not compiled with GPU support.")
     )
 
+    # Assert
     assert updated is not None
     assert updated["device"] == "cpu"
 
 
 def test_gpu_fallback_is_logged_as_a_warning(monkeypatch: pytest.MonkeyPatch) -> None:
     """Training on the CPU after a CUDA failure is a warning, not routine information."""
+    # Arrange
     _reset_runtime_state()
     warnings_logged = _record_warnings(monkeypatch)
 
+    # Act
     xgb_utils._coerce_tree_method_on_error(
         {"device": "cuda", "tree_method": "hist"}, xgb.core.XGBoostError("CUDA error")
     )
 
+    # Assert
     assert len(warnings_logged) == 1
 
 
@@ -436,26 +543,33 @@ def test_every_fit_time_fallback_warns_even_after_a_resolution_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A fit that falls back is never silent, whatever was warned about before it."""
+    # Arrange
     _reset_runtime_state()
     warnings_logged = _record_warnings(monkeypatch)
     cuda_params = {"device": "cuda", "tree_method": "hist"}
 
     xgb_utils.resolve_xgb_device("cuda")
     xgb_utils._coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
+
+    # Act
     xgb_utils._coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
 
+    # Assert
     assert len(warnings_logged) == 3
 
 
 def test_coerce_tree_method_on_error_replaces_a_gpu_tree_method_on_cuda() -> None:
     """The CPU retry never keeps a GPU tree method, which XGBoost would reject again."""
+    # Arrange
     _reset_runtime_state()
 
+    # Act
     updated = xgb_utils._coerce_tree_method_on_error(
         {"device": "cuda", "tree_method": "gpu_hist"},
         xgb.core.XGBoostError("Invalid Input: 'gpu_hist', valid values are: approx, exact, hist"),
     )
 
+    # Assert
     assert updated is not None
     assert updated["device"] == "cpu"
     assert updated["tree_method"] == "hist"
@@ -466,18 +580,22 @@ def test_resolve_xgb_params_maps_a_gpu_tree_method_override_to_hist(
     monkeypatch: pytest.MonkeyPatch, *, usable: bool, expected: str
 ) -> None:
     """A ``gpu_hist`` override asks for CUDA with ``hist``, like the ``tree_method`` argument."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: usable)
 
+    # Act
     params = xgb_utils.resolve_xgb_params(
         {"max_depth": 3}, overrides={"tree_method": "gpu_hist", "device": "auto"}
     )
 
+    # Assert
     assert params["tree_method"] == "hist"
     assert params["device"] == expected
 
 
 def test_a_gpu_hist_override_fits(monkeypatch: pytest.MonkeyPatch) -> None:
     """``--xgb-tree-method gpu_hist`` trains instead of failing on XGBoost's rejection."""
+    # Arrange
     from nfl_predictor.ml import ml_model_core
 
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
@@ -488,10 +606,12 @@ def test_a_gpu_hist_override_fits(monkeypatch: pytest.MonkeyPatch) -> None:
     rng = np.random.default_rng(5)
     x = rng.normal(size=(40, 2))
 
+    # Act
     margin_model, _total_model = ml_model_core.fit_margin_total_models(
         ml_model_core.FitData(x, x[:, 0], 40.0 + x[:, 1]), params
     )
 
+    # Assert
     assert margin_model.get_params()["tree_method"] == "hist"
 
 
@@ -503,50 +623,90 @@ def test_resolve_xgb_device_normalizes_accepted_spellings(
     monkeypatch: pytest.MonkeyPatch, requested: str, expected: str
 ) -> None:
     """``gpu`` means ``cuda``, so the two never fingerprint differently."""
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
-    assert xgb_utils.resolve_xgb_device(requested) == expected
+    # Act
+    device = xgb_utils.resolve_xgb_device(requested)
+
+    # Assert
+    assert device == expected
 
 
 @pytest.mark.parametrize("requested", ["cdua", "gpu:0", "cuda:", "cuda:x", "tpu"])
 def test_resolve_xgb_device_rejects_unknown_devices(requested: str) -> None:
     """A typo fails here instead of reaching XGBoost."""
+    # Act & Assert
     with pytest.raises(ValueError, match="XGBoost device"):
         xgb_utils.resolve_xgb_device(requested)
 
 
+@pytest.mark.parametrize(("value", "expected"), [("auto", "auto"), ("gpu", "cuda")])
+def test_xgb_device_arg_keeps_good_devices(value: str, expected: str) -> None:
+    """The command-line type keeps good devices in their normalized spelling."""
+    # Act
+    device = xgb_utils.xgb_device_arg(value)
+
+    # Assert
+    assert device == expected
+
+
 def test_xgb_device_arg_rejects_a_typo_as_an_argparse_error() -> None:
-    """The command-line type reports a bad device as a usage error and keeps good ones."""
+    """The command-line type reports a bad device as a usage error."""
+    # Arrange
     import argparse
 
-    assert xgb_utils.xgb_device_arg("auto") == "auto"
-    assert xgb_utils.xgb_device_arg("gpu") == "cuda"
+    # Act & Assert
     with pytest.raises(argparse.ArgumentTypeError):
         xgb_utils.xgb_device_arg("cdua")
 
 
-def test_fitted_xgb_device_reads_every_head() -> None:
+def _heads(margin: str, total: str, quantile: str) -> SimpleNamespace:
+    """Return a model stand-in whose heads were fitted on the given devices."""
+    return SimpleNamespace(
+        margin_model=xgb.XGBRegressor(device=margin),
+        total_model=xgb.XGBRegressor(device=total),
+        margin_quantile_models={0.1: xgb.XGBRegressor(device=quantile)},
+        total_quantile_models=None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("devices", "expected"),
+    [
+        pytest.param(("cuda", "cuda", "cuda"), "cuda", id="all_cuda"),
+        pytest.param(("cuda", "cpu", "cuda"), "mixed", id="total_fell_back"),
+        pytest.param(("cuda", "cuda", "cpu"), "mixed", id="quantile_fell_back"),
+    ],
+)
+def test_fitted_xgb_device_reads_every_head(devices: tuple[str, str, str], expected: str) -> None:
     """Every head is read: one device when they agree, ``mixed`` when a head fell back."""
-    from types import SimpleNamespace
+    # Arrange
+    model = _heads(*devices)
 
-    def heads(margin: str, total: str, quantile: str) -> SimpleNamespace:
-        return SimpleNamespace(
-            margin_model=xgb.XGBRegressor(device=margin),
-            total_model=xgb.XGBRegressor(device=total),
-            margin_quantile_models={0.1: xgb.XGBRegressor(device=quantile)},
-            total_quantile_models=None,
-        )
+    # Act
+    device = xgb_utils.fitted_xgb_device(model)
 
-    assert xgb_utils.fitted_xgb_device(heads("cuda", "cuda", "cuda")) == "cuda"
-    assert xgb_utils.fitted_xgb_device(heads("cuda", "cpu", "cuda")) == "mixed"
-    assert xgb_utils.fitted_xgb_device(heads("cuda", "cuda", "cpu")) == "mixed"
+    # Assert
+    assert device == expected
 
 
 def test_fitted_xgb_device_reads_the_fitted_estimator() -> None:
-    """The device comes from the fitted estimator; a model without one records none."""
-    from types import SimpleNamespace
-
+    """The device comes from the fitted estimator."""
+    # Arrange
     plain = SimpleNamespace(margin_model=xgb.XGBRegressor(device="cpu"))
 
-    assert xgb_utils.fitted_xgb_device(plain) == "cpu"
-    assert xgb_utils.fitted_xgb_device({"model": "stub"}) is None
+    # Act
+    device = xgb_utils.fitted_xgb_device(plain)
+
+    # Assert
+    assert device == "cpu"
+
+
+def test_fitted_xgb_device_records_none_without_an_estimator() -> None:
+    """A model without a fitted estimator records no device."""
+    # Act
+    device = xgb_utils.fitted_xgb_device({"model": "stub"})
+
+    # Assert
+    assert device is None

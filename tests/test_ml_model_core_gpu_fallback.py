@@ -61,12 +61,15 @@ def test_margin_total_fit_falls_back_to_the_cpu_with_a_warning(
     warnings_logged: list[str],
 ) -> None:
     """Both heads train on the CPU after the CUDA fit fails, and the fallback is a warning."""
+    # Arrange
     x, margin, total = _data()
 
+    # Act
     margin_model, total_model = core.fit_margin_total_models(
         core.FitData(x, margin, total), _cuda_params()
     )
 
+    # Assert
     assert margin_model.get_params()["device"] == "cpu"
     assert total_model.get_params()["device"] == "cpu"
     assert len(warnings_logged) == 1
@@ -74,10 +77,13 @@ def test_margin_total_fit_falls_back_to_the_cpu_with_a_warning(
 
 def test_quantile_fit_falls_back_to_the_cpu_with_a_warning(warnings_logged: list[str]) -> None:
     """The quantile heads fall back the same way."""
+    # Arrange
     x, margin, _total = _data()
 
+    # Act
     models = core.fit_quantile_models(x, margin, _cuda_params(), quantiles=(0.1, 0.9))
 
+    # Assert
     assert {model.get_params()["device"] for model in models.values()} == {"cpu"}
     assert len(warnings_logged) == 1
 
@@ -89,19 +95,24 @@ def test_walk_forward_stops_instead_of_checkpointing_a_week_trained_on_the_wrong
 
     Its checkpoint would sit under the CUDA fingerprint, so resuming would mix devices.
     """
+    # Arrange
     monkeypatch.setattr(xgb_utils, "xgb_cuda_usable", lambda: True)
 
+    # Act & Assert
     with pytest.raises(RuntimeError, match="cuda"):
         walk_forward.run_walk_forward_backtest(
             _fixture_df(), _base_config(), checkpoints=walk_forward.FoldCheckpoints(tmp_path)
         )
 
+    # Assert
     assert not list(tmp_path.rglob("fold_*.joblib"))
     assert warnings_logged
 
 
 def test_walk_forward_weeks_record_the_device_they_trained_on() -> None:
     """Each week's metrics name the device its models were fitted on."""
+    # Act
     result = walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 
+    # Assert
     assert {week["xgb_device"] for week in result["per_week"]} == {"cpu"}

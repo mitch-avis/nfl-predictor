@@ -45,19 +45,23 @@ def _write_dummy_all_data(tmp_path: Path) -> Path:
 
 def test_validate_offline_main_missing_file_logs_error(tmp_path: Path, monkeypatch) -> None:
     """Offline validation returns code 2 and logs an error when the CSV is missing."""
+    # Arrange
     logger = _FakeLogger()
-
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
 
-    assert module.main([]) == 2
+    # Act
+    code = module.main([])
+
+    # Assert
+    assert code == 2
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
 
 
 def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypatch) -> None:
     """Offline validation emits logger output for both errors and warnings."""
+    # Arrange
     logger = _FakeLogger()
-
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
@@ -73,7 +77,11 @@ def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypa
         ),
     )
 
-    assert module.main([]) == 1
+    # Act
+    code = module.main([])
+
+    # Assert
+    assert code == 1
     assert ("error", "Errors:") in logger.records
     assert ("error", "- bad schema") in logger.records
     assert ("warning", "Warnings:") in logger.records
@@ -82,8 +90,8 @@ def test_validate_offline_main_logs_errors_and_warnings(tmp_path: Path, monkeypa
 
 def test_validate_offline_main_logs_success(tmp_path: Path, monkeypatch) -> None:
     """Offline validation logs success and returns zero when no issues are found."""
+    # Arrange
     logger = _FakeLogger()
-
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
@@ -96,25 +104,33 @@ def test_validate_offline_main_logs_success(tmp_path: Path, monkeypatch) -> None
         lambda _df: module.validation_utils.ValidationResult(errors=[], warnings=[]),
     )
 
-    assert module.main([]) == 0
+    # Act
+    code = module.main([])
+
+    # Assert
+    assert code == 0
     assert logger.records == [("info", "Validation OK")]
 
 
 def test_validate_live_main_missing_file_logs_error(tmp_path: Path, monkeypatch) -> None:
     """Live validation returns code 2 and logs an error when the CSV is missing."""
+    # Arrange
     logger = _FakeLogger()
-
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
 
-    assert module.main(LIVE) == 2
+    # Act
+    code = module.main(LIVE)
+
+    # Assert
+    assert code == 2
     assert logger.records == [("error", f"Missing data file: {tmp_path / 'all_data.csv'}")]
 
 
 def test_validate_live_main_logs_success_without_mismatches(tmp_path: Path, monkeypatch) -> None:
     """Live validation logs success and returns zero when no score mismatches exist."""
+    # Arrange
     logger = _FakeLogger()
-
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path)
@@ -127,14 +143,18 @@ def test_validate_live_main_logs_success_without_mismatches(tmp_path: Path, monk
         lambda _df: pl.DataFrame(),
     )
 
-    assert module.main(LIVE) == 0
+    # Act
+    code = module.main(LIVE)
+
+    # Assert
+    assert code == 0
     assert logger.records == [("info", "No mismatches found")]
 
 
 def test_validate_live_main_logs_mismatches(tmp_path: Path, monkeypatch) -> None:
     """Live validation logs mismatch details and returns one when scores differ."""
+    # Arrange
     logger = _FakeLogger()
-
     mismatches = pl.DataFrame({"away_abbr": ["BUF"], "home_abbr": ["KC"]})
     _write_dummy_all_data(tmp_path)
     monkeypatch.setattr(module, "log", logger, raising=False)
@@ -148,7 +168,11 @@ def test_validate_live_main_logs_mismatches(tmp_path: Path, monkeypatch) -> None
         lambda _df: mismatches,
     )
 
-    assert module.main(LIVE) == 1
+    # Act
+    code = module.main(LIVE)
+
+    # Assert
+    assert code == 1
     assert ("error", "Score mismatches detected:") in logger.records
     assert any(
         level == "error" and "BUF" in message and "KC" in message
@@ -163,6 +187,7 @@ def test_validate_reads_the_data_dir_option(
     monkeypatch,
 ) -> None:
     """An explicit data directory is read instead of the packaged one, in either mode."""
+    # Arrange
     logger = _FakeLogger()
     chosen = tmp_path / "configured"
     chosen.mkdir()
@@ -170,7 +195,11 @@ def test_validate_reads_the_data_dir_option(
     monkeypatch.setattr(module, "log", logger, raising=False)
     monkeypatch.setattr(module.constants, "DATA_PATH", tmp_path / "packaged")
 
-    assert module.main([*mode, "--data-dir", str(chosen)]) == 2
+    # Act
+    code = module.main([*mode, "--data-dir", str(chosen)])
+
+    # Assert
+    assert code == 2
     assert logger.records == [("error", f"Missing data file: {chosen / 'all_data.csv'}")]
 
 
@@ -181,10 +210,15 @@ def test_the_front_door_returns_the_validation_exit_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """``nfl-predictor validate`` (and ``--live``) exits with the command's own return code."""
+    # Arrange
     monkeypatch.setattr(module.log, "info", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(module.log, "error", lambda *_args, **_kwargs: None)
 
-    assert front_door.main(["validate", *extra, "--data-dir", str(tmp_path)]) == 2
+    # Act
+    code = front_door.main(["validate", *extra, "--data-dir", str(tmp_path)])
+
+    # Assert
+    assert code == 2
 
 
 _SCORED_MATCHUPS = (("BUF", "KC"), ("DAL", "PHI"), ("SF", "SEA"))
@@ -228,9 +262,14 @@ def _write_newest_first_all_data(tmp_path: Path, unplayed_rows: int = 150) -> Pa
 
 def test_validate_offline_reads_scores_after_many_unplayed_rows(tmp_path: Path) -> None:
     """Scores that first appear after 100+ empty rows are still read as numbers."""
+    # Arrange
     _write_newest_first_all_data(tmp_path)
 
-    assert module.main(["--data-dir", str(tmp_path)]) == 0
+    # Act
+    code = module.main(["--data-dir", str(tmp_path)])
+
+    # Assert
+    assert code == 0
 
 
 def test_validate_live_reads_scores_after_many_unplayed_rows(
@@ -238,6 +277,7 @@ def test_validate_live_reads_scores_after_many_unplayed_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The live comparison matches numeric schedule scores after 100+ empty rows."""
+    # Arrange
     _write_newest_first_all_data(tmp_path)
     schedule = pl.DataFrame(
         {
@@ -253,4 +293,8 @@ def test_validate_live_reads_scores_after_many_unplayed_rows(
         module.validation_utils.polars_utils, "load_schedule", lambda _seasons: schedule
     )
 
-    assert module.main([*LIVE, "--data-dir", str(tmp_path)]) == 0
+    # Act
+    code = module.main([*LIVE, "--data-dir", str(tmp_path)])
+
+    # Assert
+    assert code == 0

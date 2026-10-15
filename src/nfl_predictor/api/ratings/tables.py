@@ -175,10 +175,13 @@ def team_names(frame: pl.DataFrame) -> dict[str, str]:
     if "team" not in frame.columns:
         return {}
     codes = frame.get_column("team").drop_nulls().unique().sort().to_list()
-    return {
-        str(code): str(constants.TEAM_MAPPING.get(str(code), {}).get("name", code))
-        for code in codes
-    }
+    return {str(code): _franchise_name(str(code)) for code in codes}
+
+
+def _franchise_name(code: str) -> str:
+    """Return the canonical franchise name of ``code``, or ``code`` when it names no team."""
+    meta = constants.TEAM_MAPPING.get(code)
+    return code if meta is None else meta["name"]
 
 
 def games_per_team(season: int) -> int:

@@ -3,16 +3,23 @@
 You are resuming work in the `nfl-predictor` workspace (`/home/mitch/workspace/nfl-predictor`).
 Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as binding, then
 `.agents/step6_plan.md` (streams, authority, the user's decisions), `.agents/benchmarks.md` before
-any walk-forward, and this file. The main checkout's `.agents/ultracode_session_audit_2026-10-10.md`
-(on `main` only) is the audit of the unattended session that built this branch.
+any walk-forward, and this file. `.agents/ultracode_session_audit_2026-10-10.md` is the audit of
+the unattended session that built the step-6 branch.
 
 ## State (written 2026-10-14, after `0.59.0` landed)
 
-- This branch, `feat/step6-sos-port`, is at `0.59.0` (worktree `~/scratch/step6`). `main`
-  (`0.45.4` plus the handoff merges, up to `5087a5c`, not pushed) is merged in (`d288907`,
-  `1d9f84c`), so the instruction-file restructure, the suppression rule and the three-role testing
-  standard apply here. The main checkout stays on `main`; its handoff still reads 2026-10-12 and
-  points here.
+- `main` is at `0.59.0` (`119a016`, 2026-10-14, not pushed): `feat/step6-sos-port` merged with
+  `--no-ff` after `main`'s lock refresh (`33df363`) was merged into the branch (`5a7347a`). The
+  branch (worktree `~/scratch/step6`) is level with `main`. `scripts/gate.sh --web` exited `0` on
+  that tree in the worktree, and `scripts/gate.sh` exited `0` on `main` after
+  `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` (LightGBM stays `cuda`). Run a
+  worktree's gate with `VIRTUAL_ENV` set to that worktree's `.venv`: with the main checkout's
+  venv active, `uv sync --check --active` checks the wrong environment and fails.
+- The user's web server (`nfl-predictor web --port 8001`, no `--reload`, started 18:25 MDT from
+  the main checkout) still runs the `0.45.4` code it loaded, and `main`'s `web/dist/` is the old
+  build. The `--web` gate was left off on `main` so the served frontend would not change under
+  it. To see the new pages, the user stops it, runs `scripts/gate.sh --web` (which builds
+  `web/dist/`) and starts it again; never stop or restart it for them.
 - Phase 4 is fully reviewed. `models/step6/REVIEW.md` (main checkout; `models/` is not in git)
   now holds three reviews, each by a reviewer that did not produce the runs, each with its
   scripts embedded:
@@ -178,20 +185,28 @@ Still open:
 Decided on 2026-10-14: the top-decile ranking is the two-seed mean (recorded in
 `.agents/sos_port/DECISIONS.md`).
 
-## Next: the user's review, the merge, then the close-out
+## Week 6 on the merged `main`, then the close-out
 
-1. The user reviews the `../nfeloqb` changes and the preliminary Week 6 run. Hold until then.
-2. The merge into `main` (`--no-ff`, from the main checkout; check `ss -ltnp` first), then
-   `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)` there.
-3. Back up `data/`, rebuild it (`nfl-predictor data`), run `nfl-predictor leakage-audit`, then a
-   second Week 6 run on the merged `main`. Fallback: `main` at `5087a5c` with the backed-up
-   `data/`.
+Done on 2026-10-14 with the user's approval: the merge, the sync, the `data/` backup and rebuild
+and the leakage audit (record in `.agents/benchmarks.md`, "Data state and ETL rebuild records"),
+then the Week 6 run on `0.59.0`: `models/weekly_20261015_022416_9a4c092c`, exit `0` at 20:27
+MDT, all 41 walk-forward weeks trained, floor sigma `13.3049`, the ported ratings in and the
+strength snapshot out. Every pick sides with the preliminary run; ranks moved (BAL `0.722`, rank
+10). One seed against the preliminary run on the 623 shared games (a diagnostic only, not for
+the docs): Brier `+0.00177` [−0.00021, +0.00379], inside the three-season noise floor and the
+opposite sign to the reviewed decision 1, which was measured on the old `qb_elos.csv`. Fallback:
+`main` at `5087a5c` with `~/scratch/data_backups/2026-10-14_pre_step6_merge/`.
 
-After the picks, on this branch or a fresh one off `main`:
+The user submits picks before SEA@DEN (2026-10-15 20:15 ET); Baltimore hinges on Lamar
+Jackson's Thursday practice report.
+
+After the picks, on a fresh branch off `main`:
 
 1. The "no game lines" groups change, test first through an implementer and a reviewer.
 2. Measure the `qb_elos.csv` fix and the stale win-total file with two dataset builds (a
    hypothesis and decision rule first; walk-forwards are must-ask beyond one per hypothesis).
+   Recommended to the user, not yet decided: group it with the `qb1_adj`/`qb2_adj` adoption
+   arm and with decision 1's ratings swap on the new file, given the diagnostic above.
 3. The docs close-out: regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/`
    write: ask), rename "market-free" to "no game lines" where it means the configuration with Elo
    (including `stage1.py:63,68`), refresh the stale "Review:" fields in

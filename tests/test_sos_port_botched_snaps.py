@@ -146,7 +146,7 @@ def test_remove_plays_without_removals_returns_the_rows_unchanged() -> None:
 
 def _league_rows() -> Any:
     """Return two quarterbacks' rows over four weeks against two defenses, two games a week."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for week in range(1, 5):
         for qb_id, team, opponent, epa in (
             ("00-A", "AAA", "BBB", 6.0),

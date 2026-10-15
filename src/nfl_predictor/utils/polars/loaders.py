@@ -131,9 +131,9 @@ _SKELETON_SCHEMA = pl.Schema(
 )
 
 
-def is_numeric_dtype(dtype: DataType) -> bool:
-    """Return True if dtype is numeric."""
-    return isinstance(dtype, (pl.Decimal, *NUMERIC_DTYPES))
+def is_numeric_dtype(dtype: DataType | type[DataType]) -> bool:
+    """Return True if dtype, a Polars dtype instance or class, is numeric."""
+    return isinstance(dtype, pl.Decimal) or dtype in NUMERIC_DTYPES
 
 
 def resolve_cache_dir(cache_dir: os.PathLike[str] | str | None) -> Path:

@@ -25,9 +25,13 @@ if TYPE_CHECKING:
         pytest.param(pl.Int32(), True, id="int32"),
         pytest.param(pl.Float64(), True, id="float64"),
         pytest.param(pl.Utf8(), False, id="utf8"),
+        pytest.param(pl.Decimal(10, 2), True, id="decimal"),
+        pytest.param(pl.Int64, True, id="int64-class"),
+        pytest.param(pl.Float32, True, id="float32-class"),
+        pytest.param(pl.Utf8, False, id="utf8-class"),
     ],
 )
-def test_is_numeric_dtype(dtype: pl.DataType, *, expected: bool) -> None:
+def test_is_numeric_dtype(dtype: pl.DataType | type[pl.DataType], *, expected: bool) -> None:
     """Check numeric dtype detection works as expected."""
     # Act
     is_numeric = loaders.is_numeric_dtype(dtype)

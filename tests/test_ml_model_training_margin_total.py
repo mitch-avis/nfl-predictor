@@ -73,7 +73,7 @@ def test_train_margin_total_model_full_path(monkeypatch: pytest.MonkeyPatch) -> 
         }
     )
 
-    monkeypatch.setattr(ml_model_training, "_load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(
         ml_model_training,
         "build_feature_spec",
@@ -102,7 +102,7 @@ def test_train_margin_total_model_full_path(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(ml_model_training, "validate_quantiles", returning((0.1, 0.9)))
     monkeypatch.setattr(
         ml_model_training,
-        "_run_optuna_search",
+        "run_optuna_search",
         returning(
             (
                 {"max_depth": 2},

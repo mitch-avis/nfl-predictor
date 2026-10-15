@@ -32,13 +32,13 @@ from nfl_predictor.ml import feature_spec as _feature_spec
 from nfl_predictor.ml.floor_sigma import FloorSigma, home_win_prob
 from nfl_predictor.ml.metrics import confidence_ranks, confidence_strength, picks_home
 from nfl_predictor.ml.ml_model_xgb_utils import (
-    _build_xgb_fit_kwargs,
-    _coerce_tree_method_on_error,
-    _with_xgb_early_stopping_params,
+    build_xgb_fit_kwargs,
+    coerce_tree_method_on_error,
     fit_transform_matrix,
     predict_xgb,
     resolve_xgb_params,
     transform_matrix,
+    with_xgb_early_stopping_params,
 )
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.narrowing import as_str_dict
@@ -224,13 +224,14 @@ def _get_target_columns(df: pd.DataFrame) -> tuple[str, str]:
     return away_col, home_col
 
 
-def _load_games(path: Path) -> pd.DataFrame:
+def load_games(path: Path) -> pd.DataFrame:
+    """Load a games CSV into a pandas DataFrame and log its row count."""
     df = pd.read_csv(path)
     log.info("Loaded %d rows from %s", len(df), path)
     return df
 
 
-def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
+def summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
     """Summarize missing-data prevalence for key feature groups.
 
     When some sources are missing historically, the schema remains invariant and these counters make
@@ -270,11 +271,12 @@ def _summarize_missing_data(df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def _filter_season_bounds(
+def filter_season_bounds(
     df: pd.DataFrame,
     min_season: int | None,
     max_season: int | None,
 ) -> pd.DataFrame:
+    """Keep the rows whose season lies within the given bounds (``None`` leaves a side open)."""
     if "season" not in df.columns:
         return df
 
@@ -294,9 +296,10 @@ def _filter_season_bounds(
     return df
 
 
-def _split_by_season(
+def split_by_season(
     df: pd.DataFrame, holdout_seasons: int
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[int]]:
+    """Split off the last ``holdout_seasons`` seasons: the train rows, holdout rows and seasons."""
     if "season" not in df.columns:
         msg = "Expected a season column for time-aware splits."
         raise ValueError(msg)
@@ -428,13 +431,14 @@ def _derive_scores_from_margin_total(
     return pred_away, pred_home
 
 
-def _evaluate_margin_total_predictions(
+def evaluate_margin_total_predictions(
     y_true: pd.DataFrame,
     pred_margin: np.ndarray,
     pred_total: np.ndarray,
     target_columns: tuple[str, str],
     home_win_prob: np.ndarray | None = None,
 ) -> dict[str, float]:
+    """Score margin/total predictions: MAE per target and score, winner accuracy, probabilities."""
     away_col, home_col = target_columns
     away_true = y_true[away_col].to_numpy()
     home_true = y_true[home_col].to_numpy()
@@ -493,18 +497,18 @@ def fit_margin_total_models(
         resolved_early_stopping = None if eval_data is None else early_stopping_rounds
         x_eval = None if eval_data is None else eval_data.x
 
-        active_params = _with_xgb_early_stopping_params(active_params, resolved_early_stopping)
+        active_params = with_xgb_early_stopping_params(active_params, resolved_early_stopping)
         margin_model = xgb.XGBRegressor(**active_params)
         total_model = xgb.XGBRegressor(**active_params)
 
-        fit_kwargs = _build_xgb_fit_kwargs(
+        fit_kwargs = build_xgb_fit_kwargs(
             x_eval,
             None if eval_data is None else eval_data.margin,
             resolved_early_stopping,
         )
         margin_model.fit(train.x, train.margin, sample_weight=train.sample_weight, **fit_kwargs)
 
-        fit_kwargs = _build_xgb_fit_kwargs(
+        fit_kwargs = build_xgb_fit_kwargs(
             x_eval,
             None if eval_data is None else eval_data.total,
             resolved_early_stopping,
@@ -516,7 +520,7 @@ def fit_margin_total_models(
     try:
         return _train_with_params(params)
     except xgb.core.XGBoostError as exc:
-        fallback_params = _coerce_tree_method_on_error(params, exc)
+        fallback_params = coerce_tree_method_on_error(params, exc)
         if fallback_params is None:
             raise
         return _train_with_params(fallback_params)
@@ -558,9 +562,9 @@ def fit_quantile_models(
             q_params = active_params.copy()
             q_params["objective"] = "reg:quantileerror"
             q_params["quantile_alpha"] = quantile
-            q_params = _with_xgb_early_stopping_params(q_params, None)
+            q_params = with_xgb_early_stopping_params(q_params, None)
             model = xgb.XGBRegressor(**q_params)
-            fit_kwargs = _build_xgb_fit_kwargs(None, None, None)
+            fit_kwargs = build_xgb_fit_kwargs(None, None, None)
             model.fit(x_train, y_train, sample_weight=sample_weight, **fit_kwargs)
             fitted[quantile] = model
         return fitted
@@ -568,7 +572,7 @@ def fit_quantile_models(
     try:
         models = _train_with_params(params)
     except xgb.core.XGBoostError as exc:
-        fallback_params = _coerce_tree_method_on_error(params, exc)
+        fallback_params = coerce_tree_method_on_error(params, exc)
         if fallback_params is None:
             raise
         models = _train_with_params(fallback_params)
@@ -619,10 +623,11 @@ def _predict_margin_total_from_model(
     return pred_margin, pred_total
 
 
-def _predict_margin_total_quantiles_from_model(
+def predict_margin_total_quantiles_from_model(
     model: MarginTotalModel,
     games_df: pd.DataFrame,
 ) -> tuple[dict[float, np.ndarray], dict[float, np.ndarray]]:
+    """Predict each margin and total quantile, or two empty dicts when the model has no heads."""
     margin_models = getattr(model, "margin_quantile_models", None)
     total_models = getattr(model, "total_quantile_models", None)
     if not margin_models or not total_models:
@@ -648,11 +653,12 @@ def _predict_margin_total_quantiles_from_model(
     return margin_preds, total_preds
 
 
-def _summarize_confidence_pool(
+def summarize_confidence_pool(
     df: pd.DataFrame,
     home_win_prob: np.ndarray,
     target_columns: tuple[str, str],
 ) -> dict[str, float]:
+    """Summarize weekly confidence-pool points (expected and actual) over the frame's weeks."""
     if "season" not in df.columns or "week" not in df.columns:
         return {}
 
@@ -885,7 +891,7 @@ def _estimator_iteration_info(prefix: str, estimator: object) -> dict[str, Any]:
     return info
 
 
-def _early_stopping_info(model: object) -> dict[str, Any]:
+def early_stopping_info(model: object) -> dict[str, Any]:
     """Return every head's early-stopping details, keyed ``<head>.<attribute>``."""
     if not isinstance(model, MarginTotalModel):
         return {}
@@ -1153,10 +1159,10 @@ def _score_margin_total_fold(
         pred_total = pred_total + baseline_total_val
     home_win_prob = margin_to_home_win_prob(pred_margin)
 
-    metrics = _evaluate_margin_total_predictions(
+    metrics = evaluate_margin_total_predictions(
         val_df, pred_margin, pred_total, setup.target_columns, home_win_prob
     )
-    pool_summary = _summarize_confidence_pool(val_df, home_win_prob, setup.target_columns)
+    pool_summary = summarize_confidence_pool(val_df, home_win_prob, setup.target_columns)
     return _select_objective_score(metrics, pool_summary, optuna_config.objective)
 
 
@@ -1294,7 +1300,7 @@ def _best_trial(study: optuna.Study) -> tuple[float | None, dict[str, Any], int 
         return None, {}, None
 
 
-def _run_optuna_search(
+def run_optuna_search(
     df: pd.DataFrame,
     setup: FoldSetup,
     optuna_config: OptunaConfig,

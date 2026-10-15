@@ -342,7 +342,7 @@ def test_a_failed_current_season_download_falls_back_to_the_cached_official_team
     cached = _official(data).filter(pl.col("season") == _LAST)
     source = season_stats_sources.OFFICIAL_TEAM_STATS
     path = source.cache_path(constants.NFLREADPY_CACHE_DIR, _LAST, regular_season_only=True)
-    loaders._write_cached_frame(cached, path, source.columns)
+    loaders.write_cached_frame(cached, path, source.columns)
     attempts: list[int] = []
     monkeypatch.setattr(nflreadpy, "load_team_stats", _failing_download(error, attempts))
 

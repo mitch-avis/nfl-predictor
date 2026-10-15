@@ -275,7 +275,7 @@ def resolve_xgb_params(
     return params
 
 
-def _build_xgb_fit_kwargs(
+def build_xgb_fit_kwargs(
     x_eval: np.ndarray | spmatrix | None,
     y_eval: np.ndarray | None,
     early_stopping_rounds: int | None,
@@ -296,11 +296,11 @@ def _build_xgb_fit_kwargs(
     if _xgb_fit_supports("early_stopping_rounds"):
         fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
     # Newer XGBoost sklearn wrappers moved early-stopping to model params (init kwargs).
-    # We handle that in `_with_xgb_early_stopping_params`.
+    # We handle that in `with_xgb_early_stopping_params`.
     return fit_kwargs
 
 
-def _with_xgb_early_stopping_params(
+def with_xgb_early_stopping_params(
     params: dict[str, Any],
     early_stopping_rounds: int | None,
 ) -> dict[str, Any]:
@@ -328,7 +328,7 @@ def _with_xgb_early_stopping_params(
     return updated
 
 
-def _coerce_tree_method_on_error(
+def coerce_tree_method_on_error(
     params: dict[str, Any],
     exc: Exception,
 ) -> dict[str, Any] | None:

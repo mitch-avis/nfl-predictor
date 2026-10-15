@@ -133,8 +133,8 @@ def _measure_sizes(
     """Write the fresh frame in the cache's old and new shapes and record their sizes."""
     before = work_dir / f"pbp_{result.season}_reg_cached_columns.parquet"
     after = work_dir / f"pbp_{result.season}_reg_requested_columns.parquet"
-    loaders._write_cached_frame(fresh.select(cached_columns), before, cached_columns)
-    loaders._write_cached_frame(fresh, after, list(constants.PBP_COLUMNS))
+    loaders.write_cached_frame(fresh.select(cached_columns), before, cached_columns)
+    loaders.write_cached_frame(fresh, after, list(constants.PBP_COLUMNS))
     result.size_before = before.stat().st_size
     result.size_after = after.stat().st_size
 

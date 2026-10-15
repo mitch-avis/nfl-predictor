@@ -89,7 +89,7 @@ def test_train_margin_total_model_with_report_collects_metrics(
             return np.array([3.0, -4.0])
         return np.array([40.0, 35.0])
 
-    monkeypatch.setattr(ml_model_training, "_load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(
         ml_model_training,
         "train_margin_total_model",
@@ -166,7 +166,7 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
         tuned_params=None,
         tuned_cv_summary=None,
     )
-    monkeypatch.setattr(ml_model_training, "_load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(ml_model_training, "train_margin_total_model", returning(model))
     explained: list[pd.DataFrame] = []
 

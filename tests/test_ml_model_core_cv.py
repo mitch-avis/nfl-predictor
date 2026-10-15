@@ -59,7 +59,7 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(core, "margin_to_home_win_prob", returning(np.array([0.7])))
     monkeypatch.setattr(
         core,
-        "_evaluate_margin_total_predictions",
+        "evaluate_margin_total_predictions",
         returning(
             {
                 "margin_mae": 3.0,
@@ -71,7 +71,7 @@ def test_score_margin_total_fold_with_stubs(monkeypatch: pytest.MonkeyPatch) -> 
     )
     monkeypatch.setattr(
         core,
-        "_summarize_confidence_pool",
+        "summarize_confidence_pool",
         returning({"weekly_expected_points_avg": 10.0}),
     )
 
@@ -205,7 +205,7 @@ def test_run_optuna_search_rejects_holdout_seasons(monkeypatch: pytest.MonkeyPat
 
     # Act & Assert
     with pytest.raises(ValueError, match="holdout seasons"):
-        core._run_optuna_search(df, _fold_setup(), optuna_config, holdout_seasons=[2024])
+        core.run_optuna_search(df, _fold_setup(), optuna_config, holdout_seasons=[2024])
 
 
 def _fold_setup(*, market_anchor: bool = False) -> core.FoldSetup:

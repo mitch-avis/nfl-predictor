@@ -13,7 +13,7 @@ import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
-from nfl_predictor.utils.polars.loaders import _is_numeric_dtype
+from nfl_predictor.utils.polars.loaders import is_numeric_dtype
 from nfl_predictor.utils.scraping_utils import (
     get_current_nfl_week,
     get_missing_tr_columns,
@@ -1064,7 +1064,7 @@ def calculate_stat_differentials(
             if away_dtype is None or home_dtype is None:
                 continue
 
-            if not (_is_numeric_dtype(away_dtype) and _is_numeric_dtype(home_dtype)):
+            if not (is_numeric_dtype(away_dtype) and is_numeric_dtype(home_dtype)):
                 log.debug(
                     "Skipping diff for %s (non-numeric types: %s vs %s)",
                     stat,

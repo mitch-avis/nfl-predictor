@@ -154,7 +154,7 @@ def test_early_stopping_info_records_last_round_without_xgb_best_iteration() -> 
     )
 
     # Act
-    info = ml_model_core._early_stopping_info(model)
+    info = ml_model_core.early_stopping_info(model)
 
     # Assert
     assert info["margin_model.best_iteration"] == 11
@@ -199,7 +199,7 @@ def test_train_margin_total_model_auto_stays_on_the_deterministic_floor(
             np.zeros(len(frame), dtype=float),
         )
 
-    monkeypatch.setattr(ml_model_training, "_load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(ml_model_training, "build_feature_spec", returning(_feature_spec()))
     monkeypatch.setattr(ml_model_training, "apply_feature_spec", select_feature)
     monkeypatch.setattr(ml_model_training, "build_preprocessor", returning(_DummyPreprocessor()))

@@ -76,7 +76,7 @@ def _snapshot_and_cache(tmp_path: Path, *, cache_epa: float = 0.25, stale: bool 
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     path = loaders._pbp_cache_path(cache_dir, 2025, regular_season_only=True)
-    loaders._write_cached_frame(prepared, path, requested)
+    loaders.write_cached_frame(prepared, path, requested)
     return cache_dir
 
 

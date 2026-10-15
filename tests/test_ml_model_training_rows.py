@@ -127,7 +127,7 @@ def _stub_fitting(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame) -> dict[str
     def zero_predictions(_model: object, x: np.ndarray) -> np.ndarray:
         return np.zeros(x.shape[0], dtype=float)
 
-    monkeypatch.setattr(ml_model_training, "_load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(ml_model_training, "build_feature_spec", record_spec)
     monkeypatch.setattr(ml_model_training, "apply_feature_spec", passthrough_feature_spec)
     monkeypatch.setattr(ml_model_training, "build_preprocessor", returning(_ZeroPreprocessor()))
@@ -253,7 +253,7 @@ def test_tuned_params_take_precedence_over_the_given_overrides(
     recorded = _stub_fitting(monkeypatch, _season_weeks_frame({2025: 18, 2026: 1}))
     monkeypatch.setattr(
         ml_model_training,
-        "_run_optuna_search",
+        "run_optuna_search",
         returning(({"n_estimators": 11}, None, None)),
     )
 

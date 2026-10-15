@@ -121,7 +121,7 @@ def test_build_xgb_fit_kwargs_with_early_stopping(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(xgb_utils, "_xgb_fit_supports", _always_supported)
 
     # Act
-    kwargs = xgb_utils._build_xgb_fit_kwargs(
+    kwargs = xgb_utils.build_xgb_fit_kwargs(
         np.zeros((2, 1)),
         np.array([1.0, 2.0]),
         early_stopping_rounds=5,
@@ -154,7 +154,7 @@ def test_with_xgb_early_stopping_params_uses_the_init_param_only(
     params = {"max_depth": 2}
 
     # Act
-    updated = xgb_utils._with_xgb_early_stopping_params(params, 7)
+    updated = xgb_utils.with_xgb_early_stopping_params(params, 7)
 
     # Assert
     assert updated == {"max_depth": 2, "early_stopping_rounds": 7}
@@ -164,8 +164,8 @@ def test_with_xgb_early_stopping_params_uses_the_init_param_only(
 def test_with_xgb_early_stopping_params_never_shares_a_callback() -> None:
     """On the installed XGBoost, two estimators' params carry no callback object at all."""
     # Act
-    first = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
-    second = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
+    first = xgb_utils.with_xgb_early_stopping_params({"max_depth": 2}, 5)
+    second = xgb_utils.with_xgb_early_stopping_params({"max_depth": 2}, 5)
 
     # Assert
     assert first["early_stopping_rounds"] == 5
@@ -176,8 +176,8 @@ def test_with_xgb_early_stopping_params_never_shares_a_callback() -> None:
 def test_estimators_built_from_early_stopping_params_carry_no_callback() -> None:
     """Two estimators built from early-stopping params hold no callback object."""
     # Arrange
-    first = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
-    second = xgb_utils._with_xgb_early_stopping_params({"max_depth": 2}, 5)
+    first = xgb_utils.with_xgb_early_stopping_params({"max_depth": 2}, 5)
+    second = xgb_utils.with_xgb_early_stopping_params({"max_depth": 2}, 5)
 
     # Act
     first_model = xgb.XGBRegressor(**first)
@@ -202,7 +202,7 @@ def test_with_xgb_early_stopping_params_fallback(monkeypatch: pytest.MonkeyPatch
     params = {"max_depth": 2}
 
     # Act
-    updated = xgb_utils._with_xgb_early_stopping_params(params, 3)
+    updated = xgb_utils.with_xgb_early_stopping_params(params, 3)
 
     # Assert
     assert updated == params
@@ -217,7 +217,7 @@ def test_coerce_tree_method_on_error_device_cuda() -> None:
     params = {"device": "cuda", "tree_method": "hist", "predictor": "gpu_predictor"}
 
     # Act
-    updated = xgb_utils._coerce_tree_method_on_error(params, RuntimeError("No visible GPU"))
+    updated = xgb_utils.coerce_tree_method_on_error(params, RuntimeError("No visible GPU"))
 
     # Assert
     assert updated is not None
@@ -234,7 +234,7 @@ def test_coerce_tree_method_on_error_gpu_tree_method() -> None:
     params = {"tree_method": "gpu", "predictor": "gpu_predictor"}
 
     # Act
-    updated = xgb_utils._coerce_tree_method_on_error(params, ValueError("tree_method"))
+    updated = xgb_utils.coerce_tree_method_on_error(params, ValueError("tree_method"))
 
     # Assert
     assert updated is not None
@@ -524,7 +524,7 @@ def test_coerce_tree_method_on_error_build_without_gpu_support() -> None:
     params = {"device": "cuda", "tree_method": "hist"}
 
     # Act
-    updated = xgb_utils._coerce_tree_method_on_error(
+    updated = xgb_utils.coerce_tree_method_on_error(
         params, xgb.core.XGBoostError("XGBoost version not compiled with GPU support.")
     )
 
@@ -540,7 +540,7 @@ def test_gpu_fallback_is_logged_as_a_warning(monkeypatch: pytest.MonkeyPatch) ->
     warnings_logged = _record_warnings(monkeypatch)
 
     # Act
-    xgb_utils._coerce_tree_method_on_error(
+    xgb_utils.coerce_tree_method_on_error(
         {"device": "cuda", "tree_method": "hist"}, xgb.core.XGBoostError("CUDA error")
     )
 
@@ -558,10 +558,10 @@ def test_every_fit_time_fallback_warns_even_after_a_resolution_warning(
     cuda_params = {"device": "cuda", "tree_method": "hist"}
 
     xgb_utils.resolve_xgb_device("cuda")
-    xgb_utils._coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
+    xgb_utils.coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
 
     # Act
-    xgb_utils._coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
+    xgb_utils.coerce_tree_method_on_error(cuda_params, xgb.core.XGBoostError("CUDA error"))
 
     # Assert
     assert len(warnings_logged) == 3
@@ -573,7 +573,7 @@ def test_coerce_tree_method_on_error_replaces_a_gpu_tree_method_on_cuda() -> Non
     _reset_runtime_state()
 
     # Act
-    updated = xgb_utils._coerce_tree_method_on_error(
+    updated = xgb_utils.coerce_tree_method_on_error(
         {"device": "cuda", "tree_method": "gpu_hist"},
         xgb.core.XGBoostError("Invalid Input: 'gpu_hist', valid values are: approx, exact, hist"),
     )

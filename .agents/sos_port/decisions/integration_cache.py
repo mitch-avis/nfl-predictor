@@ -119,14 +119,14 @@ def build(
             pl.read_parquet(players[0]), nflverse_sources._PLAYERS_SCHEMA
         )
         target = out_dir / "players.parquet"
-        loaders._write_cached_frame(prepared, target, tuple(constants.NFLREADPY_PLAYERS_COLUMNS))
+        loaders.write_cached_frame(prepared, target, tuple(constants.NFLREADPY_PLAYERS_COLUMNS))
         record(target, players[0].name)
     for season in seasons:
         pbp_paths = found.get(("pbp", season), [])
         if len(pbp_paths) == 1:
             prepared = loaders._prepare_pbp(pl.read_parquet(pbp_paths[0]), regular_season_only=True)
             target = out_dir / f"pbp_{season}_reg.parquet"
-            loaders._write_cached_frame(prepared, target, tuple(constants.PBP_COLUMNS))
+            loaders.write_cached_frame(prepared, target, tuple(constants.PBP_COLUMNS))
             record(target, pbp_paths[0].name)
         else:
             sys.stdout.write(f"season {season}: {len(pbp_paths)} play-by-play files, skipped\n")
@@ -135,13 +135,13 @@ def build(
             source = nflverse_sources.ROSTERS
             target = source.cache_path(out_dir, season, regular_season_only=False)
             frame = source.prepare(pl.read_parquet(season_roster), regular_season_only=False)
-            loaders._write_cached_frame(frame, target, source.columns)
+            loaders.write_cached_frame(frame, target, source.columns)
             record(target, season_roster.name)
         if weekly_roster is not None:
             source = nflverse_sources.WEEKLY_ROSTERS
             target = source.cache_path(out_dir, season, regular_season_only=True)
             frame = source.prepare(pl.read_parquet(weekly_roster), regular_season_only=True)
-            loaders._write_cached_frame(frame, target, source.columns)
+            loaders.write_cached_frame(frame, target, source.columns)
             record(target, weekly_roster.name)
         for name in (f"schedule_{season}.parquet", f"team_stats_{season}_reg.parquet"):
             copied = main_cache / name

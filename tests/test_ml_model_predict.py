@@ -152,7 +152,7 @@ def test_core_predict_margin_total_quantiles_from_model_applies_market_anchor(
     )
 
     # Act
-    margin_preds, total_preds = ml_model_core._predict_margin_total_quantiles_from_model(
+    margin_preds, total_preds = ml_model_core.predict_margin_total_quantiles_from_model(
         model, games_df
     )
 
@@ -180,15 +180,15 @@ def test_predict_week_margin_total_adds_quantiles(
         }
     )
 
-    monkeypatch.setattr(ml_model_predict, "_load_games", returning(games_df))
+    monkeypatch.setattr(ml_model_predict, "load_games", returning(games_df))
     monkeypatch.setattr(
         ml_model_predict,
-        "_predict_margin_total_from_model",
+        "predict_margin_total_from_model",
         returning((np.array([3.5]), np.array([44.2]))),
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_predict_margin_total_quantiles_from_model",
+        "predict_margin_total_quantiles_from_model",
         returning(
             (
                 {0.25: np.array([2.0]), 0.75: np.array([5.0])},
@@ -198,7 +198,7 @@ def test_predict_week_margin_total_adds_quantiles(
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_derive_scores_from_margin_total",
+        "derive_scores_from_margin_total",
         returning((np.array([20.0]), np.array([23.5]))),
     )
     monkeypatch.setattr(
@@ -258,20 +258,20 @@ def test_predict_week_margin_total_pretty_output(monkeypatch: pytest.MonkeyPatch
     )
 
     no_quantiles: tuple[dict[float, np.ndarray], dict[float, np.ndarray]] = ({}, {})
-    monkeypatch.setattr(ml_model_predict, "_load_games", returning(games_df))
+    monkeypatch.setattr(ml_model_predict, "load_games", returning(games_df))
     monkeypatch.setattr(
         ml_model_predict,
-        "_predict_margin_total_from_model",
+        "predict_margin_total_from_model",
         returning((np.array([2.0]), np.array([30.0]))),
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_predict_margin_total_quantiles_from_model",
+        "predict_margin_total_quantiles_from_model",
         returning(no_quantiles),
     )
     monkeypatch.setattr(
         ml_model_predict,
-        "_derive_scores_from_margin_total",
+        "derive_scores_from_margin_total",
         returning((np.array([14.0]), np.array([16.0]))),
     )
     monkeypatch.setattr(

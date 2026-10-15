@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 def test_is_numeric_dtype(dtype: pl.DataType, *, expected: bool) -> None:
     """Check numeric dtype detection works as expected."""
     # Act
-    is_numeric = loaders._is_numeric_dtype(dtype)
+    is_numeric = loaders.is_numeric_dtype(dtype)
 
     # Assert
     assert is_numeric is expected

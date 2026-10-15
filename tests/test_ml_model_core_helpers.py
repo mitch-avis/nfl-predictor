@@ -62,7 +62,7 @@ def test_load_games_reads_csv(tmp_path: Path) -> None:
     expected.to_csv(csv_path, index=False)
 
     # Act
-    actual = core._load_games(csv_path)
+    actual = core.load_games(csv_path)
 
     # Assert
     pdt.assert_frame_equal(actual, expected)
@@ -83,7 +83,7 @@ def test_summarize_missing_data_counts_nulls_and_missing_columns() -> None:
     )
 
     # Act
-    summary = core._summarize_missing_data(df)
+    summary = core.summarize_missing_data(df)
 
     # Assert
     assert summary["total_rows"] == 2
@@ -119,7 +119,7 @@ def test_filter_season_bounds_returns_same_frame_without_season_column() -> None
     df = pd.DataFrame({"week": [1, 2], "value": [10, 20]})
 
     # Act
-    filtered = core._filter_season_bounds(df, min_season=2020, max_season=2024)
+    filtered = core.filter_season_bounds(df, min_season=2020, max_season=2024)
 
     # Assert
     assert filtered is df
@@ -136,7 +136,7 @@ def test_filter_season_bounds_filters_min_and_max_seasons() -> None:
     )
 
     # Act
-    filtered = core._filter_season_bounds(df, min_season=2022, max_season=2023)
+    filtered = core.filter_season_bounds(df, min_season=2022, max_season=2023)
 
     # Assert
     assert filtered["season"].tolist() == [2022, 2023]
@@ -153,7 +153,7 @@ def test_split_by_season_partitions_latest_holdout_seasons() -> None:
     )
 
     # Act
-    train_df, holdout_df, holdout = core._split_by_season(df, holdout_seasons=2)
+    train_df, holdout_df, holdout = core.split_by_season(df, holdout_seasons=2)
 
     # Assert
     assert holdout == [2023, 2024]
@@ -172,7 +172,7 @@ def test_split_by_season_zero_holdout_and_invalid_inputs() -> None:
     )
 
     # Act
-    train_df, holdout_df, holdout = core._split_by_season(df, holdout_seasons=0)
+    train_df, holdout_df, holdout = core.split_by_season(df, holdout_seasons=0)
 
     # Assert
     assert holdout == []
@@ -198,4 +198,4 @@ def test_split_by_season_rejects_invalid_inputs(
     """Rejects frames without a season column or with too few seasons for the holdout."""
     # Act & Assert
     with pytest.raises(ValueError, match=match):
-        core._split_by_season(df, holdout_seasons=holdout_seasons)
+        core.split_by_season(df, holdout_seasons=holdout_seasons)

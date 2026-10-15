@@ -16,8 +16,8 @@ import pandas as pd
 from nfl_predictor.ml import metrics, ml_utils
 from nfl_predictor.ml.ml_model_core import (
     _build_prediction_output,
-    _summarize_confidence_pool,
     margin_to_home_win_prob,
+    summarize_confidence_pool,
 )
 from nfl_predictor.reporting import run_comparison
 from nfl_predictor.utils.logger import log
@@ -230,7 +230,7 @@ def test_summarize_confidence_pool_breaks_the_tie_by_game_id() -> None:
     probs = _tied_probs()
 
     # Act
-    summary = _summarize_confidence_pool(df, probs, ("away_score", "home_score"))
+    summary = summarize_confidence_pool(df, probs, ("away_score", "home_score"))
 
     # Assert
     # Game "a" picks the away side and loses (rank 1); game "b" picks home and wins (rank 2).

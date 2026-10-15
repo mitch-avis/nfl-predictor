@@ -58,12 +58,12 @@ def test_total_head_stops_on_its_own_validation_curve() -> None:
     x, margin, total = _synthetic_margin_total()
     split = 2400
     x_train, x_eval = x[:split], x[split:]
-    solo_params = xgb_utils._with_xgb_early_stopping_params(_params(), _EARLY_STOPPING_ROUNDS)
+    solo_params = xgb_utils.with_xgb_early_stopping_params(_params(), _EARLY_STOPPING_ROUNDS)
     solo_total = xgb.XGBRegressor(**solo_params)
     solo_total.fit(
         x_train,
         total[:split],
-        **xgb_utils._build_xgb_fit_kwargs(x_eval, total[split:], _EARLY_STOPPING_ROUNDS),
+        **xgb_utils.build_xgb_fit_kwargs(x_eval, total[split:], _EARLY_STOPPING_ROUNDS),
     )
 
     # Act

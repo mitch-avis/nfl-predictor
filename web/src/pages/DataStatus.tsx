@@ -29,7 +29,23 @@ function readableReasons(reason: string): string {
     .join(', ')
 }
 
-function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[]; hint: string }) {
+/** Plain labels and hints for the nflreadpy sources; an unknown source shows its name in words. */
+const CACHE_SOURCES: Record<string, { label: string; hint?: string }> = {
+  schedule: { label: 'Schedules', hint: 'One file per season; the current season is refreshed on every ETL run.' },
+  pbp: { label: 'Play-by-play', hint: 'Plays per season, used for EPA and success-rate features.' },
+  official_team_stats: { label: 'Official team stats' },
+  team_stats: { label: 'Team stats' },
+  player_stats_week: { label: 'Weekly player stats' },
+  snap_counts: { label: 'Snap counts' },
+  rosters: { label: 'Season rosters' },
+  rosters_weekly: { label: 'Weekly rosters' },
+}
+
+function sourceLabel(source: string): { label: string; hint?: string } {
+  return CACHE_SOURCES[source] ?? { label: source.replaceAll('_', ' ') }
+}
+
+function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[]; hint?: string }) {
   if (seasons.length === 0) return <div className="text-sm text-muted-foreground">{label}: none cached</div>
   const min = Math.min(...seasons)
   const max = Math.max(...seasons)
@@ -37,7 +53,8 @@ function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[
   return (
     <div>
       <div className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-        {label} <InfoTooltip content={hint} />
+        <span>{label}</span>
+        {hint ? <InfoTooltip content={hint} /> : null}
         <span className="ml-auto">{min}–{max}</span>
       </div>
       <div className="flex gap-0.5">
@@ -94,7 +111,10 @@ export function DataStatusPage() {
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Database className="size-4" /> Dataset files
                 </CardTitle>
-                <CardDescription>Everything under data/ that the model and reports read.</CardDescription>
+                <CardDescription>
+                  The datasets the ETL writes to data/, its build records and the inputs copied in by hand. Caches are in
+                  the source caches card.
+                </CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 <Table>
@@ -112,7 +132,10 @@ export function DataStatusPage() {
                       <TableRow key={file.name} className={file.exists ? '' : 'opacity-60'}>
                         <TableCell>
                           <div className="font-mono text-xs">{file.name}</div>
-                          <div className="text-xs text-muted-foreground">{file.description}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {file.description}
+                            {file.file_count != null ? ` · ${formatNumber(file.file_count, 0)} files` : null}
+                          </div>
                         </TableCell>
                         <TableCell className="tabular text-right">{formatNumber(file.rows, 0)}</TableCell>
                         <TableCell className="tabular">{file.seasons ? `${file.seasons[0]}–${file.seasons[1]}` : '—'}</TableCell>
@@ -166,12 +189,43 @@ export function DataStatusPage() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">nflreadpy cache</CardTitle>
-                  <CardDescription>Seasons cached as Parquet under data/cache.</CardDescription>
+                  <CardTitle className="text-base">Source caches</CardTitle>
+                  <CardDescription>
+                    Seasons cached per nflreadpy source under data/cache, the TeamRankings scrapes under data/ and the
+                    ETL&apos;s season builds, then the other cache files.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <SeasonStrip label="Schedules" seasons={query.data.cache.schedule} hint="One file per season; the current season is refreshed on every ETL run." />
-                  <SeasonStrip label="Play-by-play" seasons={query.data.cache.pbp} hint="Regular-season plays per season, used for EPA and success-rate features." />
+                  {Object.entries(query.data.cache).map(([source, seasons]) => (
+                    <SeasonStrip key={source} {...sourceLabel(source)} seasons={seasons} />
+                  ))}
+                  <SeasonStrip
+                    label="TeamRankings scrapes"
+                    seasons={query.data.other_seasons.team_rankings}
+                    hint="Seasons with weekly TeamRankings files under data/<season>/."
+                  />
+                  <SeasonStrip
+                    label="ETL season builds"
+                    seasons={query.data.other_seasons.etl_seasons}
+                    hint="Finished seasons the incremental ETL can reuse instead of rebuilding."
+                  />
+                  {query.data.cache_files.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No other cache files.</div>
+                  ) : (
+                    <ul className="space-y-1 text-xs">
+                      {query.data.cache_files.map((file) => (
+                        <li key={`${file.cache}/${file.name}`} className="flex items-center justify-between gap-2">
+                          <span className="truncate font-mono">
+                            {file.cache}/{file.name}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground">
+                            {file.name.endsWith('/') ? `${formatNumber(file.file_count, 0)} files · ` : ''}
+                            {bytes(file.size)} · {formatRelative(file.modified_at)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </CardContent>
               </Card>
               <Card>

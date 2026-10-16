@@ -61,8 +61,8 @@ def _git(*args: str, cwd: Path | None = None) -> str:
     ``--no-optional-locks`` keeps ``git status`` from refreshing, and so rewriting, the index of
     the read-only repository it inspects.
     """
-    return subprocess.run(  # noqa: S603 - fixed git argv built in this file
-        ["git", "--no-optional-locks", *args],  # noqa: S607 - git from PATH
+    return subprocess.run(  # fixed git argv built in this file
+        ["git", "--no-optional-locks", *args],  # git from PATH
         cwd=cwd or ROOT,
         check=True,
         capture_output=True,
@@ -202,8 +202,8 @@ class SosCode:
         if self._extracted is None:
             SCRATCH.mkdir(parents=True, exist_ok=True)
             target = Path(tempfile.mkdtemp(prefix="sos_port_", dir=SCRATCH))
-            archive = subprocess.run(  # noqa: S603 - fixed git argv built in this file
-                ["git", "--no-optional-locks", "archive", SOS_COMMIT, *prefixes],  # noqa: S607 - git from PATH
+            archive = subprocess.run(  # fixed git argv built in this file
+                ["git", "--no-optional-locks", "archive", SOS_COMMIT, *prefixes],  # git from PATH
                 cwd=SOS_REPO,
                 check=True,
                 capture_output=True,

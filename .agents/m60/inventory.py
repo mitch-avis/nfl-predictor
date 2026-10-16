@@ -35,9 +35,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+from unittest import mock
 
 import yaml
+
+if TYPE_CHECKING:
+    from nfl_predictor.api.runs.indexer import RunSummary
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -105,8 +109,8 @@ def read(path: Path) -> str:
 
 def tracked_files(pattern: str) -> list[Path]:
     """Return tracked files matching a git pathspec."""
-    out = subprocess.run(  # noqa: S603 - fixed argv; the pattern is a literal from this file
-        ["git", "ls-files", pattern],  # noqa: S607 (git is fixed, not user-controlled)
+    out = subprocess.run(  # fixed argv; the pattern is a literal from this file
+        ["git", "ls-files", pattern],  # git is fixed, not user-controlled
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -192,20 +196,20 @@ def capture_parser(ep: Entrypoint) -> argparse.ArgumentParser:
     def _raise(self: argparse.ArgumentParser, *_a: object, **_k: object) -> None:
         raise _CapturedParserError(self)
 
-    saved = (argparse.ArgumentParser.parse_args, argparse.ArgumentParser.parse_known_args)
     saved_argv = sys.argv
-    argparse.ArgumentParser.parse_args = _raise  # type: ignore[method-assign]
-    argparse.ArgumentParser.parse_known_args = _raise  # type: ignore[method-assign]
     sys.argv = [ep.path.name]
     try:
-        if inspect.signature(fn).parameters:
-            fn([])
-        else:
-            fn()
+        with (
+            mock.patch.object(argparse.ArgumentParser, "parse_args", _raise),
+            mock.patch.object(argparse.ArgumentParser, "parse_known_args", _raise),
+        ):
+            if inspect.signature(fn).parameters:
+                fn([])
+            else:
+                fn()
     except _CapturedParserError as captured:
         return captured.parser
     finally:
-        argparse.ArgumentParser.parse_args, argparse.ArgumentParser.parse_known_args = saved
         sys.argv = saved_argv
     raise RuntimeError(f"{ep.name}: {ep.capture_fn} returned without parsing")
 
@@ -255,10 +259,10 @@ def walk_actions(ep: Entrypoint, parser: argparse.ArgumentParser) -> list[Flag]:
     flags: list[Flag] = []
 
     def _walk(p: argparse.ArgumentParser, sub: str | None) -> None:
-        for action in p._actions:  # noqa: SLF001 - argparse exposes no public action list
-            if isinstance(action, argparse._HelpAction):  # noqa: SLF001
+        for action in p._actions:  # argparse exposes no public action list
+            if isinstance(action, argparse._HelpAction):
                 continue
-            if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+            if isinstance(action, argparse._SubParsersAction):
                 for name, child in action.choices.items():
                     _walk(child, name)
                 continue
@@ -339,14 +343,16 @@ def _describe_sink(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> str:
         callee = ast.unparse(call.func) if isinstance(call, ast.Call) else "?"
         return f"kw {parent.arg}= of {callee}()"
     if isinstance(parent, ast.Dict) and cur in parent.values:
-        key = parent.keys[parent.values.index(cur)]  # type: ignore[arg-type]
+        key = next(k for k, v in zip(parent.keys, parent.values, strict=True) if v is cur)
         owner = parents.get(parent)
         where = ""
         while owner is not None and not isinstance(owner, ast.stmt):
             if isinstance(owner, ast.Dict):
-                idx = owner.values.index(parent) if parent in owner.values else -1
-                if idx >= 0 and owner.keys[idx] is not None:
-                    where = f"{ast.unparse(owner.keys[idx])}." + where  # type: ignore[arg-type]
+                owner_key = next(
+                    (k for k, v in zip(owner.keys, owner.values, strict=True) if v is parent), None
+                )
+                if owner_key is not None:
+                    where = f"{ast.unparse(owner_key)}." + where
             parent, owner = owner, parents.get(owner)
         if isinstance(owner, ast.Assign):
             where = ast.unparse(owner.targets[0]) + "." + where
@@ -501,7 +507,7 @@ def web_templates() -> list[dict[str, Any]]:
                 settings=settings,
                 job_id=f"inventory_{template.id}",
                 params=params,
-                run=run,  # type: ignore[arg-type]
+                run=cast("RunSummary", run),
             )
             argv = template.build(ctx)
             variants: list[dict[str, Any]] = []
@@ -511,7 +517,7 @@ def web_templates() -> list[dict[str, Any]]:
                         settings=settings,
                         job_id=f"inventory_{template.id}_variant",
                         params={**params, spec.name: choice},
-                        run=run,  # type: ignore[arg-type]
+                        run=cast("RunSummary", run),
                     )
                     variants.append(
                         {"param": spec.name, "value": choice, "argv": template.build(vctx)}
@@ -528,7 +534,7 @@ def web_templates() -> list[dict[str, Any]]:
                     settings=settings,
                     job_id=f"inventory_{template.id}_variant",
                     params=params,
-                    run=vrun,  # type: ignore[arg-type]
+                    run=cast("RunSummary", vrun),
                 )
                 vargv = template.build(vctx)
                 if vargv != argv:
@@ -1104,7 +1110,7 @@ def score_model_evidence(flags: list[Flag]) -> dict[str, Any]:
         for path in model_files:
             try:
                 artifact_types[type(joblib.load(path)).__name__] += 1
-            except Exception as exc:  # noqa: BLE001 - any unloadable artifact is reported
+            except Exception as exc:  # any unloadable artifact is reported
                 artifact_types[f"unloadable ({type(exc).__name__})"] += 1
     if not model_files:
         fail("model artifact scan", "no model*.joblib files found under models/")

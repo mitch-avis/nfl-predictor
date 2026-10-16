@@ -172,13 +172,13 @@ def sha256_file(path: Path) -> str:
 def code_commit() -> str:
     """Return this checkout's commit and whether its tracked files differ from it."""
     git = "git"
-    head = subprocess.run(  # noqa: S603  # fixed argv in this repository
+    head = subprocess.run(  # fixed argv in this repository
         [git, "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
-    dirty = subprocess.run(  # noqa: S603  # fixed argv in this repository
+    dirty = subprocess.run(  # fixed argv in this repository
         [git, "-C", str(REPO_ROOT), "status", "--porcelain", "--untracked-files=no"],
         check=True,
         capture_output=True,

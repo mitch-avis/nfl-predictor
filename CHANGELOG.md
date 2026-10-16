@@ -11,6 +11,8 @@
   `vitest` `5.0.4`, `jsdom` `30.1.2`, `oxlint` `1.88.0` and `vite` `8.3.4`.
 - The shared data table runs on react-table 9 (`useTable` with an explicit sorting feature);
   its headers, cells, empty state and click-to-sort cycle behave as before, pinned by new tests.
+  One difference: a text column whose first row is empty now sorts ascending on the first click
+  (react-table 9 skips empty values when it picks the direction; 8 read the first row only).
 - `.github/dependabot.yml` groups only minor and patch updates in each ecosystem, so a major
   update arrives as its own pull request.
 

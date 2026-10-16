@@ -42,6 +42,7 @@ async function leakageCard(): Promise<HTMLElement> {
 describe('DataStatusPage leakage-audit card', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('lists each flagged column by name with its readable reasons', async () => {
@@ -77,6 +78,41 @@ describe('DataStatusPage leakage-audit card', () => {
     expect(items[1]).toHaveTextContent('high corr margin, matches home score')
     expect(card).toHaveTextContent('87 features · 1,234 rows · 2 flagged')
     expect(card).not.toHaveTextContent('[object Object]')
+  })
+
+  it('lists a column flagged by name and by statistics twice without a duplicate-key warning', async () => {
+    // Arrange
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    stubApi({
+      '/api/data/status': status(
+        audit({
+          flagged_columns: [
+            { column: 'final_margin_proxy', reason: 'suspicious_name' },
+            { column: 'final_margin_proxy', reason: 'high_corr_margin', corr_margin: 0.996 },
+          ],
+        }),
+      ),
+    })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await leakageCard()
+    expect(within(card).getAllByRole('listitem')).toHaveLength(2)
+    expect(consoleError.mock.calls.filter((args) => String(args[0]).includes('same key'))).toEqual([])
+  })
+
+  it('shows a flag with no reason without a trailing separator', async () => {
+    // Arrange
+    stubApi({ '/api/data/status': status(audit({ flagged_columns: [{ column: 'x_col', reason: '' }] })) })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await leakageCard()
+    expect(within(card).getByRole('listitem').textContent).toBe('x_col')
   })
 
   it('lists the failure messages when the audit failed', async () => {

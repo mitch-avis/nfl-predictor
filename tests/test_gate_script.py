@@ -26,8 +26,8 @@ def extra_steps(*, run_tests: int, run_web: int) -> list[str]:
     return result.stdout.splitlines()
 
 
-def test_the_gate_holds_src_alone_to_the_coverage_bar() -> None:
-    """tests/ counts toward the total, so src/ gets its own check at the configured bar."""
+def test_pytest_holds_src_alone_to_the_coverage_bar() -> None:
+    """Coverage measures src/ alone, so pytest's own bar is the src/ bar and the gate adds none."""
     # Arrange
     pyproject = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
 
@@ -35,8 +35,10 @@ def test_the_gate_holds_src_alone_to_the_coverage_bar() -> None:
     gate = GATE.read_text(encoding="utf-8")
 
     # Assert
-    assert pyproject["tool"]["coverage"]["report"]["fail_under"] == 90
-    assert gate.index('run_step "pytest"') < gate.index('coverage report --include="src/*"')
+    coverage = pyproject["tool"]["coverage"]
+    assert coverage["run"]["source"] == ["src"]
+    assert coverage["report"]["fail_under"] == 90
+    assert "coverage report" not in gate
 
 
 def test_the_hooks_file_accepts_the_web_option() -> None:

@@ -215,8 +215,8 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 # The package only: test code is not product code, and counting it would lift the total.
-source = ["src"]
 branch = true
+source = ["src"]
 
 [tool.coverage.report]
 fail_under = 90

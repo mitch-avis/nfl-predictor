@@ -17,7 +17,8 @@ score outputs are secondary and display-only.
   and degrades non-fatally when the current season is not published yet.
 - Reproducible artifacts: training and backtests write run directories with metadata and
   metrics, and any number quoted in the docs is auditable from disk under `models/`, except
-  from the runs listed in `.agents/models_cleanup/`, whose directories were deleted after review.
+  from the runs listed in `.agents/models_cleanup/deleted_2026-10-16.txt`, whose directories were
+  deleted on 2026-10-16.
   Outputs are deterministic under fixed seeds.
 - Tests are required, test-first by default: before changing production code, make sure the
   lines you will touch are covered, adding characterization or failing tests first. Delegated

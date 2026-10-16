@@ -85,18 +85,21 @@ def tracked_python_files() -> list[Path]:
         pytest.skip(str(exc))
 
 
+def scan_files(root: Path, files: list[Path]) -> list[str]:
+    """Return the suppression hits of ``files``, each named relative to ``root``."""
+    return [
+        hit
+        for path in files
+        for hit in suppression_hits(path.read_text(encoding="utf-8"), str(path.relative_to(root)))
+    ]
+
+
 def test_tracked_python_files_carry_no_inline_suppressions() -> None:
     # Arrange
     files = tracked_python_files()
 
     # Act
-    hits = [
-        hit
-        for path in files
-        for hit in suppression_hits(
-            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
-        )
-    ]
+    hits = scan_files(REPO_ROOT, files)
 
     # Assert
     assert files
@@ -187,6 +190,18 @@ def test_tracked_python_files_include_the_type_stubs() -> None:
 
     # Assert
     assert REPO_ROOT / "typings" / "joblib.pyi" in files
+
+
+def test_scan_files_skips_a_tracked_file_deleted_from_the_working_tree(tmp_path: Path) -> None:
+    # Arrange
+    (tmp_path / "kept.py").write_text("import os  # noqa: F401\n", encoding="utf-8")
+    files = [tmp_path / "kept.py", tmp_path / "deleted.py"]
+
+    # Act
+    hits = scan_files(tmp_path, files)
+
+    # Assert
+    assert hits == ["kept.py:1: # noqa: F401"]
 
 
 def _git_or_skip() -> str:

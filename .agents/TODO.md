@@ -639,27 +639,18 @@ Each group names the archived milestone it came from; the milestone's full recor
 Low-priority findings the independent reviews left open; the full list, with the ones already
 fixed, is in `.agents/step6_plan.md` ("Small open findings from the integration reviews").
 
-- [ ] No test covers the phase-1 audit's run-loop call to `check_opponent_rows`
-      (`.agents/sos_port/parity.py:578`); the tests call the function directly.
 - [ ] The open rating-definition tests: the quarterback test's calibration check reads the
       recorded row count, not the fit, and no test shows `run_integrity_checks` calls it; the
       information-set change leaves 1.75 and nulls as they were and the team check does not flip
-      later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds
-      for one season.
+      later sites.
 - [ ] The blend ranking default: check the single manifest match against the run itself
-      (`wf_best.json` weeks or `created_at`); three older power-ranking skips log at info level
-      (`weekly_run/pipeline.py:563-569`).
+      (`wf_best.json` weeks or `created_at`).
 - [ ] Production adoption: the disabled-group lists are not normalized for order or duplicates;
       no snapshot test of the default fit's predictions; the weekly refresh writes where
       `--data-collection-args` say while the run reads `--data-path`.
 
 ### From the step-3 merge test (2026-09-28)
 
-- [ ] (low priority) `reporting/power_rankings.py` `_load_current_records` groups with `group_by`
-      without `maintain_order`, so its row order changes between runs (content and rankings are
-      identical; found by the `0.37.2` review). The `0.37.3` determinism guard covers only the ETL
-      modules. Add `maintain_order=True` (or sort) so "identical output" checks on rankings are
-      not noisy.
 - [ ] (low priority) `load_schedule` has no current-season fallback: unlike team stats and
       play-by-play, a failed refetch of the current season's schedule (a network error or an
       nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is

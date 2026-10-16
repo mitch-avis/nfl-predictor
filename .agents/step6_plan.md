@@ -289,17 +289,18 @@ Low-priority findings (P3) the independent reviews left open; status as checked 
 
 - Betting-edge split: `floor_sigma.home_win_prob` accepted an infinite sigma. Fixed in `0.59.0`
   (`ml/floor_sigma.py` refuses a sigma that is not finite and positive).
-- Phase-1 audit refresh: no test covers the run loop's call to `check_opponent_rows`
-  (`.agents/sos_port/parity.py:578`); the tests call the function directly. Open.
+- Phase-1 audit refresh: no test covered the run loop's call to `check_opponent_rows`
+  (`.agents/sos_port/parity.py`, `_run`). Fixed in `0.63.7`: two tests in
+  `tests/test_sos_port_audit.py` drive the loop.
 - Open rating-definition tests, open and not re-checked: the quarterback test's calibration check
   reads the recorded row count, not the fit, and no test shows `run_integrity_checks` calls it;
   the information-set change leaves 1.75 and nulls as they were and the team check does not flip
-  later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds for
-  one season.
+  later sites. Fixed in `0.63.7`: the recorded commit carries a `-dirty` mark when tracked files
+  differ, and `season_t_interval` refuses fewer than two seasons instead of returning NaN bounds.
 - Blend ranking default: check the single manifest match against the run itself (`wf_best.json`
-  weeks or `created_at`), open and not re-checked; three older power-ranking skips log at info
-  level (`weekly_run/pipeline.py:563-569`), open; the "market-free" wording in `stage1.py`, fixed
-  on 2026-10-16.
+  weeks or `created_at`), open and not re-checked; the three older power-ranking skips
+  (`weekly_run/pipeline.py`, `_write_power_rankings`) log as warnings since `0.63.7`; the
+  "market-free" wording in `stage1.py`, fixed on 2026-10-16.
 - Production adoption, open and not re-checked: the disabled-group lists are not normalized for
   order or duplicates; no snapshot test of the default fit's predictions; the weekly refresh
   writes where `--data-collection-args` say while the run reads `--data-path`.

@@ -560,13 +560,13 @@ def _write_power_rankings(
         pr_week = inputs.default_power_rankings_through_week(pr_season, week)
 
     if pr_season is None or pr_week is None:
-        log.info("Power rankings skipped: unable to infer season/week.")
+        log.warning("Power rankings skipped: unable to infer season/week.")
         return _RankingOutputs([])
     if not args.power_rankings_data_ml.exists():
-        log.info("Power rankings skipped: missing %s", args.power_rankings_data_ml)
+        log.warning("Power rankings skipped: missing %s", args.power_rankings_data_ml)
         return _RankingOutputs([])
     if not args.power_rankings_data_schedule.exists():
-        log.info("Power rankings skipped: missing %s", args.power_rankings_data_schedule)
+        log.warning("Power rankings skipped: missing %s", args.power_rankings_data_schedule)
         return _RankingOutputs([])
     pr_out_dir = args.power_rankings_out_dir or ctx.output_dir
     pr_out_dir.mkdir(parents=True, exist_ok=True)

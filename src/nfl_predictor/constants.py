@@ -2089,6 +2089,13 @@ STADIUMS = {
     },
 }
 
+# Schedule `roof` corrections by `stadium_id`, applied as the schedule enters the ETL: both are
+# open-air fields (the roof covers only the stands) that nflverse lists as `dome`.
+STADIUM_ROOF_OVERRIDES: dict[str, str] = {
+    "MUN01": "outdoors",  # FC Bayern Munich Stadium (Allianz Arena), Munich
+    "PAR00": "outdoors",  # Stade de France, Saint-Denis
+}
+
 # Approximate stadium coordinates (latitude, longitude in degrees, north and east positive) for
 # every nflverse `stadium_id` on the 1999-2026 schedules, temporary and international venues
 # included. Only the own Elo's travel-distance term reads them: 4 Elo points per 1,000 miles,

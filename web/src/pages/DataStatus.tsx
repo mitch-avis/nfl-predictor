@@ -20,6 +20,15 @@ function bytes(size: number | null): string {
   return `${size} B`
 }
 
+/** The audit's reason codes (`suspicious_name`, or a comma-joined list) as plain words. */
+function readableReasons(reason: string): string {
+  return reason
+    .split(',')
+    .map((code) => code.trim().replaceAll('_', ' '))
+    .filter((code) => code.length > 0)
+    .join(', ')
+}
+
 function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[]; hint: string }) {
   if (seasons.length === 0) return <div className="text-sm text-muted-foreground">{label}: none cached</div>
   const min = Math.min(...seasons)
@@ -132,7 +141,23 @@ export function DataStatusPage() {
                       <div className="text-xs text-muted-foreground">
                         {query.data.leakage_audit.feature_count ?? '?'} features · {formatNumber(query.data.leakage_audit.row_count ?? null, 0)} rows · {(query.data.leakage_audit.flagged_columns ?? []).length} flagged
                       </div>
-                      {(query.data.leakage_audit.flagged_columns ?? []).length > 0 ? <div className="font-mono text-xs">{(query.data.leakage_audit.flagged_columns ?? []).join(', ')}</div> : null}
+                      {(query.data.leakage_audit.flagged_columns ?? []).length > 0 ? (
+                        <ul className="space-y-0.5 text-xs">
+                          {(query.data.leakage_audit.flagged_columns ?? []).map((flag) => (
+                            <li key={flag.column}>
+                              <span className="font-mono">{flag.column}</span>
+                              <span className="text-muted-foreground"> · {readableReasons(flag.reason)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {!query.data.leakage_audit.ok && (query.data.leakage_audit.failures ?? []).length > 0 ? (
+                        <ul className="space-y-0.5 text-xs text-destructive">
+                          {(query.data.leakage_audit.failures ?? []).map((failure) => (
+                            <li key={failure}>{failure}</li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="text-sm text-muted-foreground">No audit report found under models/ or reports/.</div>

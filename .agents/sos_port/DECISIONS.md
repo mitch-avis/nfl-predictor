@@ -249,8 +249,8 @@ generated [ADAPTER_PARITY.md](ADAPTER_PARITY.md), and the measured feature chang
 - **Own Elo in the datasets**: both presets in every build; designed quarterback runs now in
   VALUE; the evaluation rerun under its unchanged rule kept the same components (Brier 0.21701
   market-free, 0.21594 with win totals).
-- **Market-free runs** keep the step-5 design (line columns only, groups left out by flag) and now
-  warn when a market-informed group stays; making it automatic is on your list.
+- **Runs without game lines** keep the step-5 design (line columns only, groups left out by flag)
+  and now warn when a market-informed group stays; making it automatic is on your list.
 
 ### Red-zone trips (`0.55.0`)
 

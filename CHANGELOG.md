@@ -7,9 +7,9 @@
 - A run without game lines leaves out `strength,elo,own_elo_wt,qb_adj` by default
   (`constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`): the reviewed list of the walk-forwards
   `models/step6/elo_marketfree_seed{42,7}`, plus `qb_adj` until it is measured. Such a run (the
-  weekly run's `--wf-market-mode none`; `backtest` with `--exclude-market --no-market-anchor
-  --no-market-transform`; `train` with `--exclude-market` and its anchor and transform off) now
-  trains on no market information, with the own Elo that has no win-total prior. Every other run
+  weekly run's `--wf-market-mode none`; `backtest` with `--exclude-market --no-market-anchor`;
+  `train` with `--exclude-market` and its anchor off), whatever the market transform setting,
+  now trains on no market information, with the own Elo that has no win-total prior. Every other run
   keeps production's list, and a list given on the command line or in a config file still wins,
   `''` and `[]` included. One resolution serves the three commands
   (`cli/options.resolve_disabled_feature_groups`). Production's runs are unchanged: the same

@@ -6,7 +6,7 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6_plan.md` and
 `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 19:50 MDT)
+## State (written 2026-10-15, 20:40 MDT)
 
 - **A walk-forward measurement is running**: `qb_adj` in the run without game lines,
   `models/qb_adj_no_lines/HYPOTHESIS.md` (approved by the user 2026-10-15; sha256 `8c102843...`,
@@ -14,16 +14,20 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
   the reference; `no_lines_qb_adj_seed{42,7}`), driver PID `1382271`, launched 19:39 MDT
   through `launch.sh` from `~/scratch/qb_adj_nolines` (detached at `d791846`, its own venv), on
   the grouped measurement's new-file cut; about 31 minutes a run. Check `driver.log` there.
-- **`build/coverage-src-only`** (`0.62.1`, two commits on `main`, not merged; gate exit `0`,
-  4,392 tests, `src/` coverage 96.32%): coverage measures `src/` alone (`[tool.coverage.run]`
-  `source = ["src"]`), the user's edit minus its `omit` line (`tests/*` was redundant;
-  `src/*/__init__.py` matched only the one-line `src/nfl_predictor/__init__.py`). Awaits the
-  user's merge approval; after it, sync with the CUDA args.
-- **`main` is at `0.62.0`** (`6d5f2bf`, not pushed, no tags; four docs commits after the
-  merges: step 7's finished items closed, the cross-module imports follow-up archived, and
-  AGENTS.md rule 6 plus `.agents/guardrails.md` letting reviewed, finished items close
-  unasked). Five branches were merged `--no-ff` on 2026-10-15 evening with the user's approval
-  (the user's Week 6 picks were already in, which waived the wait for the Monday game):
+- **`main` is at `0.62.1`** (`eedfa70`, not pushed, no tags), merged with the user's approval:
+  coverage measures `src/` alone (`[tool.coverage.run]` `source = ["src"]`), the user's edit
+  minus its `omit` line (`tests/*` was redundant; `src/*/__init__.py` matched only the one-line
+  `src/nfl_predictor/__init__.py`). Gate exit `0` after the merge and the CUDA sync, 4,392
+  tests, `src/` coverage 96.32%.
+- **python-template `0.1.4`** (`~/workspace/python-template` `main` at `27ed5ed`, approved by
+  the user, gate exit `0`, 26 tests): the same coverage change for every project, and the
+  gate's separate "src coverage" step removed. **Not tagged**: the bash-guard hook forbids tags,
+  so the user tags `0.1.4`; then `copier update` here takes it (a branch, the gate, a merge).
+- Before that, `main` took four docs commits (step 7's finished items closed, the cross-module
+  imports follow-up archived, and AGENTS.md rule 6 plus `.agents/guardrails.md` letting
+  reviewed, finished items close unasked) after five branches were merged `--no-ff` on
+  2026-10-15 evening with the user's approval (the user's Week 6 picks were already in, which
+  waived the wait for the Monday game):
   - `fix/round-count-narrowing` (`0.59.7`): `_boosted_rounds` (`ml/ml_model_core.py`) and
     `_estimator_best_iteration` (`ml/walk_forward.py`) read a round count only from a Python or
     numpy integer again (the pyright review's finding);
@@ -132,9 +136,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 
 ## Open for the user
 
-- Merging `build/coverage-src-only` (`0.62.1`) into `main`, and whether the python-template
-  (`template/pyproject.toml.jinja:124`, `source = ["src", "tests"]`) takes the same change for
-  every project (its `scripts/gate.sh:138` "src coverage" step would then be redundant).
+- Tagging python-template `0.1.4` (`git -C ~/workspace/python-template tag 0.1.4`), so
+  `copier update` can bring it into this repo.
 - The test suite: the user asked about pruning; recommended no blanket review (4,392 tests run
   in about 57 seconds on 8 workers, and coverage of `tests/` never drove their number).
 - The harness worktrees `.claude/worktrees/agent-*` (including `feat/qb-adj-features` and

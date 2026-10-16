@@ -61,6 +61,13 @@ Follow-ups resolved after their milestones closed:
   checkpoints` lists checkpoint directories and what names them, read-only (Milestone 49; `0.24.0`);
   the dead `LogEvalCallback` plumbing removed, `_build_xgb_fit_kwargs` kept for tuning's eval set
   (2026-09-11 review; `0.20.0`).
+- 2026 Week 3 weekly run: the cross-module private imports left after `0.38.1` (an AST scan by
+  the `0.38.1` implementer, not checked in, found `utils/polars/teamrankings.py` importing
+  `_is_numeric_dtype` from `utils/polars/loaders.py`, and `ml/ml_model_core.py`,
+  `ml/ml_model_predict.py` and `ml/ml_model_training.py` importing 17 private names from each
+  other). Resolved in `0.59.6` (the strict pyright cleanup, user-approved 2026-10-15): every
+  helper another module imports is public, and an AST scan by the independent reviewer finds no
+  private import across `src/` modules. Closed 2026-10-15.
 
 ---
 

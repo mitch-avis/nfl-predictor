@@ -166,7 +166,9 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
 - **How to reverse it**: restore `build_team_stat_trends` to its shifted computation over the
   per-team-game rows, drop its `schedule_df` argument and the caller's, and rewrite the
   season-build characterization snapshot (`NFLP_UPDATE_SNAPSHOTS=1`).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.55.1` release's review (one independent round, merge after fixes,
+  fixes checked; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ## 2. A playoff week takes the trend over the full regular season
 
@@ -200,7 +202,9 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
   change the same way.
 - **How to reverse it**: keep only `game_type == "REG"` games in `_scheduled_team_weeks`
   (`features.py`); playoff rows then find no trend row and take `0.0` again.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.55.1` release's review (one independent round, merge after fixes,
+  fixes checked; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ## 3. The ELO, quarterback and TeamRankings trends keep their values; a missing ELO week warns
 
@@ -234,7 +238,9 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
 - **Feature-value impact**: none; the warning changes no value.
 - **How to reverse it**: remove the `warn_if_elo_lacks_week` call from
   `data_collection._load_sources`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.55.1` release's review (one independent round, merge after fixes,
+  fixes checked; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ## 4. The leakage audit could not have caught this, and it is not changed here
 
@@ -263,4 +269,6 @@ season again; `--download-stale-pbp` does that into the temporary copy when the 
   not in that file at all, only in the upcoming rows the audit never reads.
 - **Feature-value impact**: none.
 - **How to reverse it**: nothing to reverse.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.55.1` release's review (one independent round, merge after fixes,
+  fixes checked; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.

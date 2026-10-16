@@ -249,8 +249,8 @@ def fill_future_qb_data(
     team from the ELO data and fills in their name and their ELO values where those are null.
     A played game (both scores in) keeps what it has, since the latest starter was not known
     before it, and a named starter never takes the latest starter's values. The week rows
-    computed the away-minus-home diffs of those values before this fill, so the filled rows'
-    diffs are computed again.
+    computed the away-minus-home diffs of those values before this fill, so every unplayed
+    row's diffs are computed again.
 
     Args:
         df: Combined data DataFrame with potential null QBs

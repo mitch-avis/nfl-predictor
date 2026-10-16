@@ -9,8 +9,9 @@ left over from the feature milestones. An item may be retired only when it feeds
   weekly configuration leaves out (``config/weekly_run.yaml``, else
   ``constants.PRODUCTION_DISABLED_FEATURE_GROUPS``);
 - the default power rankings: the method the weekly run ranks on (the blend of the ported team
-  rating and the model rating unless the configuration sets another), and the code that method
-  reads.
+  rating and the model rating unless the configuration sets another), the method the
+  ``nfl-predictor rankings`` command ranks on when ``--method`` is absent, which the web app's
+  Power rankings job runs, and the code those methods read.
 
 Read-only: it reads one dataset file (its header with Polars, its rows with pandas, as the
 model does), the configuration and this repository's source, and writes nothing. A fact it
@@ -39,11 +40,13 @@ from nfl_predictor.ml.feature_spec import (
     build_feature_spec,
     resolve_feature_group_columns,
 )
+from nfl_predictor.reporting.power_rankings import RankingRequest, resolve_ranking_options
 from nfl_predictor.weekly_run.config import DEFAULT_POWER_RANKINGS_METHOD
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "nfl_predictor"
 CONFIG = ROOT / "config" / "weekly_run.yaml"
+WEB_JOBS = SRC / "api" / "jobs" / "catalog.py"
 MAX_CARDINALITY_RATIO = 0.5
 EXAMPLES = 4
 
@@ -74,6 +77,7 @@ class Item:
     name: str
     column_markers: tuple[str, ...]
     tokens: tuple[SourceToken, ...]
+    reads_snapshot: bool = False
 
 
 def read_config(path: Path) -> dict[str, object]:
@@ -143,6 +147,45 @@ def blend_reads_snapshot() -> list[str]:
         for path in files
         if "strength_snapshot" in path.read_text(encoding="utf-8")
         or "PRIOR_BLEND_GAMES" in path.read_text(encoding="utf-8")
+    ]
+
+
+def rankings_command_method() -> str:
+    """Return the method ``nfl-predictor rankings`` ranks on when ``--method`` is absent."""
+    return resolve_ranking_options(RankingRequest(method=None, legacy_franchise_fit=False)).method
+
+
+def web_job_passes_method() -> bool:
+    """Return whether the web app's Power rankings job passes ``--method`` to the command."""
+    source = WEB_JOBS.read_text(encoding="utf-8")
+    start = source.find("def _build_power_rankings(")
+    if start < 0:
+        msg = f"_build_power_rankings not found in {WEB_JOBS.relative_to(ROOT)}"
+        raise LookupError(msg)
+    end = source.find("\ndef ", start + 1)
+    return '"--method"' in source[start : end if end > 0 else len(source)]
+
+
+def snapshot_consumers(production: Production) -> list[str]:
+    """Return the lines naming which default power rankings read the strength snapshot."""
+    command = rankings_command_method()
+    passes = web_job_passes_method()
+    web = "passes --method" if passes else f"passes no --method, so it ranks with {command}"
+    rankers = [("the weekly run", production.ranking_method), ("the rankings command", command)]
+    if not passes:
+        rankers.append(("the web Power rankings job", command))
+    readers = [label for label, method in rankers if method == "composite"]
+    verdict = (
+        f"  FEEDS the default power rankings of {', '.join(readers)} (the composite reads the "
+        "snapshot): keep open"
+        if readers
+        else "  no default power ranking ranks with the composite"
+    )
+    return [
+        f"  the weekly run's default method: {production.ranking_method}",
+        f"  the rankings command's default method: {command}",
+        f"  the web Power rankings job ({WEB_JOBS.relative_to(ROOT)}): {web}",
+        verdict,
     ]
 
 
@@ -230,7 +273,12 @@ def items() -> list[Item]:
                 ),
             ),
         ),
-        Item("The early-season strength prior's weight (the strength snapshot)", strength, ()),
+        Item(
+            "The early-season strength prior's weight (the strength snapshot)",
+            strength,
+            (),
+            reads_snapshot=True,
+        ),
         Item(
             "The next-opponent identity columns",
             tuple(constants.FEATURE_GROUP_COLUMN_MARKERS["next_opponent_identity"]),
@@ -251,7 +299,8 @@ def report(production: Production) -> list[str]:
         f"Dataset columns: {len(production.dataset_columns)}",
         f"Production feature columns: {len(production.features)}",
         f"Production disabled groups: {', '.join(production.disabled_groups) or 'none'}",
-        f"Default power-ranking method: {production.ranking_method}",
+        f"The weekly run's power-ranking method: {production.ranking_method}",
+        f"The rankings command's default method: {rankings_command_method()}",
         (
             "Ported-rating and blend sources that mention the strength snapshot or "
             f"PRIOR_BLEND_GAMES: {', '.join(blend_reads_snapshot()) or 'none'}"
@@ -266,6 +315,8 @@ def report(production: Production) -> list[str]:
             lines.append(describe_columns("columns in the dataset", in_data))
             lines.append(describe_columns("columns among production features", in_model))
         lines.extend(describe_token(token) for token in item.tokens)
+        if item.reads_snapshot:
+            lines.extend(snapshot_consumers(production))
         lines.append("")
     return lines
 

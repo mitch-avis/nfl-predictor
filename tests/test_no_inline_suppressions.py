@@ -43,37 +43,46 @@ def suppression_hits(source: str, path: str) -> list[str]:
     ]
 
 
-def tracked_python_files() -> list[Path]:
-    """Return the tracked Python and stub files, skipping the test when git cannot list them."""
-    git = shutil.which("git")
-    if git is None:
-        pytest.skip("git is not available to list the tracked Python files")
-    listing = subprocess.run(
-        [git, "-C", str(REPO_ROOT), "ls-files", "-z", "*.py", "*.pyi"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if listing.returncode != 0:
-        pytest.skip(f"git ls-files failed: {listing.stderr.strip()}")
-    return [REPO_ROOT / name for name in listing.stdout.split("\0") if name]
-
-
 class NotACheckoutError(Exception):
-    """Raised when the directory to scan is not a git checkout."""
+    """Raised when there is no git or the directory to scan is not a git checkout."""
+
+
+def _git(git: str, root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run git in ``root`` with every inherited ``GIT_*`` variable removed."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    return subprocess.run(
+        [git, "-C", str(root), *args], capture_output=True, text=True, check=False, env=env
+    )
 
 
 def tracked_sources(root: Path) -> list[Path]:
-    """Return the tracked Python and stub files under ``root``."""
-    listing = subprocess.run(
-        ["/usr/bin/git", "-C", str(root), "ls-files", "-z", "*.py", "*.pyi"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """Return the tracked Python and stub files under ``root``.
+
+    Raises:
+        NotACheckoutError: git is missing or ``root`` is not a git checkout.
+        RuntimeError: git failed to list the files for any other reason.
+    """
+    git = shutil.which("git")
+    if git is None:
+        msg = "git is not available to list the tracked files"
+        raise NotACheckoutError(msg)
+    inside = _git(git, root, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        msg = f"{root} is not a git checkout"
+        raise NotACheckoutError(msg)
+    listing = _git(git, root, "ls-files", "-z", "*.py", "*.pyi")
     if listing.returncode != 0:
-        raise RuntimeError(listing.stderr)
+        msg = f"git ls-files failed: {listing.stderr.strip()}"
+        raise RuntimeError(msg)
     return [root / name for name in listing.stdout.split("\0") if name]
+
+
+def tracked_python_files() -> list[Path]:
+    """Return the repository's tracked Python and stub files, skipping outside a checkout."""
+    try:
+        return tracked_sources(REPO_ROOT)
+    except NotACheckoutError as exc:
+        pytest.skip(str(exc))
 
 
 def test_tracked_python_files_carry_no_inline_suppressions() -> None:

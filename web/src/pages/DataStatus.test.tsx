@@ -62,7 +62,7 @@ describe('DataStatusPage cache card', () => {
       'Official team stats',
       'Snap counts',
       'Weekly rosters',
-      'depth charts',
+      'Depth charts',
       'TeamRankings scrapes',
       'ETL season builds',
     ]) {
@@ -92,6 +92,43 @@ describe('DataStatusPage cache card', () => {
     expect(items[0]).toHaveTextContent('nflreadpy/players.parquet')
     expect(items[1]).toHaveTextContent('nfelo/snapshots/')
     expect(items[1]).toHaveTextContent('5 files')
+  })
+
+  it('shows a single cached season once, not as a range', async () => {
+    // Arrange
+    stubApi({ '/api/data/status': status(null, { cache: { schedule: [], pbp: [2026] } }) })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await cardTitled('Source caches')
+    expect(within(card).getByText('2026')).toBeInTheDocument()
+    expect(card).not.toHaveTextContent('2026–2026')
+  })
+
+  it('names the seasons missing inside a strip in words', async () => {
+    // Arrange
+    stubApi({ '/api/data/status': status(null, { cache: { schedule: [2003, 2005, 2006, 2008], pbp: [] } }) })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await cardTitled('Source caches')
+    expect(within(card).getByText('Missing: 2004, 2007')).toBeInTheDocument()
+  })
+
+  it('names no missing seasons when a strip has no gaps', async () => {
+    // Arrange
+    stubApi({ '/api/data/status': status(null, { cache: { schedule: [2003, 2004, 2005], pbp: [2026] } }) })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await cardTitled('Source caches')
+    expect(card).not.toHaveTextContent('Missing:')
   })
 
   it('still renders when nothing is cached', async () => {

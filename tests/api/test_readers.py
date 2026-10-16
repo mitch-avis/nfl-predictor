@@ -645,6 +645,21 @@ def test_wf_compare_prefers_deterministic_ranking(tmp_path: Path) -> None:
     assert table.rows[0]["wf_rank"] == 1
 
 
+def test_dataset_files_list_the_inputs_the_pipeline_reads() -> None:
+    """The data-status page lists the ETL outputs and the quarterback Elo input, in order."""
+    # Act
+    names = [name for name, _description in data_status.DATASET_FILES]
+
+    # Assert
+    assert names == [
+        "all_data_ml.csv",
+        "all_data.csv",
+        "completed_games_ml.csv",
+        "completed_games.csv",
+        "qb_elos.csv",
+    ]
+
+
 def test_file_status_reads_rows_and_seasons(project_root: Path) -> None:
     """A dataset file reports its rows and season range."""
     # Arrange

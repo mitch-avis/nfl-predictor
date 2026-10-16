@@ -22,13 +22,19 @@ leaving it stale.
 ## Data shown in the UI
 
 - 2026-10-16, Data status page, leakage audit card: `latest_leakage_audit`
-  (`api/readers/data_status.py:119-139`) shows the newest `*leakage_audit*.json` under the roots
-  by modification time, and the card (`web/src/pages/DataStatus.tsx`, from line 128) names no
+  (`api/readers/data_status.py:335-356`) shows the newest `*leakage_audit*.json` under the roots
+  by modification time, and the card (`web/src/pages/DataStatus.tsx`, from line 158) names no
   dataset or run. An audit of an experiment or an old file can therefore stand in for the production
   dataset's. The newest audit's recorded config also has `market_transform: False`, while the
   production run uses the market transform, so "Clean" may describe a different feature set from
   the one the weekly run trains on. Direction: show the audited file and its settings, and pick
   the audit attached to the active run.
+- 2026-10-16, Data status page, source caches card: only the `nflreadpy` and `nfelo` caches are
+  listed (`api/routers/data.py:23`, `cache_files` at `api/readers/data_status.py:270`), and
+  `etl_seasons/` is read only for its `season_YYYY` folders (`other_seasons`, line 313). Any other
+  content under `data/cache/` appears nowhere: a stray file in `etl_seasons/`, or a new folder
+  beside the three. Direction: list every top-level folder under `data/cache/`, with the entries
+  each one holds beyond its season files.
 - 2026-10-16, Runs page and Power rankings page: `scan_runs` (`api/runs/indexer.py:135`) takes
   every directory under `models/` that holds a `metadata.json`, so the run list includes smoke
   tests, a training run and the week-1 2026 experiment runs (`week01_2026_refreshed`,

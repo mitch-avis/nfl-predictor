@@ -567,6 +567,31 @@ def test_no_reference_runs_is_an_explicit_option(monkeypatch: pytest.MonkeyPatch
     assert args.floor_sigma_reference_runs == []
 
 
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        ([], constants.FLOOR_SIGMA_REFERENCE_RUNS),
+        (["--exclude-market", "--market-anchor"], constants.FLOOR_SIGMA_REFERENCE_RUNS),
+        (["--exclude-market"], constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS),
+        (["--exclude-market", "--floor-sigma-reference-runs", "a/b"], ("a/b",)),
+    ],
+    ids=["market-features", "anchor-only", "without-game-lines", "listed"],
+)
+def test_the_reference_runs_default_by_whether_the_run_uses_game_lines(
+    monkeypatch: pytest.MonkeyPatch, flags: list[str], expected: tuple[str, ...]
+) -> None:
+    """Without market features and anchor, train pools the runs without game lines by default."""
+    # Arrange
+    ml_model_cli = _import_ml_model_cli(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["prog", *flags])
+
+    # Act
+    args = ml_model_cli._parse_args()
+
+    # Assert
+    assert args.floor_sigma_reference_runs == [Path(path) for path in expected]
+
+
 def test_loading_a_saved_model_reads_no_reference_runs(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, reference_pool_requests: list[object]
 ) -> None:

@@ -1385,12 +1385,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": [
-    "models/qb_elos_measure/new_file_seed42",
-    "models/qb_elos_measure/new_file_seed7"
-   ],
+   "default": null,
    "dest": "floor_sigma_reference_runs",
-   "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the floor's sigma, which the saved model records; their checkpoints are only read. A missing run is an error; give no paths to train without them (the constant, recorded as the fallback).",
+   "help": "Walk-forward runs (run or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the floor's sigma, which the saved model records; their checkpoints are only read. A missing run is an error; give no paths to train without them (the constant, recorded as the fallback). Default: models/qb_elos_measure/new_file_seed42, models/qb_elos_measure/new_file_seed7 (production's reference), or models/qb_adj_no_lines/no_lines_seed42, models/qb_adj_no_lines/no_lines_seed7 for a run without game lines (no market feature and no anchor).",
    "nargs": "*",
    "options": [
     "--floor-sigma-reference-runs"
@@ -2512,12 +2509,9 @@
   {
    "action": "_StoreAction",
    "choices": null,
-   "default": [
-    "models/qb_elos_measure/new_file_seed42",
-    "models/qb_elos_measure/new_file_seed7"
-   ],
+   "default": null,
    "dest": "floor_sigma_reference_runs",
-   "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks).",
+   "help": "Walk-forward runs (run directories or fold checkpoint directories, relative to the repository root) whose out-of-fold margin errors set the probability floor's sigma, with stage 1's own folds; their checkpoints are only read. Several runs are averaged per game. A missing run is an error; give no paths to use only stage 1's folds (the constant until they span three earlier seasons, any weeks). Default: models/qb_elos_measure/new_file_seed42, models/qb_elos_measure/new_file_seed7 (production's reference), or models/qb_adj_no_lines/no_lines_seed42, models/qb_adj_no_lines/no_lines_seed7 for a run without game lines (no market feature and no anchor).",
    "nargs": "*",
    "options": [
     "--floor-sigma-reference-runs"

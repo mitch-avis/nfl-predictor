@@ -55,10 +55,10 @@ def test_the_reference_runs_default_to_the_gpu_reference_in_code_and_config(
     expected = [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS]
 
     # Act
-    args = parse()
+    runs = run_config.resolve_floor_sigma_reference_runs(parse())
 
     # Assert
-    assert args.floor_sigma_reference_runs == expected
+    assert runs == expected
 
 
 @pytest.mark.parametrize(

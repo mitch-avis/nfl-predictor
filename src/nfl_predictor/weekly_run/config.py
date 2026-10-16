@@ -528,16 +528,14 @@ def _add_final_fit_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> 
         "--floor-sigma-reference-runs",
         type=Path,
         nargs="*",
-        default=defaults.get(
-            "floor_sigma_reference_runs",
-            [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS],
-        ),
+        default=defaults.get("floor_sigma_reference_runs"),
         help=(
             "Walk-forward runs (run directories or fold checkpoint directories, relative to "
             "the repository root) whose out-of-fold margin errors set the probability floor's "
             "sigma, with stage 1's own folds; their checkpoints are only read. Several runs "
             "are averaged per game. A missing run is an error; give no paths to use only "
-            "stage 1's folds (the constant until they span three earlier seasons, any weeks)."
+            "stage 1's folds (the constant until they span three earlier seasons, any weeks). "
+            f"{options.FLOOR_SIGMA_REFERENCE_DEFAULT_HELP}"
         ),
     )
 
@@ -805,6 +803,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
     args.disable_feature_groups = resolve_feature_groups(args)
+    args.floor_sigma_reference_runs = resolve_floor_sigma_reference_runs(args)
     try:
         # The run directory may not exist yet; only the settings are checked here.
         power_ranking_options(args, run_dir=args.run_dir or Path(constants.MODELS_PATH))
@@ -827,6 +826,22 @@ def resolve_feature_groups(args: argparse.Namespace) -> tuple[str, ...]:
     include_market, market_anchor = stage1.market_mode_flags(mode)
     return options.resolve_disabled_feature_groups(
         args.disable_feature_groups,
+        without_game_lines=options.is_run_without_game_lines(
+            include_market=include_market, market_anchor=market_anchor
+        ),
+    )
+
+
+def resolve_floor_sigma_reference_runs(args: argparse.Namespace) -> list[Path]:
+    """Return the floor sigma's reference runs.
+
+    A list from the command line or the config file wins, an empty one included; without one,
+    the market mode with no game lines reads the reviewed runs without game lines and every
+    other mode production's reference.
+    """
+    include_market, market_anchor = stage1.market_mode_flags(str(args.wf_market_mode))
+    return options.resolve_floor_sigma_reference_runs(
+        args.floor_sigma_reference_runs,
         without_game_lines=options.is_run_without_game_lines(
             include_market=include_market, market_anchor=market_anchor
         ),

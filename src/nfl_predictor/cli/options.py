@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nfl_predictor import constants
@@ -111,6 +112,16 @@ NO_GAME_LINES_GROUPS_HELP = (
 )
 
 
+# The default of ``--floor-sigma-reference-runs``, which also depends on whether the run uses game
+# lines.
+FLOOR_SIGMA_REFERENCE_DEFAULT_HELP = (
+    "Default: "
+    f"{', '.join(constants.FLOOR_SIGMA_REFERENCE_RUNS)} (production's reference), or "
+    f"{', '.join(constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS)} for a run without game "
+    "lines (no market feature and no anchor)."
+)
+
+
 def is_run_without_game_lines(*, include_market: bool, market_anchor: bool) -> bool:
     """Return whether a run uses no game lines: no market feature and no anchor.
 
@@ -153,3 +164,19 @@ def add_feature_group_option(parser: argparse.ArgumentParser) -> None:
         default=None,
         help=f"{FEATURE_GROUPS_HELP} {FEATURE_GROUPS_DEFAULT_HELP}",
     )
+
+
+def resolve_floor_sigma_reference_runs(
+    explicit: Sequence[Path] | None, *, without_game_lines: bool
+) -> list[Path]:
+    """Return the floor sigma's reference runs: ``explicit`` if given, else the default.
+
+    ``explicit`` is the list from the command line or a config file, ``None`` when neither gives
+    one, and wins even when empty. The default is the reviewed runs with the run's own market
+    setting.
+    """
+    if explicit is not None:
+        return list(explicit)
+    if without_game_lines:
+        return [Path(path) for path in constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS]
+    return [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS]

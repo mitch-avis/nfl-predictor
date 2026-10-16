@@ -751,7 +751,7 @@ hashes in `~/scratch/data_backups/2026-10-14_pre_week6/`, beside the replaced fi
 reference arm above was measured on the earlier file, so production differs from them in these
 four columns from 2023 on. "`qb_elos.csv` measurement" below measures the effect with two
 dataset builds. The stale win-total file (`../nfeloqb` `Manual Data/wt_ratings.csv` ends at 2023)
-is not part of that measurement and stays a separate question for the user.
+has its own measurement, "Upstream win totals in the quarterback-adjusted Elo" below.
 
 ## `qb_elos.csv` measurement (2026-10-15, `models/qb_elos_measure/`)
 
@@ -952,3 +952,106 @@ driver's check for other runs ran only at each run's start and its pattern misse
 forms (no effect here); and the seeds disagree in sign on pool points (`+92.0` against `-54.0`, all
 weeks) and on total MAE, which is why the two-seed mean is the instrument. Full tables,
 provenance, findings and reproduction scripts: `models/qb_adj_no_lines/REVIEW.md`.
+
+## Upstream win totals in the quarterback-adjusted Elo (2026-10-16, `models/qb_wt_measure/`)
+
+Whether the quarterback-adjusted Elo in `qb_elos.csv` (`qbelo1_pre`, the source of the
+`*_qb_elo_pre` features) measures better with upstream's maintained win-total file
+(`greerreNFL/nfelosrs` `wt_ratings.csv`, 2003-2026) in place of the fork's (`../nfeloqb`
+`Manual Data/wt_ratings.csv`, 2003-2023). At each season start the fork pulls `qbelo` 66% toward
+the season's win-total rating, so from 2024 on the fork's file leaves it only regressing to the
+mean. Four runs, two arms on two seeds each (checkpoint directories for seeds 42 and 7):
+
+- The candidate, upstream win totals: `models/qb_wt_measure/upstream_wt_seed{42,7}`
+  (`60c64046f68b798af669`, `2b29e91c047c82fd228e`), on `models/qb_wt_measure/inputs/upstream_wt.csv`
+  (sha256 `1061d14130f867d9206a71cbd374f938d495ae3abba4f6d740a67437a763d8cc`), the through-2025 cut
+  built from the fork's `qb_elos.csv` regenerated at `27709b5` with only the win-total file
+  replaced (fork branch `exp/upstream-wt-ratings` `847b6b9`, upstream `nfelosrs` `3c6d4ae`).
+- The reference, fork win totals: `models/qb_elos_measure/new_file_seed{42,7}`
+  (`3bd2b79b36c6ed70e0e5`, `98696fa36a5ae245740b`), on `models/qb_elos_measure/inputs/new_file.csv`
+  (`b9772e3e...49f0`): the new-file runs of "`qb_elos.csv` measurement" above and production's
+  floor-sigma reference, not rerun.
+
+The two cuts (7,261 rows, 544 columns) differ in 6 columns, all in the `elo` group
+(`{home,away}_qb_elo_pre`, `{home,away}_qb_elo_4wk_trend`, `qb_elo_pre_diff`,
+`qb_elo_4wk_trend_diff`), only in the 855 rows of 2023-2025: every `qb_elos.csv` row before
+2023-02-12 is copied from 538's historical file, so the win totals reach the file only through the
+state the fork's Elo carries into 2023. Code `c637fc0` (`0.60.0`) in all four runs. Command
+(`driver.sh`): `nfl-predictor backtest --data-path inputs/upstream_wt.csv --calibration auto
+--eval-seasons 2007..2025 --wf-start-week 1 --random-seed {42,7} --market-anchor
+--market-transform --disable-feature-groups strength,own_elo,own_elo_wt,qb_adj`: 449 features, 328
+folds, 4943 games, 200 trees with no early stop, calibration `none` in every fold, unweighted,
+every fold `cuda`, each run's own floor-sigma pool. Rules: `HYPOTHESIS.md` there with its
+Amendment 1 (sha256 `f26039b61ebe6639d3d717821b2198863a0dfde60fff91d00999ba3fd4a6d7a7`, written
+before the build and the launch and matching its `.sha256` file at the review). Amendment 1 moved
+the governing window from all weeks of 2007-2025 to seasons 2023-2025, all weeks (816 games),
+once the candidate's check showed that only those rows change. Second key: `REVIEW.md` there, by
+a reviewer that did not produce the runs. Two seeds averaged per game, upstream minus fork, 95%
+intervals.
+
+Provenance (`REVIEW.md`): a pass on every check. Each candidate differs from its reference only in
+the input; the leakage audit passed; all 4,127 games before 2023 are bit-identical between the
+arms in both seeds, including seed 7, which shared the GPU with another process and took 9,934 s
+against 5,165 s for seed 42. The reviewer's rescore from the fold checkpoints matches
+`nfl-predictor compare` on every run level and point estimate and on which intervals exclude zero.
+`compare` has no seasons filter, so the season windows rest on the rescore alone.
+
+Upstream minus fork, two seeds (loss columns and MAEs: negative favours upstream; pick accuracy
+and pool points: positive favours upstream):
+
+| window | games | det Brier | log loss | pick acc | pool pts | margin MAE | total MAE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **2023-2025 all weeks (governing)** | 816 | -0.00006 [-0.00057, +0.00044] | -0.00009 [-0.00124, +0.00104] | +0.0018 [-0.0025, +0.0061] | +2.5 [-17.0, +21.5] | +0.0029 [-0.0171, +0.0228] | +0.0062 [-0.0147, +0.0276] |
+| 2024-2025 all weeks | 544 | -0.00041 [-0.00103, +0.00021] | -0.00080 [-0.00219, +0.00059] | +0.0000 [-0.0055, +0.0055] | +6.5 [-8.0, +21.0] | -0.0064 [-0.0310, +0.0183] | +0.0145 [-0.0120, +0.0418] |
+| 2007-2025 all weeks | 4943 | -0.00001 [-0.00009, +0.00007] | -0.00002 [-0.00020, +0.00017] | +0.0003 [-0.0004, +0.0010] | +2.5 [-17.0, +22.0] | +0.0005 [-0.0027, +0.0037] | +0.0010 [-0.0024, +0.0046] |
+| week 1 (2007-2025) | 303 | +0.00004 [-0.00021, +0.00031] | +0.00007 [-0.00044, +0.00063] | -0.0033 [-0.0083, +0.0000] | +0.5 [+0.0, +1.5] | -0.0022 [-0.0106, +0.0063] | +0.0058 [-0.0042, +0.0154] |
+| week 2 (2007-2025) | 303 | -0.00015 [-0.00047, +0.00016] | -0.00033 [-0.00100, +0.00035] | +0.0000 [-0.0050, +0.0050] | -1.0 [-9.5, +7.0] | -0.0032 [-0.0150, +0.0084] | +0.0066 [-0.0050, +0.0186] |
+
+The 2007-2025 rows are the 2023-2025 effect diluted about six-fold, since 2007-2022 contributes
+exactly zero. Arm levels on the governing window (two-seed means): Brier `0.21378` upstream,
+`0.21384` fork, `0.21490` the pick-time line.
+
+Results, by rule (deterministic Brier selects, log loss must not lose, pick accuracy never
+selects; a loss in week 1, week 2 or 2024-2025 is flagged without overriding the rule):
+
+- Governing window: Brier `-0.00006` `[-0.00057, +0.00044]`, a tie; log loss `-0.00009`
+  `[-0.00124, +0.00104]`, no loss. The tie branch, not between branches: the fork's win-total file
+  stays as it is (the simpler setting, no change), and the result goes to the user marked as a
+  tie.
+- 2024-2025, the seasons the fork's file does not cover: Brier `-0.00041` `[-0.00103, +0.00021]`,
+  log loss `-0.00080` `[-0.00219, +0.00059]`. It leans to upstream, as hypothesised, but is not a
+  win.
+- Weeks 1 and 2 and 2024-2025: no two-seed interval excludes zero, so nothing is flagged.
+
+Every paired interval `REVIEW.md` lists as excluding zero (rule 9):
+
+- Upstream minus fork, two seeds: none, in any window or column. Three touch zero without
+  excluding it: week 1 pool points `+0.5` `[+0.0, +1.5]`, 2023-2025 week 1 pool points `+0.5`
+  `[+0.0, +1.5]` and week 1 pick accuracy `-0.0033` `[-0.0083, +0.0000]`.
+- Upstream minus fork, one seed (outside the instrument): seed 42 total MAE in week 1 `+0.0152`
+  `[+0.0020, +0.0294]` and in 2023-2025 week 1 `+0.0960` `[+0.0137, +0.1809]`, both for the fork;
+  seed 7 none.
+- Each arm against the pick-time line on its own rows (two seeds): for the line, all weeks margin
+  MAE, week 1 Brier and week 1 margin MAE (upstream `+0.0489`, `+0.00515`, `+0.2085`; fork
+  `+0.0484`, `+0.00511`, `+0.2107`); for the arm, 2023-2025 week 1 pool points (upstream `+10.0`,
+  fork `+9.5`) and 2023-2025 week 2 total MAE (upstream `-0.3629`, fork `-0.4043`); and for the
+  fork alone, 2023-2025 week 2 pool points `+12.0` `[+1.5, +27.0]`.
+- Seed 7 minus seed 42 within an arm, in 2023-2025 and 2024-2025: Brier, log loss and margin MAE
+  move by up to `0.0028`, `0.0068` and `0.11`, and the fork's 2024-2025 pool points by `+45.0`
+  `[+12.0, +75.0]`. The within-arm seed movement on the governing window's 816 games (Brier
+  `0.0015`-`0.0016`) is about 25 times the arm difference.
+
+Ranks, two-seed means with the line. Governing window: upstream first on Brier, log loss and pool
+points, the fork first on margin MAE, the line first on pick accuracy and total MAE. 2024-2025:
+upstream first on Brier, log loss, pool points and margin MAE, all three tied on pick accuracy, the
+line first on total MAE. Every upstream-minus-fork difference is far inside the three-season
+fit-noise floors above. The rank table for every window and column is in `REVIEW.md`.
+
+The reviewer's findings, both minor (P3, informational): `build.sh` reran the candidate's check
+and overwrote `inputs/qb_elos_upstream_wt_check.json`, the file Amendment 1 cites, 13 s after the
+hypothesis was hashed (the check is deterministic and the copy on disk shows the amendment's
+figures; suggested: write the check to a new file or check its hash); and `nfl-predictor compare`
+still has no seasons filter. Whether to adopt upstream's file anyway, as maintenance with no
+measured cost, is the user's call (`.agents/TODO.md`, step 7): it would change a production input
+between game weeks and make `upstream_wt_seed{42,7}` the floor-sigma reference. Full tables,
+provenance, findings and reproduction scripts: `models/qb_wt_measure/REVIEW.md`.

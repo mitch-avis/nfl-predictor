@@ -290,8 +290,19 @@ Steps:
    - done 2026-10-16 (independently reviewed, fork `main` `0db2e40`, pushed): `../nfeloqb`, a
      backup's first start in next-week projections rated as played rows rate it
      (`get_value(team)` in place of `current_value`), test first;
-   - open: the fork's win-total file ends at 2023: its own measurement after the grouped one,
-     with a fork change and a third build, landing between game weeks.
+   - done 2026-10-16 (independently reviewed, `models/qb_wt_measure/REVIEW.md`; recorded in
+     `.agents/benchmarks.md`, "Upstream win totals in the quarterback-adjusted Elo"): the fork's
+     win-total file ends at 2023, measured on its own after the grouped one
+     (`models/qb_wt_measure/HYPOTHESIS.md` with Amendment 1, sha256
+     `f26039b61ebe6639d3d717821b2198863a0dfde60fff91d00999ba3fd4a6d7a7`; one build, upstream win
+     totals `models/qb_wt_measure/upstream_wt_seed{42,7}` against fork win totals
+     `models/qb_elos_measure/new_file_seed{42,7}`, code `c637fc0`): a tie, the fork's file stays;
+     governing window 2023-2025 all weeks, Brier `-0.00006` `[-0.00057, +0.00044]`;
+   - open: adopt upstream's win-total file as maintenance (the user's call): the fork's file ends
+     at 2023, so from 2024 the quarterback-adjusted Elo only regresses to the mean at each season
+     start; measured as a tie on 2023-2025; adopting it changes a production input between game
+     weeks and makes `models/qb_wt_measure/upstream_wt_seed{42,7}` the floor-sigma reference (a
+     `constants.py` change that invalidates every walk-forward checkpoint).
 8. **Feature ideas** (raised by the user 2026-10-08; moved before the re-tune 2026-10-15, to be
    explored quickly and then accepted or dropped): the referee crew (nflverse `referee` since
    1999, full crews in `load_officials`), game-day weather (temperature and wind for outdoor

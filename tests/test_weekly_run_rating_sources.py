@@ -212,6 +212,59 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
     assert "no_such_run" in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("season", "missing", "reason"),
+    [
+        (None, None, "unable to infer season/week"),
+        (2024, "data_ml", "missing"),
+        (2024, "schedule", "missing"),
+    ],
+)
+def test_weekly_rankings_skipped_before_ranking_log_a_warning(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    season: int | None,
+    missing: str | None,
+    reason: str,
+) -> None:
+    # Arrange
+    data_ml = tmp_path / "all_data_ml.csv"
+    schedule = tmp_path / "schedule.csv"
+    for path, name in ((data_ml, "data_ml"), (schedule, "schedule")):
+        if name != missing:
+            path.write_text("season,week\n", encoding="utf-8")
+    argv = [
+        "--power-rankings-data-ml",
+        str(data_ml),
+        "--power-rankings-data-schedule",
+        str(schedule),
+        "--power-rankings-out-dir",
+        str(tmp_path / "out"),
+    ]
+    if season is not None:
+        argv += ["--power-rankings-season", str(season), "--power-rankings-through-week", "3"]
+    context = pipeline._RunContext(
+        args=_args(argv),
+        run_id="run",
+        run_dir=tmp_path,
+        output_dir=tmp_path,
+        created_at="now",
+        dataset_hash="hash",
+        dataset_fingerprint={},
+        config_payload={},
+    )
+
+    # Act
+    with caplog.at_level(logging.INFO):
+        written = pipeline._write_power_rankings(context, None, None, tmp_path / "model.joblib")
+
+    # Assert
+    assert written.paths == []
+    skips = [r for r in caplog.records if r.getMessage().startswith("Power rankings skipped")]
+    assert [r.levelno for r in skips] == [logging.WARNING]
+    assert reason in skips[0].getMessage()
+
+
 DEFAULT_SOURCE_FLAGS = [
     "--power-rankings-method",
     "blend",

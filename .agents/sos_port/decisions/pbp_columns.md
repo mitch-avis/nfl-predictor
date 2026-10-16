@@ -416,7 +416,7 @@ grows from about 437 MB to about 962 MB.
   `_apply_schedule_enrichments`.
 - **Review**: not yet reviewed.
 
-### 13. Observed, not changed: nflverse's roofs for the 2026 international venues
+### 13. nflverse's roofs for the 2026 international venues: two overridden
 
 - **What differs**: the 2026 schedule lists the Melbourne Cricket Ground, the Allianz Arena
   (`MUN01`) and the Stade de France as `dome` and leaves the Bernabéu's roof empty, while it lists
@@ -426,9 +426,9 @@ grows from about 437 MB to about 962 MB.
 - **Options**: (a) leave the schedule's values: the current season's schedule is downloaded
   again on every ETL run, so an nflverse correction arrives by itself; (b) add a roof field to
   the table that overrides the schedule.
-- **Decision**: (a), and nothing changed here: the table holds no roof, and adding one is beyond
-  this chunk. Raised as a question for the user, with the recommendation to recheck the
-  schedule before the week-7 Paris game.
+- **Decision**: first (a), with the question raised to the user; since 2026-10-16, (b) for
+  `PAR00` and `MUN01` only, by the user's choice (the update below). The other venues keep
+  nflverse's values.
 - **Reasoning**: three of the four games are still to be played, and an override would be a new
   table field and loader rule for three games whose source may still be corrected.
 - **Data**: the roof column of the "Every venue id" table in run 1 of
@@ -446,7 +446,8 @@ grows from about 437 MB to about 962 MB.
   `stadium_type` `open`. Neither id appears on a cached schedule before 2026, so no earlier game
   changes. `MEL00` (the Melbourne Cricket Ground, 2026 week 1, listed `dome`) and `RIO00` (the
   Maracanã, 2026 week 3, listed `open`) are open-air fields too; by the user's choice they stay
-  as nflverse has them.
+  as nflverse has them, as does `MAD01` (the Bernabéu, 2026 week 9, empty roof, so `stadium_type`
+  `unknown`).
 
 ## Repairs the `nfl-sos-ratings` loader makes that this cache does not
 

@@ -21,27 +21,20 @@ leaving it stale.
 
 ## Data shown in the UI
 
-- 2026-10-16, Data status page, files card: the card says "Everything under data/ that the model
-  and reports read" (`web/src/pages/DataStatus.tsx:97`), but `DATASET_FILES`
-  (`api/readers/data_status.py:28`) lists only `all_data_ml.csv`, `all_data.csv`,
-  `completed_games_ml.csv`, `completed_games.csv` and `qb_elos.csv`. Files the code does read
-  are missing: `meta_data.csv` (`utils/polars/ratings_build.py:278`), `strength_snapshots.csv`
-  (the composite power-ranking method), `market_lines_metadata.json` (read by the lines refresh),
-  `own_elo_metadata.json` and the ported ratings under `data/ratings/`. Direction: list those, or
-  reword the description to "the main dataset files".
-- 2026-10-16, Data status page, cache coverage: `CACHE_FILE_RE`
-  (`api/readers/data_status.py:35`) matches only `pbp_` and `schedule_` files, so the coverage
-  shown leaves out the other per-season nflreadpy caches on disk (`official_team_stats`,
-  `player_stats_week`, `rosters`, `rosters_weekly`, `snap_counts`, `team_stats`) and the
-  `data/cache/nfelo/` market-lines cache. A season missing from one of those does not show.
 - 2026-10-16, Data status page, leakage audit card: `latest_leakage_audit`
-  (`api/readers/data_status.py:119-139`) shows the newest `*leakage_audit*.json` under the roots
-  by modification time, and the card (`web/src/pages/DataStatus.tsx`, from line 128) names no
+  (`api/readers/data_status.py:335-356`) shows the newest `*leakage_audit*.json` under the roots
+  by modification time, and the card (`web/src/pages/DataStatus.tsx`, from line 158) names no
   dataset or run. An audit of an experiment or an old file can therefore stand in for the production
   dataset's. The newest audit's recorded config also has `market_transform: False`, while the
   production run uses the market transform, so "Clean" may describe a different feature set from
   the one the weekly run trains on. Direction: show the audited file and its settings, and pick
   the audit attached to the active run.
+- 2026-10-16, Data status page, source caches card: only the `nflreadpy` and `nfelo` caches are
+  listed (`api/routers/data.py:23`, `cache_files` at `api/readers/data_status.py:270`), and
+  `etl_seasons/` is read only for its `season_YYYY` folders (`other_seasons`, line 313). Any other
+  content under `data/cache/` appears nowhere: a stray file in `etl_seasons/`, or a new folder
+  beside the three. Direction: list every top-level folder under `data/cache/`, with the entries
+  each one holds beyond its season files.
 - 2026-10-16, Runs page and Power rankings page: `scan_runs` (`api/runs/indexer.py:135`) takes
   every directory under `models/` that holds a `metadata.json`, so the run list includes smoke
   tests, a training run and the week-1 2026 experiment runs (`week01_2026_refreshed`,
@@ -91,6 +84,15 @@ leaving it stale.
 
 - Data status page, files card: `nfl_elo.csv` was listed although nothing reads it; removed from
   `DATASET_FILES` in 0.63.2.
+- Data status page, files card: the card claimed to list everything under `data/` that the model
+  and reports read, but missed `meta_data.csv`, `strength_snapshots.csv`, both build-record JSONs
+  and `data/ratings/`; fixed in 0.63.6, which lists them (named from the path constants, the
+  ratings directory as a file count), checks every data-path constant against the list in a test,
+  and words the card as the ETL's datasets, build records and hand-copied inputs.
+- Data status page, cache coverage: only schedule and play-by-play seasons were counted; fixed in
+  0.63.6, which shows a strip for every season-partitioned nflreadpy source, the TeamRankings
+  scrapes and the ETL season builds, and lists the nflreadpy and nfelo cache entries that are not
+  season files.
 - Data status page, leakage audit card: flagged columns showed as `[object Object]`, because the
   page typed the audit's `{"column", "reason"}` objects as strings; fixed in 0.63.4, which lists
   each flagged column with its reasons.

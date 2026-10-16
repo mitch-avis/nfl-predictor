@@ -22,6 +22,23 @@
 - The `git_commit` tests run git without the caller's `GIT_*` variables, so run from a git hook
   they can no longer commit into the hook's repository.
 
+## [0.63.6] - 2026-10-16
+
+### Fixed
+
+- The web app's data status page lists every file the pipeline writes or reads under `data/`:
+  besides the four datasets and `qb_elos.csv`, the strength snapshot, the ratings directory (its
+  top-level Parquet tables as a count and total size), both build-record JSONs and the
+  quarterback identity file, each described with the code that reads or rewrites it. A test
+  checks every data-path and file-name constant in `constants.py` against the list.
+- A dataset CSV that cannot be read (empty, a non-numeric season, no read permission) shows as
+  present without rows instead of failing `/api/data/status`, and is named in a warning.
+- The page's cache card shows a season strip for every season-partitioned nflreadpy source, the
+  TeamRankings scrapes and the ETL's season builds, names the seasons missing inside a strip in
+  words (runs collapsed into ranges, such as `2000–2025`), and lists the nflreadpy and nfelo
+  cache entries that are not season files. The `/api/data/status` payload gains `cache_files`,
+  `other_seasons` and a directory's `file_count`; the `schedule` and `pbp` keys stay.
+
 ## [0.63.5] - 2026-10-16
 
 ### Changed

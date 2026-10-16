@@ -345,6 +345,17 @@ export interface DataFile {
   modified_at: string | null
   rows: number | null
   seasons: [number, number] | null
+  /** Set for a directory entry (its name ends in `/`): the number of files under it. */
+  file_count?: number | null
+}
+
+/** A cache entry that is not a season file; a directory reports its files. */
+export interface CacheFile {
+  cache: string
+  name: string
+  file_count: number
+  size: number
+  modified_at: string | null
 }
 
 export interface PredictFile {
@@ -385,7 +396,10 @@ export interface DataStatusOut {
   files: DataFile[]
   predict_files: PredictFile[]
   fingerprint: { sha256: string; size: number; mtime: number; path: string } | null
-  cache: { schedule: number[]; pbp: number[] }
+  /** Seasons per nflreadpy source; `schedule` and `pbp` are always present. */
+  cache: { schedule: number[]; pbp: number[] } & Record<string, number[]>
+  cache_files: CacheFile[]
+  other_seasons: { team_rankings: number[]; etl_seasons: number[] }
   leakage_audit: LeakageAudit | null
 }
 

@@ -196,13 +196,13 @@ def write_cache(files: SnapshotFiles, cache_dir: Path, seasons: list[int]) -> No
             message = f"the snapshot has no play-by-play or player stats for {season}"
             raise SystemExit(message)
         pbp = loaders._prepare_pbp(pl.read_parquet(files.pbp[season]), regular_season_only=True)
-        loaders._write_cached_frame(
+        loaders.write_cached_frame(
             pbp,
             loaders._pbp_cache_path(cache_dir, season, regular_season_only=True),
             tuple(constants.PBP_COLUMNS),
         )
         schedule = loaders._prepare_schedule(schedules.filter(pl.col("season") == season))
-        loaders._write_cached_frame(
+        loaders.write_cached_frame(
             schedule,
             loaders._schedule_cache_path(cache_dir, season),
             loaders._schedule_requested_columns(),
@@ -215,13 +215,13 @@ def write_cache(files: SnapshotFiles, cache_dir: Path, seasons: list[int]) -> No
             if season < source.first_season:
                 continue
             raw = pl.read_parquet(by_season[season]) if season in by_season else source.empty()
-            loaders._write_cached_frame(
+            loaders.write_cached_frame(
                 source.prepare(raw, regular_season_only=True),
                 source.cache_path(cache_dir, season, regular_season_only=True),
                 source.columns,
             )
         if season in files.team_stats:
-            loaders._write_cached_frame(
+            loaders.write_cached_frame(
                 OFFICIAL_TEAM_STATS.prepare(
                     pl.read_parquet(files.team_stats[season]), regular_season_only=True
                 ),
@@ -230,7 +230,7 @@ def write_cache(files: SnapshotFiles, cache_dir: Path, seasons: list[int]) -> No
             )
     for season, path in files.season_rosters.items():
         source = nflverse_sources.ROSTERS
-        loaders._write_cached_frame(
+        loaders.write_cached_frame(
             source.prepare(pl.read_parquet(path), regular_season_only=False),
             source.cache_path(cache_dir, season, regular_season_only=False),
             source.columns,
@@ -238,7 +238,7 @@ def write_cache(files: SnapshotFiles, cache_dir: Path, seasons: list[int]) -> No
     players = nflverse_sources.conform(
         pl.read_parquet(files.players), nflverse_sources._PLAYERS_SCHEMA
     )
-    loaders._write_cached_frame(
+    loaders.write_cached_frame(
         players,
         cache_dir / nflverse_sources._PLAYERS_CACHE_NAME,
         tuple(constants.NFLREADPY_PLAYERS_COLUMNS),

@@ -7,23 +7,27 @@ from typing import Any
 
 import polars as pl
 import pytest
-from tests.ratings_league import league
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.polars import nflverse_sources, ratings_build
+from tests.fakes import returning
+from tests.ratings_league import league
 
 _FIRST = constants.NFLREADPY_MIN_SEASON
+
+# One loader call: the seasons asked for and the keyword arguments.
+type _Call = tuple[list[int], dict[str, Any]]
 
 
 @dataclass
 class _Calls:
     """Every loader call: the seasons asked for and the keyword arguments."""
 
-    pbp: list[tuple[list[int], dict[str, Any]]] = field(default_factory=list)
-    schedule: list[tuple[list[int], dict[str, Any]]] = field(default_factory=list)
-    sources: dict[str, tuple[list[int], dict[str, Any]]] = field(default_factory=dict)
-    players: list[dict[str, Any]] = field(default_factory=list)
+    pbp: list[_Call] = field(default_factory=list[_Call])
+    schedule: list[_Call] = field(default_factory=list[_Call])
+    sources: dict[str, _Call] = field(default_factory=dict[str, _Call])
+    players: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
 
 
 def _seasons_frame(seasons: list[int], label: str) -> pl.DataFrame:
@@ -197,7 +201,7 @@ def test_no_play_by_play_at_all_loads_no_other_source_and_returns_none(
     calls: _Calls, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(pl.DataFrame()))
 
     # Act
     sources = ratings_build.load_ratings_sources(
@@ -217,7 +221,7 @@ def test_load_ratings_build_without_play_by_play_returns_none(
     calls: _Calls, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(polars_utils, "load_pbp", lambda *_args, **_kwargs: pl.DataFrame())
+    monkeypatch.setattr(polars_utils, "load_pbp", returning(pl.DataFrame()))
 
     # Act
     build = ratings_build.load_ratings_build(
@@ -246,7 +250,7 @@ def test_load_ratings_build_builds_from_the_loaded_sources(
         weekly_rosters=data.weekly_rosters,
         starter_identity=data.starter_identity,
     )
-    monkeypatch.setattr(ratings_build, "load_ratings_sources", lambda *_args, **_kwargs: sources)
+    monkeypatch.setattr(ratings_build, "load_ratings_sources", returning(sources))
 
     # Act
     build = ratings_build.load_ratings_build(

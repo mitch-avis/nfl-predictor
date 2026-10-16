@@ -76,10 +76,13 @@ def _ratings_lookup(ratings: pl.DataFrame, column: str) -> dict[str, float]:
 
 def test_round_robin_recovers_known_offense_and_defense_strengths() -> None:
     """A noiseless double round-robin recovers the centered generating strengths."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
 
+    # Act
     ratings, _ = adjusted_strength.solve_team_ridge(team_games, "response", ridge_lambda=1e-6)
 
+    # Assert
     offense = _ratings_lookup(ratings, "offense_rating")
     defense = _ratings_lookup(ratings, "defense_rating")
     expected_offense = _centered(TRUE_OFFENSE)
@@ -91,48 +94,59 @@ def test_round_robin_recovers_known_offense_and_defense_strengths() -> None:
 
 def test_home_field_term_matches_positive_truth() -> None:
     """A positive generating home-field edge is recovered with a positive sign."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.5)
 
+    # Act
     _, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=1e-6
     )
 
+    # Assert
     assert home_field_advantage > 0.0
     assert home_field_advantage == pytest.approx(2.5, abs=1e-4)
 
 
 def test_home_field_term_flips_sign_for_negative_truth() -> None:
     """A negative generating home-field edge is recovered with a negative sign."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, -1.75)
 
+    # Act
     _, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=1e-6
     )
 
+    # Assert
     assert home_field_advantage < 0.0
     assert home_field_advantage == pytest.approx(-1.75, abs=1e-4)
 
 
 def test_offense_and_defense_coefficients_are_independently_centered() -> None:
     """Offense and defense coefficients each average to zero on noisy input."""
+    # Arrange
     rng = np.random.default_rng(1234)
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
     noisy = team_games.with_columns(
         (pl.col("response") + pl.Series(rng.normal(0.0, 3.0, team_games.height))).alias("response")
     )
 
+    # Act
     ratings, _ = adjusted_strength.solve_team_ridge(noisy, "response", ridge_lambda=0.5)
 
+    # Assert
     assert ratings.get_column("offense_rating").sum() == pytest.approx(0.0, abs=1e-5)
     assert ratings.get_column("defense_rating").sum() == pytest.approx(0.0, abs=1e-5)
 
 
 def test_empty_input_returns_typed_empty_ratings_frame() -> None:
     """Empty input yields a typed empty ratings frame and a zero home-field term."""
+    # Act
     ratings, home_field_advantage = adjusted_strength.solve_team_ridge(
         pl.DataFrame(), "response", ridge_lambda=1.0
     )
 
+    # Assert
     assert ratings.is_empty()
     assert ratings.schema == pl.Schema(
         {
@@ -146,6 +160,7 @@ def test_empty_input_returns_typed_empty_ratings_frame() -> None:
 
 def test_all_null_rows_return_typed_empty_ratings_frame() -> None:
     """Input that becomes empty after dropping nulls yields the typed empty frame."""
+    # Arrange
     team_games = pl.DataFrame(
         {
             "team_abbr": ["KC", "GB"],
@@ -156,10 +171,12 @@ def test_all_null_rows_return_typed_empty_ratings_frame() -> None:
         schema_overrides={"response": pl.Float64},
     )
 
+    # Act
     ratings, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=1.0
     )
 
+    # Assert
     assert ratings.is_empty()
     assert ratings.schema == pl.Schema(
         {
@@ -173,6 +190,7 @@ def test_all_null_rows_return_typed_empty_ratings_frame() -> None:
 
 def test_single_game_input_returns_two_team_frame() -> None:
     """A one-game frame solves without raising and returns both teams."""
+    # Arrange
     team_games = pl.DataFrame(
         {
             "team_abbr": ["KC", "GB"],
@@ -182,10 +200,12 @@ def test_single_game_input_returns_two_team_frame() -> None:
         }
     )
 
+    # Act
     ratings, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=1.0
     )
 
+    # Assert
     assert ratings.height == 2
     assert ratings.get_column("team_abbr").to_list() == ["GB", "KC"]
     assert ratings.schema == pl.Schema(
@@ -200,31 +220,38 @@ def test_single_game_input_returns_two_team_frame() -> None:
 
 def test_missing_home_column_solves_without_home_field_term() -> None:
     """A frame without the home indicator solves with a zero home-field column."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 0.0).drop("is_home")
 
+    # Act
     ratings, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=1e-6
     )
 
+    # Assert
     assert ratings.height == len(TEAMS)
     assert home_field_advantage == 0.0
 
 
 def test_repeated_solves_are_deterministic() -> None:
     """Solving the same frame twice produces frame-equal ratings."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
-
     first, first_hfa = adjusted_strength.solve_team_ridge(team_games, "response", ridge_lambda=0.25)
+
+    # Act
     second, second_hfa = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=0.25
     )
 
+    # Assert
     assert_frame_equal(first, second)
     assert first_hfa == second_hfa
 
 
 def test_opponent_only_team_receives_defense_coefficient() -> None:
     """A team seen only in the opponent column still appears with both coefficients."""
+    # Arrange
     team_games = pl.DataFrame(
         {
             "team_abbr": ["KC", "GB", "KC"],
@@ -234,8 +261,10 @@ def test_opponent_only_team_receives_defense_coefficient() -> None:
         }
     )
 
+    # Act
     ratings, _ = adjusted_strength.solve_team_ridge(team_games, "response", ridge_lambda=1.0)
 
+    # Assert
     assert "SEA" in ratings.get_column("team_abbr").to_list()
     seattle = ratings.filter(pl.col("team_abbr") == "SEA")
     assert seattle.get_column("offense_rating").item() is not None
@@ -244,12 +273,15 @@ def test_opponent_only_team_receives_defense_coefficient() -> None:
 
 def test_rank_deficient_design_falls_back_to_least_squares() -> None:
     """A zero ridge penalty on a rank-deficient design solves instead of raising."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
 
+    # Act
     ratings, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=0.0
     )
 
+    # Assert
     offense = _ratings_lookup(ratings, "offense_rating")
     expected_offense = _centered(TRUE_OFFENSE)
     for team in TEAMS:
@@ -262,6 +294,7 @@ def test_singular_matrix_error_falls_back_to_least_squares(
 ) -> None:
     """A singular normal-equation solve degrades to least squares instead of raising."""
 
+    # Arrange
     def _raise_singular(
         matrix: npt.NDArray[np.float64], vector: npt.NDArray[np.float64]
     ) -> npt.NDArray[np.float64]:
@@ -272,10 +305,12 @@ def test_singular_matrix_error_falls_back_to_least_squares(
     monkeypatch.setattr(np.linalg, "solve", _raise_singular)
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
 
+    # Act
     ratings, home_field_advantage = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=1e-6
     )
 
+    # Assert
     offense = _ratings_lookup(ratings, "offense_rating")
     expected_offense = _centered(TRUE_OFFENSE)
     for team in TEAMS:
@@ -285,6 +320,7 @@ def test_singular_matrix_error_falls_back_to_least_squares(
 
 def test_null_rows_are_dropped_before_solving() -> None:
     """A row with a null response leaves the solved ratings unchanged."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
     polluted = pl.concat(
         [
@@ -300,28 +336,33 @@ def test_null_rows_are_dropped_before_solving() -> None:
             ),
         ]
     )
-
     clean_ratings, clean_hfa = adjusted_strength.solve_team_ridge(
         team_games, "response", ridge_lambda=0.25
     )
+
+    # Act
     polluted_ratings, polluted_hfa = adjusted_strength.solve_team_ridge(
         polluted, "response", ridge_lambda=0.25
     )
 
+    # Assert
     assert_frame_equal(clean_ratings, polluted_ratings)
     assert clean_hfa == polluted_hfa
 
 
 def test_missing_required_column_raises_value_error() -> None:
     """A frame without the requested response column reports a clear error."""
+    # Arrange
     team_games = pl.DataFrame({"team_abbr": ["KC"], "opponent_abbr": ["GB"]})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="response"):
         adjusted_strength.solve_team_ridge(team_games, "response", ridge_lambda=1.0)
 
 
 def test_build_team_design_matrix_encodes_signs_and_team_universe() -> None:
     """The design matrix encodes offense, defense, and home-field columns as expected."""
+    # Arrange
     team_games = pl.DataFrame(
         {
             "team_abbr": ["KC", "GB"],
@@ -331,6 +372,7 @@ def test_build_team_design_matrix_encodes_signs_and_team_universe() -> None:
         }
     )
 
+    # Act
     design, response, teams = adjusted_strength.build_team_design_matrix(
         team_games,
         "response",
@@ -339,6 +381,7 @@ def test_build_team_design_matrix_encodes_signs_and_team_universe() -> None:
         ),
     )
 
+    # Assert
     assert teams == ["GB", "KC", "SEA"]
     assert design.shape == (2, len(teams) * 2 + 1)
     assert response.tolist() == [7.0, -3.0]
@@ -352,6 +395,7 @@ def test_build_team_design_matrix_encodes_signs_and_team_universe() -> None:
 
 def test_solve_srs_recovers_known_ratings() -> None:
     """A noiseless round-robin margin response recovers the centered generating ratings."""
+    # Arrange
     true_ratings = _centered({"ARI": -6.0, "BAL": 1.0, "CHI": 3.0, "DAL": 8.0})
     rows: list[dict[str, object]] = []
     for team in true_ratings:
@@ -367,8 +411,10 @@ def test_solve_srs_recovers_known_ratings() -> None:
             )
     team_games = pl.DataFrame(rows)
 
+    # Act
     ratings = adjusted_strength.solve_srs(team_games, "margin")
 
+    # Assert
     solved = dict(
         zip(
             ratings.get_column("team_abbr").to_list(),
@@ -382,6 +428,7 @@ def test_solve_srs_recovers_known_ratings() -> None:
 
 def test_solve_srs_ratings_are_centered() -> None:
     """Simple rating system output averages to zero."""
+    # Arrange
     rng = np.random.default_rng(7)
     rows: list[dict[str, object]] = []
     for team in TEAMS:
@@ -396,21 +443,26 @@ def test_solve_srs_ratings_are_centered() -> None:
                 }
             )
 
+    # Act
     ratings = adjusted_strength.solve_srs(pl.DataFrame(rows), "margin")
 
+    # Assert
     assert ratings.get_column("srs_rating").sum() == pytest.approx(0.0, abs=1e-5)
 
 
 def test_solve_srs_empty_input_returns_typed_empty_frame() -> None:
     """Empty simple rating system input yields a typed empty frame."""
+    # Act
     ratings = adjusted_strength.solve_srs(pl.DataFrame(), "margin")
 
+    # Assert
     assert ratings.is_empty()
     assert ratings.schema == pl.Schema({"team_abbr": pl.String, "srs_rating": pl.Float64})
 
 
 def test_solve_srs_drops_null_rows() -> None:
     """Null rows do not change the simple rating system solution."""
+    # Arrange
     base = pl.DataFrame(
         {
             "team_abbr": ["KC", "GB", "KC", "GB"],
@@ -427,15 +479,18 @@ def test_solve_srs_drops_null_rows() -> None:
             ),
         ]
     )
+    base_ratings = adjusted_strength.solve_srs(base, "margin")
 
-    assert_frame_equal(
-        adjusted_strength.solve_srs(base, "margin"),
-        adjusted_strength.solve_srs(polluted, "margin"),
-    )
+    # Act
+    polluted_ratings = adjusted_strength.solve_srs(polluted, "margin")
+
+    # Assert
+    assert_frame_equal(base_ratings, polluted_ratings)
 
 
 def test_tune_ridge_lambda_returns_grid_member_and_is_deterministic() -> None:
     """The tuner returns a candidate from the grid and repeats its choice exactly."""
+    # Arrange
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
     design, response, _ = adjusted_strength.build_team_design_matrix(
         team_games,
@@ -444,10 +499,12 @@ def test_tune_ridge_lambda_returns_grid_member_and_is_deterministic() -> None:
             team="team_abbr", opponent="opponent_abbr", home="is_home"
         ),
     )
-
     first = adjusted_strength.tune_ridge_lambda(design, response)
+
+    # Act
     second = adjusted_strength.tune_ridge_lambda(design, response)
 
+    # Assert
     assert first == second
     assert any(
         first == pytest.approx(float(candidate))
@@ -457,16 +514,20 @@ def test_tune_ridge_lambda_returns_grid_member_and_is_deterministic() -> None:
 
 def test_tune_ridge_lambda_handles_short_inputs() -> None:
     """A single-row system returns the smallest candidate rather than raising."""
+    # Arrange
     design = np.array([[1.0, -1.0]], dtype=np.float64)
     response = np.array([3.0], dtype=np.float64)
 
+    # Act
     chosen = adjusted_strength.tune_ridge_lambda(design, response)
 
+    # Assert
     assert chosen == pytest.approx(float(adjusted_strength.DEFAULT_RIDGE_LAMBDAS[0]))
 
 
 def test_tune_ridge_lambda_prefers_a_larger_penalty_under_heavy_noise() -> None:
     """Heavier response noise pushes the tuner toward a larger ridge penalty."""
+    # Arrange
     rng = np.random.default_rng(20240909)
     team_games = _double_round_robin(TRUE_OFFENSE, TRUE_DEFENSE, 2.0)
     design, response, _ = adjusted_strength.build_team_design_matrix(
@@ -477,24 +538,29 @@ def test_tune_ridge_lambda_prefers_a_larger_penalty_under_heavy_noise() -> None:
         ),
     )
     noisy_response = response + rng.normal(0.0, 40.0, response.shape[0])
-
     quiet_lambda = adjusted_strength.tune_ridge_lambda(design, response)
+
+    # Act
     noisy_lambda = adjusted_strength.tune_ridge_lambda(design, noisy_response)
 
+    # Assert
     assert noisy_lambda > quiet_lambda
 
 
 def test_tune_ridge_lambda_rejects_mismatched_shapes() -> None:
     """Mismatched design and response row counts report a clear error."""
+    # Arrange
     design = np.zeros((3, 2), dtype=np.float64)
     response = np.zeros(2, dtype=np.float64)
 
+    # Act & Assert
     with pytest.raises(ValueError, match="same number of rows"):
         adjusted_strength.tune_ridge_lambda(design, response)
 
 
 def test_tune_ridge_lambda_rejects_non_matrix_design() -> None:
     """A one-dimensional design reports a clear error."""
+    # Act & Assert
     with pytest.raises(ValueError, match="2D matrix"):
         adjusted_strength.tune_ridge_lambda(
             np.zeros(3, dtype=np.float64), np.zeros(3, dtype=np.float64)
@@ -503,6 +569,7 @@ def test_tune_ridge_lambda_rejects_non_matrix_design() -> None:
 
 def test_tune_ridge_lambda_rejects_non_vector_response() -> None:
     """A two-dimensional response reports a clear error."""
+    # Act & Assert
     with pytest.raises(ValueError, match="1D vector"):
         adjusted_strength.tune_ridge_lambda(
             np.zeros((3, 2), dtype=np.float64), np.zeros((3, 1), dtype=np.float64)
@@ -511,6 +578,7 @@ def test_tune_ridge_lambda_rejects_non_vector_response() -> None:
 
 def test_tune_ridge_lambda_rejects_empty_candidate_grid() -> None:
     """An empty candidate grid reports a clear error."""
+    # Act & Assert
     with pytest.raises(ValueError, match="at least one value"):
         adjusted_strength.tune_ridge_lambda(
             np.zeros((3, 2), dtype=np.float64),
@@ -521,12 +589,15 @@ def test_tune_ridge_lambda_rejects_empty_candidate_grid() -> None:
 
 def test_solve_srs_all_null_rows_return_typed_empty_frame() -> None:
     """Simple rating system input that empties after dropping nulls returns the typed frame."""
+    # Arrange
     team_games = pl.DataFrame(
         {"team_abbr": ["KC", "GB"], "opponent_abbr": ["GB", "KC"], "margin": [None, None]},
         schema_overrides={"margin": pl.Float64},
     )
 
+    # Act
     ratings = adjusted_strength.solve_srs(team_games, "margin")
 
+    # Assert
     assert ratings.is_empty()
     assert ratings.schema == pl.Schema({"team_abbr": pl.String, "srs_rating": pl.Float64})

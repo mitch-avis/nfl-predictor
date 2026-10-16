@@ -13,14 +13,14 @@ import sys
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from tests.api import factories
-from tests.test_walk_forward import _base_config, _fixture_df
 
 from nfl_predictor.api.readers import model as model_reader
 from nfl_predictor.api.runs.files import resolve_run_files
 from nfl_predictor.cli import backtest, train
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.weekly_run import config as run_config
+from tests.api import factories
+from tests.test_walk_forward import _base_config, _fixture_df
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,7 +37,10 @@ def test_train_no_longer_parses_a_hold_out_option(
     flag: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``train`` fits every non-holdout game, so it has nothing to hold out."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["prog", flag, "1"])
+
+    # Act & Assert
     with pytest.raises(SystemExit):
         train._parse_args()
 
@@ -47,7 +50,10 @@ def test_backtest_no_longer_parses_the_calibration_frame_option(
     flag: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``backtest`` hands XGBoost no eval frame, so there is no frame to size."""
+    # Arrange
     monkeypatch.setattr(sys, "argv", ["prog", flag, "4"])
+
+    # Act & Assert
     with pytest.raises(SystemExit):
         backtest._parse_args()
 
@@ -57,6 +63,7 @@ def test_backtest_no_longer_parses_the_calibration_frame_option(
 )
 def test_weekly_no_longer_parses_a_hold_out_option(flag: str) -> None:
     """The weekly run's final fit and stage 1 hold nothing out."""
+    # Act & Assert
     with pytest.raises(SystemExit):
         run_config._build_parser().parse_args([flag, "4"])
 
@@ -64,23 +71,28 @@ def test_weekly_no_longer_parses_a_hold_out_option(flag: str) -> None:
 @pytest.mark.parametrize("key", RETIRED_WEEKLY_KEYS)
 def test_a_config_with_a_retired_hold_out_key_is_rejected(tmp_path: Path, key: str) -> None:
     """An old config that sets a hold-out key fails with the reason, before any data refresh."""
+    # Arrange
     config_path = tmp_path / "weekly.json"
     config_path.write_text(json.dumps({key: 4}), encoding="utf-8")
 
+    # Act & Assert
     with pytest.raises(ValueError, match=rf"{key}.*every eligible completed game"):
         run_config._parse_args(["--config", str(config_path)])
 
 
 def test_the_walk_forward_config_records_no_calibration_weeks() -> None:
     """The recorded config, and so the checkpoint fingerprint, carries no retired key."""
+    # Act
     config = walk_forward.WalkForwardConfig()
 
+    # Assert
     assert not hasattr(config, "calibration_weeks")
     assert "calibration_weeks" not in config.to_dict()
 
 
 def test_walk_forward_folds_hand_xgboost_no_eval_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every fold fits its heads without an eval frame, as the final fit does."""
+    # Arrange
     calls: list[dict[str, Any]] = []
     fit_heads = walk_forward.ml_model.fit_margin_total_models
     fit_quantiles = walk_forward.ml_model.fit_quantile_models
@@ -96,14 +108,17 @@ def test_walk_forward_folds_hand_xgboost_no_eval_set(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(walk_forward.ml_model, "fit_margin_total_models", spy_heads)
     monkeypatch.setattr(walk_forward.ml_model, "fit_quantile_models", spy_quantiles)
 
+    # Act
     walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 
+    # Assert
     assert calls
     assert all(kwargs.get("x_eval") is None for kwargs in calls)
 
 
 def test_a_run_written_with_the_hold_out_still_reads(tmp_path: Path) -> None:
     """Metadata that records the old calibration split and config keys reads unchanged."""
+    # Arrange
     run_dir = factories.make_run_dir(tmp_path, "weekly")
     metadata_path = run_dir / "metadata.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -118,7 +133,9 @@ def test_a_run_written_with_the_hold_out_still_reads(tmp_path: Path) -> None:
     metadata["config"]["train_config"] = {"calibration_seasons": 0, "calibration_weeks": 4}
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
 
+    # Act
     payload = model_reader.model_payload(resolve_run_files(run_dir))
 
+    # Assert
     assert payload["metadata"]["splits"] == old_splits
     assert payload["metadata"]["config"]["train_config"]["calibration_weeks"] == 4

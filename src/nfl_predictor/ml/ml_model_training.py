@@ -29,26 +29,26 @@ from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
     OptunaConfig,
     TrainingResult,
-    _early_stopping_info,
-    _evaluate_margin_total_predictions,
-    _filter_season_bounds,
-    _get_target_columns,
-    _load_games,
-    _run_optuna_search,
-    _split_by_season,
-    _summarize_confidence_pool,
-    _summarize_missing_data,
     apply_feature_spec,
     build_feature_spec,
     build_preprocessor,
+    early_stopping_info,
+    evaluate_margin_total_predictions,
+    filter_season_bounds,
     fit_margin_total_models,
     fit_quantile_models,
     fit_transform_matrix,
     get_market_baseline,
+    get_target_columns,
+    load_games,
     margin_to_home_win_prob,
     predict_xgb,
     prepare_margin_total_targets_with_anchor,
     resolve_xgb_params,
+    run_optuna_search,
+    split_by_season,
+    summarize_confidence_pool,
+    summarize_missing_data,
     transform_matrix,
     validate_quantiles,
 )
@@ -109,7 +109,7 @@ def _split_train_holdout(
     if holdout_seasons < 0:
         msg = "Holdout seasons must be non-negative."
         raise ValueError(msg)
-    train_df, holdout_df, holdout = _split_by_season(df, holdout_seasons)
+    train_df, holdout_df, holdout = split_by_season(df, holdout_seasons)
     splits = {
         "train_seasons": sorted(int(season) for season in train_df["season"].dropna().unique()),
         "holdout_seasons": [int(season) for season in holdout],
@@ -182,7 +182,7 @@ def _load_training_games(options: TrainingOptions) -> _TrainingGames:
     The disabled feature groups' columns are dropped first, before anything reads the columns,
     as a walk-forward drops them before it builds its folds.
     """
-    df = _load_games(options.data_path)
+    df = load_games(options.data_path)
     dropped: list[str] = []
     if options.disabled_feature_groups:
         check_ratings_replace_strength(df, options.disabled_feature_groups, stop=True)
@@ -193,9 +193,9 @@ def _load_training_games(options: TrainingOptions) -> _TrainingGames:
             list(options.disabled_feature_groups),
             len(dropped),
         )
-    target_columns = _get_target_columns(df)
+    target_columns = get_target_columns(df)
     df = df.dropna(subset=list(target_columns))
-    df = _filter_season_bounds(df, options.min_season, options.max_season)
+    df = filter_season_bounds(df, options.min_season, options.max_season)
     df = _filter_to_regular_season_for_training(df, include_postseason=options.include_postseason)
     return _TrainingGames(df, target_columns, tuple(dropped))
 
@@ -307,12 +307,12 @@ def _log_holdout_evaluation(
         pred_total = pred_total + baseline_total_holdout
     home_win_prob = _holdout_home_win_prob(pred_margin, holdout_df, options.floor_sigma_pool)
 
-    metrics = _evaluate_margin_total_predictions(
+    metrics = evaluate_margin_total_predictions(
         holdout_df, pred_margin, pred_total, target_columns, home_win_prob
     )
     log.info("Holdout metrics: %s", {k: round(v, 4) for k, v in metrics.items()})
 
-    pool_summary = _summarize_confidence_pool(holdout_df, home_win_prob, target_columns)
+    pool_summary = summarize_confidence_pool(holdout_df, home_win_prob, target_columns)
     if pool_summary:
         log.info(
             "Confidence pool (avg weekly): expected=%.1f actual=%.1f picks=%.2f",
@@ -364,7 +364,7 @@ def train_margin_total_model(options: TrainingOptions) -> MarginTotalModel:
     tuned_cv_summary: dict[str, Any] | None = None
     optuna_summary: dict[str, Any] | None = None
     if options.optuna_config.enabled:
-        tuned_params, tuned_cv_summary, optuna_summary = _run_optuna_search(
+        tuned_params, tuned_cv_summary, optuna_summary = run_optuna_search(
             train_df,
             FoldSetup(
                 target_columns=target_columns,
@@ -421,7 +421,7 @@ def _holdout_home_win_prob(
 def train_margin_total_model_with_report(options: TrainingOptions) -> TrainingResult:
     """Train a margin/total model and return a structured metrics report payload."""
     df, _target_columns, dropped_group_columns = _load_training_games(options)
-    missing_data_summary = _summarize_missing_data(df)
+    missing_data_summary = summarize_missing_data(df)
     train_df, holdout_df, splits = _split_train_holdout(df, options.holdout_seasons)
 
     # Train the actual model (this will also log holdout metrics).
@@ -440,10 +440,10 @@ def train_margin_total_model_with_report(options: TrainingOptions) -> TrainingRe
             pred_margin = pred_margin + baseline_margin_holdout
             pred_total = pred_total + baseline_total_holdout
         home_win_prob = _holdout_home_win_prob(pred_margin, holdout_df, options.floor_sigma_pool)
-        holdout_metrics = _evaluate_margin_total_predictions(
+        holdout_metrics = evaluate_margin_total_predictions(
             holdout_df, pred_margin, pred_total, model.target_columns, home_win_prob
         )
-        pool_summary = _summarize_confidence_pool(holdout_df, home_win_prob, model.target_columns)
+        pool_summary = summarize_confidence_pool(holdout_df, home_win_prob, model.target_columns)
 
     report = {
         "kind": "train",
@@ -468,7 +468,7 @@ def train_margin_total_model_with_report(options: TrainingOptions) -> TrainingRe
         params=params,
         tuned_params=model.tuned_params,
         feature_list=feature_list,
-        early_stopping=_early_stopping_info(model),
+        early_stopping=early_stopping_info(model),
         feature_importance=feature_importance_report,
         disabled_feature_groups=tuple(options.disabled_feature_groups),
         dropped_feature_group_columns=dropped_group_columns,

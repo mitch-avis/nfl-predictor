@@ -22,6 +22,10 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
+
+from nfl_predictor.cli import train
+from nfl_predictor.ml import walk_forward
+from nfl_predictor.weekly_run import pipeline
 from tests import snapshots
 from tests.feature_group_fixture import (
     GROUP_COLUMNS,
@@ -29,10 +33,6 @@ from tests.feature_group_fixture import (
     write_group_weekly_config,
 )
 from tests.weekly_fixture import CURRENT_SEASON, PREDICT_WEEK
-
-from nfl_predictor.cli import train
-from nfl_predictor.ml import walk_forward
-from nfl_predictor.weekly_run import pipeline
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

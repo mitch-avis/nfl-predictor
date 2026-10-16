@@ -39,7 +39,7 @@ def _random_team_games(seed: int = 0) -> pl.DataFrame:
     for week in range(1, _WEEKS + 1):
         order = rng.permutation(len(_TEAMS))
         for pair in range(len(_TEAMS) // 2):
-            team, opponent = _TEAMS[order[2 * pair]], _TEAMS[order[2 * pair + 1]]
+            team, opponent = _TEAMS[int(order[2 * pair])], _TEAMS[int(order[2 * pair + 1])]
             margin = float(rng.normal())
             plays = float(rng.integers(100, 140))
             for subject, foe, sign in ((team, opponent, 1.0), (opponent, team, -1.0)):

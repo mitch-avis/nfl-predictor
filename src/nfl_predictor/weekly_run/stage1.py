@@ -43,6 +43,7 @@ from nfl_predictor.ml import (
 )
 from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -98,8 +99,9 @@ def predictions_source(run_dir: Path) -> Path:
 
 def _write_predictions_source(run_dir: Path, checkpoint: object) -> None:
     """Record the walk-forward's fold checkpoint directory for `predictions_source`."""
-    if isinstance(checkpoint, dict) and checkpoint.get("dir"):
-        pointer = {"config": {"checkpoint": {"dir": str(checkpoint["dir"])}}}
+    checkpoint_dict = as_str_dict(checkpoint)
+    if checkpoint_dict is not None and checkpoint_dict.get("dir"):
+        pointer = {"config": {"checkpoint": {"dir": str(checkpoint_dict["dir"])}}}
         _atomic_write_json(predictions_source(run_dir) / "metadata.json", pointer)
 
 
@@ -160,11 +162,11 @@ def _fold_directories_matching(
     matches: list[Path] = []
     for manifest_path in sorted(folds_root.glob("*/manifest.json")):
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = as_str_dict(json.loads(manifest_path.read_text(encoding="utf-8")))
         except OSError, json.JSONDecodeError:
             continue
         if (
-            isinstance(manifest, dict)
+            manifest is not None
             and manifest.get("config") == expected
             and manifest.get("rows") == rows
             and manifest.get("columns") == columns

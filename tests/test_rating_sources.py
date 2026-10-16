@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 from nfl_predictor import constants
 from nfl_predictor.ratings.team_rating import TEAM_RATING_COLUMNS
 from nfl_predictor.reporting import rating_sources
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,7 +25,7 @@ HOME_TERM = 2.0
 
 def _round_robin(strengths: dict[str, float], *, neutral_game: tuple[str, str] | None = None):
     """Return every pairing once, home side alternating, margins additive in the strengths."""
-    rows = []
+    rows: list[dict[str, object]] = []
     for index, (first, second) in enumerate(itertools.combinations(sorted(strengths), 2)):
         home, away = (first, second) if index % 2 == 0 else (second, first)
         neutral = (home, away) == neutral_game

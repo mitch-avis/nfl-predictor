@@ -12,6 +12,7 @@ import polars as pl
 import pytest
 
 from nfl_predictor import constants
+from nfl_predictor.utils.narrowing import as_str_dict
 from nfl_predictor.utils.polars import elo_game_context, elo_ratings
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fivethirtyeight_elo" / "nfl_games_2017_2019.csv"
@@ -815,8 +816,8 @@ def test_win_total_variant_records_its_preset_and_fitted_weights() -> None:
     assert metadata["settings"] == dataclasses.asdict(elo_ratings.WIN_TOTAL_SETTINGS)
     assert metadata["columns"] == constants.OWN_WT_ELO_COLUMNS
     assert metadata["first_season"] == 2000
-    weights = metadata["win_total_weights"]
-    assert isinstance(weights, dict)
+    weights = as_str_dict(metadata["win_total_weights"])
+    assert weights is not None
     assert set(weights) == {"2001", "2002", "2003"}
 
 

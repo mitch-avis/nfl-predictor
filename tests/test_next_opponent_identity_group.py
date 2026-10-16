@@ -94,7 +94,7 @@ def _feature_matrix(
     )
     preprocessor = build_preprocessor(spec, for_tree=True)
     matrix = ml_model_xgb_utils.fit_transform_matrix(preprocessor, apply_feature_spec(frame, spec))
-    dense = sparse.csr_matrix(matrix).toarray() if sparse.issparse(matrix) else np.asarray(matrix)
+    dense = matrix.toarray() if isinstance(matrix, sparse.csr_matrix) else np.asarray(matrix)
     names = [str(name) for name in preprocessor.get_feature_names_out()]
     return pd.DataFrame(dense, columns=names)
 

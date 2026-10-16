@@ -24,9 +24,9 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
-from tests import snapshots
 
 from nfl_predictor import constants, data_collection
+from tests import snapshots
 
 SNAPSHOT_DIR = Path(__file__).parent / "fixtures" / "season_build_characterization"
 
@@ -259,14 +259,8 @@ def _schema(frame: pl.DataFrame) -> dict[str, str]:
 
 def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
     """Guard the fixture: the pinned rows carry real values for every family."""
-    # Arrange
-    games = build.games
-
     # Act
-    played = games.select("season", "week").unique()
-    unplayed_elo = games.filter(
-        (pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])
-    ).get_column("away_elo_pre")
+    games = build.games
 
     # Assert
     for column in (
@@ -290,11 +284,15 @@ def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
         "home_division_rank",
     ):
         assert games.get_column(column).drop_nulls().n_unique() > 1, column
+    played = games.select("season", "week").unique()
     assert played.filter(pl.col("week") == _PLAYOFF_WEEK).height == 1
     assert (
         played.filter((pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])).height
         == 1
     )
+    unplayed_elo = games.filter(
+        (pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])
+    ).get_column("away_elo_pre")
     assert unplayed_elo.null_count() == 0, "the unplayed week takes each team's latest ELO"
 
 

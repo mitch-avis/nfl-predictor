@@ -105,8 +105,11 @@ Binding in every session; definitions, limits and examples are in `.agents/guard
   Never bare `python`, `pip`, `pytest`, `ruff`, `pyright` or `ty`, and never `uv run <tool>`,
   which syncs the venv first and can replace the CUDA LightGBM build. `uv` comes from `PATH`.
 - `scripts/gate.sh` runs every check the way CI does (lock, sync, ruff, ty, pyright, pytest,
-  markdownlint, CLI smoke checks). Add `--web` whenever `web/` or `src/nfl_predictor/api/`
-  changed; `--quick` skips pytest while iterating.
+  the `src/` coverage bar, every console script's and front-door command's `--help`, shellcheck,
+  markdownlint). It is shared with the other projects through the Copier template
+  `~/workspace/python-template` (`.copier-answers.yml`); this repo's own steps live in
+  `scripts/gate.hooks.sh`, and `copier update` brings in template changes. Add `--web` whenever
+  `web/` or `src/nfl_predictor/api/` changed; `--quick` skips pytest while iterating.
 - After every version bump, including a merged one, run
   `uv sync $(.venv/bin/nfl-lightgbm-cuda-install uv-args)`. A plain `uv sync` replaces the local
   CUDA build of LightGBM with the CPU wheel.

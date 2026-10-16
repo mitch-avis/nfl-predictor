@@ -114,7 +114,7 @@ def _gap_play() -> pl.DataFrame:
                 "qb_hit",
             },
         ),
-        (2006, set()),
+        (2006, set[str]()),
     ],
 )
 def test_prepare_pbp_blanks_the_fields_nflverse_lacks_that_season(

@@ -103,7 +103,7 @@ def write_predictions_csv(path: Path, season: int = 2026, week: int = 1) -> Path
 
 def write_picks_csv(path: Path, season: int = 2026, week: int = 1) -> Path:
     """Write a confidence-picks CSV."""
-    rows = []
+    rows: list[list[Any]] = []
     for rank, (away, home, date, p_home, *_rest) in enumerate(GAMES, 1):
         winner = home if p_home >= 0.5 else away
         rows.append([
@@ -116,7 +116,7 @@ def write_picks_csv(path: Path, season: int = 2026, week: int = 1) -> Path:
 
 def write_betting_csv(path: Path, season: int = 2026, week: int = 1) -> Path:
     """Write a betting-report CSV."""
-    rows = []
+    rows: list[list[Any]] = []
     for away, home, date, p_home, home_spread, total, away_ml, home_ml in GAMES:
         rows.append([
             f"{season}_{week:02d}_{away}_{home}", date, f"{away} @ {home}", 21.0, 24.0, total,
@@ -136,8 +136,8 @@ def write_power_csvs(
     """Write power rankings and both projected-standings CSVs stamped ``through_week``."""
     order = order or [team for team, *_ in TEAMS]
     info = {team: (division, conference) for team, division, conference in TEAMS}
-    power_rows = []
-    standings_rows = []
+    power_rows: list[list[Any]] = []
+    standings_rows: list[list[Any]] = []
     for rank, team in enumerate(order, 1):
         division, conference = info[team]
         rating = 2.0 - rank * 0.4

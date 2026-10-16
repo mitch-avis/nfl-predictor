@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 import yaml
+
 from tests.weekly_fixture import build_fixture, write_weekly_config
 
 if TYPE_CHECKING:

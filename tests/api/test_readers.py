@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
-from tests.api import factories
 
 from nfl_predictor.api.readers import betting, cache, data_status, model, power, predictions
 from nfl_predictor.api.runs.files import resolve_run_files
+from tests.api import factories
 
 if TYPE_CHECKING:
     from pathlib import Path

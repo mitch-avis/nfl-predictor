@@ -24,14 +24,15 @@ from io import StringIO
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import nflreadpy as nfl
 import numpy as np
 import pandas as pd
 import polars as pl
 import pytest
-from tests import snapshots
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders, pbp, qb_stats
+from tests import snapshots
 
 if TYPE_CHECKING:
     from polars.datatypes import DataType
@@ -640,8 +641,12 @@ def world(tmp_path_factory: pytest.TempPathFactory) -> dict[str, pl.DataFrame]:
     """Download the fixture seasons through the loader and aggregate them three ways."""
     seasons = sorted({game[0] for game in _GAMES})
     raw = {season: _raw_season(season) for season in seasons}
+
+    def load_pbp(seasons: list[int]) -> pl.DataFrame:
+        return raw[seasons[0]]
+
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(loaders.nfl, "load_pbp", lambda seasons: raw[seasons[0]])
+        patch.setattr(nfl, "load_pbp", load_pbp)
         loaded = loaders.load_pbp(
             seasons, cache_dir=tmp_path_factory.mktemp("pbp_cache"), current_season=2025
         )

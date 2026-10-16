@@ -9,12 +9,11 @@ import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
 import xgboost as xgb
-from tests.api import factories
 
 from nfl_predictor import data_collection
 from nfl_predictor.api.readers import cache as api_cache
@@ -31,9 +30,12 @@ from nfl_predictor.ml import (
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import inputs, pipeline, stage1
+from tests.api import factories
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Sequence
 
     from nfl_predictor.ml.ml_model_training import TrainingOptions
 
@@ -45,12 +47,27 @@ def _no_floor_sigma_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     These tests stub the stages around them; the pools are tested in
     ``tests/test_weekly_run_floor_sigma.py``.
     """
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: floor_sigma.ErrorPool())
-    monkeypatch.setattr(
-        pipeline,
-        "_production_floor_sigma",
-        lambda _args, _run_dir, _reference: (floor_sigma.ErrorPool(), (2025, 2)),
-    )
+
+    def empty_reference(_paths: Sequence[Path]) -> floor_sigma.ErrorPool:
+        return floor_sigma.ErrorPool()
+
+    def empty_production(
+        _args: argparse.Namespace, _run_dir: Path, _reference: floor_sigma.ErrorPool
+    ) -> tuple[floor_sigma.ErrorPool, tuple[int, int]]:
+        return floor_sigma.ErrorPool(), (2025, 2)
+
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", empty_reference)
+    monkeypatch.setattr(pipeline, "_production_floor_sigma", empty_production)
+
+
+def _empty_games(_path: Path) -> pd.DataFrame:
+    """Return an empty dataset in place of reading one."""
+    return pd.DataFrame()
+
+
+def _fixed_fingerprint(_path: Path) -> dict[str, Any]:
+    """Return a constant dataset fingerprint in place of hashing a file."""
+    return {"sha256": "fp"}
 
 
 def test_load_config_json(tmp_path: Path) -> None:
@@ -171,14 +188,11 @@ def test_build_confidence_picks_adds_winner_and_rank() -> None:
     assert picks["confidence_rank"].is_unique
 
 
-def test_stage_marker_reuse(tmp_path: Path) -> None:
-    """Stage markers should only reuse when hashes match and outputs exist."""
-    # Arrange
+def _write_wf_compare_marker(tmp_path: Path) -> tuple[Path, Path]:
+    """Write a wf_compare stage marker over one existing output and return both paths."""
     marker = tmp_path / "stage_state.json"
     output_path = tmp_path / "output.csv"
     output_path.write_text("ok", encoding="utf-8")
-
-    # Act
     pipeline._write_stage_marker(
         marker,
         dataset_hash="abc123",
@@ -186,10 +200,31 @@ def test_stage_marker_reuse(tmp_path: Path) -> None:
         stage="wf_compare",
         extra={"outputs": [str(output_path)]},
     )
+    return marker, output_path
+
+
+def test_stage_marker_reuse(tmp_path: Path) -> None:
+    """Stage markers should reuse when hashes match and outputs exist."""
+    # Arrange
+    marker, output_path = _write_wf_compare_marker(tmp_path)
+
+    # Act
+    result = pipeline._stage_can_reuse(marker, "abc123", "def456", [output_path])
 
     # Assert
-    assert pipeline._stage_can_reuse(marker, "abc123", "def456", [output_path])
-    assert not pipeline._stage_can_reuse(marker, "abc123", "wrong", [output_path])
+    assert result
+
+
+def test_stage_marker_reuse_rejects_a_changed_config_hash(tmp_path: Path) -> None:
+    """Stage markers should not reuse when the config hash differs."""
+    # Arrange
+    marker, output_path = _write_wf_compare_marker(tmp_path)
+
+    # Act
+    result = pipeline._stage_can_reuse(marker, "abc123", "wrong", [output_path])
+
+    # Assert
+    assert not result
 
 
 def _stub_walk_forward_results() -> dict[str, object]:
@@ -270,9 +305,11 @@ def test_the_model_page_reads_the_production_walk_forward_of_a_weekly_run(
 ) -> None:
     """The web Model page shows stage 1's one row and its reliability bins."""
     # Arrange
-    monkeypatch.setattr(
-        walk_forward, "run_walk_forward_backtest", lambda *_a, **_k: _stub_walk_forward_results()
-    )
+
+    def fake_walk_forward(*_a: object, **_k: object) -> dict[str, object]:
+        return _stub_walk_forward_results()
+
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_walk_forward)
     run_dir = factories.make_run_dir(tmp_path, "weekly_floor")
     shutil.rmtree(run_dir / "wf_compare", ignore_errors=True)
     summary = stage1.evaluate_production(
@@ -328,15 +365,17 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
         captured.update(vars(options))
         raise _StopAtFinalFitError
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(
-        stage1,
-        "evaluate_production",
-        lambda _df, options, _run: {"market_mode": options.market_mode},
-    )
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
+
+    def fake_evaluate(
+        _df: pd.DataFrame, options: stage1.ProductionOptions, _run: stage1.Stage1Run
+    ) -> dict[str, object]:
+        return {"market_mode": options.market_mode}
+
+    monkeypatch.setattr(stage1, "evaluate_production", fake_evaluate)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(
         sys,
@@ -355,11 +394,10 @@ def test_the_final_fit_uses_the_configured_market_mode_and_the_floor(
         ],
     )
 
-    # Act
+    # Act & Assert
     with pytest.raises(_StopAtFinalFitError):
         pipeline.main()
 
-    # Assert
     assert (captured["include_market"], captured["market_anchor"]) == (False, True)
     assert "win_prob_calibration" not in captured
     assert "market_prob_config" not in captured
@@ -378,8 +416,11 @@ def test_market_mode_flags_name_market_features_and_anchoring(
     mode: str, expected: tuple[bool, bool]
 ) -> None:
     """Each market mode says whether market features and market anchoring are on."""
-    # Act & Assert
-    assert stage1.market_mode_flags(mode) == expected
+    # Act
+    result = stage1.market_mode_flags(mode)
+
+    # Assert
+    assert result == expected
 
 
 def test_an_unknown_market_mode_is_an_error() -> None:
@@ -417,11 +458,11 @@ def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinali
         captured.append(config)
         raise _StopAfterStage1Error
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(
         sys,
         "argv",
@@ -438,11 +479,10 @@ def test_stage1_walks_forward_with_the_final_fits_market_transform_and_cardinali
         ],
     )
 
-    # Act
+    # Act & Assert
     with pytest.raises(_StopAfterStage1Error):
         pipeline.main()
 
-    # Assert
     assert captured[0].market_transform is transform
     assert captured[0].max_cardinality_ratio == pytest.approx(ratio)
 
@@ -479,8 +519,9 @@ def test_a_config_with_a_retired_probability_key_is_rejected(tmp_path: Path, key
         run_config._parse_args(["--config", str(config_path)])
 
 
+@pytest.mark.parametrize("spec", [None, "   "])
 def test_data_refresh_without_arguments_calls_data_collection_bare(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, spec: str | None
 ) -> None:
     """With no pass-through string the refresh calls data collection with no argv."""
     # Arrange
@@ -493,11 +534,10 @@ def test_data_refresh_without_arguments_calls_data_collection_bare(
     monkeypatch.setattr(data_collection, "main", _fake_main)
 
     # Act
-    pipeline._refresh_data(None)
-    pipeline._refresh_data("   ")
+    pipeline._refresh_data(spec)
 
     # Assert
-    assert calls == [((), {}), ((), {})]
+    assert calls == [((), {})]
 
 
 def test_data_refresh_forwards_split_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -548,8 +588,11 @@ def test_a_dry_run_does_not_refresh_the_data(
     monkeypatch.setattr(pipeline, "_refresh_data", _fail_refresh)
     monkeypatch.setattr(sys, "argv", _weekly_argv(tmp_path, "--dry-run"))
 
-    # Act & Assert
-    assert pipeline.main() == 0
+    # Act
+    result = pipeline.main()
+
+    # Assert
+    assert result == 0
 
 
 def test_a_run_without_dry_run_refreshes_the_data(
@@ -570,11 +613,10 @@ def test_a_run_without_dry_run_refreshes_the_data(
     monkeypatch.setattr(pipeline, "_refresh_data", _record_refresh)
     monkeypatch.setattr(sys, "argv", _weekly_argv(tmp_path))
 
-    # Act
+    # Act & Assert
     with pytest.raises(_StopAfterRefreshError):
         pipeline.main()
 
-    # Assert
     assert calls == ["--incremental"]
 
 
@@ -607,13 +649,14 @@ def test_the_shipped_weekly_run_refreshes_data_incrementally() -> None:
     """The shipped refresh reuses finished seasons and otherwise runs the ETL's own defaults."""
     # Arrange
     argv = pipeline._data_collection_argv(_shipped_weekly_args([]).data_collection_args)
+    full_rebuild = data_collection._resolve_config(None)
 
     # Act
     refresh = data_collection._resolve_config(argv)
 
     # Assert
     assert refresh.incremental is True
-    assert dataclasses.replace(refresh, incremental=False) == data_collection._resolve_config(None)
+    assert dataclasses.replace(refresh, incremental=False) == full_rebuild
 
 
 def test_command_line_data_collection_args_replace_the_shipped_string() -> None:
@@ -638,8 +681,31 @@ def test_a_config_file_without_data_collection_args_refreshes_with_a_full_rebuil
 
     # Assert
     assert args.data_collection_args is None
-    assert pipeline._data_collection_argv(args.data_collection_args) is None
-    assert data_collection._resolve_config(None).incremental is False
+
+
+def test_a_config_file_without_data_collection_args_passes_no_refresh_argv(
+    tmp_path: Path,
+) -> None:
+    """Leaving the key out of a ``--config`` file hands data collection no argv."""
+    # Arrange
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text('{"wf_eval_last_n_seasons": 5}', encoding="utf-8")
+    args = run_config._parse_args(["--config", str(config_path)])
+
+    # Act
+    result = pipeline._data_collection_argv(args.data_collection_args)
+
+    # Assert
+    assert result is None
+
+
+def test_data_collection_without_argv_is_a_full_rebuild() -> None:
+    """Data collection with no argv does not run incrementally."""
+    # Act
+    result = data_collection._resolve_config(None)
+
+    # Assert
+    assert result.incremental is False
 
 
 def test_an_empty_command_line_string_refreshes_with_a_full_rebuild() -> None:
@@ -649,7 +715,18 @@ def test_an_empty_command_line_string_refreshes_with_a_full_rebuild() -> None:
 
     # Assert
     assert args.data_collection_args == ""
-    assert pipeline._data_collection_argv(args.data_collection_args) is None
+
+
+def test_an_empty_command_line_string_passes_no_refresh_argv() -> None:
+    """An empty pass-through string hands data collection no argv."""
+    # Arrange
+    args = _shipped_weekly_args(["--data-collection-args", ""])
+
+    # Act
+    result = pipeline._data_collection_argv(args.data_collection_args)
+
+    # Assert
+    assert result is None
 
 
 def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
@@ -672,17 +749,15 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
         captured.update(options.xgb_params_overrides)
         raise _StopAfterStage1Error
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(
-        fingerprints,
-        "dataset_fingerprint",
-        lambda _path: {"sha256": "fp"},
-    )
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
 
     old_argv = sys.argv
+
+    # Act & Assert
     try:
         sys.argv = [
             "weekly_run.py",
@@ -697,18 +772,17 @@ def test_weekly_run_stage1_uses_shared_xgb_defaults_when_not_overridden(
             str(tmp_path / "out"),
         ]
 
-        # Act
         with pytest.raises(_StopAfterStage1Error):
             pipeline.main()
     finally:
         sys.argv = old_argv
 
-    # Assert
-    resolved = ml_model_core.resolve_xgb_params(
+    resolved = ml_model_xgb_utils.resolve_xgb_params(
         ml_model_core.DEFAULT_XGB_PARAMS,
         overrides=captured,
     )
     defaults = ml_model_core.DEFAULT_XGB_PARAMS
+
     assert resolved["n_estimators"] == defaults["n_estimators"]
     assert resolved["max_depth"] == defaults["max_depth"]
     assert resolved["learning_rate"] == pytest.approx(defaults["learning_rate"])
@@ -755,8 +829,11 @@ def test_weekly_tuning_options_accept_both_spellings(
     argv: list[str], dest: str, value: int
 ) -> None:
     """The renamed tuning options parse under their new and their old spelling."""
-    # Act & Assert
-    assert getattr(run_config._build_parser().parse_args(argv), dest) == value
+    # Act
+    args = run_config._build_parser().parse_args(argv)
+
+    # Assert
+    assert getattr(args, dest) == value
 
 
 def test_the_shipped_config_is_read_by_default_and_matches_the_code_defaults() -> None:
@@ -800,6 +877,20 @@ def test_an_explicit_config_replaces_the_shipped_one(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("option", ["skip_data_refresh", "dry_run"])
+def test_a_config_file_turns_a_switch_on(tmp_path: Path, option: str) -> None:
+    """A config that sets a switch turns it on."""
+    # Arrange
+    config_path = tmp_path / "weekly.json"
+    config_path.write_text(json.dumps({option: True}), encoding="utf-8")
+
+    # Act
+    configured = run_config._parse_args(["--config", str(config_path)])
+
+    # Assert
+    assert getattr(configured, option) is True
+
+
+@pytest.mark.parametrize("option", ["skip_data_refresh", "dry_run"])
 def test_a_command_line_switch_turns_off_what_the_config_turns_on(
     tmp_path: Path, option: str
 ) -> None:
@@ -810,22 +901,23 @@ def test_a_command_line_switch_turns_off_what_the_config_turns_on(
     flag = option.replace("_", "-")
 
     # Act
-    configured = run_config._parse_args(["--config", str(config_path)])
     overridden = run_config._parse_args(["--config", str(config_path), f"--no-{flag}"])
 
     # Assert
-    assert getattr(configured, option) is True
     assert getattr(overridden, option) is False
 
 
 def test_xgb_n_jobs_defaults_to_every_cpu_core() -> None:
     """One thread option sets XGBoost's CPU threads, and it defaults to every core."""
-    # Act
+    # Arrange
     args = run_config._build_parser().parse_args([])
 
+    # Act
+    thread_count = run_config.xgb_thread_count(args)
+
     # Assert
-    assert run_config.xgb_thread_count(args) == ml_model_core.DEFAULT_XGB_PARAMS["n_jobs"]
-    assert run_config.xgb_thread_count(args) == (os.cpu_count() or 1)
+    assert thread_count == ml_model_core.DEFAULT_XGB_PARAMS["n_jobs"]
+    assert thread_count == (os.cpu_count() or 1)
     assert not hasattr(args, "wf_n_jobs")
 
 
@@ -847,6 +939,24 @@ def test_a_config_with_the_removed_stage1_thread_key_is_rejected(tmp_path: Path)
         run_config._parse_args(["--config", str(config_path)])
 
 
+def _thread_count_argv(tmp_path: Path, extra_argv: list[str]) -> list[str]:
+    """Build the weekly_run arguments (without the program name) for the thread-count tests."""
+    data_path = tmp_path / "completed_games_ml.csv"
+    data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
+    return [
+        "--skip-data-refresh",
+        "--data-path",
+        str(data_path),
+        "--run-id",
+        "weekly_test",
+        "--run-dir",
+        str(tmp_path / "run"),
+        "--output-dir",
+        str(tmp_path / "out"),
+        *extra_argv,
+    ]
+
+
 @pytest.mark.parametrize(
     ("extra_argv", "expected"),
     [([], os.cpu_count() or 1), (["--xgb-n-jobs", "3"], 3)],
@@ -864,8 +974,6 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
         """Stop weekly_run once the final training config has been captured."""
 
     captured: dict[str, object] = {}
-    data_path = tmp_path / "completed_games_ml.csv"
-    data_path.write_text("season,week\n2025,1\n", encoding="utf-8")
 
     def _fake_run_wf_compare(
         _df: pd.DataFrame, options: stage1.ProductionOptions, _run: stage1.Stage1Run
@@ -874,40 +982,58 @@ def test_one_thread_count_reaches_stage1_and_the_final_fit(
         captured["stage1"] = options.xgb_params_overrides["n_jobs"]
         raise _StopAfterTrainingConfigError
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
 
-    argv = [
-        "--skip-data-refresh",
-        "--data-path",
-        str(data_path),
-        "--run-id",
-        "weekly_test",
-        "--run-dir",
-        str(tmp_path / "run"),
-        "--output-dir",
-        str(tmp_path / "out"),
-        *extra_argv,
-    ]
+    argv = _thread_count_argv(tmp_path, extra_argv)
     monkeypatch.setattr(sys, "argv", ["weekly_run.py", *argv])
 
-    # Act
+    # Act & Assert
     with pytest.raises(_StopAfterTrainingConfigError):
         pipeline.main()
 
-    # Assert
     assert captured["stage1"] == expected
-    assert run_config.xgb_thread_count(run_config._parse_args(argv)) == expected
 
 
-def test_xgb_device_defaults_to_auto_in_the_parser_and_the_shipped_config() -> None:
+@pytest.mark.parametrize(
+    ("extra_argv", "expected"),
+    [([], os.cpu_count() or 1), (["--xgb-n-jobs", "3"], 3)],
+)
+def test_the_final_fit_thread_count_follows_the_parsed_arguments(
+    tmp_path: Path,
+    extra_argv: list[str],
+    expected: int,
+) -> None:
+    """The final training fit reads the same thread count stage 1 receives."""
+    # Arrange
+    argv = _thread_count_argv(tmp_path, extra_argv)
+
+    # Act
+    result = run_config.xgb_thread_count(run_config._parse_args(argv))
+
+    # Assert
+    assert result == expected
+
+
+def test_xgb_device_defaults_to_auto_in_the_parser() -> None:
     """Both stages pick the GPU when one is usable unless told otherwise."""
-    # Act & Assert
-    assert run_config._build_parser().parse_args([]).xgb_device == "auto"
-    assert run_config._parse_args([]).xgb_device == "auto"
+    # Act
+    args = run_config._build_parser().parse_args([])
+
+    # Assert
+    assert args.xgb_device == "auto"
+
+
+def test_xgb_device_defaults_to_auto_in_the_shipped_config() -> None:
+    """The shipped config leaves the device on ``auto``."""
+    # Act
+    args = run_config._parse_args([])
+
+    # Assert
+    assert args.xgb_device == "auto"
 
 
 @pytest.mark.parametrize(
@@ -953,11 +1079,11 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
         return "weekly_test"
 
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _empty_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
     monkeypatch.setattr(artifacts, "generate_run_id", _fake_run_id)
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", _fixed_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_run_wf_compare)
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(
@@ -976,11 +1102,10 @@ def test_one_resolved_device_reaches_stage1_the_final_fit_and_the_records(
         ],
     )
 
-    # Act
+    # Act & Assert
     with pytest.raises(_StopAtFinalFitError):
         pipeline.main()
 
-    # Assert
     assert captured == {"run_config": expected, "stage1": expected, "final_fit": expected}
 
 
@@ -999,6 +1124,7 @@ def test_training_artifacts_record_the_device_the_model_trained_on(tmp_path: Pat
         feature_list=["feat1"],
         early_stopping={},
     )
+
     record = ml_model_training.TrainingRecord(
         run_id="weekly_test",
         created_at="2026-09-27T00:00:00+00:00",

@@ -13,10 +13,10 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.api import factories
 
 from nfl_predictor.api.runs import active
 from nfl_predictor.api.runs.files import resolve_run_files
+from tests.api import factories
 
 if TYPE_CHECKING:
     from pathlib import Path

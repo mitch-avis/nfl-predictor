@@ -207,7 +207,7 @@ class PickTimeLines:
     snapshot: NfeloLinesSnapshot
     report: pl.DataFrame
     maps: dict[int, moneyline_map.SpreadMoneylineMap | None]
-    derived: dict[int, dict[str, int]] = field(default_factory=dict)
+    derived: dict[int, dict[str, int]] = field(default_factory=dict[int, dict[str, int]])
 
     def fill_moneylines(self, df: pl.DataFrame) -> pl.DataFrame:
         """Fill missing moneylines with each season's map, recording how many it derived.

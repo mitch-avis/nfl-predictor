@@ -9,4 +9,8 @@ from nfl_predictor.utils import clock
 
 def test_local_today_is_the_local_calendar_date() -> None:
     """The helper reads the machine's local date, as season and week detection expect."""
-    assert clock.local_today() == datetime.now().astimezone().date()
+    # Act
+    result = clock.local_today()
+
+    # Assert
+    assert result == datetime.now().astimezone().date()

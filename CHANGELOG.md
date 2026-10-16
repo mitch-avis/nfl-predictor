@@ -29,6 +29,17 @@
 - `nfl-predictor train` takes `--no-market-anchor` and `--no-market-transform` (both off by
   default, as before), so the command without game lines is spelled the same as `backtest`'s.
 
+## [0.60.1] - 2026-10-15
+
+### Fixed
+
+- The quarterback fill for future games leaves a played game (both scores in) as it is, fills a
+  side's ELO values only for the starter it filled, so a named starter never takes the team's
+  latest starter's values, and computes the filled values' away-minus-home diffs again, which
+  the week rows had computed before the fill. The measurement's builds change in no value: every
+  played game has its `qb_elos.csv` row with both starters and values, and the unplayed weeks
+  the file does not list already take each team's latest values from the ELO merge.
+
 ## [0.60.0] - 2026-10-15
 
 ### Changed
@@ -55,6 +66,139 @@
   walk-forward measures it, so the weekly run, `train` and `backtest` train on the same columns as
   before. The help and the docs name `qb_adj` in the whole group lists for the stricter
   configurations.
+
+## [0.59.7] - 2026-10-15
+
+### Fixed
+
+- A booster's round count is read only from a Python or numpy integer again, as before `0.59.6`:
+  a zero-dimensional array is no round count, so the recorded best iteration stays unset instead
+  of being taken from it. The model code changed, so every walk-forward checkpoint fingerprint
+  changes again.
+
+## [0.59.6] - 2026-10-15
+
+### Changed
+
+- Strict pyright passes over `src/` and `tests/` with no errors (3,146 before), with no inline
+  suppressions: local stubs in `typings/` for joblib, threadpoolctl, nflreadpy and six sklearn
+  modules, pinned to the runtime by `tests/test_typings.py`; typed arrays and frames in the model
+  code; and typed test stand-ins, mostly through `tests/fakes.returning`. Tests may import their
+  module's private helpers (python-template `0.1.3`).
+- Helpers that another module imports are public: in `ml/ml_model_core.py` `load_games`,
+  `summarize_missing_data`, `filter_season_bounds`, `split_by_season`,
+  `evaluate_margin_total_predictions`, `predict_margin_total_quantiles_from_model`,
+  `summarize_confidence_pool`, `early_stopping_info` and `run_optuna_search`; in
+  `ml/ml_model_xgb_utils.py` `build_xgb_fit_kwargs`, `with_xgb_early_stopping_params` and
+  `coerce_tree_method_on_error`; in `utils/polars/loaders.py` `read_cached_frame`,
+  `write_cached_frame`, `resolve_cache_dir`, `resolve_current_season` and `is_numeric_dtype`.
+  `ml_model_predict` and `ml_model_training` call the existing public wrappers for the
+  prediction output, score derivation, margin/total prediction and target columns.
+- The XGBoost GPU check decides from its one-round probe fit alone instead of first reading
+  `xgb.build_info()`: a build without CUDA fails that fit or moves it to the CPU, so the answer is
+  the same.
+- Every test is written as Arrange-Act-Assert with one action; tests that repeated an action
+  over several inputs are parametrized cases.
+- The model code changed, so every walk-forward checkpoint fingerprint changes and the next
+  walk-forward retrains from scratch.
+
+### Added
+
+- `nfl_predictor.utils.narrowing` (`as_str_dict`, `as_list`) types parsed JSON and unpickled
+  values as the containers their readers expect.
+- `cryptography` in the dev group, so PyJWT's key types resolve for the type checkers.
+
+### Removed
+
+- Remove the unused season fold builder in `ml/ml_model_core.py` and its tests; tuning folds
+  come from the season-week blocked folds and walk-forward from `build_walk_forward_folds`.
+
+## [0.59.5] - 2026-10-15
+
+### Removed
+
+- Remove the changelog release-notes helper (`nfl_predictor.utils.changelog`) and its tests, used
+  only by the deleted release workflow.
+
+## [0.59.4] - 2026-10-15
+
+### Removed
+
+- Remove the GitHub release workflow: the project is private and publishes no releases.
+
+## [0.59.3] - 2026-10-15
+
+### Fixed
+
+- The power rankings read relative entries of `floor_sigma_reference_runs` and
+  `power_rankings_model_predictions`, from a config file or the command line, from the repository
+  root, as the floor sigma already read the reference runs, so a weekly run started outside the
+  repo root finds the predictions the blend ranking reads. The recorded settings name those runs by
+  absolute path, so a weekly run directory started before this release reruns its reports stage
+  once.
+- A leading `~` in a config file path is the home directory; a `~user` this machine doesn't know
+  stops the run naming the file and the key.
+- A comma-separated `disable_feature_groups` string in a config file is refused with the list to
+  write instead, since the comma form is the command line's.
+
+## [0.59.2] - 2026-10-15
+
+### Changed
+
+- The repo takes its shared tooling from the Copier template `~/workspace/python-template`
+  (version `0.1.2`, recorded in `.copier-answers.yml`): `scripts/gate.sh`, the pre-commit,
+  markdownlint, CI and Dependabot configs. This repo's own gate steps (the LightGBM CUDA sync
+  flags, every front-door command's `--help` and `--web`) move to `scripts/gate.hooks.sh`.
+- The gate adds shellcheck over every shell script `.gitignore` doesn't exclude and checks every
+  console script's `--help`; its sync check targets the checkout's own `.venv`, so a worktree no
+  longer needs `VIRTUAL_ENV` set.
+- markdownlint runs as `markdownlint-cli2` from `.markdownlint-cli2.yaml` (locally and in CI),
+  which replaces `.markdownlint.json` and `.markdownlintignore` and skips what `.gitignore`
+  excludes.
+- CI lets uv install Python, drops the editable-install step that `uv sync` already covers, and
+  moves to `actions/checkout@v7`, `actions/setup-node@v7` and `astral-sh/setup-uv@v10.2.0`;
+  Dependabot also watches the GitHub Actions versions.
+- Pre-commit adds the shebang and executable-bit checks and normalizes line endings to LF.
+
+### Added
+
+- The `py.typed` marker, and a test that the installed package is the version `pyproject.toml`
+  declares.
+
+## [0.59.1] - 2026-10-15
+
+### Changed
+
+- pytest runs in strict mode (`strict = true` in the native `[tool.pytest]` table) with every
+  warning an error, and coverage measures `src/` and `tests/` together; `scripts/gate.sh` adds a
+  `src coverage` step that holds `src/` alone to the same 90% bar. `weekly_run/config.py` is no
+  longer left out of coverage.
+- `scripts/gate.sh` runs ruff, ty and pyright on the roots configured in `pyproject.toml`
+  (`src/` and `tests/`) instead of the whole checkout.
+- `pyproject.toml` declares the license the PEP 639 way, carries the `Private :: Do Not Upload`
+  classifier and bounds `uv_build` to `0.13`; the dev group drops `colorama`, `pytest-html` and
+  `pytest-metadata` and adds `scipy-stubs`.
+- `update_requirements.sh` no longer needs an activated venv, creates `.venv` and carries on when
+  it is missing, reports the uv version change, refreshes the pre-commit hook versions, and names
+  the command when a step fails. This repo's own steps (the LightGBM CUDA build and the core
+  import check) move to `update_requirements.hooks.sh`, so the script and its tests are the same
+  files as in the python-template Copier template.
+- `ml/feature_spec.py` selects pandas string columns by naming the `str` dtype, so every
+  walk-forward checkpoint fingerprint and the weekly stage hashes change and the first weekly run
+  after the upgrade retrains stage 1. The selected columns are the same.
+
+### Fixed
+
+- A bad weekly config file (missing, not a file, not UTF-8, unparsable, not a mapping, or with
+  an extension other than `.json`, `.yaml` or `.yml`) stops the run with a `ValueError` naming
+  the file, which a run report's production-settings section reports instead of crashing; an empty
+  YAML file sets nothing. A value that is not a path or a list of paths is refused naming the
+  file and the key, and unknown keys that are not strings are named instead of crashing the
+  message.
+- Relative single paths in a weekly config file resolve against the repository root, not the
+  working directory, as `config/weekly_run.yaml` documents. The shipped config sets none, so a
+  default weekly run is unchanged.
+- A finished web job closes its output pipe instead of leaving it to the garbage collector.
 
 ## [0.59.0] - 2026-10-14
 

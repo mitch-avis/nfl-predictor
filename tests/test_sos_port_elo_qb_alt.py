@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
+
 from tests.sos_port_scripts import load_sos_port_script
 
 elo_qb_alt = load_sos_port_script("elo_qb_alt")

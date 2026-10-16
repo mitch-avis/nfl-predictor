@@ -21,9 +21,11 @@ from nfl_predictor.ml.feature_spec import (
     build_preprocessor,
 )
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_list, as_str_dict
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 from nfl_predictor.weekly_run import config as weekly_config
 from nfl_predictor.weekly_run import stage1
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     import argparse
@@ -82,8 +84,9 @@ def _matrix_inputs(frame: pd.DataFrame, selection: FeatureSelection) -> list[str
     ml_model_xgb_utils.fit_transform_matrix(preprocessor, apply_feature_spec(frame, spec))
     inputs: list[str] = []
     for _name, _transformer, columns in preprocessor.transformers_:
-        if isinstance(columns, list):
-            inputs.extend(str(column) for column in columns)
+        column_list = as_list(columns)
+        if column_list is not None:
+            inputs.extend(str(column) for column in column_list)
     return inputs
 
 
@@ -140,7 +143,7 @@ def test_the_published_schema_names_no_line_column_beyond_the_five_lines() -> No
 
 def _weekly_frame() -> pd.DataFrame:
     """Return two seasons of games over the default feature range, lines last, then scores."""
-    rows = []
+    rows: list[dict[str, object]] = []
     rng = np.random.default_rng(5)
     for season, week, game in itertools.product((2022, 2023), (1, 2, 3), range(4)):
         spread = float(rng.normal(0, 6))
@@ -193,10 +196,10 @@ def test_a_market_free_walk_forward_trains_on_no_line_column(
 ) -> None:
     """The fitted feature list holds the non-market columns only."""
     # Act
-    features = market_free_results["feature_list"]
+    features = as_list(market_free_results["feature_list"])
 
     # Assert
-    assert isinstance(features, list)
+    assert features is not None
     assert set(features) == {"away_rest", "home_rest", "elo_pre_diff"}
 
 
@@ -215,8 +218,8 @@ def test_a_market_free_walk_forward_still_scores_the_market_yardstick(
     assert isinstance(settings, dict)
     assert (settings["include_market"], settings["market_anchor"]) == (False, False)
     assert settings["market_transform"] is False
-    overall = market_free_results["overall"]
-    assert isinstance(overall, dict)
+    overall = as_str_dict(market_free_results["overall"])
+    assert overall is not None
     assert np.isfinite(overall["market_brier"])
 
 
@@ -292,7 +295,7 @@ def test_train_exclude_market_builds_market_free_training_options(
     """``nfl-predictor train --exclude-market`` trains market-free: no anchor or transform."""
     # Arrange
     monkeypatch.setattr(sys, "argv", ["nfl-predictor train", "--exclude-market"])
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _runs: None)
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", returning(None))
     args = train._parse_args()
 
     # Act
@@ -373,11 +376,11 @@ def test_weekly_market_mode_hybrid_keeps_the_transform_on(tmp_path: Path) -> Non
 def _recorded_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record the project logger's warnings."""
     warnings: list[str] = []
-    monkeypatch.setattr(
-        log,
-        "warning",
-        lambda message, *args: warnings.append(message % args if args else message),
-    )
+
+    def record(message: str, *args: object) -> None:
+        warnings.append(message % args if args else message)
+
+    monkeypatch.setattr(log, "warning", record)
     return warnings
 
 
@@ -426,9 +429,11 @@ def test_the_overridden_transform_warning_says_no_game_lines(
 def _recorded_infos(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record the project logger's info messages."""
     infos: list[str] = []
-    monkeypatch.setattr(
-        log, "info", lambda message, *args: infos.append(message % args if args else message)
-    )
+
+    def record(message: str, *args: object) -> None:
+        infos.append(message % args if args else message)
+
+    monkeypatch.setattr(log, "info", record)
     return infos
 
 
@@ -442,7 +447,7 @@ def _spec_notes(
     """
     warnings = _recorded_warnings(monkeypatch)
     infos = _recorded_infos(monkeypatch)
-    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set[tuple[str, ...]]())
     selection = FeatureSelection(
         include_market=include_market,
         max_cardinality_ratio=walk_forward.WalkForwardConfig().max_cardinality_ratio,
@@ -478,7 +483,7 @@ def test_a_run_without_game_lines_logs_its_note_at_info_level(
     # Arrange
     warnings = _recorded_warnings(monkeypatch)
     infos = _recorded_infos(monkeypatch)
-    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set[tuple[str, ...]]())
     selection = FeatureSelection(
         include_market=False,
         max_cardinality_ratio=walk_forward.WalkForwardConfig().max_cardinality_ratio,
@@ -511,7 +516,7 @@ def test_a_run_that_leaves_one_group_out_names_only_the_other(
     # Arrange
     frame = _schema_frame(derived_in_range=False)
     frame = frame.drop(
-        columns=walk_forward.resolve_feature_group_columns(list(frame.columns), ["elo"])
+        columns=feature_spec.resolve_feature_group_columns(list(frame.columns), ["elo"])
     )
 
     # Act
@@ -533,7 +538,7 @@ def test_a_market_informed_group_the_spec_drops_as_empty_goes_unnamed(
     """A group whose columns are all null leaves the features, so the note leaves it out."""
     # Arrange
     frame = _schema_frame(derived_in_range=False)
-    empty = walk_forward.resolve_feature_group_columns(list(frame.columns), emptied)
+    empty = feature_spec.resolve_feature_group_columns(list(frame.columns), emptied)
     frame.loc[:, empty] = np.nan
 
     # Act
@@ -556,7 +561,7 @@ def test_no_warning_when_the_market_columns_stay_or_the_groups_are_left_out(
     frame = _schema_frame(derived_in_range=False)
     if dropped:
         frame = frame.drop(
-            columns=walk_forward.resolve_feature_group_columns(list(frame.columns), dropped)
+            columns=feature_spec.resolve_feature_group_columns(list(frame.columns), dropped)
         )
 
     # Act

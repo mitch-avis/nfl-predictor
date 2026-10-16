@@ -14,10 +14,10 @@ import shlex
 from pathlib import Path
 
 import pytest
-from tests.cli_parsing import parse_command
 
 from nfl_predictor import constants
 from nfl_predictor.cli import main as front_door
+from tests.cli_parsing import parse_command
 
 README = Path(constants.ROOT_DIR) / "README.md"
 FENCE = re.compile(r"^\s*```(?:bash|sh)?\s*$\n(.*?)^\s*```\s*$", re.MULTILINE | re.DOTALL)
@@ -30,19 +30,26 @@ def readme_commands() -> list[str]:
         joined = re.sub(r"\\\n\s*", " ", block)
         stripped = (line.strip() for line in joined.splitlines())
         commands.extend(line for line in stripped if line.startswith("nfl-predictor"))
-    return commands
+    # A command the README shows twice is checked once, under one test ID.
+    return list(dict.fromkeys(commands))
 
 
 def test_the_readme_shows_front_door_commands() -> None:
     """The extraction finds the README's examples (guards against a silent empty list)."""
+    # Act
     names = {shlex.split(line, comments=True)[1] for line in readme_commands()}
+
+    # Assert
     assert {"data", "train", "backtest", "weekly", "validate", "web"} <= names
 
 
 @pytest.mark.parametrize("line", readme_commands())
 def test_every_readme_command_parses(line: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """The example's command exists and its parser accepts every option shown."""
+    # Arrange
     words = shlex.split(line, comments=True)
+
+    # Act & Assert
     assert words[0] == "nfl-predictor"
     if words[1:] == ["--help"]:
         with pytest.raises(SystemExit) as exit_info:

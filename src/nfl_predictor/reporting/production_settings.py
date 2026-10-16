@@ -405,7 +405,7 @@ def section_for_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     except (TypeError, ValueError) as error:
         return {"unavailable": f"the recorded configuration no longer loads: {error}"}
     xgb_params, xgb_recorded = _recorded_xgb_params(config)
-    checkpoint = config.get("checkpoint") or {}
+    checkpoint: dict[str, Any] = config.get("checkpoint") or {}
     record = RunRecord(
         disable_trend_features=bool(config.get("disable_trend_features")),
         xgb_params=xgb_params,
@@ -449,7 +449,7 @@ def format_section(section: Mapping[str, Any]) -> list[str]:
     if "unavailable" in section:
         return [f"{HEADING}: unavailable ({section['unavailable']})"]
     source = section.get("production_config") or "the code defaults"
-    retired = section.get("retired") or {}
+    retired: Mapping[str, Any] = section.get("retired") or {}
     lines = [f"{HEADING} (the weekly run with {source}):"]
     for key, label in _STAGES.items():
         stage = section[key]

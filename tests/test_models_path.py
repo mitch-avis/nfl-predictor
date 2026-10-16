@@ -20,6 +20,7 @@ from nfl_predictor.api.settings import Settings
 from nfl_predictor.cli import backtest, checkpoints
 from nfl_predictor.ml import artifacts, walk_forward
 from nfl_predictor.weekly_run import pipeline
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from tests.conftest import DataIsolation
@@ -113,17 +114,24 @@ def test_a_backtest_writes_its_report_in_a_run_directory_under_the_models_direct
 ) -> None:
     # Arrange
     models = isolated_data.models_dir
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
-    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
-    monkeypatch.setattr(
-        walk_forward,
-        "run_walk_forward_backtest",
-        lambda _df, _config, **_kwargs: {"checkpoint": {}, "per_week": []},
-    )
-    monkeypatch.setattr(
-        walk_forward, "build_metrics_report", lambda _r, _c, payload, _res: {"config": payload}
-    )
-    monkeypatch.setattr(walk_forward, "build_metadata", lambda _c, _h, payload: {"config": payload})
+
+    def one_season(_path: object) -> pd.DataFrame:
+        return pd.DataFrame({"season": [2023]})
+
+    def empty_backtest(_df: object, _config: object, **_kwargs: object) -> dict[str, object]:
+        return {"checkpoint": {}, "per_week": []}
+
+    def report_config(_r: object, _c: object, payload: object, _res: object) -> dict[str, object]:
+        return {"config": payload}
+
+    def metadata_config(_c: object, _h: object, payload: object) -> dict[str, object]:
+        return {"config": payload}
+
+    monkeypatch.setattr(walk_forward, "load_games", one_season)
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", returning("hash"))
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", empty_backtest)
+    monkeypatch.setattr(walk_forward, "build_metrics_report", report_config)
+    monkeypatch.setattr(walk_forward, "build_metadata", metadata_config)
     monkeypatch.setattr(
         sys,
         "argv",

@@ -29,7 +29,7 @@ SEASONS = (2021, 2022, 2023)
 def _games() -> pd.DataFrame:
     """Four games a week, weeks 1-4, over three seasons, with seeded scores."""
     rng = np.random.default_rng(5)
-    rows = []
+    rows: list[dict[str, object]] = []
     for season in SEASONS:
         for week in (1, 2, 3, 4):
             for game in range(4):
@@ -106,14 +106,17 @@ def data_path(tmp_path: Path) -> Path:
 
 def test_the_final_fit_records_the_sigma_for_the_week_it_predicts(data_path: Path) -> None:
     """The model carries the pool's sigma for the named week, and where it came from."""
+    # Arrange
     pool = _pool()
 
+    # Act
     model = train_margin_total_model(
         TrainingOptions(
             **_train_kwargs(data_path, floor_sigma_pool=pool, floor_sigma_week=(2023, 3))
         )
     )
 
+    # Assert
     assert model.floor_sigma is not None
     assert model.floor_sigma == floor_sigma.estimate(pool.errors, 2023, 3, sources=pool.sources)
     assert model.floor_sigma.fallback is False
@@ -124,10 +127,12 @@ def test_without_a_named_week_the_sigma_is_for_the_week_after_the_newest_game(
     data_path: Path,
 ) -> None:
     """The newest completed game is 2023 week 4, so the record is for 2023 week 5."""
+    # Act
     model = train_margin_total_model(
         TrainingOptions(**_train_kwargs(data_path, floor_sigma_pool=_pool()))
     )
 
+    # Assert
     assert model.floor_sigma is not None
     assert (model.floor_sigma.season, model.floor_sigma.week) == (2023, 5)
     assert model.floor_sigma.pool_games == len(_pool().errors)
@@ -135,14 +140,17 @@ def test_without_a_named_week_the_sigma_is_for_the_week_after_the_newest_game(
 
 def test_a_short_pool_records_the_fallback(data_path: Path) -> None:
     """A pool with fewer than three earlier seasons records the constant as a fallback."""
+    # Arrange
     short = floor_sigma.ErrorPool(_pool().errors.query("season >= 2022"), ("ref",))
 
+    # Act
     model = train_margin_total_model(
         TrainingOptions(
             **_train_kwargs(data_path, floor_sigma_pool=short, floor_sigma_week=(2024, 1))
         )
     )
 
+    # Assert
     assert model.floor_sigma is not None
     assert model.floor_sigma.fallback is True
     assert model.floor_sigma.sigma == constants.SCORE_DIFF_STD_DEV
@@ -150,13 +158,17 @@ def test_a_short_pool_records_the_fallback(data_path: Path) -> None:
 
 def test_holdout_probabilities_use_each_weeks_sigma_from_the_pool(data_path: Path) -> None:
     """Holdout games are scored with the sigma the pool gives strictly before their week."""
-    with_pool = train_margin_total_model_with_report(
-        TrainingOptions(**_train_kwargs(data_path, holdout_seasons=1, floor_sigma_pool=_pool()))
-    )
+    # Arrange
     constant = train_margin_total_model_with_report(
         TrainingOptions(**_train_kwargs(data_path, holdout_seasons=1))
     )
 
+    # Act
+    with_pool = train_margin_total_model_with_report(
+        TrainingOptions(**_train_kwargs(data_path, holdout_seasons=1, floor_sigma_pool=_pool()))
+    )
+
+    # Assert
     pooled_brier = with_pool.metrics_report["metrics"]["holdout"]["brier"]
     constant_brier = constant.metrics_report["metrics"]["holdout"]["brier"]
     assert pooled_brier != constant_brier
@@ -165,13 +177,16 @@ def test_holdout_probabilities_use_each_weeks_sigma_from_the_pool(data_path: Pat
 
 def test_weekly_probabilities_use_each_games_week() -> None:
     """Each game maps through the sigma of its own week."""
+    # Arrange
     errors = _pool().errors
     margin = np.array([3.0, 3.0])
 
+    # Act
     probs = floor_sigma.weekly_home_win_prob(
         margin, np.array([2022, 2023]), np.array([1, 1]), errors
     )
 
+    # Assert
     assert probs[0] == norm.cdf(3.0 / 10.0)
     assert probs[1] == norm.cdf(3.0 / floor_sigma.estimate(errors, 2023, 1).sigma)
 
@@ -192,6 +207,7 @@ def _raw_margin(model: ml_model_core.MarginTotalModel, predict_path: Path) -> np
 
 def test_prediction_uses_the_recorded_sigma_and_says_so(data_path: Path, tmp_path: Path) -> None:
     """A saved model predicts with its own sigma; margins and ranks match the constant path."""
+    # Arrange
     pool = _pool()
     model = train_margin_total_model(
         TrainingOptions(
@@ -200,12 +216,14 @@ def test_prediction_uses_the_recorded_sigma_and_says_so(data_path: Path, tmp_pat
     )
     assert model.floor_sigma is not None
     predict_path = _write_predict_rows(tmp_path)
-
-    output = predict_week_margin_total(model, predict_path, pretty_output=False)
     without = predict_week_margin_total(
         replace(model, floor_sigma=None), predict_path, pretty_output=False
     )
 
+    # Act
+    output = predict_week_margin_total(model, predict_path, pretty_output=False)
+
+    # Assert
     margin = _raw_margin(model, predict_path)
     np.testing.assert_array_equal(
         output["home_win_prob"], np.round(norm.cdf(margin / model.floor_sigma.sigma), 4)
@@ -221,17 +239,20 @@ def test_a_model_saved_before_the_sigma_was_recorded_predicts_with_the_constant(
     data_path: Path, tmp_path: Path
 ) -> None:
     """An old checkpoint has no ``floor_sigma``: it loads and uses the constant, flagged."""
+    # Arrange
     model = train_margin_total_model(TrainingOptions(**_train_kwargs(data_path)))
     checkpoint = tmp_path / "model.joblib"
     artifacts.save_model(checkpoint, model)
     loaded = ml_model_core.load_model_checkpoint(checkpoint, "margin_total")
     object.__delattr__(loaded, "floor_sigma")
     artifacts.save_model(checkpoint, loaded)
-
     old = ml_model_core.load_model_checkpoint(checkpoint, "margin_total")
     predict_path = _write_predict_rows(tmp_path)
+
+    # Act
     output = predict_week_margin_total(old, predict_path, pretty_output=False)
 
+    # Assert
     assert old.floor_sigma is None
     margin = _raw_margin(old, predict_path)
     np.testing.assert_array_equal(
@@ -243,6 +264,7 @@ def test_a_model_saved_before_the_sigma_was_recorded_predicts_with_the_constant(
 
 def test_the_metadata_records_the_models_sigma(tmp_path: Path) -> None:
     """The artifact contract: the saved model's metadata names its sigma and its sources."""
+    # Arrange
     record = floor_sigma.estimate(_pool().errors, 2023, 3, sources=("models/reference_a",))
 
     metadata = artifacts.build_metadata(
@@ -253,7 +275,10 @@ def test_the_metadata_records_the_models_sigma(tmp_path: Path) -> None:
         details=artifacts.TrainedModelDetails(floor_sigma=record.to_dict()),
     )
     path = tmp_path / "metadata.json"
+
+    # Act
     artifacts.write_json(path, metadata)
 
+    # Assert
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert floor_sigma.FloorSigma.from_dict(payload["floor_sigma"]) == record

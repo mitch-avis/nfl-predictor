@@ -73,7 +73,7 @@ def _ratings_by_season(ratings_dir: Path) -> dict[int, pl.DataFrame]:
     """
     if not ratings_dir.is_dir():
         return {}
-    seasons = []
+    seasons: list[int] = []
     for path in ratings_dir.glob(f"*_{RATINGS_KIND}.parquet"):
         match = SEASON_FILE.match(path.name)
         if match is not None and match["kind"] == RATINGS_KIND:

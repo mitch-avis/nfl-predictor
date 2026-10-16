@@ -6,13 +6,29 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.cli import backtest, options
 from nfl_predictor.ml import floor_sigma, ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.reporting import run_comparison
+from tests.fakes import returning
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _loading(games: pd.DataFrame) -> Callable[[Path], pd.DataFrame]:
+    """Return a ``load_games`` stand-in that hands out a fresh copy of ``games`` per call."""
+
+    def load(_path: Path) -> pd.DataFrame:
+        return games.copy()
+
+    return load
 
 
 def test_trend_feature_columns_collects_trend_and_phase_fields() -> None:
@@ -143,8 +159,8 @@ def test_main_passes_checkpoint_settings_and_records_the_restore_counts(
         """Return a minimal metadata payload."""
         return {"config": payload}
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
-    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _loading(pd.DataFrame({"season": [2023]})))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", returning("hash"))
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
     monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
     monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
@@ -231,8 +247,8 @@ def test_main_runs_and_records_the_resolved_xgb_device(
         return {"config": payload}
 
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: usable)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
-    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _loading(pd.DataFrame({"season": [2023]})))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", returning("hash"))
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
     monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
     monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
@@ -314,7 +330,7 @@ def test_disable_feature_groups_drops_resolved_columns(
     """The resolved feature-group columns are the ones dropped from the loaded dataframe."""
     # Arrange
     monkeypatch.setattr(
-        walk_forward.constants,
+        constants,
         "FEATURE_GROUP_COLUMN_MARKERS",
         {"pbp": ("epa_per_play",)},
     )
@@ -332,7 +348,7 @@ def test_disable_feature_groups_drops_resolved_columns(
     groups = options.parse_feature_groups("pbp")
 
     # Act
-    dropped = walk_forward.resolve_feature_group_columns(list(df.columns), groups)
+    dropped = resolve_feature_group_columns(list(df.columns), groups)
 
     # Assert
     assert dropped == [
@@ -349,12 +365,12 @@ def test_disable_feature_groups_unknown_group_raises_from_cli_path(
 ) -> None:
     """An unknown feature group name raises a clear error, not an obscure library traceback."""
     # Arrange
-    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
     groups = options.parse_feature_groups("not_a_real_group")
 
     # Act & Assert
     with pytest.raises(ValueError, match="not_a_real_group"):
-        walk_forward.resolve_feature_group_columns(["away_epa"], groups)
+        resolve_feature_group_columns(["away_epa"], groups)
 
 
 def test_parse_args_accepts_n_estimators_override(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -408,8 +424,8 @@ def _record_engine_configs(
         """Return a minimal metadata payload."""
         return {"config": payload}
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
-    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _loading(pd.DataFrame({"season": [2023]})))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", returning("hash"))
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
     monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
     monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
@@ -476,7 +492,7 @@ def test_a_backtest_on_data_without_the_ported_ratings_warns_and_runs(
     # Arrange
     caplog.set_level(logging.WARNING)
     captured, base_argv = _record_engine_configs(monkeypatch, tmp_path)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: GAMES_WITHOUT_RATINGS.copy())
+    monkeypatch.setattr(walk_forward, "load_games", _loading(GAMES_WITHOUT_RATINGS))
     monkeypatch.setattr(sys, "argv", base_argv)
 
     # Act
@@ -507,7 +523,7 @@ def test_a_backtest_says_nothing_when_the_ratings_are_there_or_strength_is_kept(
     # Arrange
     caplog.set_level(logging.WARNING)
     captured, base_argv = _record_engine_configs(monkeypatch, tmp_path)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: games.copy())
+    monkeypatch.setattr(walk_forward, "load_games", _loading(games))
     monkeypatch.setattr(sys, "argv", [*base_argv, *extra])
 
     # Act
@@ -567,11 +583,16 @@ def test_main_adds_the_season_stability_view_to_the_report_and_the_log(
         """Return a report with an empty metrics block, as the engine's report has one."""
         return {"config": payload, "metrics": {}}
 
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
-    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _loading(pd.DataFrame({"season": [2023]})))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", returning("hash"))
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
     monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
-    monkeypatch.setattr(walk_forward, "build_metadata", lambda *_args: {})
+
+    def empty_metadata(*_args: object) -> dict[str, object]:
+        """Return an empty metadata payload."""
+        return {}
+
+    monkeypatch.setattr(walk_forward, "build_metadata", empty_metadata)
     out_json = tmp_path / "metrics_report.json"
     monkeypatch.setattr(
         sys,
@@ -636,13 +657,24 @@ def test_named_reference_runs_become_the_walk_forwards_history(
         return history
 
     monkeypatch.setattr(floor_sigma, "load_reference_pool", fake_load)
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame({"season": [2023]}))
-    monkeypatch.setattr(walk_forward, "dataset_fingerprint", lambda _path: "hash")
+    monkeypatch.setattr(walk_forward, "load_games", _loading(pd.DataFrame({"season": [2023]})))
+    monkeypatch.setattr(walk_forward, "dataset_fingerprint", returning("hash"))
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", fake_run)
-    monkeypatch.setattr(
-        walk_forward, "build_metrics_report", lambda _r, _c, payload, _res: {"config": payload}
-    )
-    monkeypatch.setattr(walk_forward, "build_metadata", lambda _c, _h, payload: {"config": payload})
+
+    def fake_report(
+        _run_id: str, _created_at: str, payload: dict[str, object], _results: object
+    ) -> dict[str, object]:
+        """Return the config payload as the report."""
+        return {"config": payload}
+
+    def fake_metadata(
+        _created_at: str, _hash: str, payload: dict[str, object]
+    ) -> dict[str, object]:
+        """Return the config payload as the metadata."""
+        return {"config": payload}
+
+    monkeypatch.setattr(walk_forward, "build_metrics_report", fake_report)
+    monkeypatch.setattr(walk_forward, "build_metadata", fake_metadata)
     out_json = tmp_path / "metrics_report.json"
     monkeypatch.setattr(
         sys,

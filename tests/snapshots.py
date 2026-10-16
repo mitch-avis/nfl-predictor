@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
+from nfl_predictor.utils.narrowing import as_list, as_str_dict
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -54,15 +56,19 @@ def assert_frames_match(name: str, actual: pd.DataFrame, expected: pd.DataFrame)
 
 def assert_json_match(name: str, actual: Any, expected: Any) -> None:
     """Compare JSON values: exact except for floats, which are compared closely."""
-    if isinstance(expected, dict):
-        assert isinstance(actual, dict), f"{name}: type differs"
-        assert sorted(actual) == sorted(expected), f"{name}: keys differ"
-        for key, value in expected.items():
-            assert_json_match(f"{name}.{key}", actual[key], value)
-    elif isinstance(expected, list):
-        assert isinstance(actual, list), f"{name}: type differs"
-        assert len(actual) == len(expected), f"{name}: length differs"
-        for index, (left, right) in enumerate(zip(actual, expected, strict=True)):
+    expected_dict = as_str_dict(expected)
+    expected_list = as_list(expected)
+    if expected_dict is not None:
+        actual_dict = as_str_dict(actual)
+        assert actual_dict is not None, f"{name}: type differs"
+        assert sorted(actual_dict) == sorted(expected_dict), f"{name}: keys differ"
+        for key, value in expected_dict.items():
+            assert_json_match(f"{name}.{key}", actual_dict[key], value)
+    elif expected_list is not None:
+        actual_list = as_list(actual)
+        assert actual_list is not None, f"{name}: type differs"
+        assert len(actual_list) == len(expected_list), f"{name}: length differs"
+        for index, (left, right) in enumerate(zip(actual_list, expected_list, strict=True)):
             assert_json_match(f"{name}[{index}]", left, right)
     elif isinstance(expected, float) or isinstance(actual, float):
         if expected is None or actual is None:

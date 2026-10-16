@@ -25,6 +25,7 @@ from nfl_predictor.ml.floor_sigma import ErrorPool
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars.finalize import build_final_column_order
 from nfl_predictor.weekly_run import config, pipeline
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -286,7 +287,7 @@ def test_train_without_game_lines_trains_and_records_the_resolved_groups(
 ) -> None:
     # Arrange
     monkeypatch.setattr(sys, "argv", ["nfl-predictor train", *NO_GAME_LINES])
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _runs: None)
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", returning(None))
     args = train._parse_args()
 
     # Act
@@ -301,12 +302,22 @@ def test_train_without_game_lines_trains_and_records_the_resolved_groups(
     )
 
 
+def _recorded_info(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Capture every ``log.info`` message, formatted, in the returned list."""
+    infos: list[str] = []
+
+    def _capture(message: str, *args: object) -> None:
+        infos.append(message % args)
+
+    monkeypatch.setattr(log, "info", _capture)
+    return infos
+
+
 def _ignored_list_notes(monkeypatch: pytest.MonkeyPatch, *argv: str) -> list[str]:
     """Predict from a stub checkpoint with ``argv``; return the "ignoring" notes logged."""
     monkeypatch.setattr(sys, "argv", ["nfl-predictor train", "--model-in", "model.joblib", *argv])
-    monkeypatch.setattr(train, "load_model_checkpoint", lambda _path, _kind: object())
-    infos: list[str] = []
-    monkeypatch.setattr(log, "info", lambda message, *args: infos.append(message % args))
+    monkeypatch.setattr(train, "load_model_checkpoint", returning(object()))
+    infos = _recorded_info(monkeypatch)
     train._predict_from_checkpoint(train._parse_args(), None)
     return [message for message in infos if "ignoring --disable-feature-groups" in message]
 
@@ -337,9 +348,8 @@ def _win_total_notes(monkeypatch: pytest.MonkeyPatch, *argv: str) -> list[str]:
     games = pd.DataFrame(np.random.default_rng(0).normal(size=(40, len(order))), columns=order)
     monkeypatch.setattr(sys, "argv", ["nfl-predictor backtest", *argv])
     kept, _ = backtest._apply_ablations(games, backtest._parse_args())
-    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set())
-    infos: list[str] = []
-    monkeypatch.setattr(log, "info", lambda message, *args: infos.append(message % args))
+    monkeypatch.setattr(feature_spec, "_WARNED_MARKET_INFORMED", set[tuple[str, ...]]())
+    infos = _recorded_info(monkeypatch)
     feature_spec.build_feature_spec(
         kept,
         feature_spec.FeatureSelection(

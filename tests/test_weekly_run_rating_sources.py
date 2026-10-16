@@ -9,7 +9,14 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import yaml
+
+from nfl_predictor import constants
+from nfl_predictor.ml import ml_model_core, walk_forward
+from nfl_predictor.reporting import power_rankings, rating_sources
+from nfl_predictor.weekly_run import config as run_config
+from nfl_predictor.weekly_run import pipeline, stage1
 from tests import snapshots
+from tests.fakes import returning
 from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 from tests.test_weekly_run_characterization import (
     SNAPSHOT_DIR,
@@ -19,14 +26,14 @@ from tests.test_weekly_run_characterization import (
 )
 from tests.weekly_fixture import build_fixture, write_weekly_config
 
-from nfl_predictor.ml import walk_forward
-from nfl_predictor.reporting import power_rankings, rating_sources
-from nfl_predictor.weekly_run import config as run_config
-from nfl_predictor.weekly_run import pipeline, stage1
-
 
 def _args(argv: list[str]):
     return run_config._build_parser().parse_args(argv)
+
+
+def _from_root(*parts: str) -> Path:
+    """Return the repository-root path the rankings read for a relative entry."""
+    return Path(constants.ROOT_DIR).joinpath(*parts)
 
 
 def test_weekly_rating_source_flags_reach_the_ranking_options() -> None:
@@ -51,7 +58,7 @@ def test_weekly_rating_source_flags_reach_the_ranking_options() -> None:
     # Assert
     assert options.method == "blend"
     assert options.ratings_dir == Path("ratings")
-    assert options.model_predictions == (Path("runs/a"), Path("runs/b"))
+    assert options.model_predictions == (_from_root("runs/a"), _from_root("runs/b"))
     assert options.blend_weight == pytest.approx(0.4)
 
 
@@ -144,8 +151,8 @@ def test_weekly_rankings_skip_an_unavailable_rating_source(
         msg = "no ported team rating for 2024 week 4"
         raise rating_sources.RatingSourceUnavailableError(msg)
 
-    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
-    monkeypatch.setattr(pipeline.power_rankings, "compute_power_rankings", unavailable)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
+    monkeypatch.setattr(power_rankings, "compute_power_rankings", unavailable)
     monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
@@ -193,7 +200,7 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
         dataset_fingerprint={},
         config_payload={},
     )
-    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
@@ -216,6 +223,22 @@ DEFAULT_SOURCE_FLAGS = [
 ]
 
 
+def test_the_rankings_read_relative_prediction_sources_from_the_repository_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run started outside the repo root still finds the predictions a config names."""
+    # Arrange
+    absolute = tmp_path / "abs_run"
+    args = _args(["--power-rankings-model-predictions", "runs/a", str(absolute)])
+    monkeypatch.chdir(tmp_path)
+
+    # Act
+    options = run_config.power_ranking_options(args, run_dir=Path("run"))
+
+    # Assert
+    assert options.model_predictions == (_from_root("runs/a"), absolute)
+
+
 def test_weekly_points_method_defaults_to_stage_one_folds_and_reference_runs() -> None:
     # Arrange
     args = _args(DEFAULT_SOURCE_FLAGS)
@@ -225,7 +248,10 @@ def test_weekly_points_method_defaults_to_stage_one_folds_and_reference_runs() -
 
     # Assert
     assert options.model_predictions == (Path("run/wf_compare"),)
-    assert options.reference_predictions == (Path("ref/seed42"), Path("ref/seed7"))
+    assert options.reference_predictions == (
+        _from_root("ref/seed42"),
+        _from_root("ref/seed7"),
+    )
 
 
 def test_explicit_model_predictions_override_the_weekly_default() -> None:
@@ -236,7 +262,7 @@ def test_explicit_model_predictions_override_the_weekly_default() -> None:
     options = run_config.power_ranking_options(args, run_dir=Path("run"))
 
     # Assert
-    assert options.model_predictions == (Path("runs/a"),)
+    assert options.model_predictions == (_from_root("runs/a"),)
     assert options.reference_predictions == ()
 
 
@@ -249,7 +275,10 @@ def test_report_config_of_the_default_blend_names_its_resolved_sources() -> None
 
     # Assert
     assert report["power_rankings_model_predictions"] == [str(Path("run/wf_compare"))]
-    assert report["power_rankings_reference_predictions"] == ["ref/seed42", "ref/seed7"]
+    assert report["power_rankings_reference_predictions"] == [
+        str(_from_root("ref/seed42")),
+        str(_from_root("ref/seed7")),
+    ]
     assert report["power_rankings_blend_weight"] == pytest.approx(0.5)
 
 
@@ -298,7 +327,7 @@ def test_weekly_rankings_skip_without_stage_one_folds(
         dataset_fingerprint={},
         config_payload={},
     )
-    monkeypatch.setattr(pipeline.ml_model_core, "load_model_checkpoint", lambda *_a: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     monkeypatch.setattr(pipeline, "_write_projected_standings", _no_standings)
 
     # Act
@@ -327,7 +356,7 @@ def test_stage_one_records_its_fold_checkpoints_as_a_prediction_source(
         ),
         "checkpoint": {"dir": str(folds), "restored_folds": 0, "computed_folds": 1},
     }
-    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", lambda *_a, **_k: result)
+    monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", returning(result))
     options = stage1.ProductionOptions(
         eval_last_n_seasons=1,
         wf_start_week=1,

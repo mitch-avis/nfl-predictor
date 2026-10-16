@@ -6,11 +6,16 @@ import importlib
 import sys
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 from nfl_predictor.ml.ml_model_core import FeatureSpec, OptunaConfig
+from tests.fakes import returning
+
+if TYPE_CHECKING:
+    import pytest
 
 
 class _DummyPreprocessor:
@@ -40,19 +45,20 @@ def _feature_spec() -> FeatureSpec:
     )
 
 
-def _import_ml_model_training(monkeypatch):
+def _import_ml_model_training(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     stub = types.SimpleNamespace(
-        train_score_model=lambda **_kwargs: None,
-        train_margin_total_model=lambda **_kwargs: None,
-        train_blended_margin_total_model=lambda **_kwargs: None,
+        train_score_model=returning(None),
+        train_margin_total_model=returning(None),
+        train_blended_margin_total_model=returning(None),
     )
     monkeypatch.setitem(sys.modules, "nfl_predictor.ml_model", stub)
     monkeypatch.delitem(sys.modules, "nfl_predictor.ml.ml_model_training", raising=False)
     return importlib.import_module("nfl_predictor.ml.ml_model_training")
 
 
-def test_train_margin_total_model_full_path(monkeypatch) -> None:
+def test_train_margin_total_model_full_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """Margin/total model training works end to end."""
+    # Arrange
     ml_model_training = _import_ml_model_training(monkeypatch)
 
     df = pd.DataFrame(
@@ -67,38 +73,42 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         }
     )
 
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(
         ml_model_training,
         "build_feature_spec",
-        lambda *_args, **_kwargs: _feature_spec(),
+        returning(_feature_spec()),
     )
-    monkeypatch.setattr(
-        ml_model_training, "apply_feature_spec", lambda frame, _spec: frame[["feat1"]]
-    )
+
+    def select_feature(frame: pd.DataFrame, _spec: FeatureSpec) -> pd.DataFrame:
+        return frame[["feat1"]]
+
+    monkeypatch.setattr(ml_model_training, "apply_feature_spec", select_feature)
     monkeypatch.setattr(
         ml_model_training,
         "build_preprocessor",
-        lambda *_args, **_kwargs: _DummyPreprocessor(),
+        returning(_DummyPreprocessor()),
     )
     monkeypatch.setattr(
         ml_model_training,
         "fit_margin_total_models",
-        lambda *_args, **_kwargs: ("margin_model", "total_model"),
+        returning(("margin_model", "total_model")),
     )
     monkeypatch.setattr(
         ml_model_training,
         "fit_quantile_models",
-        lambda *_args, **_kwargs: {0.1: "q_model", 0.9: "q_model"},
+        returning({0.1: "q_model", 0.9: "q_model"}),
     )
-    monkeypatch.setattr(ml_model_training, "validate_quantiles", lambda _q: (0.1, 0.9))
+    monkeypatch.setattr(ml_model_training, "validate_quantiles", returning((0.1, 0.9)))
     monkeypatch.setattr(
         ml_model_training,
-        "_run_optuna_search",
-        lambda *_args, **_kwargs: (
-            {"max_depth": 2},
-            {"cv_splits": 2},
-            {"best_params": {"max_depth": 2}},
+        "run_optuna_search",
+        returning(
+            (
+                {"max_depth": 2},
+                {"cv_splits": 2},
+                {"best_params": {"max_depth": 2}},
+            )
         ),
     )
 
@@ -110,11 +120,10 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
 
     monkeypatch.setattr(ml_model_training, "predict_xgb", fake_predict_xgb)
 
-    monkeypatch.setattr(
-        ml_model_training,
-        "get_market_baseline",
-        lambda _df: (np.zeros(len(_df)), np.zeros(len(_df))),
-    )
+    def zero_baseline(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        return np.zeros(len(df)), np.zeros(len(df))
+
+    monkeypatch.setattr(ml_model_training, "get_market_baseline", zero_baseline)
 
     optuna_config = OptunaConfig(
         enabled=True,
@@ -131,6 +140,7 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         xgb_n_jobs=1,
     )
 
+    # Act
     model = ml_model_training.train_margin_total_model(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -143,6 +153,7 @@ def test_train_margin_total_model_full_path(monkeypatch) -> None:
         )
     )
 
+    # Assert
     assert model.margin_model == "margin_model"
     assert model.total_model == "total_model"
     assert model.tuned_params == {"max_depth": 2}

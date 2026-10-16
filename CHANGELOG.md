@@ -8,7 +8,8 @@
   without market features and anchor) takes its floor sigma from its own reference by default:
   `constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS`, both seeds of the reviewed walk-forward
   with those settings (`models/qb_adj_no_lines/no_lines_seed42` and `no_lines_seed7`), in place
-  of the market-anchored production reference, whose errors are narrower. The modes with game
+  of the market-anchored production reference, whose errors are narrower; in that mode the
+  power rankings' model predictions for earlier seasons come from the same runs. The modes with game
   lines, production's included, read `constants.FLOOR_SIGMA_REFERENCE_RUNS` as before;
   `config/weekly_run.yaml` leaves the key out so its default follows the market mode, and a
   listed value still replaces the default in every mode.

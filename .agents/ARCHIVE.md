@@ -77,6 +77,23 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 6 - Resolved follow-ups from the integration reviews
+
+Findings the independent integration reviews of 2026-10-14 left open; the open rest is in
+`TODO.md`, "From the step-6 integration reviews", and `.agents/step6_plan.md`.
+
+- No test covered the phase-1 audit's run-loop call to `check_opponent_rows`
+  (`.agents/sos_port/parity.py`, `_run`). Resolved in `0.63.7` (2026-10-16): two tests in
+  `tests/test_sos_port_audit.py` drive the season loop with its inputs stubbed; a team-game
+  missing its opponent's row fails the audit, a complete game passes. No bug found.
+- The rating-definition tests' recorded commit lacked a dirty mark. Resolved in `0.63.7`:
+  `rating_tests_common.git_commit` appends `-dirty`, as `git describe --dirty` does, when a
+  tracked file differs from the commit, staged or not.
+- `season_t_interval` returned NaN bounds for one season. Resolved in `0.63.7`: it raises a
+  `ValueError` for fewer than two seasons.
+- Three power-ranking skips in the weekly run (missing season/week, missing dataset, missing
+  schedule) logged at info level. Resolved in `0.63.7`: they log as warnings.
+
 ## Roadmap step 6 - Follow-ups from step 4, retired or resolved (2026-10-16)
 
 The follow-up row "6, phases 3-4 (from step 4)" in `TODO.md` was checked on 2026-10-16 with
@@ -424,6 +441,13 @@ is the remainder, for the web phases (Milestone 58).
 **Stage 1 got slower.** Candidates now fit the shared 200-tree default at learning
 rate `0.0165` (last week's candidate keys show 120 trees at `0.070`). Expected, but it
 makes the GPU default matter more.
+
+### Resolved follow-ups (step-3 merge test)
+
+- `reporting/power_rankings.py` `_load_current_records` grouped with `group_by` without
+  `maintain_order`, so its row order changed between runs (content and rankings identical; found
+  by the `0.37.2` review). Resolved in `0.63.7` (2026-10-16): the records are sorted by
+  `team_abbr`; every consumer merges on `team_abbr`, so only the frame's row order changed.
 
 ## Milestone 60 - CLI and entrypoint consolidation
 

@@ -35,10 +35,17 @@ SUPPRESSION = re.compile(
 
 
 def suppression_hits(source: str, path: str) -> list[str]:
-    """Return ``path:line`` with the comment for every suppression comment in ``source``."""
+    """Return ``path:line`` with the comment for every suppression comment in ``source``.
+
+    A source that does not tokenize cannot be checked, so it comes back as one hit naming it.
+    """
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except tokenize.TokenError, SyntaxError:
+        return [f"{path}: does not tokenize"]
     return [
         f"{path}:{token.start[0]}: {token.string.strip()}"
-        for token in tokenize.generate_tokens(io.StringIO(source).readline)
+        for token in tokens
         if token.type == tokenize.COMMENT and SUPPRESSION.search(token.string)
     ]
 

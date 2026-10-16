@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.63.2] - 2026-10-16
+
+### Removed
+
+- `nfl_elo.csv` from the web app's data-status file list (`api/readers/data_status.py`): no
+  model, ETL or report code reads it.
+
 ## [0.63.1] - 2026-10-16
 
 ### Fixed

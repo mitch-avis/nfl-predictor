@@ -93,7 +93,11 @@ Retired (feeds neither):
 
 - **The raw `adj_off_*` / `adj_def_*` columns drift in scale across a season** (Milestone 46). All
   32 strength-group columns are in the dataset and none is a production feature (the `strength`
-  group is left out since `0.59.0`); the blend does not read the snapshot.
+  group is left out since `0.59.0`). The composite rankings of `nfl-predictor rankings` and the
+  web Power rankings job still read the four EPA components, but the composite standardizes each
+  within its week (`utils/polars/strength_snapshot.py:365-377`), so a drift in scale across weeks
+  cannot reorder the teams of any one week; what is left of the item is the early-season
+  shrinkage, which stays open with the strength-snapshot item in `TODO.md`.
 - **`sos_played_raw` is null in weeks 1 and 2** (Milestone 46). Its three columns are in the
   dataset and none is a production feature (the same group).
 - **The next-opponent identity columns** (2026-09-25 review). The pair is in the dataset, on

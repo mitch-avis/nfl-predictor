@@ -156,12 +156,13 @@ def _parse_args() -> argparse.Namespace:
         "--floor-sigma-reference-runs",
         type=Path,
         nargs="*",
-        default=[Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS],
+        default=None,
         help=(
             "Walk-forward runs (run or fold checkpoint directories, relative to the repository "
             "root) whose out-of-fold margin errors set the floor's sigma, which the saved model "
             "records; their checkpoints are only read. A missing run is an error; give no "
-            "paths to train without them (the constant, recorded as the fallback)."
+            "paths to train without them (the constant, recorded as the fallback). "
+            f"{options.FLOOR_SIGMA_REFERENCE_DEFAULT_HELP}"
         ),
     )
     parser.add_argument(
@@ -304,6 +305,9 @@ def _parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
     args.disable_feature_groups = _disabled_feature_groups(parser, args)
+    args.floor_sigma_reference_runs = options.resolve_floor_sigma_reference_runs(
+        args.floor_sigma_reference_runs, without_game_lines=_without_game_lines(args)
+    )
     return args
 
 

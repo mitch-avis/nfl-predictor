@@ -62,6 +62,13 @@ FLOOR_SIGMA_REFERENCE_RUNS = (
     "models/qb_elos_measure/new_file_seed42",
     "models/qb_elos_measure/new_file_seed7",
 )
+# The same pool for a run without game lines (no market feature and no anchor): both seeds of the
+# reviewed walk-forward with those settings and NO_GAME_LINES_DISABLED_FEATURE_GROUPS left out,
+# whose errors are wider than the market-anchored runs'.
+NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS = (
+    "models/qb_adj_no_lines/no_lines_seed42",
+    "models/qb_adj_no_lines/no_lines_seed7",
+)
 
 # The feature groups (FEATURE_GROUP_COLUMN_MARKERS) production leaves out: the strength snapshot,
 # both presets of this repository's own Elo and the `qb_elos.csv` quarterback adjustment

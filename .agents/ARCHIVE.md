@@ -68,6 +68,12 @@ Follow-ups resolved after their milestones closed:
   other). Resolved in `0.59.6` (the strict pyright cleanup, user-approved 2026-10-15): every
   helper another module imports is public, and an AST scan by the independent reviewer finds no
   private import across `src/` modules. Closed 2026-10-15.
+- Step 7, the `qb_adj` measurement without game lines (its review's rule-11 finding): a weekly
+  run with `--wf-market-mode none`, and `train` without market features and anchor, took the
+  floor sigma from the market-anchored reference runs. Resolved in `0.63.0` (the user chose the
+  fix 2026-10-15): such a run defaults to `constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS`
+  (`models/qb_adj_no_lines/no_lines_seed{42,7}`), production's settings unchanged; independently
+  reviewed, gate green. Closed 2026-10-15.
 
 ---
 

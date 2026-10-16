@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
+from nfl_predictor import constants
 from nfl_predictor.api.readers.cache import cached
 from nfl_predictor.utils import clock
 from nfl_predictor.utils.fingerprints import dataset_fingerprint
@@ -21,25 +22,99 @@ from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     from nfl_predictor.api.db import Database
 
+# What the files card lists under the data directory: the ETL's outputs, its build records and
+# the inputs copied in by hand. A name ending in "/" is a directory, reported as a file count.
 DATASET_FILES: tuple[tuple[str, str], ...] = (
-    ("all_data_ml.csv", "Full ML matrix: every game 1999 to now with engineered features."),
-    ("all_data.csv", "Same games without the diff columns."),
-    ("completed_games_ml.csv", "Training set: played games with features and targets."),
-    ("completed_games.csv", "Played games without the diff columns."),
-    ("qb_elos.csv", "Quarterback Elo input (copied from nfeloqb)."),
+    (
+        "all_data_ml.csv",
+        (
+            "Every game the ETL built, played and upcoming, with its features and diff columns. "
+            "Each week's games to predict are cut from it; the lines refresh rewrites its lines."
+        ),
+    ),
+    (
+        "all_data.csv",
+        (
+            "The same games without the diff columns. The pool page scores picks against it and "
+            "the power rankings read the schedule from it."
+        ),
+    ),
+    (
+        "completed_games_ml.csv",
+        (
+            "Training set: the played games with features and targets. Training, backtests and "
+            "the leakage audit read it; its SHA-256 is the training-set hash."
+        ),
+    ),
+    (
+        "completed_games.csv",
+        "The played games without the diff columns. The ETL writes it; nothing reads it back.",
+    ),
+    (
+        f"{constants.STRENGTH_SNAPSHOTS_NAME}.csv",
+        (
+            "Each team's adjusted strength before every week, bye teams included, written by the "
+            "ETL. The composite power ranking reads it."
+        ),
+    ),
+    (
+        f"{constants.RATINGS_DIRNAME}/",
+        (
+            "The ported team and quarterback ratings tables, one Parquet file per season and "
+            "table, written by the ETL. The power rankings read the ported ratings from it."
+        ),
+    ),
+    (
+        f"{constants.MARKET_LINES_METADATA_NAME}.json",
+        (
+            "The build's line record: line source, nfelo snapshot, match rates, fallback rows and "
+            "moneyline maps. The lines refresh reads it to refresh lines the same way."
+        ),
+    ),
+    (
+        f"{constants.OWN_ELO_METADATA_NAME}.json",
+        (
+            "The own Elo's build record: both presets and the win-total file it read. Written by "
+            "the ETL as provenance; nothing reads it back."
+        ),
+    ),
+    (
+        "qb_elos.csv",
+        (
+            "Quarterback Elo input, copied by hand from nfeloqb. The ETL reads its quarterback "
+            "adjustment."
+        ),
+    ),
+    (
+        f"{constants.QB_META_DATA_NAME}.csv",
+        (
+            "Quarterback identity file, copied by hand from nfeloqb. The ETL reads it to match "
+            "starters to their play-by-play ids."
+        ),
+    ),
 )
-CACHE_FILE_RE = re.compile(r"^(pbp|schedule)_(\d{4})(?:_reg)?\.parquet$")
+# A season file in the nflreadpy cache: `<source>_<season>[_reg|_all].parquet`.
+CACHE_FILE_RE = re.compile(
+    r"^(?P<source>[a-z][a-z_]*?)_(?P<season>\d{4})(?:_(?:reg|all))?\.parquet$"
+)
+# Sources the page has always shown; they lead the coverage even when nothing is cached.
+CORE_CACHE_SOURCES = ("schedule", "pbp")
+SEASON_PREFIX_RE = re.compile(r"^(\d{4})_")
+SEASON_DIR_RE = re.compile(r"^\d{4}$")
+ETL_SEASON_DIR_RE = re.compile(r"^season_(\d{4})$")
+TEAM_RANKINGS_GLOB = "*_team_rankings.csv"
 PREDICT_FILE_RE = re.compile(r"^week_(\d{2})_(games_to_predict|predictions)\.csv$")
 FINGERPRINT_KEY_PREFIX = "fingerprint:"
 
 
 @dataclass(frozen=True, kw_only=True)
 class FileStatus:
-    """One dataset file."""
+    """One dataset file, or one directory summarized by ``file_count``."""
 
     name: str
     description: str
@@ -48,11 +123,64 @@ class FileStatus:
     modified_at: str | None
     rows: int | None
     seasons: tuple[int, int] | None
+    file_count: int | None = None
 
 
-def _iso(ts: float) -> str:
+@dataclass(frozen=True, kw_only=True)
+class CacheFile:
+    """One top-level entry of a cache that is not a season file; a directory counts its files."""
+
+    cache: str
+    name: str
+    file_count: int
+    size: int
+    modified_at: str | None
+
+
+def iso_time(ts: float) -> str:
     """Format a POSIX timestamp as ISO-8601 UTC."""
     return datetime.fromtimestamp(ts, tz=UTC).isoformat()
+
+
+def _tree_summary(directory: Path) -> tuple[list[Path], int, str | None]:
+    """Return the files under ``directory``, their total size and the newest modified time."""
+    files = sorted(path for path in directory.rglob("*") if path.is_file())
+    stats = [path.stat() for path in files]
+    newest = max((stat.st_mtime for stat in stats), default=None)
+    return (
+        files,
+        sum(stat.st_size for stat in stats),
+        iso_time(newest) if newest is not None else None,
+    )
+
+
+def _directory_status(data_dir: Path, name: str, description: str) -> FileStatus:
+    """Describe the directory ``data_dir/name`` by its files and their season prefixes."""
+    directory = data_dir / name.rstrip("/")
+    if not directory.is_dir():
+        return FileStatus(
+            name=name,
+            description=description,
+            exists=False,
+            size=None,
+            modified_at=None,
+            rows=None,
+            seasons=None,
+        )
+    files, size, modified_at = _tree_summary(directory)
+    seasons = sorted(
+        int(match.group(1)) for path in files if (match := SEASON_PREFIX_RE.match(path.name))
+    )
+    return FileStatus(
+        name=name,
+        description=description,
+        exists=True,
+        size=size,
+        modified_at=modified_at,
+        rows=None,
+        seasons=(seasons[0], seasons[-1]) if seasons else None,
+        file_count=len(files),
+    )
 
 
 def _csv_shape(path: Path) -> tuple[int, tuple[int, int] | None]:
@@ -73,7 +201,9 @@ def _csv_shape(path: Path) -> tuple[int, tuple[int, int] | None]:
 
 
 def file_status(data_dir: Path, name: str, description: str) -> FileStatus:
-    """Describe ``data_dir/name``."""
+    """Describe ``data_dir/name``: a CSV with its rows and seasons, a directory by its files."""
+    if name.endswith("/"):
+        return _directory_status(data_dir, name, description)
     path = data_dir / name
     if not path.is_file():
         return FileStatus(
@@ -86,13 +216,13 @@ def file_status(data_dir: Path, name: str, description: str) -> FileStatus:
             seasons=None,
         )
     stat = path.stat()
-    rows, seasons = cached(path, _csv_shape, "shape")
+    rows, seasons = cached(path, _csv_shape, "shape") if path.suffix == ".csv" else (None, None)
     return FileStatus(
         name=name,
         description=description,
         exists=True,
         size=stat.st_size,
-        modified_at=_iso(stat.st_mtime),
+        modified_at=iso_time(stat.st_mtime),
         rows=rows,
         seasons=seasons,
     )
@@ -105,15 +235,84 @@ def current_season_week(today: date | None = None) -> tuple[int, int]:
 
 
 def cache_coverage(cache_dir: Path) -> dict[str, list[int]]:
-    """Return the seasons present per nflreadpy cache family."""
-    coverage: dict[str, list[int]] = {"schedule": [], "pbp": []}
-    if not cache_dir.is_dir():
-        return coverage
-    for path in cache_dir.iterdir():
-        match = CACHE_FILE_RE.match(path.name)
-        if match:
-            coverage[match.group(1)].append(int(match.group(2)))
-    return {k: sorted(v) for k, v in coverage.items()}
+    """Return the seasons present per season-partitioned nflreadpy source found on disk.
+
+    ``schedule`` and ``pbp`` always come first, empty when nothing is cached; the other sources
+    follow by name, each only when it has a season file.
+    """
+    found: dict[str, set[int]] = {source: set() for source in CORE_CACHE_SOURCES}
+    if cache_dir.is_dir():
+        for path in cache_dir.iterdir():
+            match = CACHE_FILE_RE.match(path.name)
+            if match and path.is_file():
+                found.setdefault(match["source"], set()).add(int(match["season"]))
+    others = sorted(source for source in found if source not in CORE_CACHE_SOURCES)
+    return {source: sorted(found[source]) for source in (*CORE_CACHE_SOURCES, *others)}
+
+
+def cache_files(caches: Mapping[str, Path]) -> list[CacheFile]:
+    """List each cache's top-level entries that are not nflreadpy season files, in name order.
+
+    Args:
+        caches: Cache directories by the name the page shows, in display order.
+
+    Returns:
+        One entry per file or directory; a directory reports its files, total size and newest
+        modified time. A cache directory that does not exist lists nothing.
+
+    """
+    entries: list[CacheFile] = []
+    for cache_name, directory in caches.items():
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.iterdir(), key=lambda p: p.name):
+            if path.is_file() and CACHE_FILE_RE.match(path.name):
+                continue
+            if path.is_dir():
+                files, size, modified_at = _tree_summary(path)
+                entries.append(
+                    CacheFile(
+                        cache=cache_name,
+                        name=f"{path.name}/",
+                        file_count=len(files),
+                        size=size,
+                        modified_at=modified_at,
+                    )
+                )
+            elif path.is_file():
+                stat = path.stat()
+                entries.append(
+                    CacheFile(
+                        cache=cache_name,
+                        name=path.name,
+                        file_count=1,
+                        size=stat.st_size,
+                        modified_at=iso_time(stat.st_mtime),
+                    )
+                )
+    return entries
+
+
+def other_seasons(data_dir: Path) -> dict[str, list[int]]:
+    """Return the seasons of the season-partitioned caches outside nflreadpy.
+
+    ``team_rankings`` lists the ``data/<season>/`` directories that hold TeamRankings scrapes;
+    ``etl_seasons`` lists the finished seasons' builds kept for the incremental ETL.
+    """
+    team_rankings = sorted(
+        int(path.name)
+        for path in (data_dir.iterdir() if data_dir.is_dir() else ())
+        if path.is_dir()
+        and SEASON_DIR_RE.match(path.name)
+        and next(path.glob(TEAM_RANKINGS_GLOB), None) is not None
+    )
+    etl_dir = data_dir / "cache" / constants.ETL_SEASON_CACHE_DIRNAME
+    etl_seasons = sorted(
+        int(match.group(1))
+        for path in (etl_dir.iterdir() if etl_dir.is_dir() else ())
+        if path.is_dir() and (match := ETL_SEASON_DIR_RE.match(path.name))
+    )
+    return {"team_rankings": team_rankings, "etl_seasons": etl_seasons}
 
 
 def latest_leakage_audit(*roots: Path) -> dict[str, Any] | None:
@@ -136,7 +335,7 @@ def latest_leakage_audit(*roots: Path) -> dict[str, Any] | None:
     if payload is None:
         return None
     payload["path"] = str(newest)
-    payload["modified_at"] = _iso(newest.stat().st_mtime)
+    payload["modified_at"] = iso_time(newest.stat().st_mtime)
     return payload
 
 
@@ -215,7 +414,7 @@ def unattached_files(data_dir: Path, reports_dir: Path) -> list[dict[str, Any]]:
                     "season": season,
                     "week": week,
                     "size": stat.st_size,
-                    "modified_at": _iso(stat.st_mtime),
+                    "modified_at": iso_time(stat.st_mtime),
                     "path": str(path),
                 }
             )
@@ -229,7 +428,7 @@ def unattached_files(data_dir: Path, reports_dir: Path) -> list[dict[str, Any]]:
                     "season": None,
                     "week": None,
                     "size": stat.st_size,
-                    "modified_at": _iso(stat.st_mtime),
+                    "modified_at": iso_time(stat.st_mtime),
                     "path": str(path),
                 }
             )

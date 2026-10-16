@@ -246,28 +246,28 @@ Steps:
    open: the docs close-out listed in `.agents/next_agent_session_prompt.md`, 58.1's survivor
    planner (the user's acceptance) and 58.2's browser check.
 7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
-   - publish `qb_elos.csv`'s `qb1_adj`/`qb2_adj` as the `qb_adj` group, off in production until
-     measured (`feat/qb-adj-features`, `0.60.0`);
-     status: published in `0.60.0`; `0.60.1` limits the quarterback fill to unplayed games;
-   - the grouped measurement in `models/qb_elos_measure/HYPOTHESIS.md` (accepted 2026-10-15):
-     the upgraded `qb_elos.csv` against the old one, the `qb_adj` arm, and decision 1's ratings
-     swap re-checked on the new file; two builds, eight runs;
-     status: run and reviewed (`models/qb_elos_measure/REVIEW.md`, recorded in
-     `.agents/benchmarks.md`, "`qb_elos.csv` measurement"):
+   - done 2026-10-15 (`0.60.0`-`0.60.1`, independently reviewed, merged into `main`):
+     `qb_elos.csv`'s `qb1_adj`/`qb2_adj` published as the `qb_adj` group, off in production until
+     measured; `0.60.1` limits the quarterback fill to unplayed games;
+   - done 2026-10-15 (independently reviewed, `models/qb_elos_measure/REVIEW.md`; recorded in
+     `.agents/benchmarks.md`, "`qb_elos.csv` measurement"): the grouped measurement in
+     `models/qb_elos_measure/HYPOTHESIS.md`, the upgraded `qb_elos.csv` against the old one, the
+     `qb_adj` arm, and decision 1's ratings swap re-checked on the new file; two builds, eight runs:
      - the new file against the old: a tie, the new file stays;
      - `qb_adj`: a tie, the group stays off;
      - the ratings swap on the new file: the strength snapshot loses, the ported ratings stay;
-     - the new-file runs are the floor-sigma reference from `0.62.0`;
-   - the "no game lines" mode leaves out `strength,elo,own_elo_wt` (approved 2026-10-14);
-     status: in `0.61.0` the default list is `strength,elo,own_elo_wt,qb_adj`, and a run counts
-     as one without game lines when its market features and anchor are off, whatever the
-     transform;
-   - proposed: measure `qb_adj` in the run without game lines (asked for by the user on
-     2026-10-15); it needs a written hypothesis and the user's go-ahead before any run;
-   - `../nfeloqb`: a backup's first start in next-week projections rated as played rows rate it
-     (`get_value(team)` in place of `current_value`), test first;
-   - the fork's win-total file ends at 2023: its own measurement after the grouped one, with a
-     fork change and a third build, landing between game weeks.
+     - the new-file runs are the floor-sigma reference from `0.62.0` (reviewed, merged);
+   - done 2026-10-15 (`0.61.0`, independently reviewed, merged into `main`): a run without game
+     lines leaves out `strength,elo,own_elo_wt,qb_adj` by default, and a run counts as one when
+     its market features and anchor are off, whatever the transform;
+   - open: `qb_adj` in the run without game lines (approved by the user 2026-10-15),
+     `models/qb_adj_no_lines/HYPOTHESIS.md`, sha256
+     `8c1028438a66594c8ecb1445ed8fcf4403ccf0e7a8c2cd3a1f1ed4c34519ce06`; two arms on the grouped
+     measurement's new-file cut, two seeds, four runs, code at `main` `d791846`;
+   - open: `../nfeloqb`, a backup's first start in next-week projections rated as played rows
+     rate it (`get_value(team)` in place of `current_value`), test first;
+   - open: the fork's win-total file ends at 2023: its own measurement after the grouped one,
+     with a fork change and a third build, landing between game weeks.
 8. **Feature ideas** (raised by the user 2026-10-08; moved before the re-tune 2026-10-15, to be
    explored quickly and then accepted or dropped): the referee crew (nflverse `referee` since
    1999, full crews in `load_officials`), game-day weather (temperature and wind for outdoor
@@ -627,13 +627,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
-- [x] Cross-module private imports left after `0.38.1`. Resolved in `0.59.6` (the strict pyright
-      cleanup, user-approved 2026-10-15): every helper another module imports is public, and
-      an AST scan by the independent reviewer finds no private import across `src/` modules.
-      Originally (an AST scan by the `0.38.1` implementer, not checked in):
-      `utils/polars/teamrankings.py` imported `_is_numeric_dtype` from `utils/polars/loaders.py`,
-      and `ml/ml_model_core.py`, `ml/ml_model_predict.py` and `ml/ml_model_training.py` imported
-      17 private names from each other.
 - [ ] (step 6, phase 5) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig

@@ -42,7 +42,10 @@ const CACHE_SOURCES: Record<string, { label: string; hint?: string }> = {
 }
 
 function sourceLabel(source: string): { label: string; hint?: string } {
-  return CACHE_SOURCES[source] ?? { label: source.replaceAll('_', ' ') }
+  const known = CACHE_SOURCES[source]
+  if (known) return known
+  const words = source.replaceAll('_', ' ')
+  return { label: words.charAt(0).toUpperCase() + words.slice(1) }
 }
 
 function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[]; hint?: string }) {
@@ -50,18 +53,22 @@ function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[
   const min = Math.min(...seasons)
   const max = Math.max(...seasons)
   const all = Array.from({ length: max - min + 1 }, (_, i) => min + i)
+  const missing = all.filter((season) => !seasons.includes(season))
   return (
     <div>
       <div className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
         <span>{label}</span>
         {hint ? <InfoTooltip content={hint} /> : null}
-        <span className="ml-auto">{min}–{max}</span>
+        <span className="ml-auto">{min === max ? min : `${min}–${max}`}</span>
       </div>
       <div className="flex gap-0.5">
         {all.map((season) => (
           <span key={season} title={String(season)} className={seasons.includes(season) ? 'h-2 flex-1 rounded-sm bg-primary' : 'h-2 flex-1 rounded-sm bg-muted'} />
         ))}
       </div>
+      {missing.length > 0 ? (
+        <div className="mt-1 text-xs text-muted-foreground">Missing: {missing.join(', ')}</div>
+      ) : null}
     </div>
   )
 }

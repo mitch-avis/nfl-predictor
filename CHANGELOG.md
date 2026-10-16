@@ -9,9 +9,16 @@
 - The weekly run logs a power ranking skipped for a missing season/week, dataset or schedule as a
   warning instead of at info level.
 - `season_t_interval` in the rating-definition tests (`.agents/sos_port/rating_tests_common.py`)
-  raises a `ValueError` for fewer than two seasons instead of returning NaN bounds.
+  raises a `ValueError` for fewer than two distinct seasons instead of returning NaN bounds.
 - The rating-definition tests record the commit with a `-dirty` suffix when tracked files differ
-  from it, as `git describe --dirty` does.
+  from it, as `git describe --dirty` does. Git runs without the caller's `GIT_*` variables, so
+  inside a git hook it reads this checkout rather than the hook's repository, and a bare
+  repository records no commit instead of raising.
+- The `git_commit` tests run git without the caller's `GIT_*` variables, so run from a git hook
+  they can no longer commit into the hook's repository.
+
+### Added
+
 - A test drives the phase-1 parity audit's season loop through its opponent-row check, which only
   direct calls covered.
 

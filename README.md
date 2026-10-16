@@ -901,8 +901,9 @@ rebuilt from the run's `metadata.json` and its dataset's columns. Nothing is inf
 today's defaults: an older run that recorded only its XGBoost overrides has the rest listed as
 not recorded. A run with no metadata, whose dataset is gone, or whose recorded configuration no
 longer loads (a retired calibration method) says why instead.
-It reproduces the independent task 55.8 rescore exactly (`.agents/m60/verify_compare.py`) and
-replaces the per-run `compare_to_benchmark.py` copies under `models/`.
+It reproduces the independent rescore of the season-weighting arms exactly
+(`.agents/m60/verify_compare.py`) and replaces the per-run `compare_to_benchmark.py` copies under
+`models/`.
 
 ## Weekly workflow (canonical)
 
@@ -1071,9 +1072,9 @@ This is the current behavior, recorded for reference; none of it is a recommenda
   (`power_rankings_method` left unset ranks on `blend`, with `power_rankings_blend_weight: 0.5` in
   `config/weekly_run.yaml`): the user chose it after the rankings measurement, and `0.5` is the
   weight its pre-registered rule picks for 2026 (`.agents/sos_port/decisions/power_rankings.md`,
-  decision 12). Without `--power-rankings-model-predictions`, the model rating reads the ranked
-  season from the run's own stage-1 fold checkpoints (`wf_compare/`, whose `metadata.json` names
-  them; a resumed run that reuses stage 1 writes it when missing, finding the folds under
+  "The weekly run's default ranking"). Without `--power-rankings-model-predictions`, the model
+  rating reads the ranked season from the run's own stage-1 fold checkpoints (`wf_compare/`,
+  whose `metadata.json` names them; a resumed run that reuses stage 1 writes it when missing, finding the folds under
   `wf_compare/wf_folds/` by name or, for a stage 1 run on other code or library versions, by the
   one `manifest.json` that records the production configuration and the data's row and column
   counts; with none or several matching it writes nothing and warns to rerun with

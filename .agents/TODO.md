@@ -805,8 +805,12 @@ the identity warning. Still open:
       an `F.Last` fallback) could key completed games on the nflverse schedule's
       `away_qb_id` / `home_qb_id` directly if those columns joined `NFLREADPY_SCHEDULE_COLUMNS`;
       name resolution would then be needed only for future-week rows.
-      Status 2026-10-16: open; the schedule's starter ids are still not downloaded, and the chain
-      feeds production (the quarterback family and the `qb_elos.csv` Elo, 39 features).
+      Status 2026-10-16: open, low priority. Since `0.54.0`
+      (`.agents/sos_port/decisions/integration_pbp_elo.md` entry 1.3) a completed regular-season
+      game keys on its play-by-play starter, so the chain serves only postseason games, the six
+      team-games of entry 1.2, the four team-games of the two games without play-by-play, and
+      upcoming games. There it still feeds the quarterback family's production features; the
+      schedule's starter ids are still not downloaded.
 
 ### From task 56.4 (rolling calibration window)
 

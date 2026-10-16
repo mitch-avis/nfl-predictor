@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -94,7 +95,8 @@ def git_commit(repo: Path = constants.ROOT_DIR) -> str | None:
     """Return the commit ``repo`` is checked out at, marked when its tracked files differ.
 
     As ``git describe --dirty`` marks it, a staged or unstaged change to a tracked file appends
-    ``-dirty`` to the full commit hash; untracked files do not count.
+    ``-dirty`` to the full commit hash; untracked files do not count. Git runs without any
+    ``GIT_*`` variable, so a git hook's ``GIT_DIR`` cannot point it at another repository.
 
     Args:
         repo: A directory inside the checkout; this repository's root by default.
@@ -107,14 +109,16 @@ def git_commit(repo: Path = constants.ROOT_DIR) -> str | None:
     git = shutil.which("git")
     if git is None:
         return None
+    env = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
     head = subprocess.run(
-        [git, "rev-parse", "HEAD"], cwd=repo, check=False, capture_output=True, text=True
+        [git, "rev-parse", "HEAD"], cwd=repo, env=env, check=False, capture_output=True, text=True
     )
     if head.returncode != 0 or not head.stdout.strip():
         return None
     changes = subprocess.run(
         [git, "status", "--porcelain", "--untracked-files=no"],
         cwd=repo,
+        env=env,
         check=True,
         capture_output=True,
         text=True,

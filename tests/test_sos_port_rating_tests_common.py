@@ -276,6 +276,13 @@ def _repo_state(repo: Path) -> tuple[str, str]:
     return _git(repo, "rev-parse", "HEAD"), _git(repo, "ls-files", "--stage")
 
 
+def _other_repo(path: Path) -> Path:
+    """Return a second repository whose commit differs from :func:`_committed_repo`'s."""
+    other, _ = _committed_repo(path)
+    _git(other, "commit", "--allow-empty", "--quiet", "-m", "second")
+    return other
+
+
 def _point_git_at(monkeypatch: pytest.MonkeyPatch, repo: Path) -> None:
     """Set the variables a git hook exports so that git would act on ``repo``."""
     monkeypatch.setenv("GIT_DIR", str(repo / ".git"))
@@ -286,7 +293,7 @@ def test_git_helpers_leave_the_repository_named_by_the_environment_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    other, _ = _committed_repo(tmp_path / "other")
+    other = _other_repo(tmp_path / "other")
     before = _repo_state(other)
     _point_git_at(monkeypatch, other)
 
@@ -301,7 +308,7 @@ def test_git_commit_leaves_the_repository_named_by_the_environment_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    other, _ = _committed_repo(tmp_path / "other")
+    other = _other_repo(tmp_path / "other")
     repo, _ = _committed_repo(tmp_path / "repo")
     (repo / "tracked.txt").write_text("two\n")
     before = _repo_state(other)
@@ -312,6 +319,21 @@ def test_git_commit_leaves_the_repository_named_by_the_environment_alone(
 
     # Assert
     assert _repo_state(other) == before
+
+
+def test_git_commit_with_git_dir_set_reads_its_own_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    other = _other_repo(tmp_path / "other")
+    repo, head = _committed_repo(tmp_path / "repo")
+    _point_git_at(monkeypatch, other)
+
+    # Act
+    commit = common.git_commit(repo)
+
+    # Assert
+    assert commit == head
 
 
 @pytest.mark.usefixtures("no_git_environment")

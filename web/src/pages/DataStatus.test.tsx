@@ -119,6 +119,46 @@ describe('DataStatusPage cache card', () => {
     expect(within(card).getByText('Missing: 2004, 2007')).toBeInTheDocument()
   })
 
+  it('collapses a long run of missing seasons into one range', async () => {
+    // Arrange
+    stubApi({ '/api/data/status': status(null, { cache: { schedule: [1999, 2026], pbp: [] } }) })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await cardTitled('Source caches')
+    expect(within(card).getByText('Missing: 2000–2025')).toBeInTheDocument()
+  })
+
+  it('lists single missing seasons and missing runs together', async () => {
+    // Arrange
+    stubApi({
+      '/api/data/status': status(null, {
+        cache: { schedule: [2002, 2004, 2008, 2009, 2011], pbp: [] },
+      }),
+    })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await cardTitled('Source caches')
+    expect(within(card).getByText('Missing: 2003, 2005–2007, 2010')).toBeInTheDocument()
+  })
+
+  it('names a single missing season on its own', async () => {
+    // Arrange
+    stubApi({ '/api/data/status': status(null, { cache: { schedule: [2003, 2005], pbp: [] } }) })
+
+    // Act
+    renderWithProviders(<DataStatusPage />)
+
+    // Assert
+    const card = await cardTitled('Source caches')
+    expect(within(card).getByText('Missing: 2004')).toBeInTheDocument()
+  })
+
   it('names no missing seasons when a strip has no gaps', async () => {
     // Arrange
     stubApi({ '/api/data/status': status(null, { cache: { schedule: [2003, 2004, 2005], pbp: [2026] } }) })

@@ -80,6 +80,14 @@ def test_tracked_python_files_carry_no_inline_suppressions() -> None:
         "# ty: ignore[unresolved-import]",
         "# pragma: no cover",
         "# fixed argv  # noqa: S603",
+        "# ruff: noqa",
+        "# ruff: noqa: E501, S603",
+        "# flake8: noqa",
+        "# pyright: basic",
+        "# pyright: reportPrivateUsage=false",
+        "# pyright: reportPrivateUsage = False",
+        "# pyright: strict, reportUnknownMemberType=false",
+        "# pragma: no branch",
     ],
 )
 def test_suppression_hits_names_the_file_and_line_of_each_directive(comment: str) -> None:
@@ -107,6 +115,28 @@ def test_suppression_hits_ignores_a_directive_inside_a_string() -> None:
 def test_suppression_hits_ignores_a_comment_that_only_mentions_the_words() -> None:
     # Arrange
     source = "x = 1  # no noqa or type-ignore comments here\n"
+
+    # Act
+    hits = suppression_hits(source, "pkg/mod.py")
+
+    # Assert
+    assert hits == []
+
+
+@pytest.mark.parametrize(
+    "comment",
+    [
+        "# pyright: strict",
+        "# pyright: reportPrivateUsage=true",
+        "# pyright: reportPrivateUsage=error",
+        "# pyright: reportPrivateUsage=warning",
+        "# ruff: isort: skip_file",
+        "# pragma: allowlist secret",
+    ],
+)
+def test_suppression_hits_ignores_a_directive_that_does_not_silence(comment: str) -> None:
+    # Arrange
+    source = f"import os\nos.getcwd()  {comment}\n"
 
     # Act
     hits = suppression_hits(source, "pkg/mod.py")

@@ -108,6 +108,8 @@ SEASON_PREFIX_RE = re.compile(r"^(\d{4})_")
 SEASON_DIR_RE = re.compile(r"^\d{4}$")
 ETL_SEASON_DIR_RE = re.compile(r"^season_(\d{4})$")
 TEAM_RANKINGS_GLOB = "*_team_rankings.csv"
+# The files a directory entry on the files card counts: its top-level tables.
+DIRECTORY_TABLE_GLOB = "*.parquet"
 PREDICT_FILE_RE = re.compile(r"^week_(\d{2})_(games_to_predict|predictions)\.csv$")
 FINGERPRINT_KEY_PREFIX = "fingerprint:"
 
@@ -142,9 +144,9 @@ def iso_time(ts: float) -> str:
     return datetime.fromtimestamp(ts, tz=UTC).isoformat()
 
 
-def _tree_summary(directory: Path) -> tuple[list[Path], int, str | None]:
-    """Return the files under ``directory``, their total size and the newest modified time."""
-    files = sorted(path for path in directory.rglob("*") if path.is_file())
+def _tree_summary(directory: Path, pattern: str = "**/*") -> tuple[list[Path], int, str | None]:
+    """Return the files under ``directory`` matching ``pattern``, their size and newest time."""
+    files = sorted(path for path in directory.glob(pattern) if path.is_file())
     stats = [path.stat() for path in files]
     newest = max((stat.st_mtime for stat in stats), default=None)
     return (
@@ -155,7 +157,11 @@ def _tree_summary(directory: Path) -> tuple[list[Path], int, str | None]:
 
 
 def _directory_status(data_dir: Path, name: str, description: str) -> FileStatus:
-    """Describe the directory ``data_dir/name`` by its files and their season prefixes."""
+    """Describe the directory ``data_dir/name`` by its top-level Parquet tables.
+
+    Only ``*.parquet`` files directly inside count, so a table being written
+    (``*.parquet.<hex>.tmp``), a README or a nested backup folder changes none of the figures.
+    """
     directory = data_dir / name.rstrip("/")
     if not directory.is_dir():
         return FileStatus(
@@ -167,7 +173,7 @@ def _directory_status(data_dir: Path, name: str, description: str) -> FileStatus
             rows=None,
             seasons=None,
         )
-    files, size, modified_at = _tree_summary(directory)
+    files, size, modified_at = _tree_summary(directory, DIRECTORY_TABLE_GLOB)
     seasons = sorted(
         int(match.group(1)) for path in files if (match := SEASON_PREFIX_RE.match(path.name))
     )

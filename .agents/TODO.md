@@ -355,7 +355,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
 | 4, first | Done, apart from the low-priority schedule fallback (step-3 merge test group). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run), the split-review follow-ups and the schedule cache were resolved in `0.37.2`-`0.38.2` |
-| 6, phases 3-4 (from step 4) | Checked 2026-10-16 by `.agents/sos_port/followup_check.py`: three retired (feed neither the production model nor the default power rankings) and two resolved in `0.54.0`, recorded in `ARCHIVE.md`, "Roadmap step 6 - Follow-ups from step 4". Still open: the early-season strength snapshot, which drives the composite rankings of `nfl-predictor rankings` and the web Power rankings job; and, each feeding production, the early-season stat blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3 in step 9); what is left of `_attach_qb_features`, of scramble attribution and of the QB identity chain (2026-09-11 review) |
+| 6, phases 3-4 (from step 4) | Checked 2026-10-16 by `.agents/sos_port/followup_check.py`: three retired (feed neither the production model nor the default power rankings) and three resolved in `0.54.0`, recorded in `ARCHIVE.md`, "Roadmap step 6 - Follow-ups from step 4". Still open: the early-season strength snapshot, which drives the composite rankings of `nfl-predictor rankings` and the web Power rankings job; and, each feeding production, the early-season stat blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3 in step 9); what is left of scramble attribution and of the QB identity chain (2026-09-11 review) |
 
 Rules for every feature milestone:
 
@@ -790,13 +790,6 @@ the identity warning. Still open:
       `tests/test_ml_model_training_additional.py`).
       Done in `0.30.1`: the split returns a `TrainCalibrationSplit` carrying `window_pairs`,
       pinned by characterization tests written before the change.
-- [ ] `_attach_qb_features` requests a not-yet-published current season a second time before
-      kickoff (the first `load_pbp` skipped it, so it is "missing"), doubling that network attempt
-      and its warning; and every ETL run, however narrow its `--min-season`, needs all
-      `1999..max_season` play-by-play seasons cached or downloadable.
-      Status 2026-10-16: the double request is fixed in `0.54.0` (`requested_seasons`,
-      `.agents/sos_port/decisions/integration_pbp_elo.md` entry 1.6); the full-history need is not
-      re-checked. Feeds production (21 quarterback-family features).
 - [ ] `qb_stats`: scrambles (dropbacks without a passer id) go to the team-game's plurality
       passer, so a starter who leaves early has his scrambles booked to the backup; the recent
       window counts any week with one dropback as a full game; `completions` and the recent

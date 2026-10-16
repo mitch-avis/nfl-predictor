@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.63.4] - 2026-10-16
+
+### Fixed
+
+- The data-status page's leakage-audit card listed flagged columns as `[object Object]`: it now
+  lists each flagged column by name with its reasons in plain words, and lists the failure
+  messages when the audit failed. `web/src/api/types.ts` describes the report as the audit writes
+  it (`LeakageFlag` objects, string failures and warnings).
+- The shared data table put empty values first on a descending sort, so a numeric column's first
+  click led with them; empty values now sort last in both directions, for primary and secondary
+  sort keys.
+- The shared data table's primary sorted header carries `aria-sort`.
+
 ## [0.63.3] - 2026-10-16
 
 ### Changed

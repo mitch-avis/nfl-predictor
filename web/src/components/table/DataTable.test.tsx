@@ -280,6 +280,19 @@ describe('DataTable sorting', () => {
     expect(sortIcon('Team')).toMatch(/lucide-arrow-up(?!-down)/)
   })
 
+  it('sorts a text column ascending on the first click when its first row is null', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    const rows = [{ team: null, rating: 1 }, { team: 'KC', rating: 2 }, { team: 'ARI', rating: 3 }]
+    renderTable({ table: { ...sortPayload(), rows } })
+
+    // Act
+    await user.click(screen.getByRole('button', { name: 'Sort by Team' }))
+
+    // Assert
+    expect(columnText(0)).toEqual(['ARI', 'KC', '—'])
+  })
+
   it('sorts a text column descending on the second click', async () => {
     // Arrange
     const user = userEvent.setup()

@@ -591,7 +591,8 @@ Where the pool comes from:
   prediction frame carries `floor_sigma` and `floor_sigma_fallback`, and the report's
   `floor_sigma` block names the history.
 - The production final fit (the weekly run, `nfl-predictor train`) pools the out-of-fold errors
-  of the reference runs, `floor_sigma_reference_runs` in `config/weekly_run.yaml` and
+  of the reference runs, `floor_sigma_reference_runs` (left out of the shipped
+  `config/weekly_run.yaml`, so it follows the market mode) and
   `--floor-sigma-reference-runs` for `train` (default: the two seeds of the reviewed reference
   walk-forward of production's settings on the current `qb_elos.csv`, market anchored with
   production's feature groups left out, `models/qb_elos_measure/new_file_seed42` and

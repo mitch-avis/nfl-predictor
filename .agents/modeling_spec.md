@@ -74,8 +74,8 @@ When market lines exist, the system produces market-derived features and support
   deterministic-minus-market intervals, and it never enters the submitted probability. There is no
   market probability blend or clamp.
 - The stats-only mode means "no game lines", not "no market information". Such a run
-  (`nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`, the weekly
-  run's `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
+  (`nfl-predictor backtest --exclude-market --no-market-anchor`, the weekly run's
+  `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
   by the generated inventory in `.agents/market_free/`. It still scores the market yardstick, and
   with no group list it leaves out `strength,elo,own_elo_wt,qb_adj`
   (`constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`: the reviewed list of the step-6 runs
@@ -85,12 +85,13 @@ When market lines exist, the system produces market-derived features and support
   `data/qb_elos.csv` (`elo`) are not line columns, but `../nfeloqb` pulls each preseason Elo
   toward a rating built from betting win totals (2003-2023), and the repository's own Elo
   (`utils/polars/own_elo_build.py`) publishes its win-total preset as the `own_elo_wt` group. A
-  run counts as one without game lines only with all three market settings off; a backtest with
-  `--exclude-market --no-market-anchor` alone resolves the transform from the data's lines and
-  takes production's list. `nfl-predictor train` has the anchor and the transform off by default,
-  so `--exclude-market` alone makes such a run. A group list given (`--disable-feature-groups`, or
-  `disable_feature_groups` in the weekly config) replaces the default: no market information and
-  no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj` (reference runs
+  run counts as one without game lines whenever its market features and its anchor are off,
+  whatever the transform setting, since the transform only derives market features
+  (`ml/feature_spec._resolve_market_columns`). `nfl-predictor train` has the anchor off by
+  default, so `--exclude-market` alone makes such a run. A group list given
+  (`--disable-feature-groups`, or `disable_feature_groups` in the weekly config) replaces the
+  default: no market information and no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj`
+  (reference runs
   `models/step6/ratings_marketfree_seed{42,7}`), and production's list keeps the `elo` group.
   Leaving the market columns out does not by itself leave these groups out
   (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps either of them logs a "No game

@@ -77,6 +77,25 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 6 - Resolved follow-ups from the integration reviews
+
+Findings the independent integration reviews of 2026-10-14 left open; the open rest is in
+`TODO.md`, "From the step-6 integration reviews", and `.agents/step6_plan.md`.
+
+- No test covered the phase-1 audit's run-loop call to `check_opponent_rows`
+  (`.agents/sos_port/parity.py`, `_run`). Resolved in `0.63.7` (2026-10-16): two tests in
+  `tests/test_sos_port_audit.py` drive the season loop with its inputs stubbed; a team-game
+  missing its opponent's row fails the audit, a complete game passes. No bug found.
+- The rating-definition tests' recorded commit lacked a dirty mark. Resolved in `0.63.7`:
+  `rating_tests_common.git_commit` appends `-dirty`, as `git describe --dirty` does, when a
+  tracked file differs from the commit, staged or not. It runs git without any `GIT_*` variable,
+  so a git hook's `GIT_DIR` cannot point it at another repository, and records no commit for a
+  bare repository.
+- `season_t_interval` returned NaN bounds for one season. Resolved in `0.63.7`: it raises a
+  `ValueError` for fewer than two distinct seasons.
+- Three power-ranking skips in the weekly run (missing season/week, missing dataset, missing
+  schedule) logged at info level. Resolved in `0.63.7`: they log as warnings.
+
 ## Roadmap step 6 - Follow-ups from step 4, retired or resolved (2026-10-16)
 
 The follow-up row "6, phases 3-4 (from step 4)" in `TODO.md` was checked on 2026-10-16 with
@@ -279,6 +298,11 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   independent reviewer. A text token in a numeric column now fails the read (the real file has
   none, nor did any of the 233 versions in `../nfeloqb`'s history since 2023-08-09; `nfeloqb`
   writes blanks). The user kept the hard failure, tentatively, on 2026-10-01.
+- `reporting/power_rankings.py` `_load_current_records` grouped with `group_by` without
+  `maintain_order`, so its row order changed between runs (content and rankings identical; found
+  by the `0.37.2` review in the step-3 merge test). Resolved in `0.63.7` (2026-10-16): the records
+  are sorted by `team_abbr`; every consumer merges on `team_abbr`, so only the frame's row order
+  changed.
 - `data_collection.py` passed the ~2000-line threshold with the incremental ETL (`0.37.5`). Split
   in `0.37.6` (2026-10-01, approved by the user): the week builder to `utils/polars/week_rows.py`
   and, to avoid an import cycle, the per-week strength table to `utils/polars/strength_table.py`

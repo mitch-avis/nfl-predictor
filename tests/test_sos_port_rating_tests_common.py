@@ -1,7 +1,10 @@
 """Tests for the shared pieces of the rating-definition tests (``.agents/sos_port``)."""
 
 import json
+import os
 import re
+import shutil
+import subprocess
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -116,6 +119,18 @@ def test_season_t_interval_season_without_rows_raises_a_value_error() -> None:
         common.season_t_interval(differences, [2000, 2001], 0.95)
 
 
+@pytest.mark.parametrize("seasons", [[2000], [], [2000, 2000]])
+def test_season_t_interval_fewer_than_two_seasons_raises_a_value_error(
+    seasons: list[int],
+) -> None:
+    # Arrange
+    differences = pl.DataFrame({"season": [2000, 2000], "difference": [0.1, -0.1]})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="at least two seasons"):
+        common.season_t_interval(differences, seasons, 0.95)
+
+
 def test_game_bootstrap_same_seed_is_reproducible() -> None:
     # Arrange
     values = np.linspace(-1.0, 2.0, 37)
@@ -220,6 +235,162 @@ def test_perturbed_numbers_changes_every_numeric_value_of_the_rows_only() -> Non
     assert changed.schema == frame.schema
 
 
+@pytest.fixture
+def no_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the variables a git hook exports, so git finds the repository from its directory."""
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.delenv(name, raising=False)
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run git in ``repo`` with a fixed identity and return its output.
+
+    Every ``GIT_*`` variable is dropped: inside a git hook, ``GIT_DIR`` and ``GIT_INDEX_FILE``
+    name the hook's repository, and git would act on it instead of ``repo``.
+    """
+    git = shutil.which("git")
+    assert git is not None
+    env = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    return subprocess.run(
+        [git, "-c", "user.name=Test", "-c", "user.email=test@example.com", *args],
+        cwd=repo,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _committed_repo(path: Path) -> tuple[Path, str]:
+    """Return a git repository with one committed file and its commit."""
+    path.mkdir()
+    _git(path, "init", "--quiet")
+    (path / "tracked.txt").write_text("one\n")
+    _git(path, "add", "tracked.txt")
+    _git(path, "commit", "--quiet", "-m", "first")
+    return path, _git(path, "rev-parse", "HEAD")
+
+
+def _repo_state(repo: Path) -> tuple[str, str]:
+    """Return ``repo``'s commit and the staged entries of its index."""
+    return _git(repo, "rev-parse", "HEAD"), _git(repo, "ls-files", "--stage")
+
+
+def _other_repo(path: Path) -> Path:
+    """Return a second repository whose commit differs from :func:`_committed_repo`'s."""
+    other, _ = _committed_repo(path)
+    _git(other, "commit", "--allow-empty", "--quiet", "-m", "second")
+    return other
+
+
+def _point_git_at(monkeypatch: pytest.MonkeyPatch, repo: Path) -> None:
+    """Set the variables a git hook exports so that git would act on ``repo``."""
+    monkeypatch.setenv("GIT_DIR", str(repo / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(repo / ".git" / "index"))
+
+
+def test_git_helpers_leave_the_repository_named_by_the_environment_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    other = _other_repo(tmp_path / "other")
+    before = _repo_state(other)
+    _point_git_at(monkeypatch, other)
+
+    # Act
+    _committed_repo(tmp_path / "repo")
+
+    # Assert
+    assert _repo_state(other) == before
+
+
+def test_git_commit_leaves_the_repository_named_by_the_environment_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    other = _other_repo(tmp_path / "other")
+    repo, _ = _committed_repo(tmp_path / "repo")
+    (repo / "tracked.txt").write_text("two\n")
+    before = _repo_state(other)
+    _point_git_at(monkeypatch, other)
+
+    # Act
+    common.git_commit(repo)
+
+    # Assert
+    assert _repo_state(other) == before
+
+
+def test_git_commit_with_git_dir_set_reads_its_own_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    other = _other_repo(tmp_path / "other")
+    repo, head = _committed_repo(tmp_path / "repo")
+    _point_git_at(monkeypatch, other)
+
+    # Act
+    commit = common.git_commit(repo)
+
+    # Assert
+    assert commit == head
+
+
+@pytest.mark.usefixtures("no_git_environment")
+def test_git_commit_clean_tree_is_the_bare_commit(tmp_path: Path) -> None:
+    # Arrange
+    repo, head = _committed_repo(tmp_path / "repo")
+    (repo / "untracked.txt").write_text("new\n")
+
+    # Act
+    commit = common.git_commit(repo)
+
+    # Assert
+    assert commit == head
+
+
+@pytest.mark.usefixtures("no_git_environment")
+@pytest.mark.parametrize("stage", [False, True])
+def test_git_commit_changed_tracked_file_is_marked_dirty(tmp_path: Path, *, stage: bool) -> None:
+    # Arrange
+    repo, head = _committed_repo(tmp_path / "repo")
+    (repo / "tracked.txt").write_text("two\n")
+    if stage:
+        _git(repo, "add", "tracked.txt")
+
+    # Act
+    commit = common.git_commit(repo)
+
+    # Assert
+    assert commit == f"{head}-dirty"
+
+
+@pytest.mark.usefixtures("no_git_environment")
+def test_git_commit_bare_repository_is_none(tmp_path: Path) -> None:
+    # Arrange
+    repo, _ = _committed_repo(tmp_path / "repo")
+    _git(tmp_path, "clone", "--quiet", "--bare", str(repo), "bare.git")
+
+    # Act
+    commit = common.git_commit(tmp_path / "bare.git")
+
+    # Assert
+    assert commit is None
+
+
+@pytest.mark.usefixtures("no_git_environment")
+def test_git_commit_outside_a_checkout_is_none(tmp_path: Path) -> None:
+    # Arrange
+    outside = tmp_path / "not_a_repo"
+    outside.mkdir()
+
+    # Act
+    commit = common.git_commit(outside)
+
+    # Assert
+    assert commit is None
+
+
 def test_run_provenance_records_the_git_commit_and_the_run(tmp_path: Path) -> None:
     # Arrange
     code = tmp_path / "script.py"
@@ -231,7 +402,7 @@ def test_run_provenance_records_the_git_commit_and_the_run(tmp_path: Path) -> No
     provenance = common.run_provenance([code], ledger, "python script.py", 12.5)
 
     # Assert
-    assert re.fullmatch(r"[0-9a-f]{40}", provenance["git_commit"])
+    assert re.fullmatch(r"[0-9a-f]{40}(-dirty)?", provenance["git_commit"])
     assert provenance["code"] == {"script.py": common.sha256_file(code)}
     assert (provenance["inputs"], provenance["fingerprint"]) == (1, ledger.fingerprint())
     assert (provenance["command"], provenance["seconds"]) == ("python script.py", 12.5)

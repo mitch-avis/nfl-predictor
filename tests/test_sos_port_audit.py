@@ -7,6 +7,7 @@ built in a temporary directory; nothing reads the checkout's ``data/`` or the ne
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -16,6 +17,7 @@ import yaml
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders, pbp
 from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
+from tests.fakes import returning
 from tests.sos_port_scripts import load_sos_port_script
 
 if TYPE_CHECKING:
@@ -709,6 +711,117 @@ def test_check_opponent_rows_complete_game_passes(parity: ModuleType) -> None:
 
     # Assert
     assert (missing, audit.failures) == (0, [])
+
+
+def _stub_parity_season_inputs(
+    parity: ModuleType,
+    parity_rules: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    theirs: pl.DataFrame,
+) -> tuple[Path, list[dict[str, Any]]]:
+    """Stub every input of the parity run but its season loop; return the data dir and payloads.
+
+    One 2025 season with Buffalo at Miami on this repository's side, ``theirs`` as the game logs
+    and the carries-faced pair, judged on the opponent's row. The payloads list receives what the
+    run would write to ``parity.json``.
+    """
+    ours = _one_game("rush_attempts", 20.0, 30.0)
+    rules = tmp_path / "parity.yaml"
+    rules.write_text(
+        yaml.safe_dump({"tolerance": 1e-6, "games_without_play_by_play": [], "causes": {}}),
+        encoding="utf-8",
+    )
+    game_logs = tmp_path / "2025_team_game_logs.parquet"
+    theirs.write_parquet(game_logs)
+    data_dir = tmp_path / "data"
+    cache_dir = data_dir / "cache" / "nflreadpy"
+    cache_dir.mkdir(parents=True)
+    pl.DataFrame({"game_id": ["2025_01_BUF_MIA"]}).write_parquet(
+        cache_dir / "schedule_2025.parquet"
+    )
+    play_by_play = SimpleNamespace(source=parity.PLAY_BY_PLAY, via="test")
+    sources = dict.fromkeys(theirs.columns, play_by_play)
+    payloads: list[dict[str, Any]] = []
+    empty: dict[str, Any] = {}
+    no_records: list[dict[str, Any]] = []
+    snapshot_report: dict[str, Any] = {"repaired_games": []}
+
+    def write_outputs(payload: dict[str, Any], _records: list[dict[str, Any]]) -> None:
+        payloads.append(payload)
+
+    def season_ours(_frames: object, _causes: frozenset[str]) -> pl.DataFrame:
+        return ours
+
+    stubs: dict[str, object] = {
+        "RULES": rules,
+        "OUT_MD": tmp_path / "PARITY.md",
+        "SEASONS": [2025],
+        "check_sos_checkout": returning(empty),
+        "load_pairs": returning([_carries_faced_pair(parity_rules)]),
+        "sos_output": returning(game_logs),
+        "classify_game_log_columns": returning((sources, empty)),
+        "snapshot_files": returning({2025: "snapshot"}),
+        "season_pbp": returning((pl.DataFrame(_RAW_PLAYS), snapshot_report)),
+        "theirs_frame": returning(theirs),
+        "ours_frame": returning(ours),
+        "check_keys": returning(empty),
+        "check_coverage": returning(empty),
+        "attribute": returning(no_records),
+        "cause_effects": returning(empty),
+        "wiped_out_plays": returning(empty),
+        "summarize_causes": returning(empty),
+        "render": returning(""),
+        "write_outputs": write_outputs,
+    }
+    for name, stub in stubs.items():
+        monkeypatch.setattr(parity, name, stub)
+    monkeypatch.setattr(parity.SeasonFrames, "ours", season_ours)
+    return data_dir, payloads
+
+
+def test_run_team_game_without_its_opponents_row_fails_the_audit(
+    parity: ModuleType,
+    parity_rules: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    theirs = _one_game("carries_faced", 30.0, 20.0).filter(pl.col("team_abbr") == "BUF")
+    data_dir, payloads = _stub_parity_season_inputs(
+        parity, parity_rules, monkeypatch, tmp_path, theirs
+    )
+
+    # Act
+    exit_code = parity._run(None, data_dir)
+
+    # Assert
+    assert exit_code == 1
+    assert payloads[0]["failures"] == [
+        {
+            "what": "team-game keys",
+            "detail": "2025 (1, 'BUF', 'MIA') has no opponent row on their side",
+        }
+    ]
+
+
+def test_run_complete_game_passes_the_opponent_row_check(
+    parity: ModuleType,
+    parity_rules: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    theirs = _one_game("carries_faced", 30.0, 20.0)
+    data_dir, payloads = _stub_parity_season_inputs(
+        parity, parity_rules, monkeypatch, tmp_path, theirs
+    )
+
+    # Act
+    exit_code = parity._run(None, data_dir)
+
+    # Assert
+    assert (exit_code, payloads[0]["failures"]) == (0, [])
 
 
 def test_load_pairs_unknown_row_fails_the_audit(parity: ModuleType) -> None:

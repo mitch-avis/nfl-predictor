@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shutil
+import subprocess
 import textwrap
 from dataclasses import dataclass, field
 from importlib import metadata
@@ -27,7 +30,6 @@ import polars as pl
 from scipy import stats
 
 from nfl_predictor import constants
-from nfl_predictor.ml.artifacts import git_commit_hash
 from nfl_predictor.ratings.pbp_inputs import SeasonSources
 from nfl_predictor.utils.polars import loaders, nflverse_sources
 
@@ -50,6 +52,8 @@ CACHE_CURRENT_SEASON = 2027
 REPORT_WIDTH = 100
 # A bound smaller than this would print as zero at three decimals.
 _SMALLEST_SHOWN = 0.0005
+# The season t interval has seasons - 1 degrees of freedom, so it needs two seasons.
+_MIN_T_SEASONS = 2
 _LIST_ITEM = re.compile(r"^(\s*)(- |\d+\. )")
 _NFLREADPY_LOADERS = (
     "load_pbp",
@@ -87,9 +91,43 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def git_commit() -> str | None:
-    """Return the checkout's commit (``git rev-parse HEAD``), or ``None`` outside a checkout."""
-    return git_commit_hash()
+def git_commit(repo: Path = constants.ROOT_DIR) -> str | None:
+    """Return the commit ``repo`` is checked out at, marked when its tracked files differ.
+
+    As ``git describe --dirty`` marks it, a staged or unstaged change to a tracked file appends
+    ``-dirty`` to the full commit hash; untracked files do not count. Git runs without any
+    ``GIT_*`` variable, so a git hook's ``GIT_DIR`` cannot point it at another repository.
+
+    Args:
+        repo: A directory inside the checkout; this repository's root by default.
+
+    Returns:
+        The commit hash, with ``-dirty`` when the tracked files differ from it, or ``None``
+        outside a checkout, in a repository without a working tree (bare), or without
+        ``git``: the provenance is then unknown.
+
+    """
+    git = shutil.which("git")
+    if git is None:
+        return None
+    env = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    head = subprocess.run(
+        [git, "rev-parse", "HEAD"], cwd=repo, env=env, check=False, capture_output=True, text=True
+    )
+    if head.returncode != 0 or not head.stdout.strip():
+        return None
+    changes = subprocess.run(
+        [git, "status", "--porcelain", "--untracked-files=no"],
+        cwd=repo,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if changes.returncode != 0:
+        return None
+    suffix = "-dirty" if changes.stdout.strip() else ""
+    return f"{head.stdout.strip()}{suffix}"
 
 
 def run_provenance(
@@ -382,9 +420,14 @@ def season_t_interval(
     """Return the mean of the season means and its Student-t interval (seasons - 1 df).
 
     Raises:
-        ValueError: If a season of ``seasons`` has no row.
+        ValueError: If ``seasons`` holds fewer than two distinct seasons, which leave no degree
+            of freedom, or if a season of ``seasons`` has no row.
 
     """
+    distinct = len(set(seasons))
+    if distinct < _MIN_T_SEASONS:
+        msg = f"a season t interval needs at least two seasons; got {distinct} distinct"
+        raise ValueError(msg)
     _require_every_season(dict(differences.group_by("season").len().iter_rows()), seasons)
     means = dict(differences.group_by("season").agg(pl.col("difference").mean()).iter_rows())
     values = np.array([means[season] for season in seasons], dtype=np.float64)

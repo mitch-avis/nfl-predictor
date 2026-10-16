@@ -263,7 +263,7 @@ Steps:
    (two review rounds) and Milestone 58's live-betting design is archived (58.3); 58.1 waits for
    the user's acceptance of the exact survivor planner, and 58.2 for its done-criterion, a first
    look at a current-season team page in a browser (the data rebuild it also waited on is done
-   since 2026-10-14). The docs close-out is on `docs/step6-close-out` (2026-10-16, not merged).
+   since 2026-10-14). The docs close-out merged into `main` as `0.63.5` (2026-10-16).
    Step 6 closes when 58.1 and 58.2 are accepted.
 7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
    - done 2026-10-15 (`0.60.0`-`0.60.1`, independently reviewed, merged into `main`):
@@ -287,8 +287,9 @@ Steps:
      grouped measurement's new-file cut, two seeds, four runs, code at `main` `d791846`: a tie, the
      group stays in `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` and no default changes; the
      review's floor-sigma gap is fixed in `0.63.0` (`ARCHIVE.md`);
-   - open: `../nfeloqb`, a backup's first start in next-week projections rated as played rows
-     rate it (`get_value(team)` in place of `current_value`), test first;
+   - done 2026-10-16 (independently reviewed, fork `main` `0db2e40`, pushed): `../nfeloqb`, a
+     backup's first start in next-week projections rated as played rows rate it
+     (`get_value(team)` in place of `current_value`), test first;
    - open: the fork's win-total file ends at 2023: its own measurement after the grouped one,
      with a fork change and a third build, landing between game weeks.
 8. **Feature ideas** (raised by the user 2026-10-08; moved before the re-tune 2026-10-15, to be
@@ -608,8 +609,8 @@ happens on a fresh branch off `main` and merges back after each phase.
       Narrowed (2026-10-10): the pages, their API and the navigation landed on the step-6
       integration branch as `0.53.0`, over the ported ratings and season statistics, but the
       phase's done-criterion (a current-season team page with heatmaps and a game log) waited on
-      the production rebuild of `data/` and a first look in a browser; four source features are
-      logged as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
+      the production rebuild of `data/` and a first look in a browser; the source features not
+      ported are logged in `.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21.
       Status 2026-10-16: the rebuild is done (2026-10-14, `0.59.0`, with the 534 ported-ratings
       files); the browser look is still open.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
@@ -638,27 +639,18 @@ Each group names the archived milestone it came from; the milestone's full recor
 Low-priority findings the independent reviews left open; the full list, with the ones already
 fixed, is in `.agents/step6_plan.md` ("Small open findings from the integration reviews").
 
-- [ ] No test covers the phase-1 audit's run-loop call to `check_opponent_rows`
-      (`.agents/sos_port/parity.py:578`); the tests call the function directly.
 - [ ] The open rating-definition tests: the quarterback test's calibration check reads the
       recorded row count, not the fit, and no test shows `run_integrity_checks` calls it; the
       information-set change leaves 1.75 and nulls as they were and the team check does not flip
-      later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds
-      for one season.
+      later sites.
 - [ ] The blend ranking default: check the single manifest match against the run itself
-      (`wf_best.json` weeks or `created_at`); three older power-ranking skips log at info level
-      (`weekly_run/pipeline.py:563-569`).
+      (`wf_best.json` weeks or `created_at`).
 - [ ] Production adoption: the disabled-group lists are not normalized for order or duplicates;
       no snapshot test of the default fit's predictions; the weekly refresh writes where
       `--data-collection-args` say while the run reads `--data-path`.
 
 ### From the step-3 merge test (2026-09-28)
 
-- [ ] (low priority) `reporting/power_rankings.py` `_load_current_records` groups with `group_by`
-      without `maintain_order`, so its row order changes between runs (content and rankings are
-      identical; found by the `0.37.2` review). The `0.37.3` determinism guard covers only the ETL
-      modules. Add `maintain_order=True` (or sort) so "identical output" checks on rankings are
-      not noisy.
 - [ ] (low priority) `load_schedule` has no current-season fallback: unlike team stats and
       play-by-play, a failed refetch of the current season's schedule (a network error or an
       nflverse outage) fails the whole ETL. Found by the `0.38.2` review; pre-existing. If it is

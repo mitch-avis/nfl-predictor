@@ -116,6 +116,18 @@ def test_season_t_interval_season_without_rows_raises_a_value_error() -> None:
         common.season_t_interval(differences, [2000, 2001], 0.95)
 
 
+@pytest.mark.parametrize("seasons", [[2000], []])
+def test_season_t_interval_fewer_than_two_seasons_raises_a_value_error(
+    seasons: list[int],
+) -> None:
+    # Arrange
+    differences = pl.DataFrame({"season": [2000, 2000], "difference": [0.1, -0.1]})
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="at least two seasons"):
+        common.season_t_interval(differences, seasons, 0.95)
+
+
 def test_game_bootstrap_same_seed_is_reproducible() -> None:
     # Arrange
     values = np.linspace(-1.0, 2.0, 37)

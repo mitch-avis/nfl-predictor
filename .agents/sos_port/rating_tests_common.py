@@ -50,6 +50,8 @@ CACHE_CURRENT_SEASON = 2027
 REPORT_WIDTH = 100
 # A bound smaller than this would print as zero at three decimals.
 _SMALLEST_SHOWN = 0.0005
+# The season t interval has seasons - 1 degrees of freedom, so it needs two seasons.
+_MIN_T_SEASONS = 2
 _LIST_ITEM = re.compile(r"^(\s*)(- |\d+\. )")
 _NFLREADPY_LOADERS = (
     "load_pbp",
@@ -382,9 +384,13 @@ def season_t_interval(
     """Return the mean of the season means and its Student-t interval (seasons - 1 df).
 
     Raises:
-        ValueError: If a season of ``seasons`` has no row.
+        ValueError: If ``seasons`` holds fewer than two seasons, which leave no degree of freedom,
+            or if a season of ``seasons`` has no row.
 
     """
+    if len(seasons) < _MIN_T_SEASONS:
+        msg = f"a season t interval needs at least two seasons; got {len(seasons)}"
+        raise ValueError(msg)
     _require_every_season(dict(differences.group_by("season").len().iter_rows()), seasons)
     means = dict(differences.group_by("season").agg(pl.col("difference").mean()).iter_rows())
     values = np.array([means[season] for season in seasons], dtype=np.float64)

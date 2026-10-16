@@ -1298,8 +1298,7 @@ ruff format --check
 ruff check
 ty check                      # src/ and tests/, from [tool.ty.src]
 pyright                       # src/ and tests/, from [tool.pyright]
-pytest
-coverage report --include="src/*"   # src/ alone at the same 90% bar; the total counts tests/
+pytest                        # with the src/ coverage bar, from [tool.coverage]
 nfl-predictor --help          # every console script, then every front-door command's --help
 shellcheck                    # every shell script .gitignore doesn't exclude
 markdownlint-cli2 "**/*.md"   # .markdownlint-cli2.yaml: the rules, and .gitignore'd paths skipped

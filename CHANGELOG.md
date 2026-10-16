@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.62.2] - 2026-10-15
+
+### Changed
+
+- The shared tooling is python-template `0.1.4` (`.copier-answers.yml`).
+
+### Removed
+
+- `scripts/gate.sh`'s separate `src/` coverage step: since `0.62.1` pytest's own `fail_under`
+  measures `src/` alone, so the step repeated it.
+
 ## [0.62.1] - 2026-10-15
 
 ### Changed

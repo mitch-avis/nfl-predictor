@@ -5,8 +5,8 @@
 # that is wrong rather than only the first failure.
 #
 # Usage:
-#   scripts/gate.sh          lock and sync checks, ruff format, ruff, ty, pyright, pytest, the
-#                            src/ coverage bar, every console script's --help, shellcheck,
+#   scripts/gate.sh          lock and sync checks, ruff format, ruff, ty, pyright, pytest with
+#                            the src/ coverage bar, every console script's --help, shellcheck,
 #                            markdownlint
 #   scripts/gate.sh --quick  skip pytest and the coverage bar (static checks only; for
 #                            iteration, never the report)
@@ -133,9 +133,6 @@ run_step "ty check" .venv/bin/ty check
 run_step "pyright" .venv/bin/pyright
 if [[ "$RUN_TESTS" -eq 1 ]]; then
 	run_step "pytest" .venv/bin/pytest -q -p no:cacheprovider
-	# The total in pyproject.toml counts tests/ as well, which would let src/ slip under the bar;
-	# `coverage report` applies the same fail_under to src/ alone.
-	run_step "src coverage" .venv/bin/coverage report --include="src/*" --format=total
 fi
 run_step "console scripts --help" console_scripts_step
 run_step "shellcheck" shellcheck_step

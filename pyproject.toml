@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
-version = "0.62.1"
+version = "0.62.2"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -215,8 +215,8 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 # The package only: test code is not product code, and counting it would lift the total.
-source = ["src"]
 branch = true
+source = ["src"]
 
 [tool.coverage.report]
 fail_under = 90

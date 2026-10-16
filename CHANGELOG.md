@@ -6,9 +6,10 @@
 
 - `tests/test_no_inline_suppressions.py` scans the comments of every tracked `.py` and `.pyi`
   file and fails, naming `file:line`, on line or file-level `noqa`, `type: ignore`,
-  `pyright: ignore`, `ty: ignore`, pyright's basic mode or a pyright rule switched off, and
-  `pragma: no cover` or `no branch`. It lists files with inherited `GIT_*` variables removed,
-  skips only without git or outside a checkout, and reports a file that does not tokenize.
+  `pyright: ignore`, `ty: ignore`, pyright's basic or standard mode, a pyright rule switched off
+  or downgraded to a warning or information, and `pragma: no cover` or `no branch`. It lists
+  files with inherited `GIT_*` variables removed, skips only without git or outside a checkout,
+  and reports a file that does not tokenize.
 
 ### Fixed
 

@@ -298,7 +298,7 @@
    "choices": null,
    "default": true,
    "dest": "include_market",
-   "help": "Train with no game-line columns (no spread, total or moneyline, raw or transformed). With --no-market-anchor and --no-market-transform the run uses no game lines; the market-implied probability is still scored as the yardstick. A run without game lines leaves out the feature groups strength,elo,own_elo_wt,qb_adj by default, so it trains on no market information and keeps the own Elo with no win-total prior; a list given with --disable-feature-groups (or disable_feature_groups in the weekly config) replaces it (for example strength,elo,own_elo,own_elo_wt,qb_adj for no Elo at all).",
+   "help": "Train with no game-line columns (no spread, total or moneyline, raw or transformed). With --no-market-anchor the run uses no game lines; the market-implied probability is still scored as the yardstick. A run without game lines leaves out the feature groups strength,elo,own_elo_wt,qb_adj by default, so it trains on no market information and keeps the own Elo with no win-total prior; a list given with --disable-feature-groups (or disable_feature_groups in the weekly config) replaces it (for example strength,elo,own_elo,own_elo_wt,qb_adj for no Elo at all).",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -340,7 +340,7 @@
    "choices": null,
    "default": null,
    "dest": "disable_feature_groups",
-   "help": "Comma-separated feature groups to leave out, every column of each (for example 'strength,own_elo,own_elo_wt,qb_adj,pbp'); the list replaces the default rather than adding to it. A column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt,qb_adj (production's groups), or strength,elo,own_elo_wt,qb_adj for a run without game lines (no market feature, no anchor and no market transform), which keeps the own Elo with no win-total prior; an empty value leaves no group out.",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'strength,own_elo,own_elo_wt,qb_adj,pbp'); the list replaces the default rather than adding to it. A column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt,qb_adj (production's groups), or strength,elo,own_elo_wt,qb_adj for a run without game lines (no market feature and no anchor), which keeps the own Elo with no win-total prior; an empty value leaves no group out.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -1199,7 +1199,7 @@
    "choices": null,
    "default": false,
    "dest": "exclude_market",
-   "help": "Train with no game-line columns (spreads, totals, moneylines). With the market anchor and transform off (their default) the run uses no game lines. A run without game lines leaves out the feature groups strength,elo,own_elo_wt,qb_adj by default, so it trains on no market information and keeps the own Elo with no win-total prior; a list given with --disable-feature-groups (or disable_feature_groups in the weekly config) replaces it (for example strength,elo,own_elo,own_elo_wt,qb_adj for no Elo at all).",
+   "help": "Train with no game-line columns (spreads, totals, moneylines). With the market anchor off (its default) the run uses no game lines. A run without game lines leaves out the feature groups strength,elo,own_elo_wt,qb_adj by default, so it trains on no market information and keeps the own Elo with no win-total prior; a list given with --disable-feature-groups (or disable_feature_groups in the weekly config) replaces it (for example strength,elo,own_elo,own_elo_wt,qb_adj for no Elo at all).",
    "nargs": 0,
    "options": [
     "--exclude-market"
@@ -1356,7 +1356,7 @@
    "choices": null,
    "default": null,
    "dest": "disable_feature_groups",
-   "help": "Comma-separated feature groups to leave out, every column of each (for example 'strength,own_elo,own_elo_wt,qb_adj,pbp'); the list replaces the default rather than adding to it. A column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt,qb_adj (production's groups), or strength,elo,own_elo_wt,qb_adj for a run without game lines (no market feature, no anchor and no market transform), which keeps the own Elo with no win-total prior; an empty value leaves no group out.",
+   "help": "Comma-separated feature groups to leave out, every column of each (for example 'strength,own_elo,own_elo_wt,qb_adj,pbp'); the list replaces the default rather than adding to it. A column belongs to a group when one of the group's markers in constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error. Default: strength,own_elo,own_elo_wt,qb_adj (production's groups), or strength,elo,own_elo_wt,qb_adj for a run without game lines (no market feature and no anchor), which keeps the own Elo with no win-total prior; an empty value leaves no group out.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"
@@ -2329,7 +2329,7 @@
    "choices": null,
    "default": null,
    "dest": "disable_feature_groups",
-   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file). The list replaces the default rather than adding to it. Default: strength,own_elo,own_elo_wt,qb_adj (production's groups), or strength,elo,own_elo_wt,qb_adj for a run without game lines (no market feature, no anchor and no market transform), which keeps the own Elo with no win-total prior; an empty value leaves no group out. An unknown group stops the run before the data refresh.",
+   "help": "Stage 1 and the final fit: feature groups to leave out, every column of each, comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a list in the config file). The list replaces the default rather than adding to it. Default: strength,own_elo,own_elo_wt,qb_adj (production's groups), or strength,elo,own_elo_wt,qb_adj for a run without game lines (no market feature and no anchor), which keeps the own Elo with no win-total prior; an empty value leaves no group out. An unknown group stops the run before the data refresh.",
    "nargs": null,
    "options": [
     "--disable-feature-groups"

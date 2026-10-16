@@ -123,8 +123,8 @@ def _parse_args() -> argparse.Namespace:
         dest="include_market",
         help=(
             "Train with no game-line columns (no spread, total or moneyline, raw or "
-            "transformed). With --no-market-anchor and --no-market-transform the run uses no "
-            "game lines; the market-implied probability is still scored as the yardstick. "
+            "transformed). With --no-market-anchor the run uses no game lines; the "
+            "market-implied probability is still scored as the yardstick. "
             f"{options.NO_GAME_LINES_GROUPS_HELP}"
         ),
     )
@@ -225,7 +225,6 @@ def _resolved_feature_groups(args: argparse.Namespace) -> str:
         without_game_lines=options.is_run_without_game_lines(
             include_market=bool(args.include_market),
             market_anchor=bool(args.market_anchor),
-            market_transform=args.market_transform,
         ),
     )
     return ",".join(groups)

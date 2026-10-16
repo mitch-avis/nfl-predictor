@@ -65,7 +65,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help=(
             "Train with no game-line columns (spreads, totals, moneylines). With the market "
-            "anchor and transform off (their default) the run uses no game lines. "
+            "anchor off (its default) the run uses no game lines. "
             f"{options.NO_GAME_LINES_GROUPS_HELP}"
         ),
     )
@@ -308,11 +308,9 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _without_game_lines(args: argparse.Namespace) -> bool:
-    """Return whether the run uses no game lines: no market feature, anchor or transform."""
+    """Return whether the run uses no game lines: no market feature and no anchor."""
     return options.is_run_without_game_lines(
-        include_market=not args.exclude_market,
-        market_anchor=bool(args.market_anchor),
-        market_transform=bool(args.market_transform),
+        include_market=not args.exclude_market, market_anchor=bool(args.market_anchor)
     )
 
 

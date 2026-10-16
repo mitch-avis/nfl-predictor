@@ -98,8 +98,8 @@ FEATURE_GROUPS_DEFAULT_HELP = (
     "Default: "
     f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)} (production's groups), or "
     f"{','.join(constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS)} for a run without game lines "
-    "(no market feature, no anchor and no market transform), which keeps the own Elo with no "
-    "win-total prior; an empty value leaves no group out."
+    "(no market feature and no anchor), which keeps the own Elo with no win-total prior; an "
+    "empty value leaves no group out."
 )
 # What a run without game lines leaves out, for the options that make one.
 NO_GAME_LINES_GROUPS_HELP = (
@@ -111,14 +111,13 @@ NO_GAME_LINES_GROUPS_HELP = (
 )
 
 
-def is_run_without_game_lines(
-    *, include_market: bool, market_anchor: bool, market_transform: bool | None
-) -> bool:
-    """Return whether a run uses no game lines: no market feature, no anchor and no transform.
+def is_run_without_game_lines(*, include_market: bool, market_anchor: bool) -> bool:
+    """Return whether a run uses no game lines: no market feature and no anchor.
 
-    The transform must be off explicitly; an unset one resolves from the dataset's lines.
+    The market transform only derives market features, so without them it adds no line
+    column whatever its setting.
     """
-    return not include_market and not market_anchor and market_transform is False
+    return not include_market and not market_anchor
 
 
 def default_disabled_feature_groups(*, without_game_lines: bool) -> tuple[str, ...]:

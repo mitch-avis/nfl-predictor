@@ -828,11 +828,7 @@ def resolve_feature_groups(args: argparse.Namespace) -> tuple[str, ...]:
     return options.resolve_disabled_feature_groups(
         args.disable_feature_groups,
         without_game_lines=options.is_run_without_game_lines(
-            include_market=include_market,
-            market_anchor=market_anchor,
-            market_transform=stage1.market_mode_transform(
-                mode, market_transform=args.market_transform
-            ),
+            include_market=include_market, market_anchor=market_anchor
         ),
     )
 

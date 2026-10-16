@@ -842,9 +842,13 @@ def test_the_shipped_config_is_read_by_default_and_matches_the_code_defaults() -
     The only differences from the bare code defaults are the recorded config path,
     ``postseason_weight``, which applies only when postseason games are in training (off), and
     ``data_collection_args``, whose ``--incremental`` refresh writes what a full rebuild writes.
+    The feature group list depends on the market mode, so the shipped file sets none and the bare
+    side takes the same mode-dependent default the run resolves.
     """
     # Arrange
-    bare = vars(run_config._build_parser().parse_args([]))
+    bare_args = run_config._build_parser().parse_args([])
+    bare_args.disable_feature_groups = run_config.resolve_feature_groups(bare_args)
+    bare = vars(bare_args)
 
     # Act
     loaded = vars(run_config._parse_args([]))

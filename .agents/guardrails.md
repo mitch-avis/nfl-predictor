@@ -125,7 +125,11 @@ so these rules are not advisory.
       (`strength,own_elo,own_elo_wt,qb_adj`), so a command recorded before it reproduces with
       `--disable-feature-groups qb_adj` added, and a group list recorded before 0.60.0 (for
       example the step-6 arms' `strength,elo,own_elo_wt`, or `''`) reproduces with `qb_adj`
-      added to it.
+      added to it. A run without game lines (all three market settings off) with no group option
+      leaves out `strength,elo,own_elo_wt,qb_adj` instead, from 0.61.0; such a command recorded
+      before 0.61.0 with no group option reproduces with the list it then defaulted to given
+      explicitly (`--disable-feature-groups strength,own_elo,own_elo_wt,qb_adj` from the
+      adoption on, `--disable-feature-groups qb_adj` before it).
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
     applied as written. If the result falls between its branches, or its first condition fails
     and a fallback branch rescues the preferred outcome, the result goes to the user as a

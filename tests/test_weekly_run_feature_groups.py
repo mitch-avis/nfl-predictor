@@ -1,12 +1,13 @@
 """The weekly run's ``disable_feature_groups`` setting and its ``--disable-feature-groups`` option.
 
-``config/weekly_run.yaml`` lists the feature groups (``constants.FEATURE_GROUP_COLUMN_MARKERS``)
-that stage 1's walk-forward and the final fit both leave out: by default the strength snapshot
-(``strength``), both presets of this repository's own Elo (``own_elo``, ``own_elo_wt``) and the
-``qb_elos.csv`` quarterback adjustment (``qb_adj``), so production trains on the ported team ratings
-and the ``qb_elos.csv`` Elo. An explicit empty list leaves no group out, a config without the key
-leaves out production's groups, and the key with no value is refused, so commenting out every item
-cannot bring the groups back. The command line takes the comma-separated form
+The setting lists the feature groups (``constants.FEATURE_GROUP_COLUMN_MARKERS``) that stage 1's
+walk-forward and the final fit both leave out. In the market modes with game lines the default is
+production's: the strength snapshot (``strength``), both presets of this repository's own Elo
+(``own_elo``, ``own_elo_wt``) and the ``qb_elos.csv`` quarterback adjustment (``qb_adj``), so
+production trains on the ported team ratings and the ``qb_elos.csv`` Elo. An explicit empty list
+leaves no group out, a config without the key takes the market mode's default, and the key with
+no value is refused, so commenting out every item cannot bring the groups back. The command line
+takes the comma-separated form
 ``nfl-predictor backtest`` takes and overrides the file. An unknown group stops the run when its
 options are parsed, before the data refresh.
 """
@@ -62,12 +63,16 @@ def test_the_shipped_config_leaves_out_productions_groups() -> None:
     assert args.disable_feature_groups == PRODUCTION_GROUPS
 
 
-def test_the_code_default_leaves_out_the_same_groups_as_the_shipped_config() -> None:
+def test_the_code_default_leaves_the_list_to_the_market_mode() -> None:
+    # Arrange
+    bare = config._build_parser().parse_args([])
+
     # Act
-    args = config._build_parser().parse_args([])
+    groups = config.resolve_feature_groups(bare)
 
     # Assert
-    assert args.disable_feature_groups == PRODUCTION_GROUPS
+    assert bare.disable_feature_groups is None
+    assert groups == PRODUCTION_GROUPS
 
 
 def test_an_explicit_empty_config_list_leaves_no_group_out(tmp_path: Path) -> None:

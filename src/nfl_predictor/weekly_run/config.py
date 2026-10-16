@@ -219,7 +219,7 @@ def _normalize_feature_groups(normalized: dict[str, Any], source: str) -> None:
         if groups is None or not isinstance(groups, list):
             msg = (
                 f"Config key {key} has no value: write [] to leave no group out, or remove the "
-                "key for production's default."
+                "key for the market mode's default."
                 if groups is None
                 else f"Config key {key} must be a list of feature group names."
             )
@@ -421,25 +421,22 @@ def _add_stage1_arguments(parser: WeeklyParser, defaults: dict[str, Any]) -> Non
         help=(
             "Market mode of the walk-forward and the final fit: market lines as features, "
             "the model anchored to them, both (hybrid, the default), or none (no game lines: no "
-            "game-line columns, no anchor and no market transform). The default groups keep the "
-            "elo group's preseason win-total prior; for no market information pass "
-            "--disable-feature-groups strength,elo,own_elo_wt,qb_adj (keeps the market-free own "
-            "Elo) or strength,elo,own_elo,own_elo_wt,qb_adj (no Elo at all)."
+            "game-line columns, no anchor and no market transform). "
+            f"{options.NO_GAME_LINES_GROUPS_HELP}"
         ),
     )
     parser.add_argument(
         "--disable-feature-groups",
         type=options.parse_feature_groups,
-        default=defaults.get(
-            "disable_feature_groups", constants.PRODUCTION_DISABLED_FEATURE_GROUPS
-        ),
+        # None when neither the command line nor the config file gives a list: the default then
+        # depends on the market mode (resolve_feature_groups).
+        default=defaults.get("disable_feature_groups"),
         help=(
             "Stage 1 and the final fit: feature groups to leave out, every column of each, "
             "comma-separated as nfl-predictor backtest --disable-feature-groups takes them (a "
-            "list in the config file; default: "
-            f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)}; an empty value leaves "
-            "no group out). The list replaces the default rather than adding to it. An unknown "
-            "group stops the run before the data refresh."
+            "list in the config file). The list replaces the default rather than adding to it. "
+            f"{options.FEATURE_GROUPS_DEFAULT_HELP} An unknown group stops the run before the "
+            "data refresh."
         ),
     )
     parser.add_argument(
@@ -807,6 +804,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         # Recording the path as the default keeps it in args.config when it was not passed.
         parser = _build_parser(_normalize_config_defaults({**config, "config": config_path}))
         args = parser.parse_args(argv)
+    args.disable_feature_groups = resolve_feature_groups(args)
     try:
         # The run directory may not exist yet; only the settings are checked here.
         power_ranking_options(args, run_dir=args.run_dir or Path(constants.MODELS_PATH))
@@ -816,6 +814,23 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error(str(error))
     _warn_on_an_overridden_transform(args)
     return args
+
+
+def resolve_feature_groups(args: argparse.Namespace) -> tuple[str, ...]:
+    """Return the groups stage 1 and the final fit leave out.
+
+    A list from the command line or the config file wins, an empty one included; without one,
+    the market mode with no game lines leaves out its own default and every other mode
+    production's.
+    """
+    mode = str(args.wf_market_mode)
+    include_market, market_anchor = stage1.market_mode_flags(mode)
+    return options.resolve_disabled_feature_groups(
+        args.disable_feature_groups,
+        without_game_lines=options.is_run_without_game_lines(
+            include_market=include_market, market_anchor=market_anchor
+        ),
+    )
 
 
 def _warn_on_an_overridden_transform(args: argparse.Namespace) -> None:

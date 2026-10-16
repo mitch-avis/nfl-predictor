@@ -64,10 +64,9 @@ def _parse_args() -> argparse.Namespace:
         "--exclude-market",
         action="store_true",
         help=(
-            "Train with no game-line columns (spreads, totals, moneylines). The default groups "
-            "keep the elo group's preseason win-total prior; for no market information pass "
-            "--disable-feature-groups strength,elo,own_elo_wt,qb_adj (keeps the market-free own "
-            "Elo) or strength,elo,own_elo,own_elo_wt,qb_adj (no Elo at all)."
+            "Train with no game-line columns (spreads, totals, moneylines). With the market "
+            "anchor off (its default) the run uses no game lines. "
+            f"{options.NO_GAME_LINES_GROUPS_HELP}"
         ),
     )
     parser.add_argument(
@@ -96,14 +95,20 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--market-transform",
-        action="store_true",
-        help=("Use transformed market features (implied probs, home margin) instead of raw lines."),
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Use transformed market features (implied probs, home margin) instead of raw lines "
+            "(default: off)."
+        ),
     )
     parser.add_argument(
         "--market-anchor",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help=(
-            "Train on residuals vs market spread/total and add market baseline at prediction time."
+            "Train on residuals vs market spread/total and add market baseline at prediction "
+            "time (default: off)."
         ),
     )
     parser.add_argument(
@@ -136,7 +141,7 @@ def _parse_args() -> argparse.Namespace:
         default=0.5,
         help="Drop categorical columns with unique ratio above this threshold.",
     )
-    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
+    options.add_feature_group_option(parser)
     parser.add_argument(
         "--win-prob-calibration",
         choices=["auto", "none"],
@@ -298,13 +303,30 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     args = parser.parse_args()
-    args.disable_feature_groups = _disabled_feature_groups(parser, args.disable_feature_groups)
+    args.disable_feature_groups = _disabled_feature_groups(parser, args)
     return args
 
 
-def _disabled_feature_groups(parser: argparse.ArgumentParser, raw: str | None) -> tuple[str, ...]:
-    """Return the groups ``--disable-feature-groups`` names; an unknown one is a usage error."""
-    groups = options.parse_feature_groups(raw)
+def _without_game_lines(args: argparse.Namespace) -> bool:
+    """Return whether the run uses no game lines: no market feature and no anchor."""
+    return options.is_run_without_game_lines(
+        include_market=not args.exclude_market, market_anchor=bool(args.market_anchor)
+    )
+
+
+def _disabled_feature_groups(
+    parser: argparse.ArgumentParser, args: argparse.Namespace
+) -> tuple[str, ...]:
+    """Return the groups the run leaves out; an unknown one is a usage error.
+
+    A ``--disable-feature-groups`` list wins, an empty one included; without one a run without
+    game lines leaves out its own default and every other run production's.
+    """
+    raw = args.disable_feature_groups
+    groups = options.resolve_disabled_feature_groups(
+        None if raw is None else options.parse_feature_groups(raw),
+        without_game_lines=_without_game_lines(args),
+    )
     try:
         feature_spec.validate_feature_groups(groups)
     except ValueError as error:
@@ -358,7 +380,10 @@ def _predict_from_checkpoint(args: argparse.Namespace, output_path: Path | None)
     """Load ``--model-in`` and predict ``--predict-path`` with it, training nothing."""
     if args.tune:
         log.info("Model checkpoint provided; ignoring training and Optuna tuning.")
-    if args.disable_feature_groups != constants.PRODUCTION_DISABLED_FEATURE_GROUPS:
+    run_default = options.default_disabled_feature_groups(
+        without_game_lines=_without_game_lines(args)
+    )
+    if args.disable_feature_groups != run_default:
         log.info(
             "Model checkpoint provided; ignoring --disable-feature-groups: a saved model "
             "predicts with the columns it was trained on."

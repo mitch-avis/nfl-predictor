@@ -74,21 +74,26 @@ When market lines exist, the system produces market-derived features and support
   deterministic-minus-market intervals, and it never enters the submitted probability. There is no
   market probability blend or clamp.
 - The stats-only mode means "no game lines", not "no market information". Such a run
-  (`nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`, the weekly
-  run's `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
+  (`nfl-predictor backtest --exclude-market --no-market-anchor`, the weekly run's
+  `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
   by the generated inventory in `.agents/market_free/`. It still scores the market yardstick, and
-  with no group option it leaves out production's groups (`strength,own_elo,own_elo_wt,qb_adj`) and
-  keeps the ported ratings and the `elo` group with its preseason win-total prior: the Elo
-  columns from `data/qb_elos.csv` are not line columns, but `../nfeloqb` pulls each preseason Elo
+  with no group list it leaves out `strength,elo,own_elo_wt,qb_adj`
+  (`constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`: the reviewed list of the step-6 runs
+  `models/step6/elo_marketfree_seed{42,7}`, plus `qb_adj` until it is measured), so it trains on
+  no market information: on the ported ratings and the market-free own Elo (`own_elo`). The two
+  groups it leaves out beyond production's carry a preseason win-total prior: the Elo columns from
+  `data/qb_elos.csv` (`elo`) are not line columns, but `../nfeloqb` pulls each preseason Elo
   toward a rating built from betting win totals (2003-2023), and the repository's own Elo
   (`utils/polars/own_elo_build.py`) publishes its win-total preset as the `own_elo_wt` group. A
-  group list replaces the default, so the two stricter variants name the whole list: no market
-  information with the market-free own Elo is
-  `--disable-feature-groups strength,elo,own_elo_wt,qb_adj` (`[strength, elo, own_elo_wt, qb_adj]`
-  in the weekly config; reference runs `models/step6/elo_marketfree_seed{42,7}`), and no market
-  information and no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj` (reference runs
-  `models/step6/ratings_marketfree_seed{42,7}`).
-  Leaving the market columns out does not leave these groups out
+  run counts as one without game lines whenever its market features and its anchor are off,
+  whatever the transform setting, since the transform only derives market features
+  (`ml/feature_spec._resolve_market_columns`). `nfl-predictor train` has the anchor off by
+  default, so `--exclude-market` alone makes such a run. A group list given
+  (`--disable-feature-groups`, or `disable_feature_groups` in the weekly config) replaces the
+  default: no market information and no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj`
+  (reference runs
+  `models/step6/ratings_marketfree_seed{42,7}`), and production's list keeps the `elo` group.
+  Leaving the market columns out does not by itself leave these groups out
   (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps either of them logs a "No game
   lines" info message naming it (`ml/feature_spec.build_feature_spec`).
 
@@ -295,10 +300,14 @@ Rules for stat-style features:
 - Production leaves out the strength snapshot (`strength`), both presets of the repository's own Elo
   (`own_elo`, `own_elo_wt`) and the `qb_elos.csv` quarterback adjustment (`qb_adj`), so it trains on
   the ported team ratings (`ratings`) and the `qb_elos.csv` Elo (`elo`). That list
-  (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`) is the default of the weekly config,
-  `nfl-predictor train` and `nfl-predictor backtest`, so a backtest without the option leaves out
-  what production leaves out; a list given replaces it, and an empty one
-  (`disable_feature_groups: []`, `--disable-feature-groups ''`) leaves no group out. Leaving out
+  (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`) is the default of the weekly run,
+  `nfl-predictor train` and `nfl-predictor backtest` for every run that uses game lines, so a
+  backtest without the option leaves out what production leaves out; a run without game lines
+  defaults to `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` instead (the stats-only bullet
+  under "Market integration" above). `config/weekly_run.yaml` leaves the key out so the default
+  follows `wf_market_mode`. One resolution serves all three commands
+  (`cli/options.resolve_disabled_feature_groups`): a list given replaces the default, and an empty
+  one (`disable_feature_groups: []`, `--disable-feature-groups ''`) leaves no group out. Leaving out
   `strength` on a build with the strength snapshot but no ported ratings (a ratings
   column null in every row counts as missing) stops `train` and the weekly run, the latter
   before any work, and warns in the backtest (`feature_spec.check_ratings_replace_strength`).

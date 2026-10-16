@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 import argparse
+from typing import TYPE_CHECKING
+
+from nfl_predictor import constants
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # The model kinds a run records in its metadata.
 MODEL_KINDS = ("margin_total",)
@@ -86,19 +92,64 @@ FEATURE_GROUPS_HELP = (
 )
 
 
-def add_feature_group_option(parser: argparse.ArgumentParser, groups: tuple[str, ...] = ()) -> None:
+# The default list of ``--disable-feature-groups``, which depends on whether the run uses game
+# lines; every command that takes the option or its config key says so with this text.
+FEATURE_GROUPS_DEFAULT_HELP = (
+    "Default: "
+    f"{','.join(constants.PRODUCTION_DISABLED_FEATURE_GROUPS)} (production's groups), or "
+    f"{','.join(constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS)} for a run without game lines "
+    "(no market feature and no anchor), which keeps the own Elo with no win-total prior; an "
+    "empty value leaves no group out."
+)
+# What a run without game lines leaves out, for the options that make one.
+NO_GAME_LINES_GROUPS_HELP = (
+    "A run without game lines leaves out the feature groups "
+    f"{','.join(constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS)} by default, so it trains on "
+    "no market information and keeps the own Elo with no win-total prior; a list given with "
+    "--disable-feature-groups (or disable_feature_groups in the weekly config) replaces it (for "
+    "example strength,elo,own_elo,own_elo_wt,qb_adj for no Elo at all)."
+)
+
+
+def is_run_without_game_lines(*, include_market: bool, market_anchor: bool) -> bool:
+    """Return whether a run uses no game lines: no market feature and no anchor.
+
+    The market transform only derives market features, so without them it adds no line
+    column whatever its setting.
+    """
+    return not include_market and not market_anchor
+
+
+def default_disabled_feature_groups(*, without_game_lines: bool) -> tuple[str, ...]:
+    """Return the groups a run leaves out when no list is given, by whether it uses game lines."""
+    if without_game_lines:
+        return constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS
+    return constants.PRODUCTION_DISABLED_FEATURE_GROUPS
+
+
+def resolve_disabled_feature_groups(
+    explicit: Sequence[str] | None, *, without_game_lines: bool
+) -> tuple[str, ...]:
+    """Return the groups a run leaves out: ``explicit`` when given (even empty), else the default.
+
+    ``explicit`` is the list from the command line or a config file, ``None`` when neither gives
+    one; the default is ``default_disabled_feature_groups``.
+    """
+    if explicit is not None:
+        return tuple(explicit)
+    return default_disabled_feature_groups(without_game_lines=without_game_lines)
+
+
+def add_feature_group_option(parser: argparse.ArgumentParser) -> None:
     """Add ``--disable-feature-groups``, which ``backtest`` and ``train`` share.
 
-    The value is the raw comma-separated string; ``parse_feature_groups`` splits it. ``groups``
-    is the default; an empty value on the command line leaves no group out.
+    The value is the raw comma-separated string, ``None`` when the option is not given;
+    ``parse_feature_groups`` splits it and ``resolve_disabled_feature_groups`` applies the
+    default. An empty value on the command line leaves no group out.
     """
-    default = ",".join(groups)
-    help_text = FEATURE_GROUPS_HELP
-    if default:
-        help_text += f" Default: {default}; an empty value leaves no group out."
     parser.add_argument(
         "--disable-feature-groups",
         type=str,
-        default=default or None,
-        help=help_text,
+        default=None,
+        help=f"{FEATURE_GROUPS_HELP} {FEATURE_GROUPS_DEFAULT_HELP}",
     )

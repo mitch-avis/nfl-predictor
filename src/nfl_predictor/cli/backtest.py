@@ -123,11 +123,9 @@ def _parse_args() -> argparse.Namespace:
         dest="include_market",
         help=(
             "Train with no game-line columns (no spread, total or moneyline, raw or "
-            "transformed). With --no-market-anchor and --no-market-transform the run uses no "
-            "game lines; the market-implied probability is still scored as the yardstick. The "
-            "default groups keep the elo group's preseason win-total prior; for no market "
-            "information pass --disable-feature-groups strength,elo,own_elo_wt,qb_adj (keeps the "
-            "market-free own Elo) or strength,elo,own_elo,own_elo_wt,qb_adj (no Elo at all)."
+            "transformed). With --no-market-anchor the run uses no game lines; the "
+            "market-implied probability is still scored as the yardstick. "
+            f"{options.NO_GAME_LINES_GROUPS_HELP}"
         ),
     )
     parser.add_argument(
@@ -143,7 +141,7 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Drop trend + season-phase features for ablation comparisons.",
     )
-    options.add_feature_group_option(parser, constants.PRODUCTION_DISABLED_FEATURE_GROUPS)
+    options.add_feature_group_option(parser)
     parser.add_argument(
         "--xgb-tree-method",
         type=str,
@@ -210,7 +208,26 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Path to metrics_report.json (default: models/<run_id>/metrics_report.json).",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    args.disable_feature_groups = _resolved_feature_groups(args)
+    return args
+
+
+def _resolved_feature_groups(args: argparse.Namespace) -> str:
+    """Return the groups the run leaves out, comma-separated as the option takes them.
+
+    A list on the command line wins, an empty one included; without one a run without game
+    lines leaves out its own default and every other run production's.
+    """
+    raw = args.disable_feature_groups
+    groups = options.resolve_disabled_feature_groups(
+        None if raw is None else options.parse_feature_groups(raw),
+        without_game_lines=options.is_run_without_game_lines(
+            include_market=bool(args.include_market),
+            market_anchor=bool(args.market_anchor),
+        ),
+    )
+    return ",".join(groups)
 
 
 @dataclass(frozen=True)

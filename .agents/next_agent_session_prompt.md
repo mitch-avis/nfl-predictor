@@ -6,11 +6,24 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6_plan.md` and
 `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 19:45 MDT)
+## State (written 2026-10-15, 19:50 MDT)
 
-- **`main` is at `0.62.0`** (`f8d6a4e`, not pushed, no tags). Five branches were merged `--no-ff`
-  on 2026-10-15 evening with the user's approval (the user's Week 6 picks were already in, which
-  waived the wait for the Monday game):
+- **A walk-forward measurement is running**: `qb_adj` in the run without game lines,
+  `models/qb_adj_no_lines/HYPOTHESIS.md` (approved by the user 2026-10-15; sha256 `8c102843...`,
+  committed in `TODO.md` step 7 by `7b1560b` before the launch). Four runs (`no_lines_seed{42,7}`,
+  the reference; `no_lines_qb_adj_seed{42,7}`), driver PID `1382271`, launched 19:39 MDT
+  through `launch.sh` from `~/scratch/qb_adj_nolines` (detached at `d791846`, its own venv), on
+  the grouped measurement's new-file cut; about 31 minutes a run. Check `driver.log` there.
+- **`build/coverage-src-only`** (`0.62.1`, two commits on `main`, not merged; gate exit `0`,
+  4,392 tests, `src/` coverage 96.32%): coverage measures `src/` alone (`[tool.coverage.run]`
+  `source = ["src"]`), the user's edit minus its `omit` line (`tests/*` was redundant;
+  `src/*/__init__.py` matched only the one-line `src/nfl_predictor/__init__.py`). Awaits the
+  user's merge approval; after it, sync with the CUDA args.
+- **`main` is at `0.62.0`** (`6d5f2bf`, not pushed, no tags; four docs commits after the
+  merges: step 7's finished items closed, the cross-module imports follow-up archived, and
+  AGENTS.md rule 6 plus `.agents/guardrails.md` letting reviewed, finished items close
+  unasked). Five branches were merged `--no-ff` on 2026-10-15 evening with the user's approval
+  (the user's Week 6 picks were already in, which waived the wait for the Monday game):
   - `fix/round-count-narrowing` (`0.59.7`): `_boosted_rounds` (`ml/ml_model_core.py`) and
     `_estimator_best_iteration` (`ml/walk_forward.py`) read a round count only from a Python or
     numpy integer again (the pyright review's finding);
@@ -72,9 +85,11 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
    no win-total pull since 2024 (`elo.py` line ~136). Hypothesis and rule first, a fork change, a
    third build against the grouped measurement's new-file build. If it changes production's
    input, the floor-sigma reference moves with it.
-3. **`qb_adj` in the run without game lines** (proposed by the user 2026-10-15, `TODO.md` step 7):
-   a written hypothesis and decision rule, then the user's go-ahead before any run. The user is
-   still weighing the no-lines model against the regular one (a separate conversation).
+3. **`qb_adj` in the run without game lines** (running, see State): when the driver ends, the
+   producer writes the `nfl-predictor compare` check-ins (as in `models/qb_elos_measure/checkins/`)
+   and checks in with the user; then a `reviewer` in a fresh context rescores from the fold
+   checkpoints and writes `REVIEW.md`; then an agent that did not produce the runs records it
+   in `.agents/benchmarks.md` and closes the `TODO.md` item.
 4. **The step-6 docs close-out and the roadmap tidy** (approved 2026-10-15):
    - regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/` write: ask);
    - rename "market-free" to "no game lines" where it means the configuration with Elo,
@@ -104,6 +119,12 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 - The `_fill_side_qb` fix: investigate first, then fix (done, `0.60.1`).
 - `.agents/m60/INVENTORY.md` and `PROPOSAL.md` stay frozen with their old helper names.
 - Merges no longer wait for the Monday game this week (the picks are in).
+- Finished, independently reviewed roadmap items close without asking (AGENTS.md rule 6);
+  reopening, reordering or retiring undone items still asks.
+- Merged scratch worktrees removed 2026-10-15; the reviewers' adversarial tests are in
+  `~/scratch/review_archive/`. Kept: `~/scratch/qb_measure` (the new-file build, for the
+  win-total measurement), `~/scratch/qb_adj_nolines` (the running measurement's code) and
+  `~/scratch/step6/data` (step 6's candidate build, cited by `.agents/sos_port/*.md`).
 - Earlier the same day: the Las Vegas fork fix (done); `qb_adj` as features, off until measured;
   the grouped measurement and its ladder; the backup first-start fork fix; the stale win-total
   file as its own measurement; steps 7 and 8 before the re-tune (step 9); the Week 6 top-decile
@@ -111,14 +132,13 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 
 ## Open for the user
 
-- Closing step 7's finished items in `TODO.md` (the `qb_adj` group, the grouped measurement, the
-  no-game-lines list) and the ticked "Cross-module private imports" item: rule 5, the user's call.
-- Cleanup of merged branches and their worktrees (`~/scratch/round_fix`, `qb_adj_docs`, `step3`,
-  `step3_review`, `qb_adj_review`, `qb_measure`, `review_stack`, `pyright_review`, `step6`,
-  `step6_runs`, and the harness's `.claude/worktrees/agent-*`, including the ones on
-  `feat/qb-adj-features` and `docs/qb-elos-measurement-record`). Recommended: remove the scratch
-  worktrees whose branches are merged once the user no longer wants their adversarial files;
-  `qb_measure` holds the measurement's `data/`, keep it until the win-total build is done.
+- Merging `build/coverage-src-only` (`0.62.1`) into `main`, and whether the python-template
+  (`template/pyproject.toml.jinja:124`, `source = ["src", "tests"]`) takes the same change for
+  every project (its `scripts/gate.sh:138` "src coverage" step would then be redundant).
+- The test suite: the user asked about pruning; recommended no blanket review (4,392 tests run
+  in about 57 seconds on 8 workers, and coverage of `tests/` never drove their number).
+- The harness worktrees `.claude/worktrees/agent-*` (including `feat/qb-adj-features` and
+  `docs/qb-elos-measurement-record`, both merged) are left alone.
 - The stats-only model: proposed 2026-10-15, not decided. A named track in three parts: in step 8
   measure each feature idea without game lines as well as with them; in step 9 tune it as its own
   study; a weekly shadow prediction, logged and never submitted, scored against the closing line.

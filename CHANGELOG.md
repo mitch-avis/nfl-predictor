@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.62.0] - 2026-10-15
+
+### Changed
+
+- The production floor-sigma pool (the weekly run and `nfl-predictor train`) reads
+  `models/qb_elos_measure/new_file_seed42` and `new_file_seed7` by default
+  (`constants.FLOOR_SIGMA_REFERENCE_RUNS`, `config/weekly_run.yaml`): both seeds of the reviewed
+  walk-forward of production's settings on the current `qb_elos.csv`, market anchored with
+  production's feature groups left out (`models/qb_elos_measure/REVIEW.md`). The step-6 runs they
+  replace trained on the `qb_elos.csv` before its refresh. The constant moves every walk-forward
+  checkpoint fingerprint.
+
 ## [0.61.0] - 2026-10-15
 
 ### Changed

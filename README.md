@@ -158,7 +158,7 @@ that touch them pass their own paths:
   from `constants.ROOT_DIR` (the checkout's `data/web/app.db`, the running web app's database); its
   models directory follows `constants.MODELS_PATH`;
 - the floor-sigma reference runs (`constants.FLOOR_SIGMA_REFERENCE_RUNS`, by default
-  `models/step6/ratings_anchored_seed*`), which `ml/floor_sigma.py` resolves against
+  `models/qb_elos_measure/new_file_seed*`), which `ml/floor_sigma.py` resolves against
   `constants.ROOT_DIR`: the default of `nfl-predictor train --floor-sigma-reference-runs` and the
   weekly run's `floor_sigma_reference_runs`, read when a model is trained;
 - the relative `data/...` defaults of `nfl-predictor rankings` (`--data-ml`, `--data-schedule`,
@@ -591,9 +591,9 @@ Where the pool comes from:
 - The production final fit (the weekly run, `nfl-predictor train`) pools the out-of-fold errors
   of the reference runs, `floor_sigma_reference_runs` in `config/weekly_run.yaml` and
   `--floor-sigma-reference-runs` for `train` (default: the two seeds of the reviewed reference
-  walk-forward of production's settings, market anchored with the strength snapshot and both
-  own-Elo presets left out, `models/step6/ratings_anchored_seed42` and
-  `ratings_anchored_seed7`, whose fold checkpoints are only read), with, in the weekly run,
+  walk-forward of production's settings on the current `qb_elos.csv`, market anchored with
+  production's feature groups left out, `models/qb_elos_measure/new_file_seed42` and
+  `new_file_seed7`, whose fold checkpoints are only read), with, in the weekly run,
   stage 1's errors before the predicted week at every `(season, week)` the reference runs have
   no rows for: the seasons after the reference and the predicted season's earlier weeks (where
   both have a week, the reference's errors are used).

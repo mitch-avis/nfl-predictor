@@ -42,11 +42,11 @@ wf_checkpoint_per_fold: false
 # are only read, and several runs are averaged per game. A listed run that is missing stops the
 # run. An empty list ([]) uses only stage 1's folds, which fall back to the constant 14.21 until
 # they span three earlier seasons, any weeks of them (default: both seeds of the reviewed
-# reference walk-forward of production's settings, market anchored with the strength snapshot and
-# both own-Elo presets left out; constants.FLOOR_SIGMA_REFERENCE_RUNS)
+# reference walk-forward of production's settings on the current qb_elos.csv, market anchored
+# with production's feature groups left out; constants.FLOOR_SIGMA_REFERENCE_RUNS)
 floor_sigma_reference_runs:
-  - models/step6/ratings_anchored_seed42
-  - models/step6/ratings_anchored_seed7
+  - models/qb_elos_measure/new_file_seed42
+  - models/qb_elos_measure/new_file_seed7
 # number of most recent seasons to include; the current season counts even before it has a
 # completed week, so 3 scores two seasons (default: 3)
 wf_eval_last_n_seasons: 3

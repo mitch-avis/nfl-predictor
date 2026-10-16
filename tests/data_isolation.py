@@ -27,7 +27,7 @@ change; tests that touch them pass their own paths:
   paths from ``constants.ROOT_DIR`` in ``model_post_init`` (the checkout's ``data/web/app.db``,
   the database the running web app uses); its models directory follows ``MODELS_PATH``;
 - the floor-sigma reference runs (``constants.FLOOR_SIGMA_REFERENCE_RUNS``, by default
-  ``models/step6/ratings_anchored_seed*``), which ``ml/floor_sigma.py`` resolves against
+  ``models/qb_elos_measure/new_file_seed*``), which ``ml/floor_sigma.py`` resolves against
   ``constants.ROOT_DIR``: the default of ``nfl-predictor train``'s
   ``--floor-sigma-reference-runs`` and the weekly run's ``floor_sigma_reference_runs``, read when
   a model is trained;

@@ -56,11 +56,11 @@ SCORE_DIFF_STD_DEV = 14.21377923  # Standard deviation of score differences for 
 FLOOR_SIGMA_MIN_POOL_SEASONS = 3
 # The walk-forward runs whose out-of-fold errors form the production pool (the weekly run and
 # `nfl-predictor train`), relative to the repository root; their fold checkpoints are only read.
-# Both seeds of the reviewed walk-forward of production's settings: market anchored, with
-# PRODUCTION_DISABLED_FEATURE_GROUPS left out.
+# Both seeds of the reviewed walk-forward of production's settings on the current
+# qb_elos.csv: market anchored, with PRODUCTION_DISABLED_FEATURE_GROUPS left out.
 FLOOR_SIGMA_REFERENCE_RUNS = (
-    "models/step6/ratings_anchored_seed42",
-    "models/step6/ratings_anchored_seed7",
+    "models/qb_elos_measure/new_file_seed42",
+    "models/qb_elos_measure/new_file_seed7",
 )
 
 # The feature groups (FEATURE_GROUP_COLUMN_MARKERS) production leaves out: the strength snapshot,

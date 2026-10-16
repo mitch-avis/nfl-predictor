@@ -35,8 +35,9 @@ Direct home/away score regressors are allowed only as secondary ensemble members
   the weekly run's stage 1), a week the run predicts replacing the history's. The production
   final fit pools the reference runs' fold checkpoints (`floor_sigma_reference_runs`, default
   `constants.FLOOR_SIGMA_REFERENCE_RUNS`: both seeds of the reviewed reference walk-forward of
-  production's settings, market anchored with production's feature groups left out,
-  `models/step6/ratings_anchored_seed42` and `ratings_anchored_seed7`, averaged per game) with
+  production's settings on the current `qb_elos.csv`, market anchored with production's
+  feature groups left out, `models/qb_elos_measure/new_file_seed42` and `new_file_seed7`,
+  averaged per game) with
   the weekly run's stage-1 errors before the predicted week at every `(season, week)` the
   reference has no rows for (the seasons after it and the predicted season's earlier weeks; the
   reference keeps its own weeks), estimates sigma for the predicted week, and records it in the

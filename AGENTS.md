@@ -46,7 +46,9 @@ score outputs are secondary and display-only.
 - `.agents/guardrails.md` is the long form of the delegation guardrails below, and
   `.agents/guardrail_history.md` the incidents behind them. `.agents/walk_forward_runbook.md`
   has run timings, machine load and how to launch a run. `.agents/feature_crosswalk.md` is the
-  cross-repo feature review. `CHANGELOG.md` is the release history.
+  cross-repo feature review. `.agents/frontend_audit_notes.md` collects web-app problems noticed
+  in passing (wrong data on a page, component and accessibility defects): add one when you see
+  one. `CHANGELOG.md` is the release history.
 - Nested instructions load on demand: `src/nfl_predictor/ml/AGENTS.md`,
   `src/nfl_predictor/api/AGENTS.md`, `web/AGENTS.md`, and the path-scoped rules under
   `.claude/rules/` for `constants.py`, the ETL helpers and the model code.

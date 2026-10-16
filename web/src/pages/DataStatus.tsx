@@ -48,6 +48,17 @@ function sourceLabel(source: string): { label: string; hint?: string } {
   return { label: words.charAt(0).toUpperCase() + words.slice(1) }
 }
 
+/** Seasons in ascending order as text, each consecutive run collapsed: "2003, 2005–2007, 2010". */
+function seasonRanges(seasons: number[]): string {
+  const runs: [number, number][] = []
+  for (const season of seasons) {
+    const last = runs.at(-1)
+    if (last && season === last[1] + 1) last[1] = season
+    else runs.push([season, season])
+  }
+  return runs.map(([start, end]) => (start === end ? String(start) : `${start}–${end}`)).join(', ')
+}
+
 function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[]; hint?: string }) {
   if (seasons.length === 0) return <div className="text-sm text-muted-foreground">{label}: none cached</div>
   const min = Math.min(...seasons)
@@ -67,7 +78,7 @@ function SeasonStrip({ label, seasons, hint }: { label: string; seasons: number[
         ))}
       </div>
       {missing.length > 0 ? (
-        <div className="mt-1 text-xs text-muted-foreground">Missing: {missing.join(', ')}</div>
+        <div className="mt-1 text-xs text-muted-foreground">Missing: {seasonRanges(missing)}</div>
       ) : null}
     </div>
   )

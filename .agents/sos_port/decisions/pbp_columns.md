@@ -81,7 +81,9 @@ Scripts and their captured output sit beside this file:
   the team-game pin failed when the snap definition was made to read `qb_scramble`.
 - **How to reverse it**: remove entries from `constants.PBP_COLUMNS`. Cache files written with
   the longer list stay valid (a cache read keeps only the requested columns).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 2. Columns that `nfl-sos-ratings` reads only to normalize or repair
 
@@ -107,7 +109,9 @@ Scripts and their captured output sit beside this file:
 - **Feature-value impact**: none (entry 1).
 - **How to reverse it**: remove them from `constants.PBP_COLUMNS` (and, for team-code columns,
   from `constants.PBP_TEAM_COLUMNS`).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 3. The play text (`desc`)
 
@@ -123,7 +127,9 @@ Scripts and their captured output sit beside this file:
   column (table in "Cache size").
 - **Feature-value impact**: none.
 - **How to reverse it**: remove `desc` from `constants.PBP_COLUMNS` and `_PBP_STRING_COLUMNS`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 4. Every team-code column is normalized when the cache is written
 
@@ -149,7 +155,9 @@ Scripts and their captured output sit beside this file:
 - **Feature-value impact**: none; the six earlier columns are normalized exactly as before.
 - **How to reverse it**: shorten `constants.PBP_TEAM_COLUMNS`, then refresh the cache
   (`--refresh-nflreadpy`), since cached values stay normalized until rewritten.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 5. Yard-line text is cached as nflverse writes it
 
@@ -172,7 +180,9 @@ Scripts and their captured output sit beside this file:
   skips the normalization misreads the Rams' and Washington's drive starts.
 - **How to reverse it**: add the yard-line normalization to `loaders._prepare_pbp` (a change to
   cached values of `drive_start_yard_line`, so a cache refresh).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 6. One dtype per column across seasons
 
@@ -197,7 +207,9 @@ Scripts and their captured output sit beside this file:
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the cast call in `loaders._prepare_pbp` (and drop `goal_to_go`, or
   multi-season loads fail again).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 7. Where the added columns sit in the list
 
@@ -211,7 +223,9 @@ Scripts and their captured output sit beside this file:
 - **Data**: none needed beyond the test.
 - **Feature-value impact**: none.
 - **How to reverse it**: reorder the list; nothing depends on the order.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 8. A fresh download equals the cache, so the candidate build may refresh it
 
@@ -253,7 +267,9 @@ Scripts and their captured output sit beside this file:
 - **Feature-value impact**: none from republication as of 2026-10-10.
 - **How to reverse it**: not applicable; if the recheck finds a difference, list the affected
   seasons and columns and decide then whether to pin the old values.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### Cache size
 
@@ -331,7 +347,9 @@ grows from about 437 MB to about 962 MB.
   merges.
 - **How to reverse it**: remove the entries from `constants.STADIUMS` (and the ids from
   `tests/fixtures/schedule_venue_ids.json`).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 10. The source of each new entry's values
 
@@ -375,7 +393,9 @@ grows from about 437 MB to about 962 MB.
 
 - **Feature-value impact**: as entry 9.
 - **How to reverse it**: change the values in `constants.STADIUMS`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 11. The Allianz Arena under two ids
 
@@ -390,7 +410,9 @@ grows from about 437 MB to about 962 MB.
   ids, Copernicus GLO-90 1,611 ft at the center and 1,621 ft as the ring median.
 - **Feature-value impact**: one game, `2026_10_NE_DET`.
 - **How to reverse it**: change `MUN01` in `constants.STADIUMS`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 12. Stadium city and state derived on every load
 
@@ -414,7 +436,9 @@ grows from about 437 MB to about 962 MB.
   games of entry 9 get their location from a cached schedule too.
 - **How to reverse it**: restore the `"stadium_city" not in df.columns` condition in
   `_apply_schedule_enrichments`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 13. Observed, not changed: nflverse's roofs for the 2026 international venues
 
@@ -464,7 +488,9 @@ integration and the ports wherever their outputs must match the source's.
 - **Feature-value impact**: none.
 - **How to reverse it**: make the loader's team-code loop in `loaders._prepare_pbp` turn `""`
   into null, then refresh the cache (`--refresh-nflreadpy`).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.
 
 ### 15. Fields blanked in the seasons nflverse lacks them
 
@@ -497,4 +523,6 @@ integration and the ports wherever their outputs must match the source's.
   hits and 1999-2002 as seasons with almost no no-huddle snaps, where the source reads unknown;
   a pass-depth statistic would count 1999's few charted plays.
 - **How to reverse it**: not applicable; the rule lives in the ported code.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.50.0` release's review (one independent round plus a verified
+  documentation round; [the decision index](../DECISIONS.md)); no separate re-run of this entry is
+  recorded.

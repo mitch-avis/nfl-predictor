@@ -84,7 +84,7 @@ def games_without_plays() -> None:
 def summed_team_stats() -> None:
     """Print the official stats the override reads that the team-stat loader sums away."""
     print("3. Official team stats the override reads that loaders.load_team_stats sums away")
-    for name, parts in loaders._SUMMED_STATS:  # noqa: SLF001 - reading the loader's own table
+    for name, parts in loaders._SUMMED_STATS:  # reading the loader's own table
         read = [part for part in parts if part in OFFICIAL_TEAM_STAT_COLUMNS]
         if read:
             print(f"   {name} = {' + '.join(parts)}; the override reads {', '.join(read)}")

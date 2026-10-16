@@ -176,7 +176,7 @@ def load_registry(code: SosCode) -> Any:
     )
     sys.path.insert(0, str(root))
     try:
-        from nfl_sos_ratings.metrics import get_registry  # noqa: PLC0415 - extracted at run time
+        from nfl_sos_ratings.metrics import get_registry  # extracted at run time
 
         return get_registry()
     finally:
@@ -187,10 +187,10 @@ def affixes(registry: Any, column: str, base: str) -> tuple[str, str]:
     """Return the prefix and suffix its registry resolves around ``base`` in ``column``."""
     if column == base:
         return "", ""
-    for rule in registry._prefix_rules:  # noqa: SLF001 - its own resolution order
+    for rule in registry._prefix_rules:  # the frozen registry's private resolution order
         if column.startswith(rule.prefix):
             core = column[len(rule.prefix) :]
-            if registry._resolve_core(core) is not None:  # noqa: SLF001
+            if registry._resolve_core(core) is not None:
                 return rule.prefix, core[len(base) :] if core.startswith(base) else ""
     return "", column[len(base) :]
 
@@ -752,8 +752,8 @@ def _run(code: SosCode, data_dir: Path) -> int:
         "game_log_source_facts": source_facts,
         "registry": {
             "metrics": metrics,
-            "prefix_rules": [rule.prefix for rule in registry._prefix_rules],  # noqa: SLF001
-            "suffix_rules": [rule.suffix for rule in registry._suffix_rules],  # noqa: SLF001
+            "prefix_rules": [rule.prefix for rule in registry._prefix_rules],
+            "suffix_rules": [rule.suffix for rule in registry._suffix_rules],
         },
         "here_catalog": catalog,
         "port_catalog": port,

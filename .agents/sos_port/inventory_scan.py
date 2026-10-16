@@ -150,8 +150,8 @@ def _is_fetch(func: ast.expr) -> bool:
 
 def tracked(pattern: str) -> list[str]:
     """Return this checkout's tracked files matching a git pathspec."""
-    out = subprocess.run(  # noqa: S603 - fixed git argv
-        ["git", "ls-files", pattern],  # noqa: S607 - git from PATH
+    out = subprocess.run(  # fixed git argv
+        ["git", "ls-files", pattern],  # git from PATH
         cwd=ROOT,
         check=True,
         capture_output=True,

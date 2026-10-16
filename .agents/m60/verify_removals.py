@@ -45,8 +45,8 @@ def _options(surface: dict[str, list[dict[str, Any]]]) -> dict[str, set[str]]:
 def main() -> int:
     """Print each removed option with how the changelog covers it; exit 1 if one is uncovered."""
     old = json.loads(
-        subprocess.check_output(  # noqa: S603 - fixed argv built from this file
-            ["git", "show", f"{FIRST_SNAPSHOT}:{SURFACE}"],  # noqa: S607 (git is fixed)
+        subprocess.check_output(  # fixed argv built from this file
+            ["git", "show", f"{FIRST_SNAPSHOT}:{SURFACE}"],  # git is fixed
             cwd=ROOT,
         )
     )

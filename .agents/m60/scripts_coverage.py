@@ -33,7 +33,7 @@ def main() -> int:
 
 def _measure(raw: Path) -> int:
     """Run pytest writing the JSON report to ``raw`` and render the table."""
-    result = subprocess.run(  # noqa: S603 - fixed argv built from this file
+    result = subprocess.run(  # fixed argv built from this file
         [
             sys.executable,
             "-m",

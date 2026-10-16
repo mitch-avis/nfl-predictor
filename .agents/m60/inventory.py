@@ -109,8 +109,8 @@ def read(path: Path) -> str:
 
 def tracked_files(pattern: str) -> list[Path]:
     """Return tracked files matching a git pathspec."""
-    out = subprocess.run(  # noqa: S603 - fixed argv; the pattern is a literal from this file
-        ["git", "ls-files", pattern],  # noqa: S607 (git is fixed, not user-controlled)
+    out = subprocess.run(  # fixed argv; the pattern is a literal from this file
+        ["git", "ls-files", pattern],  # git is fixed, not user-controlled
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -259,10 +259,10 @@ def walk_actions(ep: Entrypoint, parser: argparse.ArgumentParser) -> list[Flag]:
     flags: list[Flag] = []
 
     def _walk(p: argparse.ArgumentParser, sub: str | None) -> None:
-        for action in p._actions:  # noqa: SLF001 - argparse exposes no public action list
-            if isinstance(action, argparse._HelpAction):  # noqa: SLF001
+        for action in p._actions:  # argparse exposes no public action list
+            if isinstance(action, argparse._HelpAction):
                 continue
-            if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+            if isinstance(action, argparse._SubParsersAction):
                 for name, child in action.choices.items():
                     _walk(child, name)
                 continue
@@ -1110,7 +1110,7 @@ def score_model_evidence(flags: list[Flag]) -> dict[str, Any]:
         for path in model_files:
             try:
                 artifact_types[type(joblib.load(path)).__name__] += 1
-            except Exception as exc:  # noqa: BLE001 - any unloadable artifact is reported
+            except Exception as exc:  # any unloadable artifact is reported
                 artifact_types[f"unloadable ({type(exc).__name__})"] += 1
     if not model_files:
         fail("model artifact scan", "no model*.joblib files found under models/")

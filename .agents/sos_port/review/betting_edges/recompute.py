@@ -176,7 +176,7 @@ def main() -> int:
 
     # cross-check p_ml against the report's own conversion and the walk-forward market column
     sys.path.insert(0, sys.argv[3]) if len(sys.argv) > 3 else None
-    from nfl_predictor.reporting import betting_report as br  # noqa: PLC0415
+    from nfl_predictor.reporting import betting_report as br
 
     rep_h = np.array([br._moneyline_to_implied_prob(v) for v in hml])
     rep_a = np.array([br._moneyline_to_implied_prob(v) for v in aml])

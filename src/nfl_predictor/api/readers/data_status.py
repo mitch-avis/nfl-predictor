@@ -34,14 +34,16 @@ DATASET_FILES: tuple[tuple[str, str], ...] = (
         "all_data_ml.csv",
         (
             "Every game the ETL built, played and upcoming, with its features and diff columns. "
-            "Each week's games to predict are cut from it; the lines refresh rewrites its lines."
+            "Each week's games to predict are cut from it, the power rankings read it and the "
+            "lines refresh rewrites its lines."
         ),
     ),
     (
         "all_data.csv",
         (
-            "The same games without the diff columns. The pool page scores picks against it and "
-            "the power rankings read the schedule from it."
+            "The same games without the diff columns. The pool page scores picks against it, "
+            "the power rankings read the schedule from it, nfl-predictor validate checks it and "
+            "the lines refresh rewrites its lines."
         ),
     ),
     (
@@ -66,14 +68,16 @@ DATASET_FILES: tuple[tuple[str, str], ...] = (
         f"{constants.RATINGS_DIRNAME}/",
         (
             "The ported team and quarterback ratings tables, one Parquet file per season and "
-            "table, written by the ETL. The power rankings read the ported ratings from it."
+            "table, written by the ETL. The web app's Ratings pages show them and the power "
+            "rankings read the ported ratings from it."
         ),
     ),
     (
         f"{constants.MARKET_LINES_METADATA_NAME}.json",
         (
-            "The build's line record: line source, nfelo snapshot, match rates, fallback rows and "
-            "moneyline maps. The lines refresh reads it to refresh lines the same way."
+            "The build's line record. A pick-time build records the line source, nfelo "
+            "snapshot, match rates, fallback rows and moneyline maps; a stored-lines build only "
+            "its line source. The lines refresh reads it to refresh lines the same way."
         ),
     ),
     (

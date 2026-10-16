@@ -16,6 +16,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 import textwrap
 from dataclasses import dataclass, field
 from importlib import metadata
@@ -27,7 +29,6 @@ import polars as pl
 from scipy import stats
 
 from nfl_predictor import constants
-from nfl_predictor.ml.artifacts import git_commit_hash
 from nfl_predictor.ratings.pbp_inputs import SeasonSources
 from nfl_predictor.utils.polars import loaders, nflverse_sources
 
@@ -89,9 +90,37 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def git_commit() -> str | None:
-    """Return the checkout's commit (``git rev-parse HEAD``), or ``None`` outside a checkout."""
-    return git_commit_hash()
+def git_commit(repo: Path = constants.ROOT_DIR) -> str | None:
+    """Return the commit ``repo`` is checked out at, marked when its tracked files differ.
+
+    As ``git describe --dirty`` marks it, a staged or unstaged change to a tracked file appends
+    ``-dirty`` to the full commit hash; untracked files do not count.
+
+    Args:
+        repo: A directory inside the checkout; this repository's root by default.
+
+    Returns:
+        The commit hash, with ``-dirty`` when the tracked files differ from it, or ``None``
+        outside a checkout or without ``git``.
+
+    """
+    git = shutil.which("git")
+    if git is None:
+        return None
+    head = subprocess.run(
+        [git, "rev-parse", "HEAD"], cwd=repo, check=False, capture_output=True, text=True
+    )
+    if head.returncode != 0 or not head.stdout.strip():
+        return None
+    changes = subprocess.run(
+        [git, "status", "--porcelain", "--untracked-files=no"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    suffix = "-dirty" if changes.stdout.strip() else ""
+    return f"{head.stdout.strip()}{suffix}"
 
 
 def run_provenance(

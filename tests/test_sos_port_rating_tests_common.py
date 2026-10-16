@@ -2,6 +2,8 @@
 
 import json
 import re
+import shutil
+import subprocess
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -232,6 +234,68 @@ def test_perturbed_numbers_changes_every_numeric_value_of_the_rows_only() -> Non
     assert changed.schema == frame.schema
 
 
+def _git(repo: Path, *args: str) -> str:
+    """Run git in ``repo`` with a fixed identity and return its output."""
+    git = shutil.which("git")
+    assert git is not None
+    return subprocess.run(
+        [git, "-c", "user.name=Test", "-c", "user.email=test@example.com", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _committed_repo(path: Path) -> tuple[Path, str]:
+    """Return a git repository with one committed file and its commit."""
+    path.mkdir()
+    _git(path, "init", "--quiet")
+    (path / "tracked.txt").write_text("one\n")
+    _git(path, "add", "tracked.txt")
+    _git(path, "commit", "--quiet", "-m", "first")
+    return path, _git(path, "rev-parse", "HEAD")
+
+
+def test_git_commit_clean_tree_is_the_bare_commit(tmp_path: Path) -> None:
+    # Arrange
+    repo, head = _committed_repo(tmp_path / "repo")
+    (repo / "untracked.txt").write_text("new\n")
+
+    # Act
+    commit = common.git_commit(repo)
+
+    # Assert
+    assert commit == head
+
+
+@pytest.mark.parametrize("stage", [False, True])
+def test_git_commit_changed_tracked_file_is_marked_dirty(tmp_path: Path, *, stage: bool) -> None:
+    # Arrange
+    repo, head = _committed_repo(tmp_path / "repo")
+    (repo / "tracked.txt").write_text("two\n")
+    if stage:
+        _git(repo, "add", "tracked.txt")
+
+    # Act
+    commit = common.git_commit(repo)
+
+    # Assert
+    assert commit == f"{head}-dirty"
+
+
+def test_git_commit_outside_a_checkout_is_none(tmp_path: Path) -> None:
+    # Arrange
+    outside = tmp_path / "not_a_repo"
+    outside.mkdir()
+
+    # Act
+    commit = common.git_commit(outside)
+
+    # Assert
+    assert commit is None
+
+
 def test_run_provenance_records_the_git_commit_and_the_run(tmp_path: Path) -> None:
     # Arrange
     code = tmp_path / "script.py"
@@ -243,7 +307,7 @@ def test_run_provenance_records_the_git_commit_and_the_run(tmp_path: Path) -> No
     provenance = common.run_provenance([code], ledger, "python script.py", 12.5)
 
     # Assert
-    assert re.fullmatch(r"[0-9a-f]{40}", provenance["git_commit"])
+    assert re.fullmatch(r"[0-9a-f]{40}(-dirty)?", provenance["git_commit"])
     assert provenance["code"] == {"script.py": common.sha256_file(code)}
     assert (provenance["inputs"], provenance["fingerprint"]) == (1, ledger.fingerprint())
     assert (provenance["command"], provenance["seconds"]) == ("python script.py", 12.5)

@@ -248,10 +248,22 @@ Steps:
 7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
    - publish `qb_elos.csv`'s `qb1_adj`/`qb2_adj` as the `qb_adj` group, off in production until
      measured (`feat/qb-adj-features`, `0.60.0`);
+     status: published in `0.60.0`; `0.60.1` limits the quarterback fill to unplayed games;
    - the grouped measurement in `models/qb_elos_measure/HYPOTHESIS.md` (accepted 2026-10-15):
      the upgraded `qb_elos.csv` against the old one, the `qb_adj` arm, and decision 1's ratings
      swap re-checked on the new file; two builds, eight runs;
+     status: run and reviewed (`models/qb_elos_measure/REVIEW.md`, recorded in
+     `.agents/benchmarks.md`, "`qb_elos.csv` measurement"):
+     - the new file against the old: a tie, the new file stays;
+     - `qb_adj`: a tie, the group stays off;
+     - the ratings swap on the new file: the strength snapshot loses, the ported ratings stay;
+     - the new-file runs are the floor-sigma reference from `0.62.0`;
    - the "no game lines" mode leaves out `strength,elo,own_elo_wt` (approved 2026-10-14);
+     status: in `0.61.0` the default list is `strength,elo,own_elo_wt,qb_adj`, and a run counts
+     as one without game lines when its market features and anchor are off, whatever the
+     transform;
+   - proposed: measure `qb_adj` in the run without game lines (asked for by the user on
+     2026-10-15); it needs a written hypothesis and the user's go-ahead before any run;
    - `../nfeloqb`: a backup's first start in next-week projections rated as played rows rate it
      (`get_value(team)` in place of `current_value`), test first;
    - the fork's win-total file ends at 2023: its own measurement after the grouped one, with a

@@ -626,8 +626,9 @@ margin MAE.
 The reference production adopts on 2026-10-14: `models/step6/ratings_anchored_seed42/` and
 `ratings_anchored_seed7/` (checkpoints `d97fab54e7261f18e349`, `2f7442e89fd6ff3981f4`), the ported
 ratings in place of the strength snapshot with the own Elo off (`--disable-feature-groups
-strength,own_elo,own_elo_wt`, production's default until `0.60.0`, 449 features). They also supply
-the floor's sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`). Input
+strength,own_elo,own_elo_wt`, production's default until `0.60.0`, 449 features). They also
+supplied the floor's sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`) until `0.62.0`, when the
+new-file runs of "`qb_elos.csv` measurement" below replaced them. Input
 `models/step6/inputs/candidate.csv` (`74b21113d167...`, the through-2025 cut of the step-6 build:
 the ported ratings, the own Elo and the play-by-play corrections), code `d6064eb`, and otherwise
 the 2026-10-09 reference's command
@@ -649,9 +650,9 @@ Since `0.60.0` production also leaves out `qb_adj` (`strength,own_elo,own_elo_wt
 step-6 build has no `qb_adj` column, so the reference runs trained on the same columns production
 does, and the only effect of the longer list is a difference listed in `compare`'s
 production-settings section; nothing in the weekly run, `train` or `backtest` stops or warns on
-it (independent review, 2026-10-15). The difference is harmless until a measurement on a build
-with the columns replaces the reference. On such a build, each list above reproduces with
-`qb_adj` added.
+it (independent review, 2026-10-15). The reference production reads from `0.62.0` was measured on
+a build with the columns, with `qb_adj` left out as production does ("`qb_elos.csv` measurement"
+below). On such a build, each list above reproduces with `qb_adj` added.
 
 Results (deterministic Brier and log loss, other columns where an interval excludes zero):
 
@@ -689,8 +690,8 @@ ruled on 2026-10-12 that this is the project's convention, not a caveat on any a
 only the previous starter costs the own Elo without lines `+0.00101` `[-0.00027, +0.00232]` Brier
 and `+0.00331` `[+0.00035, +0.00631]` log loss (`.agents/sos_port/decisions/elo.md`, entry 15).
 
-**`qb_elos.csv` after the upstream Elo fix (2026-10-14, approved by the user, not yet
-measured).** Since Week 6 of 2026, `data/qb_elos.csv` comes from `../nfeloqb` with upstream's
+**`qb_elos.csv` after the upstream Elo fix (2026-10-14, approved by the user; measured on
+2026-10-15).** Since Week 6 of 2026, `data/qb_elos.csv` comes from `../nfeloqb` with upstream's
 `90e19d9` merged (fork commit `27709b5`). That commit enters the quarterback adjustment in the
 QB-adjusted probability as home minus away (the fork added both) and tracks the plain Elo and the
 QB-adjusted Elo separately, as 538's original file does. The rows before the 2023-02-12 cutover
@@ -698,6 +699,103 @@ are unchanged; from 2023 on, `elo1_pre` moves by 12.3 Elo points on average (110
 `qbelo1_pre` by 25.2 (142 at most), and `qb1_value_pre` not at all (`verify.py` and the file
 hashes in `~/scratch/data_backups/2026-10-14_pre_week6/`, beside the replaced files). Every step-6
 reference arm above was measured on the earlier file, so production differs from them in these
-four columns from 2023 on. The effect is to be measured with two dataset builds after the Week 6
-picks, together with the stale win-total file (`../nfeloqb` `Manual Data/wt_ratings.csv` ends at
-2023).
+four columns from 2023 on. "`qb_elos.csv` measurement" below measures the effect with two
+dataset builds. The stale win-total file (`../nfeloqb` `Manual Data/wt_ratings.csv` ends at 2023)
+is not part of that measurement and stays a separate question for the user.
+
+## `qb_elos.csv` measurement (2026-10-15, `models/qb_elos_measure/`)
+
+Eight runs, four arms on two seeds each, all in `models/qb_elos_measure/` (checkpoint directories
+for seeds 42 and 7):
+
+- The old file with production's features (`--disable-feature-groups
+  strength,own_elo,own_elo_wt,qb_adj`, 449 features): `old_file_seed{42,7}`
+  (`c11316698f8b83a57544`, `988441baadcd2d3e2634`).
+- The new file with production's features (the same groups, 449 features):
+  `new_file_seed{42,7}` (`3bd2b79b36c6ed70e0e5`, `98696fa36a5ae245740b`).
+- The new file with the quarterback adjustment (`strength,own_elo,own_elo_wt`, 452 features):
+  `qb_adj_seed{42,7}` (`a6acc6d874d9b3bdb00b`, `90d8d9374d2d9cc3d55c`).
+- The new file with the strength snapshot in place of the ported ratings
+  (`ratings,own_elo,own_elo_wt,qb_adj`, 460 features): `strength_seed{42,7}`
+  (`ab173f4fb240abfe577d`, `be38b8d37d9ab698570c`).
+
+Inputs: `inputs/new_file.csv` (`b9772e3e...49f0`, the through-2025 cut with `data/qb_elos.csv` as
+copied on 2026-10-14) and `inputs/old_file.csv` (`b59366e2...0af3`, the same cut with the replaced
+copy). Both have 7,261 rows and 544 columns; they differ in 12 columns, all in the `elo` group,
+all in the 855 rows of 2023-2025, and the `qb_adj` columns are identical. Code `c637fc0`
+(`0.60.0`) in all eight runs. Command (`driver.sh`): `nfl-predictor backtest --calibration auto
+--eval-seasons 2007..2025 --wf-start-week 1 --random-seed {42,7} --market-anchor
+--market-transform --disable-feature-groups <arm's groups>`: 328 folds, 4943 games, 200 trees
+with no early stop, calibration `none` in every fold, unweighted, every fold `cuda`, each run's
+own floor-sigma pool. Rules: `HYPOTHESIS.md` there (checksummed before the builds); second key:
+`REVIEW.md` there, by a reviewer that did not produce the runs. The old-file runs reproduce the
+step-6 reference (`models/step6/ratings_anchored_seed{42,7}`) bit for bit, and the two files'
+runs are identical game for game before 2023. Two seeds averaged per game, candidate minus
+reference, 95% intervals.
+
+Results, by rule:
+
+- The new file minus the old, governing window seasons 2023-2025, all weeks (816 games): Brier
+  `-0.00026` `[-0.00082, +0.00030]`, log loss `-0.00070` `[-0.00195, +0.00055]`. A tie: the new
+  file stays (already in production; nothing changes).
+- The quarterback adjustment minus the new file, all weeks: Brier `+0.00025`
+  `[-0.00026, +0.00076]`, log loss `+0.00056` `[-0.00056, +0.00170]`. A tie: the `qb_adj` group
+  stays off (the simpler setting). The direction does not hold across seeds.
+- The strength snapshot minus the new file (the ported ratings re-checked on the new file), all
+  weeks: Brier `+0.00102` `[+0.00045, +0.00159]`, log loss `+0.00238` `[+0.00111, +0.00366]`,
+  pool points `-95.5` `[-187.5, -4.0]`, margin MAE `+0.0280` `[+0.0049, +0.0511]`. The swap
+  loses, on each seed alone too: the ported ratings stay.
+- Weeks 1 and 2: no two-seed interval excludes zero in either week in any comparison.
+
+Every paired interval `REVIEW.md` lists as excluding zero (rule 9):
+
+- The new file minus the old: none, on two seeds or on either seed alone.
+- The quarterback adjustment minus the new file, two seeds: weeks 3-18 pool points `-82.0`
+  `[-156.5, -8.0]`; 2023-2025 week 2 (outside the instrument) pool points `-6.5`
+  `[-13.5, -3.0]`. Seed 42 alone: week 1 Brier `-0.00254` `[-0.00500, -0.00009]` and log loss
+  `-0.00538` `[-0.01077, -0.00002]`, for the quarterback adjustment. Seed 7 alone: weeks 3-18
+  Brier `+0.00090` `[+0.00013, +0.00167]` and log loss `+0.00210` `[+0.00036, +0.00386]`;
+  2023-2025 week 2 (outside the instrument) pool points `-10.0` `[-15.0, -6.0]`.
+- The strength snapshot minus the new file, two seeds, all against the strength snapshot: weeks
+  3-18 Brier `+0.00123` `[+0.00063, +0.00185]`, log loss `+0.00283` `[+0.00148, +0.00422]`,
+  margin MAE `+0.0344` `[+0.0094, +0.0589]`, pool points `-97.5` `[-178.5, -13.0]`; all weeks
+  Brier `+0.00102` `[+0.00045, +0.00159]`, log loss `+0.00238` `[+0.00111, +0.00366]`, margin MAE
+  `+0.0280` `[+0.0049, +0.0511]`, pool points `-95.5` `[-187.5, -4.0]`; 2007-2022 all weeks
+  (outside the instrument) Brier `+0.00098` `[+0.00034, +0.00161]`, log loss `+0.00226`
+  `[+0.00086, +0.00368]`, margin MAE `+0.0291` `[+0.0030, +0.0551]`.
+- The same, seed 42 alone: weeks 3-18 Brier `+0.00124` `[+0.00041, +0.00208]`, log loss
+  `+0.00287` `[+0.00099, +0.00475]`; all weeks Brier `+0.00105` `[+0.00029, +0.00182]`, log loss
+  `+0.00250` `[+0.00079, +0.00423]`; 2007-2022 all weeks (outside the instrument) Brier `+0.00126`
+  `[+0.00039, +0.00211]`, log loss `+0.00303` `[+0.00106, +0.00496]`.
+- The same, seed 7 alone: weeks 3-18 Brier `+0.00122` `[+0.00038, +0.00206]`, log loss `+0.00280`
+  `[+0.00091, +0.00470]`, margin MAE `+0.0370` `[+0.0029, +0.0713]`; all weeks Brier `+0.00100`
+  `[+0.00022, +0.00180]`, log loss `+0.00226` `[+0.00048, +0.00405]`, margin MAE `+0.0327`
+  `[+0.0009, +0.0644]`; outside the instrument, 2023-2025 all weeks Brier `+0.00258`
+  `[+0.00084, +0.00435]`, log loss `+0.00613` `[+0.00233, +0.01003]`, margin MAE `+0.0756`
+  `[+0.0094, +0.1431]`, and 2023-2025 weeks 3-18 Brier `+0.00250` `[+0.00065, +0.00437]`, log
+  loss `+0.00603` `[+0.00194, +0.01013]`, margin MAE `+0.0789` `[+0.0068, +0.1520]`.
+- Against the pick-time line on each arm's own rows (two seeds), all for the line: the old file
+  week 1 margin MAE `+0.2037` `[+0.0326, +0.3761]`, all weeks `+0.0500` `[+0.0072, +0.0924]`; the
+  new file week 1 Brier `+0.00511` `[+0.00007, +0.01030]`, week 1 margin MAE `+0.2107`
+  `[+0.0399, +0.3824]`, all weeks `+0.0484` `[+0.0057, +0.0909]`; the quarterback adjustment week 1
+  margin MAE `+0.1673` `[+0.0005, +0.3360]`, weeks 3-18 margin MAE `+0.0532` `[+0.0076, +0.0985]`
+  and total MAE `+0.0503` `[+0.0025, +0.0979]`, all weeks margin MAE `+0.0534`
+  `[+0.0113, +0.0958]`; the strength snapshot week 1 margin MAE `+0.2034` `[+0.0292, +0.3786]`,
+  weeks 3-18 `+0.0738` `[+0.0281, +0.1198]`, all weeks log loss `+0.00273` `[+0.00002, +0.00544]`
+  and margin MAE `+0.0764` `[+0.0344, +0.1198]`. No arm beats the line on any column in any
+  window.
+- Seed 7 minus seed 42 within an arm: a tie in every instrument window; in seasons 2023-2025, the
+  old file margin MAE `-0.0711` `[-0.1354, -0.0068]`, the new file log loss `-0.00360`
+  `[-0.00710, -0.00016]`, the quarterback adjustment total MAE `-0.0813` `[-0.1510, -0.0132]`.
+
+Ranks, all weeks, two-seed means with the line: Brier and log loss: the line 1, the new file 2,
+the old file 3, the quarterback adjustment 4, the strength snapshot 5. Pool points: the new file
+1, the old file 2, the quarterback adjustment 3, the line 4, the strength snapshot 5. Margin MAE:
+the line 1, the new file 2, the old file 3, the quarterback adjustment 4, the strength snapshot 5.
+The rank table for every window and column is in `REVIEW.md`.
+
+**The floor-sigma reference.** Since `0.62.0`, `new_file_seed42` and `new_file_seed7` are
+production's floor-sigma reference (`constants.FLOOR_SIGMA_REFERENCE_RUNS`), by the user's
+decision on 2026-10-15. They replace the step-6 runs, which trained on the `qb_elos.csv` before
+its refresh. From `REVIEW.md`: "the sigma moves by under `0.005` points (final
+`13.3184`/`13.3182` against `13.3195`/`13.3227`), so probabilities barely change".

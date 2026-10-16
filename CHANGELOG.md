@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.63.7] - 2026-10-16
+
+### Fixed
+
+- The power-ranking records (`reporting/power_rankings.py`) come back sorted by team, so their row
+  order no longer changes between runs; rankings are unchanged.
+- The weekly run logs a power ranking skipped for a missing season/week, dataset or schedule as a
+  warning instead of at info level.
+- `season_t_interval` in the rating-definition tests (`.agents/sos_port/rating_tests_common.py`)
+  raises a `ValueError` for fewer than two seasons instead of returning NaN bounds.
+- The rating-definition tests record the commit with a `-dirty` suffix when tracked files differ
+  from it, as `git describe --dirty` does.
+- A test drives the phase-1 parity audit's season loop through its opponent-row check, which only
+  direct calls covered.
+
 ## [0.63.5] - 2026-10-16
 
 ### Changed

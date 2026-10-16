@@ -6,7 +6,7 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6_plan.md` and
 `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 22:15 MDT)
+## State (written 2026-10-15, 22:40 MDT)
 
 - **`main` is at `0.62.2`** (`b5b2f53`, not pushed, no tags): python-template `0.1.4` (tagged by
   the user) through `copier update` on `build/python-template-0.1.4`, merged `--no-ff` with the
@@ -14,14 +14,15 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
   measures `src/` alone since `0.62.1`); `tests/test_gate_script.py` pins that, and failed
   against the `0.1.3` gate first. Gate exit `0` on the branch, 4,392 tests, `src/` coverage
   96.32%; the merged tree is identical to the gated one, and the CUDA sync ran.
-- **`qb_adj` in the run without game lines: runs done, review running.** Four runs
-  (`models/qb_adj_no_lines/no_lines_seed{42,7}`, the reference, and
-  `no_lines_qb_adj_seed{42,7}`), `HYPOTHESIS.md` sha256 `8c102843...` committed in `TODO.md` step
-  7 by `7b1560b` before the 19:39 MDT launch; the driver ended 21:49 MDT, no failed runs. The
-  producer's two-seed check-in is `models/qb_adj_no_lines/checkins/qb_adj_vs_no_lines_two_seeds.md`
-  (`compare.log` beside it). A `reviewer` in a fresh context was started at 21:52 MDT to rescore
-  from the fold checkpoints and write `models/qb_adj_no_lines/REVIEW.md`; if it is missing, start
-  the review again. No numbers go into the docs before `REVIEW.md`.
+- **`qb_adj` in the run without game lines: done and closed.** Four runs in
+  `models/qb_adj_no_lines/`, reviewed in a fresh context (`REVIEW.md`: approve, provenance clean,
+  a tie, so `qb_adj` stays in `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` and no default
+  changes) and recorded by an agent that did not produce them (`b810142`, `.agents/benchmarks.md`
+  "The quarterback adjustment without game lines"; `1c24b8c` closes the `TODO.md` step 7 item).
+  Gate exit `0` on `1c24b8c`. The review found an open rule-11 gap, logged in `TODO.md` "Open
+  follow-ups" as the user's decision: a weekly run with `--wf-market-mode none` takes its floor
+  sigma from the market-anchored reference runs (`weekly_run/pipeline.py`
+  `load_reference_pool`, no market-mode branch). The weekly run with game lines is unaffected.
 - `0.62.1` (`eedfa70`, merged with the user's approval): coverage measures `src/` alone
   (`[tool.coverage.run]` `source = ["src"]`), the user's edit minus its `omit` line (`tests/*`
   was redundant; `src/*/__init__.py` matched only the one-line `src/nfl_predictor/__init__.py`).
@@ -91,11 +92,7 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
    no win-total pull since 2024 (`elo.py` line ~136). Hypothesis and rule first, a fork change, a
    third build against the grouped measurement's new-file build. If it changes production's
    input, the floor-sigma reference moves with it.
-3. **`qb_adj` in the run without game lines** (review running, see State): when `REVIEW.md` is
-   written, check in with the user on its verdict; an agent that did not produce the runs
-   records it in `.agents/benchmarks.md` and closes the `TODO.md` item (rule 6). A default change
-   (dropping `qb_adj` from `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS`) is the user's call.
-4. **The step-6 docs close-out and the roadmap tidy** (approved 2026-10-15):
+3. **The step-6 docs close-out and the roadmap tidy** (approved 2026-10-15):
    - regenerate `RANKINGS_EVAL.md` under `models/step6/rankings/` (a `models/` write: ask);
    - rename "market-free" to "no game lines" where it means the configuration with Elo,
      including `weekly_run/stage1.py:63,68`;
@@ -110,7 +107,7 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
      phases done; retire the follow-ups that concern only the strength snapshot, since the
      grouped measurement kept the ported ratings (rule 5: the user approves each closure);
    - build the approvals list and the user's final HTML report for step 6.
-5. `scripts/gate.sh --web` on `main` and a browser look once the user restarts the server; the
+4. `scripts/gate.sh --web` on `main` and a browser look once the user restarts the server; the
    2026 roof recheck before the Paris game on 2026-10-25
    (`.agents/sos_port/decisions/pbp_columns.md`).
 
@@ -120,7 +117,7 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 - No-game-lines check: market features and anchor off, the transform not counted (done).
 - `train`'s `--no-market-anchor`/`--no-market-transform` and its `--exclude-market` default list:
   accepted.
-- The no-game-lines list keeps `qb_adj`; measuring `qb_adj` without game lines is a proposal.
+- The no-game-lines list keeps `qb_adj` (measured: a tie, `models/qb_adj_no_lines/REVIEW.md`).
 - The `_fill_side_qb` fix: investigate first, then fix (done, `0.60.1`).
 - `.agents/m60/INVENTORY.md` and `PROPOSAL.md` stay frozen with their old helper names.
 - Merges no longer wait for the Monday game this week (the picks are in).
@@ -137,6 +134,11 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 
 ## Open for the user
 
+- The floor sigma of weekly runs without game lines (the review's rule-11 gap): recommended, a
+  reference of their own for that mode (`models/qb_adj_no_lines/no_lines_seed{42,7}`, which
+  match step 6's runs without game lines game for game), a small code change with a test that
+  moves only runs without game lines; the alternative records the shared sigma as an approved
+  difference. Its row in `TODO.md`'s follow-up-to-step table waits for the user's choice.
 - The test suite: the user asked about pruning; recommended no blanket review (4,392 tests run
   in about 57 seconds on 8 workers, and coverage of `tests/` never drove their number).
 - The harness worktrees `.claude/worktrees/agent-*` (including `feat/qb-adj-features` and

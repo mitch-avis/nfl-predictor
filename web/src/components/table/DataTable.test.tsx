@@ -448,3 +448,47 @@ describe('DataTable sorting', () => {
     expect(columnText(0)).toEqual(['KC', 'ARI', '—', 'BUF'])
   })
 })
+
+describe('DataTable aria-sort', () => {
+  /** The `aria-sort` of each header cell, in column order. */
+  function ariaSorts(): (string | null)[] {
+    return screen.getAllByRole('columnheader').map((th) => th.getAttribute('aria-sort'))
+  }
+
+  it('leaves aria-sort off every header when the table is unsorted', () => {
+    // Act
+    renderTable({ table: sortPayload() })
+
+    // Assert
+    expect(ariaSorts()).toEqual([null, null])
+  })
+
+  it('marks the sorted header ascending', () => {
+    // Act
+    renderTable({ table: sortPayload(), defaultSort: { key: 'rating' } })
+
+    // Assert
+    expect(ariaSorts()).toEqual([null, 'ascending'])
+  })
+
+  it('marks the sorted header descending', () => {
+    // Act
+    renderTable({ table: sortPayload(), defaultSort: { key: 'team', desc: true } })
+
+    // Assert
+    expect(ariaSorts()).toEqual(['descending', null])
+  })
+
+  it('marks only the primary header in a multi-sort', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    renderTable({ table: sortPayload(), defaultSort: { key: 'rating' } })
+    await user.keyboard('{Shift>}')
+
+    // Act
+    await user.click(screen.getByRole('button', { name: 'Sort by Team' }))
+
+    // Assert
+    expect(ariaSorts()).toEqual([null, 'ascending'])
+  })
+})

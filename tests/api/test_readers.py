@@ -913,24 +913,32 @@ def test_file_status_of_a_json_file_has_size_without_rows(project_root: Path) ->
 
 
 def test_file_status_of_a_directory_counts_its_files(project_root: Path) -> None:
-    """A directory entry reports its file count, total size, newest time and season range."""
+    """A directory entry counts its top-level tables only, with their size, time and seasons.
+
+    A table being written (``*.parquet.<hex>.tmp``), a README and a nested backup folder are
+    left out of every figure.
+    """
     # Arrange
     ratings = project_root / "data" / "ratings"
-    ratings.mkdir()
+    (ratings / "old").mkdir(parents=True)
     (ratings / "2024_ratings.parquet").write_bytes(b"abc")
     (ratings / "2026_qb_ratings.parquet").write_bytes(b"defgh")
-    (ratings / "notes.txt").write_bytes(b"z")
+    (ratings / "2025_ratings.parquet.1f2e3d.tmp").write_bytes(b"temporary")
+    (ratings / "README.md").write_bytes(b"readme")
+    (ratings / "old" / "1990_ratings.parquet").write_bytes(b"backup")
     os.utime(ratings / "2024_ratings.parquet", (1_000_000_000, 1_000_000_000))
     os.utime(ratings / "2026_qb_ratings.parquet", (2_000_000_000, 2_000_000_000))
-    os.utime(ratings / "notes.txt", (1_500_000_000, 1_500_000_000))
+    os.utime(ratings / "2025_ratings.parquet.1f2e3d.tmp", (2_100_000_000, 2_100_000_000))
+    os.utime(ratings / "README.md", (2_100_000_000, 2_100_000_000))
+    os.utime(ratings / "old" / "1990_ratings.parquet", (2_100_000_000, 2_100_000_000))
 
     # Act
     status = data_status.file_status(project_root / "data", "ratings/", "d")
 
     # Assert
     assert status.exists
-    assert status.file_count == 3
-    assert status.size == 9
+    assert status.file_count == 2
+    assert status.size == 8
     assert status.modified_at == data_status.iso_time(2_000_000_000)
     assert status.seasons == (2024, 2026)
     assert status.rows is None

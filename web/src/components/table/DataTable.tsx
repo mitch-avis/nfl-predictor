@@ -157,6 +157,8 @@ export function DataTable({
                 const meta = table.column_metadata[header.column.id]
                 const sorted = header.column.getIsSorted()
                 const sticky = header.column.id in stickyOffsets
+                const primary = sorted && header.column.getSortIndex() === 0
+                const ariaSort = primary ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined
                 const style: CSSProperties | undefined = sticky
                   ? { position: 'sticky', left: stickyOffsets[header.column.id], minWidth: STICKY_WIDTH, zIndex: 30 }
                   : undefined
@@ -164,6 +166,7 @@ export function DataTable({
                   <th
                     key={header.id}
                     style={style}
+                    aria-sort={ariaSort}
                     className={cn(
                       'whitespace-nowrap border-b bg-card px-2.5 font-medium text-muted-foreground',
                       dense ? 'py-1.5' : 'py-2.5',

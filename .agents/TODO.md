@@ -295,6 +295,26 @@ Steps:
    1999, full crews in `load_officials`), game-day weather (temperature and wind for outdoor
    games), attendance, and team health (nflverse injury reports since 2009). Each first passes a
    pick-time check (what is known before Thursday for an upcoming game), then a measured arm.
+   - [ ] Investigation (not a milestone, added 2026-10-16): `data/nfelo_games.csv`, downloaded by
+     the user from Robert Greer's `greerreNFL/nfelo`, keyed by `game_id` (4,723 games from 2009
+     week 1 to 2026 week 6, counted 2026-10-16). It holds nfelo's pre-game home win probability
+     at the open and the close (`nfelo_home_probability_open`, `_close`), its line projections
+     (`nfelo_home_line_open`, `_close`), opening and closing spreads and totals with their
+     prices, and its situational modifiers (`hfa_mod`, `home_bye_mod`, `away_bye_mod`,
+     `div_game_mod`, `dif_surface_mod`, `home_time_advantage_mod`, `home_538_qb_adj`). Three
+     questions:
+     - (a) nfelo's probability as a second outside benchmark beside the closing market, scored
+       with the benchmark instrument on 2009-2025 (nfelo itself reads market lines, so it is a
+       market-informed yardstick);
+     - (b) whether its opening prices or totals fill gaps in our line data (`data/nfl_lines.csv`
+       and the pick-time line logic);
+     - (c) its modifiers against our features, as feature ideas, measured with and without game
+       lines.
+     Leakage: the closing-line columns (`*_close`, the EV and CLV columns) are known only at
+     kickoff, so they are benchmark-only, never features; the opening columns need their
+     timestamps checked against pick time before any use.
+     Also recorded: `data/nfl_elo.csv`, 538's old team Elo file (hand-updated until December
+     of 2025), was read only by the data-status page and was deleted on 2026-10-16.
 9. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
    three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
    (wiring the chosen settings into the weekly run and the benchmark, one shared source).

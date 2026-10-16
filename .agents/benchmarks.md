@@ -633,9 +633,14 @@ new-file runs of "`qb_elos.csv` measurement" below replaced them. Input
 the ported ratings, the own Elo and the play-by-play corrections), code `d6064eb`, and otherwise
 the 2026-10-09 reference's command
 (2007-2025 from week 1, 328 folds, 4943 games, market anchor and transform on, 200 trees,
-unweighted, every fold `cuda`). Rules: `HYPOTHESIS.md` there and `nogamelines_wt/HYPOTHESIS.md`;
-second key: `REVIEW.md` in each, by reviewers that did not produce the runs. Two seeds averaged
-per game, 95% intervals, all weeks unless named.
+unweighted, every fold `cuda`). Rules: `HYPOTHESIS.md` there (sha256
+`e027793932a519e26963210370f27861d0743fbc9b59951318883edc8c396ed9`, the amended text; the checksum
+before the amendment, `5b91d1d4a0b60810b1ace9db1ad7586f17778596301ccd118db083f5099ba976`, is in
+`HYPOTHESIS.original.sha256`, and the original text is not on disk) and
+`nogamelines_wt/HYPOTHESIS.md` (sha256
+`08bc8c7fdd902e730c0f9de31f41cf657f35aaf11b8a75eeb94959a649970caf`); both matched their `.sha256`
+files on 2026-10-16. Second key: `REVIEW.md` in each, by reviewers that did not produce the runs.
+Two seeds averaged per game, 95% intervals, all weeks unless named.
 
 The other reference arms on the same build and code:
 
@@ -727,7 +732,9 @@ all in the 855 rows of 2023-2025, and the `qb_adj` columns are identical. Code `
 --eval-seasons 2007..2025 --wf-start-week 1 --random-seed {42,7} --market-anchor
 --market-transform --disable-feature-groups <arm's groups>`: 328 folds, 4943 games, 200 trees
 with no early stop, calibration `none` in every fold, unweighted, every fold `cuda`, each run's
-own floor-sigma pool. Rules: `HYPOTHESIS.md` there (checksummed before the builds); second key:
+own floor-sigma pool. Rules: `HYPOTHESIS.md` there (checksummed before the builds, sha256
+`d682a0c0e4330614df0e866e62a3e628990ea1595d96c419ac26ac8edc1406fb`, which matched its `.sha256`
+file on 2026-10-16); second key:
 `REVIEW.md` there, by a reviewer that did not produce the runs. The old-file runs reproduce the
 step-6 reference (`models/step6/ratings_anchored_seed{42,7}`) bit for bit, and the two files'
 runs are identical game for game before 2023. Two seeds averaged per game, candidate minus
@@ -821,7 +828,8 @@ measurement above, no new build); its `qb_adj` columns have no nulls from 2007 o
 games, 200 trees with no early stop, calibration `none` in every fold, unweighted, every fold
 `cuda`, each run's own floor-sigma pool. Rules: `HYPOTHESIS.md` there (sha256
 `8c1028438a66594c8ecb1445ed8fcf4403ccf0e7a8c2cd3a1f1ed4c34519ce06`, committed on `main` in
-`7b1560b` before the launch, unamended); second key: `REVIEW.md` there, by a reviewer that did not
+`7b1560b` before the launch, unamended, and matching its `.sha256` file on 2026-10-16); second
+key: `REVIEW.md` there, by a reviewer that did not
 produce the runs. Two seeds averaged per game, candidate minus reference, 95% intervals.
 
 Provenance (`REVIEW.md`): each candidate differs from its reference only in the disabled groups,

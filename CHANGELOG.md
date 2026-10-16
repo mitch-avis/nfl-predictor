@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.60.1] - 2026-10-15
+
+### Fixed
+
+- The quarterback fill for future games leaves a played game (both scores in) as it is, fills a
+  side's ELO values only for the starter it filled, so a named starter never takes the team's
+  latest starter's values, and computes the filled values' away-minus-home diffs again, which
+  the week rows had computed before the fill. The measurement's builds change in no value: every
+  played game has its `qb_elos.csv` row with both starters and values, and the unplayed weeks
+  the file does not list already take each team's latest values from the ELO merge.
+
 ## [0.60.0] - 2026-10-15
 
 ### Changed

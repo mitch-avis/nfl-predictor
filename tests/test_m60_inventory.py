@@ -15,20 +15,29 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from types import ModuleType
 
 INVENTORY_PATH = Path(__file__).resolve().parents[1] / ".agents" / "m60" / "inventory.py"
 
 
 @pytest.fixture(scope="module")
-def inventory() -> ModuleType:
-    """Return the inventory script, imported from its file."""
+def inventory() -> Iterator[ModuleType]:
+    """Return the inventory script, imported from its file.
+
+    The module is registered in ``sys.modules`` while it runs: on Python 3.14 ``@dataclass``
+    looks up the defining module there to resolve string annotations.
+    """
     spec = importlib.util.spec_from_file_location("m60_inventory", INVENTORY_PATH)
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+        yield module
+    finally:
+        sys.modules.pop(spec.name, None)
 
 
 @pytest.fixture

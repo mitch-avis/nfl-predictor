@@ -107,3 +107,21 @@ def test_describe_sink_skips_the_key_of_an_unpacked_outer_dict(inventory: Module
 
     # Assert
     assert sink == "dict key return.'inner'"
+
+
+def test_describe_sink_names_the_key_of_a_later_value_in_a_dict(inventory: ModuleType) -> None:
+    # Act
+    sink = _sink_of(inventory, "payload = {'a': 1, 'season': args.x}")
+
+    # Assert
+    assert sink == "dict key payload.'season'"
+
+
+def test_describe_sink_names_the_keys_of_later_values_in_nested_dicts(
+    inventory: ModuleType,
+) -> None:
+    # Act
+    sink = _sink_of(inventory, "payload = {'a': 1, 'outer': {'b': 2, 'inner': args.x}}")
+
+    # Assert
+    assert sink == "dict key payload.'outer'.'inner'"

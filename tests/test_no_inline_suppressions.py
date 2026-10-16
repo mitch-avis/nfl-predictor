@@ -137,6 +137,9 @@ def test_tracked_python_files_carry_no_inline_suppressions() -> None:
         "# pyright: reportPrivateUsage = False",
         "# pyright: strict, reportUnknownMemberType=false",
         "# pyright: reportPrivateUsage=none",
+        "# pyright: reportPrivateUsage=warning",
+        "# pyright: reportUnusedImport = Information",
+        "# pyright: standard",
         "# pragma: no branch",
     ],
 )
@@ -179,7 +182,7 @@ def test_suppression_hits_ignores_a_comment_that_only_mentions_the_words() -> No
         "# pyright: strict",
         "# pyright: reportPrivateUsage=true",
         "# pyright: reportPrivateUsage=error",
-        "# pyright: reportPrivateUsage=warning",
+        "# pyright: strict, reportPrivateUsage = Error",
         "# ruff: isort: skip_file",
         "# pragma: allowlist secret",
     ],

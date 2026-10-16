@@ -151,12 +151,27 @@ def _write_ratings_tables(data_dir: Path, inventory: ModuleType, *, skip: str = 
             )
 
 
-def test_parse_args_without_data_dir_reads_the_main_checkout_data(port_audit: ModuleType) -> None:
+def test_the_default_data_dir_is_the_main_checkout_data(port_audit: ModuleType) -> None:
+    # Act
+    default = port_audit.DATA
+
+    # Assert
+    assert default == port_audit.MAIN / "data"
+
+
+def test_parse_args_without_data_dir_reads_the_default_data_dir(
+    port_audit: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setattr(port_audit, "DATA", data)
+
     # Act
     args = port_audit.parse_args("audit", [])
 
     # Assert
-    assert args.data_dir == port_audit.MAIN / "data"
+    assert args.data_dir == data.resolve()
 
 
 def test_parse_args_data_dir_returns_the_resolved_directory(

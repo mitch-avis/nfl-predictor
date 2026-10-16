@@ -675,25 +675,30 @@ DATASET_FILE_EXCLUSIONS: dict[str, str] = {
 def _data_path_constants() -> dict[str, str]:
     """Return the data-file constants in ``constants.py`` outside the cache, by name.
 
-    A ``*_NAME`` constant is a file's base name and a ``*_DIRNAME`` constant a directory's; a
-    ``Path`` constant counts when it lies under the data directory but not under its cache.
+    A ``*_NAME`` constant is a file's base name, a ``*_FILENAME`` or ``*_FILE`` constant a file's
+    name and a ``*_DIRNAME`` constant a directory's. A ``Path`` constant counts when it lies under
+    a data directory but not under its cache. Both data directories are checked: the module is
+    evaluated before the test isolation redirects ``DATA_PATH``, so a path built from it at import
+    keeps the checkout's directory.
     """
     found: dict[str, str] = {}
-    cache_root = constants.DATA_PATH / "cache"
+    data_roots = (constants.DATA_PATH, data_isolation.PACKAGED_DATA_DIR)
     for name, value in vars(constants).items():
         if not name.isupper():
             continue
         if isinstance(value, str) and name.endswith("_DIRNAME"):
             found[name] = f"{value}/"
-        elif isinstance(value, str) and name.endswith("_NAME"):
+        elif isinstance(value, str) and name.endswith(("_NAME", "_FILENAME", "_FILE")):
             found[name] = value
-        elif (
-            isinstance(value, Path)
-            and value.is_relative_to(constants.DATA_PATH)
-            and value != constants.DATA_PATH
-            and not value.is_relative_to(cache_root)
-        ):
-            found[name] = value.relative_to(constants.DATA_PATH).as_posix()
+        elif isinstance(value, Path):
+            for root in data_roots:
+                if (
+                    value.is_relative_to(root)
+                    and value != root
+                    and not value.is_relative_to(root / "cache")
+                ):
+                    found[name] = value.relative_to(root).as_posix()
+                    break
     return found
 
 

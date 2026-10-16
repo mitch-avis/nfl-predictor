@@ -63,7 +63,8 @@ so these rules are not advisory.
      `data/` or `models/`;
    - changing a default (CLI, config, constants) that alters what a weekly run produces, or any
      change that alters feature values at ETL time;
-   - closing a milestone, reopening a parked one (Milestone 57), or reordering the roadmap;
+   - reopening a closed or parked milestone (Milestone 57), reordering the roadmap, or retiring
+     an item that was not done (dropping it, or closing it as moot);
    - merging to `main` or pushing (tags and releases: never);
    - touching `../nfeloqb`, `../nfl-sos-ratings`, or the running web API (`nfl-predictor web`,
      port 8000 by default);
@@ -76,7 +77,11 @@ so these rules are not advisory.
    - fixes with a failing test first within the current task, corrections under rule 2, and doc
      updates that restate numbers already verified under rule 3;
    - one walk-forward run per written hypothesis, within rule 4;
-   - creating the milestone's feature branch off `main` when none exists.
+   - creating the milestone's feature branch off `main` when none exists;
+   - closing a finished task, step or milestone in `TODO.md` (and archiving it) once its
+     independent review passed and `scripts/gate.sh` is green on the merged tree: finished,
+     reviewed work is always marked done (the user, 2026-10-15). A delivery that differs from
+     the task text is not finished (rule 2).
 7. **Check-ins.** Report at every landed version and after every walk-forward run: what landed,
    the run directory, the gate result, the open questions. Stop for a question whenever rule 5
    triggers; a session that ends blocked on a question has done the right thing. The check-in

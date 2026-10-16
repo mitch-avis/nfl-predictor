@@ -14,7 +14,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
   2026-10-15): a run without game lines (the weekly run's `--wf-market-mode none`, or `train`
   without market features and anchor) defaults its floor-sigma reference to
   `constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS`
-  (`models/qb_adj_no_lines/no_lines_seed{42,7}`) instead of the market-anchored production runs; a listed value still wins in every mode;
+  (`models/qb_adj_no_lines/no_lines_seed{42,7}`) instead of the market-anchored production
+  runs; a listed value still wins in every mode;
   `options.resolve_floor_sigma_reference_runs` mirrors the feature-group default, and
   `config/weekly_run.yaml` leaves the key out so it follows the mode. Production (mode hybrid)
   resolves to the same runs and settings as before; `constants.py` changed, so every

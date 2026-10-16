@@ -88,9 +88,11 @@ Findings the independent integration reviews of 2026-10-14 left open; the open r
   missing its opponent's row fails the audit, a complete game passes. No bug found.
 - The rating-definition tests' recorded commit lacked a dirty mark. Resolved in `0.63.7`:
   `rating_tests_common.git_commit` appends `-dirty`, as `git describe --dirty` does, when a
-  tracked file differs from the commit, staged or not.
+  tracked file differs from the commit, staged or not. It runs git without any `GIT_*` variable,
+  so a git hook's `GIT_DIR` cannot point it at another repository, and records no commit for a
+  bare repository.
 - `season_t_interval` returned NaN bounds for one season. Resolved in `0.63.7`: it raises a
-  `ValueError` for fewer than two seasons.
+  `ValueError` for fewer than two distinct seasons.
 - Three power-ranking skips in the weekly run (missing season/week, missing dataset, missing
   schedule) logged at info level. Resolved in `0.63.7`: they log as warnings.
 
@@ -296,6 +298,11 @@ Branch `feat/step4-feature-values`. Items resolved here move from `TODO.md` as t
   independent reviewer. A text token in a numeric column now fails the read (the real file has
   none, nor did any of the 233 versions in `../nfeloqb`'s history since 2023-08-09; `nfeloqb`
   writes blanks). The user kept the hard failure, tentatively, on 2026-10-01.
+- `reporting/power_rankings.py` `_load_current_records` grouped with `group_by` without
+  `maintain_order`, so its row order changed between runs (content and rankings identical; found
+  by the `0.37.2` review in the step-3 merge test). Resolved in `0.63.7` (2026-10-16): the records
+  are sorted by `team_abbr`; every consumer merges on `team_abbr`, so only the frame's row order
+  changed.
 - `data_collection.py` passed the ~2000-line threshold with the incremental ETL (`0.37.5`). Split
   in `0.37.6` (2026-10-01, approved by the user): the week builder to `utils/polars/week_rows.py`
   and, to avoid an import cycle, the per-week strength table to `utils/polars/strength_table.py`
@@ -441,13 +448,6 @@ is the remainder, for the web phases (Milestone 58).
 **Stage 1 got slower.** Candidates now fit the shared 200-tree default at learning
 rate `0.0165` (last week's candidate keys show 120 trees at `0.070`). Expected, but it
 makes the GPU default matter more.
-
-### Resolved follow-ups (step-3 merge test)
-
-- `reporting/power_rankings.py` `_load_current_records` grouped with `group_by` without
-  `maintain_order`, so its row order changed between runs (content and rankings identical; found
-  by the `0.37.2` review). Resolved in `0.63.7` (2026-10-16): the records are sorted by
-  `team_abbr`; every consumer merges on `team_abbr`, so only the frame's row order changed.
 
 ## Milestone 60 - CLI and entrypoint consolidation
 

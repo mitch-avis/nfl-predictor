@@ -1,7 +1,10 @@
 import {
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
+  metaHelper,
+  rowSortingFeature,
+  tableFeatures,
+  useTable,
   type CellContext,
   type ColumnDef,
   type HeaderContext,
@@ -9,7 +12,6 @@ import {
   type SortingState,
   type Table,
 } from '@tanstack/react-table'
-import { useReactTable } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
@@ -42,7 +44,16 @@ interface DataTableMeta {
   renderers?: Record<string, CellRenderer>
 }
 
-function tableMeta(table: Table<Row>): DataTableMeta {
+/** The table features: sorting only, with the cells' metadata typed through `tableMeta`. */
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  tableMeta: metaHelper<DataTableMeta>(),
+})
+
+type Features = typeof features
+
+function tableMeta(table: Table<Features, Row>): DataTableMeta {
   return table.options.meta as DataTableMeta
 }
 
@@ -51,7 +62,7 @@ function tableMeta(table: Table<Row>): DataTableMeta {
  * level and read the current metadata and renderers from the table, so their identity never
  * changes and React updates cells in place instead of remounting them (which dropped focus).
  */
-function HeaderLabel({ column, table }: HeaderContext<Row, unknown>) {
+function HeaderLabel({ column, table }: HeaderContext<Features, Row, unknown>) {
   const meta = tableMeta(table).columnMetadata[column.id]
   return (
     <span className={cn('inline-flex items-center gap-1', isNumericKind(meta) && 'justify-end w-full')}>
@@ -62,7 +73,7 @@ function HeaderLabel({ column, table }: HeaderContext<Row, unknown>) {
 }
 
 /** A cell: the page's renderer for its column when there is one, else the formatted value. */
-function BodyCell({ column, row, table, getValue }: CellContext<Row, unknown>) {
+function BodyCell({ column, row, table, getValue }: CellContext<Features, Row, unknown>) {
   const { columnMetadata, renderers } = tableMeta(table)
   const meta = columnMetadata[column.id]
   const value = getValue() as Row[string]
@@ -71,7 +82,7 @@ function BodyCell({ column, row, table, getValue }: CellContext<Row, unknown>) {
 }
 
 /** Sort numbers as numbers and anything else as text, missing values last. */
-function compareCells(left: TableRow<Row>, right: TableRow<Row>, columnId: string): number {
+function compareCells(left: TableRow<Features, Row>, right: TableRow<Features, Row>, columnId: string): number {
   const av = left.original[columnId]
   const bv = right.original[columnId]
   if (av === null || av === undefined) return 1
@@ -103,29 +114,26 @@ export function DataTable({
     stickyOffsets[k] = i * STICKY_WIDTH
   })
 
-  const columnDefs = useMemo<ColumnDef<Row>[]>(
+  const columnDefs = useMemo<ColumnDef<Features, Row>[]>(
     () =>
       keys.map((key) => ({
         id: key,
         accessorFn: (row) => row[key],
         header: HeaderLabel,
         cell: BodyCell,
-        sortingFn: compareCells,
+        sortFn: compareCells,
         sortUndefined: 'last',
       })),
     [keys],
   )
   const meta: DataTableMeta = { columnMetadata: table.column_metadata, renderers }
 
-  // TanStack Table exposes imperative handlers by design; this component keeps them local.
-  // oxlint-disable-next-line react/incompatible-library
-  const instance = useReactTable({
+  const instance = useTable({
+    features,
     data: table.rows,
     columns: columnDefs,
     state: { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     meta,
   })
 
@@ -175,7 +183,7 @@ export function DataTable({
         <tbody>
           {instance.getRowModel().rows.map((row, index) => (
             <tr key={rowKey ? rowKey(row.original, index) : row.id} className={cn('group/row hover:bg-accent/30', rowClassName?.(row.original))}>
-              {row.getVisibleCells().map((cell) => {
+              {row.getAllCells().map((cell) => {
                 const key = cell.column.id
                 const meta = table.column_metadata[key]
                 const value = row.original[key]

@@ -103,7 +103,8 @@ def git_commit(repo: Path = constants.ROOT_DIR) -> str | None:
 
     Returns:
         The commit hash, with ``-dirty`` when the tracked files differ from it, or ``None``
-        outside a checkout or without ``git``.
+        outside a checkout, in a repository without a working tree (bare), or without
+        ``git``: the provenance is then unknown.
 
     """
     git = shutil.which("git")
@@ -119,10 +120,12 @@ def git_commit(repo: Path = constants.ROOT_DIR) -> str | None:
         [git, "status", "--porcelain", "--untracked-files=no"],
         cwd=repo,
         env=env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if changes.returncode != 0:
+        return None
     suffix = "-dirty" if changes.stdout.strip() else ""
     return f"{head.stdout.strip()}{suffix}"
 

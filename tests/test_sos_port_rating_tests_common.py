@@ -366,6 +366,19 @@ def test_git_commit_changed_tracked_file_is_marked_dirty(tmp_path: Path, *, stag
 
 
 @pytest.mark.usefixtures("no_git_environment")
+def test_git_commit_bare_repository_is_none(tmp_path: Path) -> None:
+    # Arrange
+    repo, _ = _committed_repo(tmp_path / "repo")
+    _git(tmp_path, "clone", "--quiet", "--bare", str(repo), "bare.git")
+
+    # Act
+    commit = common.git_commit(tmp_path / "bare.git")
+
+    # Assert
+    assert commit is None
+
+
+@pytest.mark.usefixtures("no_git_environment")
 def test_git_commit_outside_a_checkout_is_none(tmp_path: Path) -> None:
     # Arrange
     outside = tmp_path / "not_a_repo"

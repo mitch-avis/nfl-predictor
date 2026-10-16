@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+# dump_json puts one key per line in this many outer levels of objects.
+ONE_KEY_PER_LINE_DEPTH = 2
+
 
 def cell(value: object) -> str:
     """Render a table cell without breaking the Markdown table."""
@@ -46,7 +49,7 @@ def dump_json(value: object, depth: int = 0) -> str:
     item per line in compact form, so a report diffs line by line without one value per line.
     """
     pad = " " * (depth + 1)
-    if isinstance(value, dict) and value and depth < 2:  # noqa: PLR2004 - two levels
+    if isinstance(value, dict) and value and depth < ONE_KEY_PER_LINE_DEPTH:
         items = [f"{pad}{json.dumps(str(k))}: {dump_json(v, depth + 1)}" for k, v in value.items()]
         return "{\n" + ",\n".join(items) + "\n" + " " * depth + "}"
     if isinstance(value, list) and value and all(isinstance(v, dict | list) for v in value):

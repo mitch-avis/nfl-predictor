@@ -20,6 +20,8 @@ LOADER = "nfl_sos_ratings/data_loader.py"
 TEAM_STATS = "nfl_sos_ratings/team_stats.py"
 EXPANDED = "nfl_sos_ratings/team_stats_expanded.py"
 KEY_COLUMNS = ("game_id", "week", "team", "opponent_team")
+# A rate entry is a (numerator, denominator, rate) triple.
+TRIPLE_LENGTH = 3
 
 PLAY_BY_PLAY = "play-by-play"
 OFFICIAL = "official weekly team stats"
@@ -75,7 +77,7 @@ def _string_triples(value: object, name: str) -> list[tuple[str, str, str]]:
     """Return ``value`` as a list of string triples, or raise when it is not one."""
     if isinstance(value, list | tuple):
         triples = [tuple(_strings(item, name)) for item in value]
-        if all(len(triple) == 3 for triple in triples):  # noqa: PLR2004 - a triple
+        if all(len(triple) == TRIPLE_LENGTH for triple in triples):
             return [(triple[0], triple[1], triple[2]) for triple in triples]
     msg = f"{name} is not a sequence of string triples"
     raise TypeError(msg)

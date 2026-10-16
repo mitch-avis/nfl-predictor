@@ -9,6 +9,9 @@ from typing import Any
 from report_text import season_ranges, table
 
 CLASSES = ("matched", "different", "missing")
+# The season in progress when the inventory ran; a kind whose seasons start there is
+# not complete yet.
+CURRENT_SEASON = 2026
 RATING_KINDS = (
     "ratings",
     "ratings_by_week",
@@ -72,7 +75,7 @@ def _summary(payload: dict[str, Any], w: Any) -> None:
     columns = payload["columns"]
     checkout = payload["sos_checkout"]
     kinds = payload["kinds"]
-    completed = [kind for kind, seasons in kinds.items() if min(seasons) < 2026]  # noqa: PLR2004
+    completed = [kind for kind, seasons in kinds.items() if min(seasons) < CURRENT_SEASON]
     current = sorted(set(kinds) - set(completed))
     partial = [c for c in columns if len(c["seasons"]) != len(kinds[c["kind"]])]
     metrics = payload["registry"]["metrics"]

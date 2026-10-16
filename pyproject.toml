@@ -214,11 +214,11 @@ addopts = [
 filterwarnings = ["error"]
 
 [tool.coverage.run]
+# The package only: test code is not product code, and counting it would lift the total.
+source = ["src"]
 branch = true
-source = ["src", "tests"]
 
 [tool.coverage.report]
-# scripts/gate.sh also holds src/ alone to this bar, since tests/ lifts the total.
 fail_under = 90
 show_missing = true
 skip_empty = true

@@ -49,30 +49,34 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-25, version `0.28.1`, `main` after the Milestone 60 merge)
+### Current validated baseline (2026-10-16, production as of `0.63.0`)
 
-- Milestone 60 is closed: `feat/m60-cli-consolidation` merged into `main` with `--no-ff` on
-      2026-09-25 (the user's approval) and the local branch was deleted. Not pushed; pushing is
-      must-ask. `scripts/gate.sh --web` exits `0` on the merged tree (`1032 passed`, coverage
-      `92.21%` against the `90%` floor, 22 frontend tests).
-- One front door: `nfl-predictor <command>` runs every task (`nfl-predictor --help`); `scripts/`
-      holds only `gate.sh`, which CI runs. Every web job runs `<python> -m nfl_predictor
-      <command>`. `nfl-predictor compare` is the paired walk-forward comparison.
-- Checkpoint fingerprints changed in `0.20.0`, `0.22.0` and `0.26.0` and no walk-forward has run
-      since, so the next reference run retrains from scratch.
-- Data: the 2026-09-21 full rebuild on the `pbp`-default sources produced the walk-forward input
-      `data/completed_games_ml.m54_flip_through_2025.csv` (`7261` rows, `2d4111a6...`; leakage
-      audit `models/audit_m54_flip_rebuild/leakage_audit.json`, `463` features, `0` flags). The
-      weekly runs since have refreshed the current-season rows of the top-level CSVs; the
-      through-2025 cut is unchanged.
-- Production trains unweighted (task 55.8, `0.18.0`), with the shared `200`-tree default
-      (task 55.7, `0.13.0`). The weekly run reads `config/weekly_run.yaml` by default (`0.23.0`).
-- Reference arms on the pre-flip and default sources, both three-season ties on weeks 3-18:
-      `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
-      `models/wf_checkpoints/d112ebcba3115bafe9d9/`) and the default-flip verification arm
-      `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
-      `models/wf_checkpoints/9779c1cbb0701d23661a/`); numbers in `.agents/benchmarks.md`.
-      Both predate the fingerprint changes above.
+- Production (`config/weekly_run.yaml`, code defaults): the XGBoost margin and total heads, 200
+      trees, unweighted, market mode `hybrid` (line features and the anchor, the transform on),
+      the GPU when present, and the deterministic floor `Phi(margin / sigma)`. It leaves out
+      `strength, own_elo, own_elo_wt, qb_adj`, so it trains on the ported team ratings
+      (`ratings`) and the `qb_elos.csv` Elo (`elo`): 449 features on the through-2025 cut. The
+      power rankings rank on the blend of the ported rating and the model rating at weight `0.5`.
+- Reference with game lines: `models/qb_elos_measure/new_file_seed{42,7}` (code `c637fc0`,
+      `0.60.0`; 2007-2025 from week 1, 328 folds, 4,943 games; independently reviewed), the
+      floor-sigma reference since `0.62.0` (final pooled sigma `13.3184` and `13.3182`). It does
+      not beat the pick-time line on any column in any window; against it, two seeds, the line
+      leads on margin MAE all weeks by `0.0484` `[0.0057, 0.0909]` and on week-1 Brier by
+      `0.00511` `[0.00007, 0.01030]` (`.agents/benchmarks.md`, "`qb_elos.csv` measurement").
+- Reference without game lines (`weekly --wf-market-mode none`, `train --exclude-market`):
+      `models/qb_adj_no_lines/no_lines_seed{42,7}` (code `d791846`, `0.62.0`; leaves out
+      `strength, elo, own_elo_wt, qb_adj`, 431 features; independently reviewed), the floor-sigma
+      reference of that mode since `0.63.0` (final pooled sigma `13.3969` and `13.4341`). The
+      pick-time line leads it all weeks on Brier by `0.00373` `[0.00162, 0.00579]`, log loss by
+      `0.00839` `[0.00351, 0.01313]` and margin MAE by `0.1197` `[0.0469, 0.1901]`
+      (`.agents/benchmarks.md`, "The quarterback adjustment without game lines").
+- Data: the ETL rebuilt on 2026-10-14 on `0.59.0` (7,340 completed rows, 541 columns,
+      fingerprint `f3eca626...`, 534 ported-ratings files under `data/ratings/`); leakage audit
+      `models/leakage_audit.json`, 490 features, 0 flags. Both references read the walk-forward
+      input `models/qb_elos_measure/inputs/new_file.csv` (7,261 rows, 544 columns,
+      `b9772e3e...49f0`).
+- Run directories that predate step 6 and were deleted on 2026-10-16 are listed in
+      `.agents/models_cleanup/`; numbers quoted from them stand as reviewed.
 
 ---
 
@@ -251,9 +255,15 @@ Steps:
    `qb_adj` since `0.61.0`); no rating-definition outcome is adopted before a post-merge
    measurement; the merge itself. The reviews' small open findings are listed under "From the
    step-6 integration reviews" below.
-   Merged into `main` as `0.59.0` on 2026-10-14 with the user's approval. Its close-out is
-   open: the docs close-out listed in `.agents/next_agent_session_prompt.md`, 58.1's survivor
-   planner (the user's acceptance) and 58.2's browser check.
+   Merged into `main` as `0.59.0` on 2026-10-14 with the user's approval.
+   Status 2026-10-16: phases 1-5 are done and independently reviewed (the release index in
+   `.agents/sos_port/DECISIONS.md`, `0.46.0`-`0.59.0`), the ported ratings adopted in production
+   in `0.59.0`. Phase 6 is done except for two narrowed items: the web pages landed in `0.53.0`
+   (two review rounds) and Milestone 58's live-betting design is archived (58.3); 58.1 waits for
+   the user's acceptance of the exact survivor planner, and 58.2 for its done-criterion, a first
+   look at a current-season team page in a browser (the data rebuild it also waited on is done
+   since 2026-10-14). The docs close-out is on `docs/step6-close-out` (2026-10-16, not merged).
+   Step 6 closes when 58.1 and 58.2 are accepted.
 7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
    - done 2026-10-15 (`0.60.0`-`0.60.1`, independently reviewed, merged into `main`):
      `qb_elos.csv`'s `qb1_adj`/`qb2_adj` published as the `qb_adj` group, off in production until
@@ -556,10 +566,11 @@ happens on a fresh branch off `main` and merges back after each phase.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
       Narrowed (2026-10-10): the pages, their API and the navigation landed on the step-6
       integration branch as `0.53.0`, over the ported ratings and season statistics, but the
-      phase's done-criterion (a current-season team page with heatmaps and a game log) waits on
-      the production rebuild of `data/` (held for the user's approval; the ETL step that writes the
-      tables landed in `0.56.0`) and a first look in a browser; four source features are logged
-      as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
+      phase's done-criterion (a current-season team page with heatmaps and a game log) waited on
+      the production rebuild of `data/` and a first look in a browser; four source features are
+      logged as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
+      Status 2026-10-16: the rebuild is done (2026-10-14, `0.59.0`, with the 534 ported-ratings
+      files); the browser look is still open.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the

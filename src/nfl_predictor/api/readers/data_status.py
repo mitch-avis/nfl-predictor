@@ -216,7 +216,14 @@ def file_status(data_dir: Path, name: str, description: str) -> FileStatus:
             seasons=None,
         )
     stat = path.stat()
-    rows, seasons = cached(path, _csv_shape, "shape") if path.suffix == ".csv" else (None, None)
+    rows: int | None = None
+    seasons: tuple[int, int] | None = None
+    if path.suffix == ".csv":
+        try:
+            rows, seasons = cached(path, _csv_shape, "shape")
+        except (pl.exceptions.PolarsError, OSError, ValueError) as exc:
+            # One unreadable file must not take the whole status page down.
+            log.warning("Could not read the rows and seasons of %s: %s", path, exc)
     return FileStatus(
         name=name,
         description=description,

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.59.7] - 2026-10-15
+
+### Fixed
+
+- A booster's round count is read only from a Python or numpy integer again, as before `0.59.6`:
+  a zero-dimensional array is no round count, so the recorded best iteration stays unset instead
+  of being taken from it. The model code changed, so every walk-forward checkpoint fingerprint
+  changes again.
+
 ## [0.59.6] - 2026-10-15
 
 ### Changed

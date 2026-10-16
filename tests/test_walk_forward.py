@@ -9,6 +9,7 @@ import json
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -1306,6 +1307,37 @@ def test_walk_forward_disables_small_window_early_stopping(
     assert first_week["margin_model.early_stopped"] is False
     # Running the full budget is the configured behavior, not a warning condition.
     assert "iteration_warnings" not in first_week
+
+
+def _estimator_reporting(rounds: object, best_iteration: object = None) -> SimpleNamespace:
+    booster = SimpleNamespace(num_boosted_rounds=lambda: rounds)
+    return SimpleNamespace(get_booster=lambda: booster, best_iteration=best_iteration)
+
+
+@pytest.mark.parametrize(
+    ("rounds", "best_iteration", "expected"),
+    [
+        pytest.param(10, None, 9, id="int-rounds"),
+        pytest.param(np.int64(10), None, 9, id="numpy-rounds"),
+        pytest.param(10, np.int64(3), 3, id="best-iteration-wins"),
+        pytest.param(10, 0, 0, id="best-iteration-zero"),
+        pytest.param(None, None, None, id="nothing"),
+        pytest.param(np.float64(10.0), None, None, id="float-rounds"),
+        pytest.param(np.array(10), None, None, id="zero-d-array"),
+    ],
+)
+def test_estimator_best_iteration_reads_only_integer_round_counts(
+    rounds: object, best_iteration: object, expected: int | None
+) -> None:
+    """The full-budget fallback takes only a Python or numpy integer as a round count."""
+    # Arrange
+    estimator = _estimator_reporting(rounds, best_iteration)
+
+    # Act
+    result = walk_forward._estimator_best_iteration(estimator)
+
+    # Assert
+    assert result == expected
 
 
 def test_iteration_details_warns_only_on_real_early_stopping_outcomes() -> None:

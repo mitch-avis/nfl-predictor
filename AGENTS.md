@@ -68,14 +68,15 @@ Binding in every session; definitions, limits and examples are in `.agents/guard
    combine) before each walk-forward; after two runs on one task without a decision, stop and
    ask. An accepted ladder with a stated cap approves its rungs. One walk-forward at a time.
 5. **Must ask first:** rebuilding, deleting or overwriting anything under `data/` or `models/`;
-   changing a default that alters a weekly run or feature values; closing, reopening or
-   reordering roadmap items; merging to `main` or pushing (tags and releases: never); touching
-   `../nfeloqb`, `../nfl-sos-ratings` or the running web API; a third walk-forward on one task
-   or any six-season run outside an accepted ladder; anything the task says to decide with the
-   user.
+   changing a default that alters a weekly run or feature values; reopening, reordering or
+   retiring (dropping undone) roadmap items; merging to `main` or pushing (tags and releases:
+   never); touching `../nfeloqb`, `../nfl-sos-ratings` or the running web API; a third
+   walk-forward on one task or any six-season run outside an accepted ladder; anything the task
+   says to decide with the user.
 6. **May proceed:** commits on the feature branch per versioned chunk; fixes with a failing
    test first; corrections under rule 2; doc updates restating verified numbers; one
-   walk-forward per written hypothesis; creating the milestone branch off `main`.
+   walk-forward per written hypothesis; creating the milestone branch off `main`; closing a
+   finished roadmap item once its independent review passed and the gate is green.
 7. **Check-ins** at every landed version and after every walk-forward: what landed, the run
    directory, the gate result, the governing-window numbers, the open questions, and how long
    runs are sequenced and watched. Never promise to "keep monitoring" with nothing watching.

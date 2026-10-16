@@ -17,9 +17,10 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
   - `fix/qb-adj-review-findings` (`0.60.0` plus `0.60.1`): the `qb_adj` group from `qb_elos.csv`,
     off in production, with the first review's fixes; `0.60.1` makes
     `game_utils.fill_future_qb_data` fill quarterbacks only on unplayed games, give a starter's
-    values only to the side it filled and recompute every unplayed row's `*_diff` columns. An investigation before the fix found no
-    played row filled in the 1999-2025 build and consistent diffs everywhere, so no current value
-    changes; the fix closes a path for later values into played rows;
+    values only to the side it filled and recompute every unplayed row's `*_diff` columns. An
+    investigation before the fix found no played row filled in the 1999-2025 build and
+    consistent diffs everywhere, so no current value changes; the fix closes a path for later
+    values into played rows;
   - `feat/no-game-lines-groups` (`0.61.0`): a run without game lines leaves out
     `strength,elo,own_elo_wt,qb_adj` by default; it counts as one when its market features and
     anchor are off, whatever the market transform (the user dropped the transform from the check;

@@ -126,7 +126,7 @@ def _team_plays(
     """
     game_id, season, week, team, opponent, season_type = game
     passer_id, passer_name = _passer(team, season, week)
-    base = {
+    base: dict[str, object] = {
         "game_id": game_id,
         "season": season,
         "season_type": season_type,

@@ -173,7 +173,7 @@ def _with_earlier_seasons(
     got no rows for (the current season before kickoff) is not asked for a second time. With
     nothing loaded, every season is asked for.
     """
-    present = (
+    present: set[int] = (
         set(loaded.get_column("season").unique(maintain_order=True).to_list())
         if "season" in loaded.columns
         else set()
@@ -599,7 +599,7 @@ class RatingsBuild:
         """Return every team's pre-week ratings for each scheduled week of the season."""
         teams = self._teams(season)
         fits: dict[int, pl.DataFrame] = {}
-        parts = []
+        parts: list[pl.DataFrame] = []
         for week, read_week in self._weeks(season):
             if read_week not in fits:
                 fits[read_week] = self._history.pre_week_teams(season, read_week, teams)
@@ -609,7 +609,7 @@ class RatingsBuild:
     def _pre_week_quarterbacks(self, season: int) -> pl.DataFrame:
         """Return every passer's pre-week rating for each scheduled week of the season."""
         fits: dict[int, pl.DataFrame] = {}
-        parts = []
+        parts: list[pl.DataFrame] = []
         for week, read_week in self._weeks(season):
             if read_week not in fits:
                 fits[read_week] = self._history.pre_week_quarterbacks(season, read_week)

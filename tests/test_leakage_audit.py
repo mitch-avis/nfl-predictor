@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import pytest
 
+from nfl_predictor import ml_model
 from nfl_predictor.ml import leakage_audit
+from tests.fakes import returning
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _tiny_df() -> pd.DataFrame:
@@ -29,6 +36,7 @@ def _tiny_df() -> pd.DataFrame:
 
 def test_leakage_audit_detects_target_in_features() -> None:
     """Audit should fail if a target copy is in the feature range."""
+    # Arrange
     df = _tiny_df()
 
     config = leakage_audit.LeakageAuditConfig(
@@ -38,14 +46,17 @@ def test_leakage_audit_detects_target_in_features() -> None:
         market_transform=False,
     )
 
+    # Act
     report = leakage_audit.run_leakage_audit(df, config)
 
+    # Assert
     assert report["ok"] is False
     assert any("nearly equals" in msg for msg in report["failures"])
 
 
 def test_leakage_audit_runs_on_fixture() -> None:
     """Audit should pass when targets are excluded from the feature range."""
+    # Arrange
     df = _tiny_df()
 
     config = leakage_audit.LeakageAuditConfig(
@@ -55,26 +66,55 @@ def test_leakage_audit_runs_on_fixture() -> None:
         market_transform=False,
     )
 
+    # Act
     report = leakage_audit.run_leakage_audit(df, config)
 
+    # Assert
     assert "ok" in report
     assert "flagged_columns" in report
     # Should pass: targets are not in feature range.
     assert report["ok"] is True
 
 
-def test_safe_corr_and_equality_rate_handle_edge_cases() -> None:
-    """Helper metrics return `None` for degenerate inputs and scores for valid arrays."""
-    assert leakage_audit._safe_corr(np.array([1.0, np.nan]), np.array([2.0, 3.0])) is None
-    assert leakage_audit._safe_corr(np.array([1.0, 1.0, 1.0]), np.array([1.0, 2.0, 3.0])) is None
-    assert leakage_audit._equality_rate(np.array([np.nan]), np.array([1.0])) is None
-    assert leakage_audit._equality_rate(np.array([1.0, 2.0]), np.array([1.0, 3.0])) == 0.5
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        (np.array([1.0, np.nan]), np.array([2.0, 3.0])),
+        (np.array([1.0, 1.0, 1.0]), np.array([1.0, 2.0, 3.0])),
+    ],
+)
+def test_safe_corr_and_equality_rate_handle_edge_cases(left: np.ndarray, right: np.ndarray) -> None:
+    """The correlation helper returns `None` for degenerate inputs."""
+    # Act
+    corr = leakage_audit._safe_corr(left, right)
+
+    # Assert
+    assert corr is None
+
+
+def test_equality_rate_degenerate_input_is_none() -> None:
+    """The equality-rate helper returns `None` for degenerate inputs."""
+    # Act
+    rate = leakage_audit._equality_rate(np.array([np.nan]), np.array([1.0]))
+
+    # Assert
+    assert rate is None
+
+
+def test_equality_rate_scores_valid_arrays() -> None:
+    """The equality-rate helper scores valid arrays."""
+    # Act
+    rate = leakage_audit._equality_rate(np.array([1.0, 2.0]), np.array([1.0, 3.0]))
+
+    # Assert
+    assert rate == 0.5
 
 
 def test_leakage_audit_flags_suspicious_names_and_near_perfect_correlation(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Flags heuristic names and fails for near-perfect label-derived features."""
+    # Arrange
     df = pd.DataFrame(
         {
             "away_score": [10, 14, 21],
@@ -84,37 +124,41 @@ def test_leakage_audit_flags_suspicious_names_and_near_perfect_correlation(
         }
     )
 
+    monkeypatch.setattr(ml_model, "get_target_columns", returning(("away_score", "home_score")))
     monkeypatch.setattr(
-        leakage_audit.ml_model,
-        "get_target_columns",
-        lambda _df: ("away_score", "home_score"),
-    )
-    monkeypatch.setattr(
-        leakage_audit.ml_model,
+        ml_model,
         "build_feature_spec",
-        lambda *_args, **_kwargs: SimpleNamespace(feature_columns=["winner_hint", "total_copy"]),
+        returning(SimpleNamespace(feature_columns=["winner_hint", "total_copy"])),
     )
 
+    # Act
     report = leakage_audit.run_leakage_audit(df, leakage_audit.LeakageAuditConfig())
 
+    # Assert
     assert report["ok"] is False
     assert any("Near-perfect correlation" in message for message in report["failures"])
     assert any(item["reason"] == "suspicious_name" for item in report["flagged_columns"])
 
 
-def test_write_report_writes_sorted_json(tmp_path) -> None:
+def test_write_report_writes_sorted_json(tmp_path: Path) -> None:
     """Persists the JSON report to disk using a stable sort order."""
+    # Arrange
     report = {"b": 2, "a": 1}
     out_path = tmp_path / "report.json"
 
+    # Act
     leakage_audit.write_report(report, out_path)
 
+    # Assert
     assert json.loads(out_path.read_text(encoding="utf-8")) == report
     assert out_path.read_text(encoding="utf-8").splitlines()[1].strip().startswith('"a"')
 
 
-def test_cli_main_creates_missing_report_directory(tmp_path, monkeypatch) -> None:
+def test_cli_main_creates_missing_report_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The CLI writes its report even when the output directory does not exist yet."""
+    # Arrange
     from nfl_predictor.cli import leakage_audit as leakage_audit_cli
 
     data_path = tmp_path / "games.csv"
@@ -135,7 +179,9 @@ def test_cli_main_creates_missing_report_directory(tmp_path, monkeypatch) -> Non
         ],
     )
 
+    # Act
     exit_code = leakage_audit_cli.main()
 
+    # Assert
     assert exit_code == 0
     assert json.loads(out_path.read_text())["ok"] is True

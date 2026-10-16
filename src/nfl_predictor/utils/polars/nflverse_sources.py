@@ -10,7 +10,7 @@ columns it was written for:
 
 - A historical season (before ``current_season``) reads its cached file when the file is
   current; a file that lacks a column the code now requests is fetched again (see
-  ``loaders._read_cached_frame``). ``force_refresh`` fetches every season again.
+  ``loaders.read_cached_frame``). ``force_refresh`` fetches every season again.
 - The current and any later season is always fetched again.
 - A failed fetch for a historical season is re-raised. For the current or a later season it
   falls back to the cached file, or the season is skipped: nflverse publishes a season's files
@@ -45,10 +45,10 @@ from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import player_identity, player_team_repair
 from nfl_predictor.utils.polars.loaders import (
-    _read_cached_frame,
-    _resolve_cache_dir,
-    _resolve_current_season,
-    _write_cached_frame,
+    read_cached_frame,
+    resolve_cache_dir,
+    resolve_current_season,
+    write_cached_frame,
 )
 from nfl_predictor.utils.scraping_utils import normalize_team_column
 
@@ -155,7 +155,7 @@ class SeasonSource:
     season_type_column: str | None = None
     regular_season_value: str = "REG"
     team_columns: tuple[str, ...] = ()
-    team_codes: Mapping[str, str] = field(default_factory=dict)
+    team_codes: Mapping[str, str] = field(default_factory=dict[str, str])
 
     @property
     def columns(self) -> tuple[str, ...]:
@@ -215,8 +215,8 @@ class SeasonSource:
         if not seasons:
             return self.empty()
 
-        cache_root = _resolve_cache_dir(cache_dir)
-        current = _resolve_current_season(current_season)
+        cache_root = resolve_cache_dir(cache_dir)
+        current = resolve_current_season(current_season)
         log.info("Loading %s for seasons: %s", self.label, list(seasons))
         frames: list[pl.DataFrame] = []
         for season in seasons:
@@ -252,9 +252,7 @@ class SeasonSource:
                 season,
             )
             return None
-        cached = (
-            _read_cached_frame(path, self.columns) if historical and not force_refresh else None
-        )
+        cached = read_cached_frame(path, self.columns) if historical and not force_refresh else None
         if cached is not None:
             log.info("Using cached %s for season %d from %s", self.label, season, path)
             return conform(cached, self.schema)
@@ -269,7 +267,7 @@ class SeasonSource:
         except DOWNLOAD_ERRORS as exc:
             if historical:
                 raise
-            fallback = _read_cached_frame(path)
+            fallback = read_cached_frame(path)
             if fallback is not None:
                 log.warning(
                     "Current-season %s unavailable for season %d; using cached data from %s. "
@@ -290,7 +288,7 @@ class SeasonSource:
             return None
 
         prepared = self.prepare(raw, regular_season_only=regular_season_only)
-        _write_cached_frame(prepared, path, self.columns)
+        write_cached_frame(prepared, path, self.columns)
         return prepared
 
 
@@ -623,9 +621,9 @@ def load_players(
         The players file's requested columns (``constants.NFLREADPY_PLAYERS_COLUMNS``)
 
     """
-    path = _resolve_cache_dir(cache_dir) / _PLAYERS_CACHE_NAME
+    path = resolve_cache_dir(cache_dir) / _PLAYERS_CACHE_NAME
     columns = tuple(constants.NFLREADPY_PLAYERS_COLUMNS)
-    cached = None if force_refresh else _read_cached_frame(path, columns)
+    cached = None if force_refresh else read_cached_frame(path, columns)
     if cached is not None:
         log.info("Using the cached players file from %s", path)
         return conform(cached, _PLAYERS_SCHEMA)
@@ -636,7 +634,7 @@ def load_players(
     except DOWNLOAD_ERRORS as exc:
         if not degrade_on_failure:
             raise
-        fallback = _read_cached_frame(path)
+        fallback = read_cached_frame(path)
         if fallback is not None:
             log.warning("Players file unavailable; using cached data from %s. Error: %s", path, exc)
             return conform(fallback, _PLAYERS_SCHEMA)
@@ -644,7 +642,7 @@ def load_players(
         return pl.DataFrame(schema=_PLAYERS_SCHEMA)
 
     players = conform(raw, _PLAYERS_SCHEMA)
-    _write_cached_frame(players, path, columns)
+    write_cached_frame(players, path, columns)
     return players
 
 
@@ -675,7 +673,7 @@ def load_season_qb_identity(
         One row per GSIS id with the snap-count id, name and the season's position
 
     """
-    current = _resolve_current_season(current_season)
+    current = resolve_current_season(current_season)
     is_current = season >= current
     players = load_players(
         cache_dir=cache_dir,

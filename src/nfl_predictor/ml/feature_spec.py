@@ -139,8 +139,8 @@ def _drop_high_cardinality_columns(
     df: pd.DataFrame, max_cardinality_ratio: float
 ) -> tuple[pd.DataFrame, list[str]]:
     """Drop categorical columns with high cardinality ratios."""
-    cat_cols = df.select_dtypes(include=["object", "category"]).columns
-    dropped = []
+    cat_cols = df.select_dtypes(include=["object", "str", "category"]).columns
+    dropped: list[str] = []
     row_count = max(len(df), 1)
     for col in cat_cols:
         unique_ratio = df[col].nunique(dropna=True) / row_count
@@ -420,7 +420,9 @@ def build_feature_spec(df: pd.DataFrame, selection: FeatureSelection) -> Feature
     )
     _note_kept_market_informed_groups(feature_df.columns.tolist(), selection)
 
-    categorical_columns = feature_df.select_dtypes(include=["object", "category"]).columns.tolist()
+    categorical_columns = feature_df.select_dtypes(
+        include=["object", "str", "category"]
+    ).columns.tolist()
     numeric_columns = [col for col in feature_df.columns if col not in categorical_columns]
 
     spec = FeatureSpec(

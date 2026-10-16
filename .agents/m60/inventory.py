@@ -59,7 +59,7 @@ RECORD_SINK = re.compile(
 )
 TUNING_SINK = re.compile(r"^kw (\w+)= of (?:\w+\.)*OptunaConfig\(\)$")
 WF_CONFIG_SINK = re.compile(r"^kw (\w+)= of (?:\w+\.)*WalkForwardConfig\(\)$")
-TUNING_FUNCTIONS = {"_run_optuna_search", "objective_fn"}
+TUNING_FUNCTIONS = {"run_optuna_search", "objective_fn"}
 # Config dataclasses whose per-field reads the inventory traces across the package.
 CONFIG_CLASSES = {
     "WalkForwardConfig": "nfl_predictor/ml/walk_forward.py",

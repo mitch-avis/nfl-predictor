@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from nfl_predictor.api.errors import NotFoundError
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     import sqlite3
@@ -40,7 +41,8 @@ def _loads(payload: str | None) -> dict[str, Any]:
         value = json.loads(payload)
     except ValueError:
         return {}
-    return value if isinstance(value, dict) else {}
+    record = as_str_dict(value)
+    return {} if record is None else record
 
 
 @dataclass(frozen=True)
@@ -220,7 +222,7 @@ class JobStore:
                 "SELECT COALESCE(MAX(seq), 0) AS seq FROM job_logs WHERE job_id = ?", (job_id,)
             ).fetchone()
             seq = int(row["seq"])
-            payload = []
+            payload: list[tuple[str, int, str, str, str]] = []
             for line in lines:
                 seq += 1
                 payload.append((job_id, seq, line.ts or _now(), line.level, line.message))

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from nfl_predictor.api.runs.files import RunFiles, resolve_run_files
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -57,7 +58,7 @@ def _read_json(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError) as exc:
         log.warning("Skipping unreadable JSON %s: %s", path, exc)
         return None
-    return payload if isinstance(payload, dict) else None
+    return as_str_dict(payload)
 
 
 def _holdout_metrics(metrics_path: Path) -> dict[str, float] | None:
@@ -65,11 +66,11 @@ def _holdout_metrics(metrics_path: Path) -> dict[str, float] | None:
     report = _read_json(metrics_path) if metrics_path.is_file() else None
     if report is None:
         return None
-    block: Any = report.get("metrics")
-    if isinstance(block, dict):
-        inner = block.get("metrics")
-        block = inner.get("holdout") if isinstance(inner, dict) else block.get("overall")
-    if not isinstance(block, dict):
+    block = as_str_dict(report.get("metrics"))
+    if block is not None:
+        inner = as_str_dict(block.get("metrics"))
+        block = as_str_dict(inner.get("holdout") if inner is not None else block.get("overall"))
+    if block is None:
         return None
     return {k: float(v) for k, v in block.items() if isinstance(v, int | float)}
 
@@ -88,8 +89,8 @@ def _season_week(files: RunFiles, metadata: dict[str, Any]) -> tuple[int | None,
     """Return the season/week a run predicted, from its files or its config."""
     if files.season is not None:
         return files.season, files.week
-    config = metadata.get("config")
-    if not isinstance(config, dict):
+    config = as_str_dict(metadata.get("config"))
+    if config is None:
         return None, None
     season = config.get("power_rankings_season")
     predict_path = config.get("predict_path")
@@ -111,7 +112,7 @@ def summarize_run(run_dir: Path) -> RunSummary | None:
     metadata = _read_json(files.metadata)
     if metadata is None:
         return None
-    config = metadata.get("config")
+    config = as_str_dict(metadata.get("config"))
     season, week = _season_week(files, metadata)
     return RunSummary(
         run_id=run_dir.name,
@@ -124,7 +125,7 @@ def summarize_run(run_dir: Path) -> RunSummary | None:
         complete=files.complete,
         git_commit_hash=metadata.get("git_commit_hash"),
         dataset_hash=metadata.get("dataset_hash"),
-        model_kind=config.get("model_kind") if isinstance(config, dict) else None,
+        model_kind=config.get("model_kind") if config is not None else None,
         holdout=_holdout_metrics(files.metrics),
         files=files.presence(),
         run_files=files,

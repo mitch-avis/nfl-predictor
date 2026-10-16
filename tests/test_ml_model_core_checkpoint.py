@@ -40,6 +40,7 @@ def _dummy_feature_spec() -> core.FeatureSpec:
 
 def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
     """Loads a MarginTotalModel checkpoint when model_kind matches."""
+    # Arrange
     model_path = tmp_path / "model.joblib"
     meta_path = tmp_path / "metadata.json"
 
@@ -60,7 +61,10 @@ def test_load_model_checkpoint_loads_expected_kind(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    # Act
     loaded = core.load_model_checkpoint(model_path, "margin_total")
+
+    # Assert
     assert isinstance(loaded, core.MarginTotalModel)
 
 
@@ -72,6 +76,7 @@ def test_load_model_checkpoint_ignores_unreadable_metadata(
     tmp_path: Path, metadata_text: str
 ) -> None:
     """Metadata that is not the expected JSON object never blocks loading the model."""
+    # Arrange
     model_path = tmp_path / "model.joblib"
     model = core.MarginTotalModel(
         preprocessor=cast("ColumnTransformer", None),
@@ -85,12 +90,16 @@ def test_load_model_checkpoint_ignores_unreadable_metadata(
     joblib.dump(model, model_path)
     (tmp_path / "metadata.json").write_text(metadata_text, encoding="utf-8")
 
+    # Act
     loaded = core.load_model_checkpoint(model_path, "margin_total")
+
+    # Assert
     assert isinstance(loaded, core.MarginTotalModel)
 
 
 def test_a_saved_blend_model_is_refused_with_a_reason(tmp_path: Path) -> None:
     """A checkpoint of the retired blend kind fails to load and says why."""
+    # Arrange
     model_path = tmp_path / "model.joblib"
     joblib.dump(
         core.BlendedMarginTotalModel(
@@ -102,23 +111,28 @@ def test_a_saved_blend_model_is_refused_with_a_reason(tmp_path: Path) -> None:
         model_path,
     )
 
+    # Act & Assert
     with pytest.raises(TypeError, match=r"blend model kind was retired"):
         core.load_model_checkpoint(model_path, "margin_total")
 
 
 def test_the_retired_blend_kind_cannot_be_requested(tmp_path: Path) -> None:
     """Loading with ``model_kind="blend"`` is an unknown kind now."""
+    # Arrange
     model_path = tmp_path / "model.joblib"
     joblib.dump({"x": 1}, model_path)
 
+    # Act & Assert
     with pytest.raises(ValueError, match=r"Unknown model kind"):
         core.load_model_checkpoint(model_path, "blend")
 
 
 def test_load_model_checkpoint_unknown_kind_raises(tmp_path: Path) -> None:
     """Raises ValueError for unknown model_kind values."""
+    # Arrange
     model_path = tmp_path / "model.joblib"
     joblib.dump({"x": 1}, model_path)
 
+    # Act & Assert
     with pytest.raises(ValueError, match=r"Unknown model kind"):
         core.load_model_checkpoint(model_path, "not_a_kind")

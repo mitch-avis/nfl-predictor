@@ -3,19 +3,27 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import itertools
 import json
+import subprocess
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 import pandas.testing as pdt
 import pytest
 from scipy.stats import norm
 
-from nfl_predictor import constants
+from nfl_predictor import constants, ml_model
 from nfl_predictor.ml import ml_model_xgb_utils, walk_forward
+from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
+from nfl_predictor.utils.logger import log
+from tests.fakes import returning
 
 
 def _fixture_df() -> pd.DataFrame:
@@ -72,11 +80,26 @@ def _base_config() -> walk_forward.WalkForwardConfig:
     )
 
 
+def _capture_info_messages(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Route ``walk_forward.log.info`` into a list of formatted messages and return it."""
+    messages: list[str] = []
+
+    def capture(message: str, *args: object) -> None:
+        messages.append(message % args if args else message)
+
+    monkeypatch.setattr(log, "info", capture)
+    return messages
+
+
 def test_walk_forward_split_excludes_eval_week() -> None:
     """Train set must exclude any games from the predicted eval week."""
+    # Arrange
     df = _fixture_df()
+
+    # Act
     folds = walk_forward.build_walk_forward_folds(df, [2023], start_week=2)
 
+    # Assert
     assert folds
     for fold in folds:
         same_season = fold.train_df[fold.train_df["season"] == fold.season]
@@ -85,7 +108,10 @@ def test_walk_forward_split_excludes_eval_week() -> None:
 
 def test_summarize_eval_window_flags_incomplete_regular_season() -> None:
     """Summarize eval window reports incomplete regular seasons when data is partial."""
+    # Arrange
     df = _fixture_df()
+
+    # Act
     summary = walk_forward.summarize_eval_window(
         df,
         eval_seasons=[2023],
@@ -93,6 +119,7 @@ def test_summarize_eval_window_flags_incomplete_regular_season() -> None:
         include_postseason=False,
     )
 
+    # Assert
     assert summary["include_postseason"] is False
     assert 2023 in summary["incomplete_seasons"]
     season_summary = summary["seasons"]["2023"]
@@ -102,12 +129,15 @@ def test_summarize_eval_window_flags_incomplete_regular_season() -> None:
 
 def test_walk_forward_deterministic_outputs() -> None:
     """Fixed seeds yield identical per-fold outputs."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
-
     result_a = walk_forward.run_walk_forward_backtest(df, config)
+
+    # Act
     result_b = walk_forward.run_walk_forward_backtest(df, config)
 
+    # Assert
     pdt.assert_frame_equal(result_a["predictions"], result_b["predictions"])
     assert result_a["per_week"] == result_b["per_week"]
 
@@ -116,16 +146,19 @@ def test_run_walk_forward_backtest_logs_each_finished_week(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Every finished fold logs its position and timing, so a long run shows progress."""
+    # Arrange
     messages: list[str] = []
 
     def _capture(msg: str, *args: object, **_kwargs: object) -> None:
         """Record the formatted message."""
         messages.append(msg % args if args else msg)
 
-    monkeypatch.setattr(walk_forward.log, "info", _capture)
+    monkeypatch.setattr(log, "info", _capture)
 
+    # Act
     walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 
+    # Assert
     progress = [message for message in messages if message.startswith("Walk-forward fold")]
     assert len(progress) == 2
     assert progress[0].startswith("Walk-forward fold 1/2 done: season 2023 week 2 (2 games")
@@ -177,6 +210,7 @@ def _assert_same_results(actual: dict[str, object], expected: dict[str, object])
 
 def test_resumed_run_matches_an_uninterrupted_run(tmp_path: Path) -> None:
     """A run stopped after its first week resumes from the checkpoint and ends identical."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     clean = walk_forward.run_walk_forward_backtest(df, config)
@@ -190,8 +224,10 @@ def test_resumed_run_matches_an_uninterrupted_run(tmp_path: Path) -> None:
             df, config, fold_callback=_stop, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
         )
 
+    # Act
     resumed, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
 
+    # Assert
     assert computed == [(2023, 3)]
     assert resumed["checkpoint"] == {
         "dir": str(tmp_path / walk_forward.fold_checkpoint_fingerprint(df, config)[:20]),
@@ -203,11 +239,15 @@ def test_resumed_run_matches_an_uninterrupted_run(tmp_path: Path) -> None:
 
 def test_finished_run_restores_every_week(tmp_path: Path) -> None:
     """Re-running a finished run trains nothing and reproduces the same results."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     first, first_computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+
+    # Act
     second, second_computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
 
+    # Assert
     assert first_computed == [(2023, 2), (2023, 3)]
     assert second_computed == []
     _assert_same_results(second, first)
@@ -215,6 +255,7 @@ def test_finished_run_restores_every_week(tmp_path: Path) -> None:
 
 def test_checkpoints_from_another_config_are_not_reused(tmp_path: Path) -> None:
     """A different config fingerprints differently, so every week is trained again."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     changed = replace(
@@ -222,66 +263,109 @@ def test_checkpoints_from_another_config_are_not_reused(tmp_path: Path) -> None:
         xgb_params_overrides={**(config.xgb_params_overrides or {}), "n_estimators": 11},
     )
     _run_recording_folds(df, config, checkpoint_dir=tmp_path)
+    expected = walk_forward.run_walk_forward_backtest(df, changed)
 
+    # Act
     result, computed = _run_recording_folds(df, changed, checkpoint_dir=tmp_path)
 
+    # Assert
     assert computed == [(2023, 2), (2023, 3)]
-    _assert_same_results(result, walk_forward.run_walk_forward_backtest(df, changed))
+    _assert_same_results(result, expected)
 
 
 def test_corrupt_checkpoint_is_recomputed(tmp_path: Path) -> None:
     """An unreadable checkpoint is ignored and that week is trained again."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     clean, _ = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
     (fold_file,) = tmp_path.rglob("fold_2023_w02.joblib")
     fold_file.write_bytes(b"not a checkpoint")
 
+    # Act
     result, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path)
 
+    # Assert
     assert computed == [(2023, 2)]
     _assert_same_results(result, clean)
 
 
 def test_resume_disabled_recomputes_every_week(tmp_path: Path) -> None:
     """With resume off, existing checkpoints are overwritten rather than read."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     _run_recording_folds(df, config, checkpoint_dir=tmp_path)
 
+    # Act
     _, computed = _run_recording_folds(df, config, checkpoint_dir=tmp_path, resume=False)
 
+    # Assert
     assert computed == [(2023, 2), (2023, 3)]
 
 
 def test_run_without_a_checkpoint_dir_reports_no_checkpoint() -> None:
     """Checkpointing is opt-in for library callers."""
+    # Act
     result = walk_forward.run_walk_forward_backtest(_fixture_df(), _base_config())
 
+    # Assert
     assert result["checkpoint"] is None
 
 
-def test_fold_checkpoint_fingerprint_tracks_data_and_config() -> None:
-    """The fingerprint is stable for identical inputs and moves with the data or config."""
+def test_fold_checkpoint_fingerprint_is_stable_for_identical_inputs() -> None:
+    """The fingerprint is stable for identical inputs."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
 
+    # Act
+    result = walk_forward.fold_checkpoint_fingerprint(df.copy(), config)
+
+    # Assert
+    assert result == baseline
+
+
+def test_fold_checkpoint_fingerprint_moves_with_the_data() -> None:
+    """The fingerprint moves when the data changes."""
+    # Arrange
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
     changed_df = df.copy()
     changed_df.loc[0, "feat1"] = 99.0
 
-    assert walk_forward.fold_checkpoint_fingerprint(df.copy(), config) == baseline
-    assert walk_forward.fold_checkpoint_fingerprint(changed_df, config) != baseline
-    assert (
-        walk_forward.fold_checkpoint_fingerprint(df, replace(config, wf_start_week=3)) != baseline
-    )
+    # Act
+    result = walk_forward.fold_checkpoint_fingerprint(changed_df, config)
+
+    # Assert
+    assert result != baseline
+
+
+def test_fold_checkpoint_fingerprint_moves_with_the_config() -> None:
+    """The fingerprint moves when the config changes."""
+    # Arrange
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+
+    # Act
+    result = walk_forward.fold_checkpoint_fingerprint(df, replace(config, wf_start_week=3))
+
+    # Assert
+    assert result != baseline
 
 
 def test_fold_checkpoint_fingerprint_sources_are_the_package_modelling_files() -> None:
     """The fingerprint reads the package's ``ml`` modules, ``constants`` and ``ml_model``."""
+    # Arrange
     package_dir = Path(walk_forward.__file__).resolve().parents[1]
+
+    # Act
     sources = walk_forward._modelling_source_files()
 
+    # Assert
     assert [path.name for path in sources] == [
         *sorted(path.name for path in (package_dir / "ml").glob("*.py")),
         "constants.py",
@@ -290,27 +374,52 @@ def test_fold_checkpoint_fingerprint_sources_are_the_package_modelling_files() -
     assert all(path.resolve().is_relative_to(package_dir) for path in sources)
 
 
-def test_fold_checkpoint_fingerprint_hashes_source_names_and_bytes_not_locations(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Identical source files in another directory give the same fingerprint."""
-    df = _fixture_df()
-    config = _base_config()
-    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+def _copy_modelling_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Copy the modelling source files elsewhere and point the fingerprint at the copies."""
     sources = walk_forward._modelling_source_files()
-    copies = []
+    copies: list[Path] = []
     for index, path in enumerate(sources):
         target = tmp_path / "elsewhere" / str(index) / path.name
         target.parent.mkdir(parents=True)
         target.write_bytes(path.read_bytes())
         copies.append(target)
     monkeypatch.setattr(walk_forward, "_modelling_source_files", lambda: copies)
+    return copies
 
-    assert walk_forward.fold_checkpoint_fingerprint(df, config) == baseline
 
+def test_fold_checkpoint_fingerprint_hashes_source_names_and_bytes_not_locations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Identical source files in another directory give the same fingerprint."""
+    # Arrange
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+    _copy_modelling_sources(tmp_path, monkeypatch)
+
+    # Act
+    result = walk_forward.fold_checkpoint_fingerprint(df, config)
+
+    # Assert
+    assert result == baseline
+
+
+def test_fold_checkpoint_fingerprint_moves_with_source_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Changing a copied source file's bytes changes the fingerprint."""
+    # Arrange
+    df = _fixture_df()
+    config = _base_config()
+    baseline = walk_forward.fold_checkpoint_fingerprint(df, config)
+    copies = _copy_modelling_sources(tmp_path, monkeypatch)
     copies[0].write_bytes(copies[0].read_bytes() + b"\n")
 
-    assert walk_forward.fold_checkpoint_fingerprint(df, config) != baseline
+    # Act
+    result = walk_forward.fold_checkpoint_fingerprint(df, config)
+
+    # Assert
+    assert result != baseline
 
 
 def _with_device(
@@ -323,55 +432,104 @@ def _with_device(
     return replace(config, xgb_params_overrides=overrides)
 
 
+@pytest.mark.parametrize("requested", [None, "auto", "cuda"])
 def test_with_resolved_xgb_device_names_the_concrete_device(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, requested: str | None
 ) -> None:
     """``auto`` or no device becomes the device the run trains on; other overrides stay."""
+    # Arrange
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
     config = _base_config()
 
-    for requested in (None, "auto", "cuda"):
-        resolved = walk_forward.with_resolved_xgb_device(_with_device(config, requested))
-        assert resolved.xgb_params_overrides == {
-            **(config.xgb_params_overrides or {}),
-            "device": "cuda",
-        }
+    # Act
+    resolved = walk_forward.with_resolved_xgb_device(_with_device(config, requested))
+
+    # Assert
+    assert resolved.xgb_params_overrides == {
+        **(config.xgb_params_overrides or {}),
+        "device": "cuda",
+    }
+
+
+def test_with_resolved_xgb_device_without_overrides_names_the_concrete_device(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A config with no overrides gains only the resolved device."""
+    # Arrange
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    config = _base_config()
+
+    # Act
     no_overrides = walk_forward.with_resolved_xgb_device(replace(config, xgb_params_overrides=None))
+
+    # Assert
     assert no_overrides.xgb_params_overrides == {"device": "cuda"}
 
 
+@pytest.mark.parametrize("requested", ["auto", None, "gpu"])
 def test_fold_checkpoint_fingerprint_hashes_the_resolved_device(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, requested: str | None
 ) -> None:
     """An ``auto`` run shares checkpoints with an explicit run on the same device only."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
-
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
     gpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cuda"))
-    gpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
-    gpu_default = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, None))
-    gpu_alias = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "gpu"))
+
+    # Act
+    result = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, requested))
+
+    # Assert
+    assert result == gpu
+
+
+def test_fold_checkpoint_fingerprint_differs_between_cpu_and_gpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit CPU run does not share checkpoints with a GPU run."""
+    # Arrange
+    df = _fixture_df()
+    config = _base_config()
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    gpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cuda"))
+
+    # Act
     cpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cpu"))
 
+    # Assert
+    assert cpu != gpu
+
+
+def test_fold_checkpoint_fingerprint_auto_without_cuda_matches_cpu(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``auto`` run on a machine without CUDA shares checkpoints with an explicit CPU run."""
+    # Arrange
+    df = _fixture_df()
+    config = _base_config()
+    monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: True)
+    cpu = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "cpu"))
     monkeypatch.setattr(ml_model_xgb_utils, "xgb_cuda_usable", lambda: False)
+
+    # Act
     cpu_auto = walk_forward.fold_checkpoint_fingerprint(df, _with_device(config, "auto"))
 
-    assert gpu_auto == gpu
-    assert gpu_default == gpu
-    assert gpu_alias == gpu
-    assert cpu != gpu
+    # Assert
     assert cpu_auto == cpu
 
 
 def test_run_records_the_resolved_xgb_device(tmp_path: Path) -> None:
     """The result and the checkpoint manifest name the concrete device, never ``auto``."""
+    # Arrange
     config = _with_device(_base_config(), "auto")
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(), config, checkpoints=walk_forward.FoldCheckpoints(tmp_path)
     )
 
+    # Assert
     assert result["resolved_settings"]["xgb_device"] == "cpu"
     (manifest_path,) = tmp_path.rglob("manifest.json")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -380,24 +538,30 @@ def test_run_records_the_resolved_xgb_device(tmp_path: Path) -> None:
 
 def test_walk_forward_probabilities_in_bounds() -> None:
     """Home win probabilities are always in [0, 1]."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(df, config)
-    probs = result["predictions"]["home_win_prob"]
 
+    # Assert
+    probs = result["predictions"]["home_win_prob"]
     assert (probs >= 0).all()
     assert (probs <= 1).all()
 
 
 def test_walk_forward_quantile_intervals_monotonic() -> None:
     """Walk-forward outputs include monotonic quantile intervals for margin/total."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(df, config)
-    preds = result["predictions"]
 
+    # Assert
+    preds = result["predictions"]
     required = {
         "predicted_margin_p10",
         "predicted_margin_p50",
@@ -416,6 +580,7 @@ def test_walk_forward_quantile_intervals_monotonic() -> None:
 
 def test_walk_forward_can_disable_quantiles() -> None:
     """Walk-forward can skip quantile model training for faster comparisons."""
+    # Arrange
     df = _fixture_df()
     config = _base_config()
     config = replace(
@@ -424,9 +589,11 @@ def test_walk_forward_can_disable_quantiles() -> None:
         include_quantiles=False,
     )
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(df, config)
-    preds = result["predictions"]
 
+    # Assert
+    preds = result["predictions"]
     assert "predicted_margin" in preds.columns
     assert "predicted_total" in preds.columns
     assert "predicted_margin_p10" not in preds.columns
@@ -435,12 +602,17 @@ def test_walk_forward_can_disable_quantiles() -> None:
 
 def test_dataset_fingerprint_matches_sha256(tmp_path: Path) -> None:
     """Computes SHA-256 fingerprint of file contents."""
+    # Arrange
     path = Path(tmp_path) / "data.bin"
     payload = b"abc\x00def"
     path.write_bytes(payload)
-
     expected = hashlib.sha256(payload).hexdigest()
-    assert walk_forward.dataset_fingerprint(path) == expected
+
+    # Act
+    result = walk_forward.dataset_fingerprint(path)
+
+    # Assert
+    assert result == expected
 
 
 def test_generate_run_id_is_deterministic_under_fixed_time(
@@ -448,6 +620,7 @@ def test_generate_run_id_is_deterministic_under_fixed_time(
 ) -> None:
     """Builds a stable run_id when datetime is fixed."""
 
+    # Arrange
     class _FixedDatetime:
         @staticmethod
         def now(_tz: object) -> _FixedDatetime:
@@ -470,8 +643,11 @@ def test_generate_run_id_is_deterministic_under_fixed_time(
         include_quantiles=False,
     )
     run_id_a = walk_forward.generate_run_id("deadbeef", cfg)
+
+    # Act
     run_id_b = walk_forward.generate_run_id("deadbeef", cfg)
 
+    # Assert
     assert run_id_a == run_id_b
     assert run_id_a.startswith("wf_20260110_000000_")
     assert len(run_id_a.split("_")[-1]) == 8
@@ -479,6 +655,7 @@ def test_generate_run_id_is_deterministic_under_fixed_time(
 
 def test_build_metrics_report_shape() -> None:
     """Builds a JSON-serializable metrics report envelope."""
+    # Act
     report = walk_forward.build_metrics_report(
         run_id="wf_test",
         created_at="2026-01-10T00:00:00Z",
@@ -520,6 +697,7 @@ def test_build_metrics_report_shape() -> None:
         },
     )
 
+    # Assert
     assert report["run_id"] == "wf_test"
     assert report["metrics"]["overall"]["games"] == 1
     assert report["metrics"]["fold_summary"]["folds"] == 1
@@ -536,24 +714,35 @@ def test_build_metrics_report_shape() -> None:
     assert report["splits"]["excluded_incomplete_seasons"] == []
 
 
-def test_filter_incomplete_eval_seasons_tracks_drops(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("regular_season_weeks", "expect_kept"),
+    [(4, False), (3, True)],
+    ids=["seasons_short_of_the_schedule_dropped", "complete_seasons_kept"],
+)
+def test_filter_incomplete_eval_seasons_tracks_drops(
+    monkeypatch: pytest.MonkeyPatch, regular_season_weeks: int, *, expect_kept: bool
+) -> None:
     """Filtering incomplete seasons returns kept + dropped lists."""
+    # Arrange
     df = _fixture_df()
     eval_seasons = [2022, 2023]
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(regular_season_weeks))
 
-    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 4)
+    # Act
     kept, dropped = walk_forward.filter_incomplete_eval_seasons(df, eval_seasons)
-    assert kept == []
-    assert dropped == eval_seasons
 
-    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 3)
-    kept, dropped = walk_forward.filter_incomplete_eval_seasons(df, eval_seasons)
-    assert kept == eval_seasons
-    assert dropped == []
+    # Assert
+    if expect_kept:
+        assert kept == eval_seasons
+        assert dropped == []
+    else:
+        assert kept == []
+        assert dropped == eval_seasons
 
 
 def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> None:
     """Computes optional market residual MAE and interval coverage diagnostics."""
+    # Arrange
     frame = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -578,7 +767,10 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
         }
     )
 
+    # Act
     metrics = walk_forward._aggregate_metrics(frame, market_anchor=True)
+
+    # Assert
     assert metrics["season"] == 2024
     assert metrics["games"] == 2
     assert "market_margin_resid_mae" in metrics
@@ -598,6 +790,7 @@ def test_aggregate_metrics_includes_market_residuals_and_interval_coverage() -> 
 
 def test_season_win_totals_summary() -> None:
     """Summarize expected vs actual season win totals."""
+    # Arrange
     predictions = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -609,7 +802,10 @@ def test_season_win_totals_summary() -> None:
         }
     )
 
+    # Act
     totals = walk_forward._season_win_totals(predictions)
+
+    # Assert
     per_team = {row["team"]: row for row in totals["per_team"]}
     assert totals["overall"]["teams"] == 2
     assert per_team["AAA"]["expected_wins"] == pytest.approx(0.7)
@@ -621,6 +817,7 @@ def test_season_win_totals_summary() -> None:
 
 def test_calibration_drift_summary() -> None:
     """Summarize calibration drift by season/week."""
+    # Arrange
     predictions = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -630,7 +827,10 @@ def test_calibration_drift_summary() -> None:
         }
     )
 
+    # Act
     drift = walk_forward._calibration_drift(predictions)
+
+    # Assert
     assert len(drift["per_week"]) == 1
     row = drift["per_week"][0]
     assert row["season"] == 2024
@@ -643,6 +843,7 @@ def test_calibration_drift_summary() -> None:
 
 def test_probability_window_rows_include_bootstrap_intervals() -> None:
     """Window summaries include deterministic-versus-market intervals for each standard window."""
+    # Arrange
     predictions = pd.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -661,9 +862,11 @@ def test_probability_window_rows_include_bootstrap_intervals() -> None:
         }
     )
 
+    # Act
     rows = walk_forward._probability_window_rows(predictions, seed=7)
-    by_window = {row["window"]: row for row in rows}
 
+    # Assert
+    by_window = {row["window"]: row for row in rows}
     assert set(by_window) == {"week_1_only", "week_2_only", "weeks_3_18", "all_weeks"}
     assert by_window["all_weeks"]["deterministic_brier_vs_market"] < 0
     assert "deterministic_brier_vs_market_ci_low" in by_window["all_weeks"]
@@ -676,88 +879,182 @@ def test_probability_window_rows_include_bootstrap_intervals() -> None:
 def test_git_commit_hash_returns_none_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """Returns None when git command fails or returns non-zero."""
 
+    # Arrange
     class _Result:
         returncode = 1
         stdout = ""
 
-    monkeypatch.setattr(walk_forward.subprocess, "run", lambda *_args, **_kwargs: _Result())
-    assert walk_forward._git_commit_hash() is None
+    monkeypatch.setattr(subprocess, "run", returning(_Result()))
+
+    # Act
+    result = walk_forward._git_commit_hash()
+
+    # Assert
+    assert result is None
 
 
 def test_library_versions_handles_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Records None version when a dependency import fails."""
 
+    # Arrange
     def _fake_import(name: str):
         if name == "optuna":
             msg = "missing"
             raise ImportError(msg)
         return type("M", (), {"__version__": "1.0.0"})
 
-    monkeypatch.setattr(walk_forward.importlib, "import_module", _fake_import)
+    monkeypatch.setattr(importlib, "import_module", _fake_import)
+
+    # Act
     versions = walk_forward._library_versions()
+
+    # Assert
     assert versions["optuna"] is None
     assert versions["numpy"] == "1.0.0"
 
 
-def test_load_games_and_filter_regular_season_cover_helper_branches(
+def _write_games_csv(tmp_path: Path) -> Path:
+    """Write a two-game CSV with one regular-season and one postseason game."""
+    path = tmp_path / "games.csv"
+    path.write_text("season,week,game_type\n2024,1,REG\n2024,2,WC\n", encoding="utf-8")
+    return path
+
+
+def test_load_games_reads_the_csv_and_logs_its_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Game loading and season filtering should handle regular and passthrough paths."""
-    path = tmp_path / "games.csv"
-    path.write_text("season,week,game_type\n2024,1,REG\n2024,2,WC\n", encoding="utf-8")
+    """Game loading reads every row and logs the source path."""
+    # Arrange
+    path = _write_games_csv(tmp_path)
+    messages = _capture_info_messages(monkeypatch)
 
-    messages: list[str] = []
-    monkeypatch.setattr(
-        walk_forward.log,
-        "info",
-        lambda message, *args: messages.append(message % args if args else message),
-    )
-
+    # Act
     loaded = walk_forward.load_games(path)
+
+    # Assert
     assert len(loaded) == 2
     assert any(str(path) in message for message in messages)
 
+
+def test_filter_regular_season_keeps_only_regular_season_games(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Season filtering keeps the regular-season games and logs the filter."""
+    # Arrange
+    path = _write_games_csv(tmp_path)
+    messages = _capture_info_messages(monkeypatch)
+    loaded = walk_forward.load_games(path)
+
+    # Act
     filtered = walk_forward.filter_regular_season(loaded)
+
+    # Assert
     assert len(filtered) == 1
     assert filtered["game_type"].iloc[0] == "REG"
     assert any("Filtered to regular-season games" in message for message in messages)
 
-    assert walk_forward.filter_regular_season(loaded, include_postseason=True) is loaded
-    no_game_type = loaded.drop(columns=["game_type"])
-    assert walk_forward.filter_regular_season(no_game_type) is no_game_type
 
-
-def test_resolve_eval_seasons_and_fold_building_edge_cases(
-    monkeypatch: pytest.MonkeyPatch,
+def test_filter_regular_season_with_postseason_passes_the_frame_through(
+    tmp_path: Path,
 ) -> None:
-    """Evaluation-season and fold helpers should cover missing-data and skip branches."""
+    """Including the postseason returns the input frame unchanged."""
+    # Arrange
+    loaded = walk_forward.load_games(_write_games_csv(tmp_path))
+
+    # Act
+    result = walk_forward.filter_regular_season(loaded, include_postseason=True)
+
+    # Assert
+    assert result is loaded
+
+
+def test_filter_regular_season_without_game_type_passes_the_frame_through(
+    tmp_path: Path,
+) -> None:
+    """A frame without a game_type column is returned unchanged."""
+    # Arrange
+    loaded = walk_forward.load_games(_write_games_csv(tmp_path))
+    no_game_type = loaded.drop(columns=["game_type"])
+
+    # Act
+    result = walk_forward.filter_regular_season(no_game_type)
+
+    # Assert
+    assert result is no_game_type
+
+
+def test_resolve_eval_seasons_rejects_an_empty_frame() -> None:
+    """A frame with no seasons cannot resolve evaluation seasons."""
+    # Arrange
     empty_df = pd.DataFrame(columns=["season", "week"])
+
+    # Act & Assert
     with pytest.raises(ValueError, match="No seasons available"):
         walk_forward.resolve_eval_seasons(empty_df, None, 1)
 
-    df = _fixture_df()
-    messages: list[str] = []
-    monkeypatch.setattr(
-        walk_forward.log,
-        "info",
-        lambda message, *args: messages.append(message % args if args else message),
-    )
 
-    assert walk_forward.resolve_eval_seasons(df, [2021, 2023], 1) == [2023]
+def test_resolve_eval_seasons_drops_missing_requested_seasons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Requested seasons absent from the data are dropped with a log message."""
+    # Arrange
+    df = _fixture_df()
+    messages = _capture_info_messages(monkeypatch)
+
+    # Act
+    result = walk_forward.resolve_eval_seasons(df, [2021, 2023], 1)
+
+    # Assert
+    assert result == [2023]
     assert any("Dropping missing eval seasons" in message for message in messages)
 
-    with pytest.raises(ValueError, match="None of the requested eval seasons"):
-        walk_forward.resolve_eval_seasons(df, [1999], 1)
 
-    with pytest.raises(ValueError, match="eval_last_n_seasons must be positive"):
-        walk_forward.resolve_eval_seasons(df, None, 0)
+@pytest.mark.parametrize(
+    ("requested", "last_n", "match"),
+    [
+        ([1999], 1, "None of the requested eval seasons"),
+        (None, 0, "eval_last_n_seasons must be positive"),
+    ],
+)
+def test_resolve_eval_seasons_rejects_invalid_requests(
+    requested: list[int] | None, last_n: int, match: str
+) -> None:
+    """Requests naming no available season or a non-positive window are errors."""
+    # Arrange
+    df = _fixture_df()
 
-    assert walk_forward.resolve_eval_seasons(df, None, 5) == [2022, 2023]
+    # Act & Assert
+    with pytest.raises(ValueError, match=match):
+        walk_forward.resolve_eval_seasons(df, requested, last_n)
 
+
+def test_resolve_eval_seasons_caps_the_last_n_window_at_the_available_seasons() -> None:
+    """Asking for more trailing seasons than exist returns every season."""
+    # Arrange
+    df = _fixture_df()
+
+    # Act
+    result = walk_forward.resolve_eval_seasons(df, None, 5)
+
+    # Assert
+    assert result == [2022, 2023]
+
+
+def test_build_walk_forward_folds_requires_season_and_week_columns() -> None:
+    """Fold building fails without a week column."""
+    # Act & Assert
     with pytest.raises(ValueError, match="season and week columns are required"):
         walk_forward.build_walk_forward_folds(pd.DataFrame({"season": [2024]}), [2024], 1)
 
+
+def test_build_walk_forward_folds_skips_weeks_without_training_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A week with no earlier games yields no fold and logs the skip."""
+    # Arrange
+    messages = _capture_info_messages(monkeypatch)
     single_week_df = pd.DataFrame(
         {
             "season": [2024],
@@ -767,9 +1064,18 @@ def test_resolve_eval_seasons_and_fold_building_edge_cases(
             "home_score": [24],
         }
     )
-    assert walk_forward.build_walk_forward_folds(single_week_df, [2024], 1) == []
+
+    # Act
+    result = walk_forward.build_walk_forward_folds(single_week_df, [2024], 1)
+
+    # Assert
+    assert result == []
     assert any("no training data" in message for message in messages)
 
+
+def test_build_walk_forward_folds_includes_postseason_weeks() -> None:
+    """With the postseason included, a postseason week becomes a fold."""
+    # Arrange
     postseason_df = pd.DataFrame(
         {
             "season": [2024, 2024],
@@ -779,37 +1085,49 @@ def test_resolve_eval_seasons_and_fold_building_edge_cases(
             "home_score": [24, 27],
         }
     )
+
+    # Act
     postseason_folds = walk_forward.build_walk_forward_folds(
         postseason_df,
         [2024],
         20,
         include_postseason=True,
     )
+
+    # Assert
     assert len(postseason_folds) == 1
     assert postseason_folds[0].week == 20
 
 
-def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Eval-window, market, and XGBoost helper branches should resolve edge cases cleanly."""
+def test_summarize_eval_window_with_postseason_ends_at_the_last_postseason_week() -> None:
+    """The eval window extends into the postseason when it is included."""
+    # Act
     postseason_summary = walk_forward.summarize_eval_window(
         pd.DataFrame({"season": [2024], "week": [20]}),
         eval_seasons=[2024],
         start_week=19,
         include_postseason=True,
     )
+
+    # Assert
     assert postseason_summary["seasons"]["2024"]["eval_end_week"] == 20
 
-    messages: list[str] = []
-    monkeypatch.setattr(
-        walk_forward.log,
-        "info",
-        lambda message, *args: messages.append(message % args if args else message),
+
+def test_resolve_market_settings_without_market_columns_disables_market(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing market columns turn off the market features and anchor, with log messages."""
+    # Arrange
+    messages = _capture_info_messages(monkeypatch)
+    no_market_df = pd.DataFrame({"season": [2024], "week": [1]})
+
+    # Act
+    result = walk_forward.resolve_market_settings(
+        no_market_df, include_market=True, market_transform=None, market_anchor=True
     )
 
-    no_market_df = pd.DataFrame({"season": [2024], "week": [1]})
-    assert walk_forward.resolve_market_settings(
-        no_market_df, include_market=True, market_transform=None, market_anchor=True
-    ) == (
+    # Assert
+    assert result == (
         False,
         False,
         False,
@@ -817,30 +1135,48 @@ def test_market_and_xgb_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None
     assert any("Market columns missing" in message for message in messages)
     assert any("Market anchor requested" in message for message in messages)
 
+
+def test_resolve_market_settings_anchors_without_market_features() -> None:
+    """Market columns allow the anchor even when market features are off."""
+    # Arrange
     market_df = pd.DataFrame({"home_spread": [-3.0], "total_line": [44.5]})
-    assert walk_forward.resolve_market_settings(
+
+    # Act
+    result = walk_forward.resolve_market_settings(
         market_df, include_market=False, market_transform=None, market_anchor=True
-    ) == (
+    )
+
+    # Assert
+    assert result == (
         False,
         True,
         True,
     )
 
+
+def test_xgb_params_for_config_passes_overrides_and_seed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The config's overrides and random seed reach the XGBoost parameter resolver."""
+    # Arrange
     captured: dict[str, object] = {}
-    monkeypatch.setattr(
-        walk_forward.ml_model,
-        "resolve_xgb_params",
-        lambda _defaults, overrides: (
-            captured.setdefault("overrides", dict(overrides)) or dict(overrides)
-        ),
-    )
+
+    def fake_resolve(_defaults: dict[str, Any], overrides: dict[str, Any]) -> object:
+        return captured.setdefault("overrides", dict(overrides)) or dict(overrides)
+
+    monkeypatch.setattr(ml_model, "resolve_xgb_params", fake_resolve)
     config = replace(_base_config(), xgb_params_overrides={"max_depth": 4}, random_seed=99)
+
+    # Act
     walk_forward.xgb_params_for_config(config)
+
+    # Assert
     assert captured["overrides"] == {"max_depth": 4, "random_state": 99}
 
 
 def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -> None:
     """A market-aware walk-forward run should exercise quantiles and callbacks."""
+    # Arrange
     df = _fixture_df().copy()
     df["home_spread"] = -3.0
     df["total_line"] = 44.5
@@ -859,8 +1195,10 @@ def test_walk_forward_backtest_covers_market_anchor_uncertainty_and_callback() -
         """Record the fold callback payload for assertions."""
         folds.append((fold.season, fold.week, str(metrics["calibration_method"])))
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(df, config, fold_callback=_capture)
 
+    # Assert
     assert len(folds) == 2
     assert result["resolved_settings"]["market_anchor"] is True
     assert "market_baseline_margin" in result["predictions"].columns
@@ -875,9 +1213,12 @@ def test_walk_forward_fails_cleanly_when_every_eval_season_is_incomplete(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Incomplete-season filtering that removes every eval season is an error, not a no-op."""
+    # Arrange
     df = _fixture_df()
-    monkeypatch.setattr(walk_forward.constants, "get_regular_season_weeks", lambda _season: 99)
+    monkeypatch.setattr(constants, "get_regular_season_weeks", returning(99))
     incomplete_config = replace(_base_config(), exclude_incomplete_seasons=True)
+
+    # Act & Assert
     with pytest.raises(ValueError, match="No complete seasons available"):
         walk_forward.run_walk_forward_backtest(df, incomplete_config)
 
@@ -886,14 +1227,18 @@ def test_walk_forward_auto_calibration_uses_the_deterministic_floor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The submitted probability is the deterministic floor of each predicted margin."""
+    # Act
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(),
         replace(_base_config(), calibration="auto", include_quantiles=False),
     )
+
+    # Assert
     predictions = result["predictions"]
+    margins: npt.NDArray[np.float64] = predictions["predicted_margin"].to_numpy()
     np.testing.assert_allclose(
         predictions["home_win_prob"].to_numpy(),
-        norm.cdf(predictions["predicted_margin"].to_numpy() / constants.SCORE_DIFF_STD_DEV),
+        norm.cdf(margins / constants.SCORE_DIFF_STD_DEV),
     )
 
     assert set(result["predictions"]["calibration_method"].unique()) == {"none"}
@@ -904,6 +1249,7 @@ def test_walk_forward_disables_small_window_early_stopping(
 ) -> None:
     """Walk-forward fits should no longer use per-fold early stopping windows."""
 
+    # Arrange
     class _DummyBooster:
         def num_boosted_rounds(self) -> int:
             return 12
@@ -922,11 +1268,13 @@ def test_walk_forward_disables_small_window_early_stopping(
     margin_rounds: list[object] = []
     quantile_rounds: list[object] = []
 
-    def fake_fit_margin_total_models(*_args, **kwargs):
+    def fake_fit_margin_total_models(
+        *_args: object, **kwargs: object
+    ) -> tuple[_DummyModel, _DummyModel]:
         margin_rounds.append(kwargs.get("early_stopping_rounds"))
         return _DummyModel("margin"), _DummyModel("total")
 
-    def fake_fit_quantile_models(*_args, **kwargs):
+    def fake_fit_quantile_models(*_args: object, **kwargs: object) -> dict[float, _DummyModel]:
         quantile_rounds.append(kwargs.get("early_stopping_rounds"))
         return {}
 
@@ -936,18 +1284,20 @@ def test_walk_forward_disables_small_window_early_stopping(
         return np.full(x.shape[0], 44.0, dtype=float)
 
     monkeypatch.setattr(
-        walk_forward.ml_model,
+        ml_model,
         "fit_margin_total_models",
         fake_fit_margin_total_models,
     )
-    monkeypatch.setattr(walk_forward.ml_model, "fit_quantile_models", fake_fit_quantile_models)
-    monkeypatch.setattr(walk_forward.ml_model, "predict_xgb", fake_predict_xgb)
+    monkeypatch.setattr(ml_model, "fit_quantile_models", fake_fit_quantile_models)
+    monkeypatch.setattr(ml_model, "predict_xgb", fake_predict_xgb)
 
+    # Act
     result = walk_forward.run_walk_forward_backtest(
         _fixture_df(),
         replace(_base_config(), include_quantiles=True),
     )
 
+    # Assert
     assert margin_rounds == [None, None]
     assert quantile_rounds == [None, None, None, None]
     assert result["resolved_settings"]["in_season_early_stopping"] is False
@@ -959,9 +1309,41 @@ def test_walk_forward_disables_small_window_early_stopping(
     assert "iteration_warnings" not in first_week
 
 
+def _estimator_reporting(rounds: object, best_iteration: object = None) -> SimpleNamespace:
+    booster = SimpleNamespace(num_boosted_rounds=lambda: rounds)
+    return SimpleNamespace(get_booster=lambda: booster, best_iteration=best_iteration)
+
+
+@pytest.mark.parametrize(
+    ("rounds", "best_iteration", "expected"),
+    [
+        pytest.param(10, None, 9, id="int-rounds"),
+        pytest.param(np.int64(10), None, 9, id="numpy-rounds"),
+        pytest.param(10, np.int64(3), 3, id="best-iteration-wins"),
+        pytest.param(10, 0, 0, id="best-iteration-zero"),
+        pytest.param(None, None, None, id="nothing"),
+        pytest.param(np.float64(10.0), None, None, id="float-rounds"),
+        pytest.param(np.array(10), None, None, id="zero-d-array"),
+    ],
+)
+def test_estimator_best_iteration_reads_only_integer_round_counts(
+    rounds: object, best_iteration: object, expected: int | None
+) -> None:
+    """The full-budget fallback takes only a Python or numpy integer as a round count."""
+    # Arrange
+    estimator = _estimator_reporting(rounds, best_iteration)
+
+    # Act
+    result = walk_forward._estimator_best_iteration(estimator)
+
+    # Assert
+    assert result == expected
+
+
 def test_iteration_details_warns_only_on_real_early_stopping_outcomes() -> None:
     """Cap and below-10 flags describe early stopping; a full-budget fit is not flagged."""
 
+    # Arrange
     class _Booster:
         def __init__(self, rounds: int) -> None:
             self._rounds = rounds
@@ -989,10 +1371,12 @@ def test_iteration_details_warns_only_on_real_early_stopping_outcomes() -> None:
         def get_booster(self) -> _Booster:
             return _Booster(4)
 
+    # Act
     details = walk_forward._iteration_details(
         {"full": _FullBudget(), "capped": _StoppedAtCap(), "tiny": _StoppedEarly()}
     )
 
+    # Assert
     assert details["full.best_iteration"] == 11
     assert details["full.early_stopped"] is False
     assert "full.warning" not in details
@@ -1008,15 +1392,18 @@ def test_resolve_feature_group_columns_matches_configured_markers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A group with non-empty markers resolves to the columns whose names contain a marker."""
+    # Arrange
     monkeypatch.setattr(
-        walk_forward.constants,
+        constants,
         "FEATURE_GROUP_COLUMN_MARKERS",
         {"pbp": ("epa",), "other": ("success_rate",)},
     )
     columns = ["away_epa_per_play", "home_success_rate", "week", "season"]
 
-    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+    # Act
+    resolved = resolve_feature_group_columns(columns, ["pbp"])
 
+    # Assert
     assert resolved == ["away_epa_per_play"]
 
 
@@ -1024,11 +1411,14 @@ def test_resolve_feature_group_columns_empty_markers_matches_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An empty marker tuple for a group resolves to zero columns, dropping nothing."""
-    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ()})
+    # Arrange
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ()})
     columns = ["away_epa_per_play", "home_epa_per_play", "epa_per_play_diff"]
 
-    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+    # Act
+    resolved = resolve_feature_group_columns(columns, ["pbp"])
 
+    # Assert
     assert resolved == []
 
 
@@ -1036,9 +1426,8 @@ def test_resolve_feature_group_columns_substring_matches_prefix_and_suffix_varia
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A single marker catches away_/home_/opponent_ prefixed and _diff suffixed columns."""
-    monkeypatch.setattr(
-        walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa_per_play",)}
-    )
+    # Arrange
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa_per_play",)})
     columns = [
         "away_epa_per_play",
         "home_epa_per_play",
@@ -1047,8 +1436,10 @@ def test_resolve_feature_group_columns_substring_matches_prefix_and_suffix_varia
         "unrelated_column",
     ]
 
-    resolved = walk_forward.resolve_feature_group_columns(columns, ["pbp"])
+    # Act
+    resolved = resolve_feature_group_columns(columns, ["pbp"])
 
+    # Assert
     assert resolved == sorted(
         [
             "away_epa_per_play",
@@ -1063,19 +1454,36 @@ def test_resolve_feature_group_columns_unknown_group_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An unknown group name raises a ValueError naming the bad group."""
-    monkeypatch.setattr(walk_forward.constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
+    # Arrange
+    monkeypatch.setattr(constants, "FEATURE_GROUP_COLUMN_MARKERS", {"pbp": ("epa",)})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="not_a_real_group"):
-        walk_forward.resolve_feature_group_columns(["away_epa"], ["not_a_real_group"])
+        resolve_feature_group_columns(["away_epa"], ["not_a_real_group"])
 
 
 def test_walk_forward_config_disabled_feature_groups_serializes_to_list() -> None:
-    """`disabled_feature_groups` round-trips through `to_dict` as a list, defaulting to empty."""
-    default_config = _base_config()
-    assert default_config.to_dict()["disabled_feature_groups"] == []
-
+    """`disabled_feature_groups` round-trips through `to_dict` as a list."""
+    # Arrange
     configured = replace(_base_config(), disabled_feature_groups=("pbp",))
-    assert configured.to_dict()["disabled_feature_groups"] == ["pbp"]
+
+    # Act
+    result = configured.to_dict()
+
+    # Assert
+    assert result["disabled_feature_groups"] == ["pbp"]
+
+
+def test_walk_forward_config_disabled_feature_groups_defaults_to_empty_list() -> None:
+    """`disabled_feature_groups` serializes to an empty list by default."""
+    # Arrange
+    default_config = _base_config()
+
+    # Act
+    result = default_config.to_dict()
+
+    # Assert
+    assert result["disabled_feature_groups"] == []
 
 
 def test_run_walk_forward_backtest_drops_disabled_feature_groups(
@@ -1086,6 +1494,7 @@ def test_run_walk_forward_backtest_drops_disabled_feature_groups(
     The CLI scripts drop the columns before building the config, so this guards a direct
     caller of `run_walk_forward_backtest` against silently getting no ablation at all.
     """
+    # Arrange
     monkeypatch.setattr(
         constants,
         "FEATURE_GROUP_COLUMN_MARKERS",
@@ -1113,6 +1522,7 @@ def test_run_walk_forward_backtest_drops_disabled_feature_groups(
     )
     config = walk_forward.WalkForwardConfig(disabled_feature_groups=("demo",))
 
+    # Act & Assert
     with pytest.raises(RuntimeError, match="stop after the drop"):
         walk_forward.run_walk_forward_backtest(df, config)
 

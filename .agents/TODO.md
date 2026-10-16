@@ -108,10 +108,11 @@ diagnostic-only), task 56.4 (calibration window across the season boundary), Mil
 the web UI's phases 0-3 (Milestone 58, merged as `0.8.0`). Execution order:
 
 Order agreed with the user on 2026-09-24 and extended on 2026-10-08 (steps 5 and 6 added: the
-market-free baseline and absorbing `nfl-sos-ratings`; the Optuna re-tune moved to step 7, after
-the features settle; the web UI's remaining phases joined step 6). There is no deadline: every
-step runs to satisfactory completion, including its reviews, before the next starts. Step 6 is
-the largest workstream so far, several weeks of sessions.
+market-free baseline and absorbing `nfl-sos-ratings`; the Optuna re-tune moved after the features
+settle; the web UI's remaining phases joined step 6) and on 2026-10-15 (steps 7 and 8 added: the
+Elo inputs and the feature ideas, both before the re-tune, now step 9). There is no deadline:
+every step runs to satisfactory completion, including its reviews, before the next starts. Step 6
+is the largest workstream so far, several weeks of sessions.
 
 Why this order (the ordering principles, agreed with the user):
 
@@ -241,12 +242,26 @@ Steps:
       validation);
    6. its web pages (teams, quarterbacks, schedules, rank ranges, head-to-head) folded into this
       app, together with Milestone 58 phases 4-6.
-   Feature ideas to evaluate after phase 4, each a measured arm (raised by the user 2026-10-08,
-   not yet approved; on 2026-10-10 the user moved them to a later session): the referee crew
-   (nflverse `referee` since 1999, full crews in `load_officials`), game-day weather (temperature
-   and wind for outdoor games), attendance, and team health (nflverse injury reports since 2009).
-   Each needs a pick-time check: what is known before Thursday for an upcoming game.
-7. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
+   Merged into `main` as `0.59.0` on 2026-10-14 with the user's approval. Its close-out is
+   open: the docs close-out listed in `.agents/next_agent_session_prompt.md`, 58.1's survivor
+   planner (the user's acceptance) and 58.2's browser check.
+7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
+   - publish `qb_elos.csv`'s `qb1_adj`/`qb2_adj` as the `qb_adj` group, off in production until
+     measured (`feat/qb-adj-features`, `0.60.0`);
+   - the grouped measurement in `models/qb_elos_measure/HYPOTHESIS.md` (accepted 2026-10-15):
+     the upgraded `qb_elos.csv` against the old one, the `qb_adj` arm, and decision 1's ratings
+     swap re-checked on the new file; two builds, eight runs;
+   - the "no game lines" mode leaves out `strength,elo,own_elo_wt` (approved 2026-10-14);
+   - `../nfeloqb`: a backup's first start in next-week projections rated as played rows rate it
+     (`get_value(team)` in place of `current_value`), test first;
+   - the fork's win-total file ends at 2023: its own measurement after the grouped one, with a
+     fork change and a third build, landing between game weeks.
+8. **Feature ideas** (raised by the user 2026-10-08; moved before the re-tune 2026-10-15, to be
+   explored quickly and then accepted or dropped): the referee crew (nflverse `referee` since
+   1999, full crews in `load_officials`), game-day weather (temperature and wind for outdoor
+   games), attendance, and team health (nflverse injury reports since 2009). Each first passes a
+   pick-time check (what is known before Thursday for an upcoming game), then a measured arm.
+9. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
    three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
    (wiring the chosen settings into the weekly run and the benchmark, one shared source).
 
@@ -394,12 +409,12 @@ Tasks:
       final fit alike. Half-life `4` (shipped since `83ba2a7` and never measured before) lost on
       two seeds; `16` and `32` tied. Record: `ARCHIVE.md`, Milestone 55, "55.8", and
       `.agents/benchmarks.md` under "Season weighting and the six-season fit-noise floor".
-- [ ] 55.9 (step 7, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
+- [ ] 55.9 (step 9, with 56.3) Optuna re-tune. Added 2026-09-21 by the user's decision, to run
       **after Milestone 54 lands** (tuning before the feature set changes would have to be redone).
-      Scheduled 2026-09-24 as roadmap step 5 (step 7 since 2026-10-08), after every feature-value
-      change and on the final device (step 3), so the tune is fitted to the feature set that
-      ships. It occupies the
-      machine for hours, so it runs overnight. Prerequisites, each its own tested chunk before any
+      Scheduled 2026-09-24 as roadmap step 5 (step 7 from 2026-10-08, step 9 since 2026-10-15),
+      after every feature-value change and on the final device (step 3), so the tune is fitted to
+      the feature set that ships. It occupies the machine for hours,
+      so it runs overnight. Prerequisites, each its own tested chunk before any
       trial runs: (1) trials must fit exactly the way production fits. `0.12.3` removed in-season
       early stopping from production and walk-forward, but `_score_margin_total_fold` in
       `src/nfl_predictor/ml/ml_model_core.py` still passes `early_stopping_rounds` to
@@ -445,7 +460,7 @@ Formerly Milestone 41.
       defaults. `postseason_weight` stays in the config but inert. The playoff-week design itself
       (a playoff-specific model or weighting) stays deferred, wanted in time for the 2026
       playoffs. Full record: `ARCHIVE.md`, Milestone 56, "56.2".
-- [ ] 56.3 (step 7, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
+- [ ] 56.3 (step 9, with 55.9) Wire the settings chosen by the task 55.9 tune into the weekly run
       and the benchmark from one shared source (today `weekly_run` takes explicit `wf_*` params and
       never reads a best-params file); confirm resume behavior.
 Task 56.4 (the in-season calibration window rolls back across the season boundary) is done and
@@ -600,12 +615,13 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
-- [ ] Cross-module private imports left after `0.38.1` (an AST scan by the `0.38.1` implementer,
-      not checked in): `utils/polars/teamrankings.py` imports `_is_numeric_dtype` from
-      `utils/polars/loaders.py`; `ml/ml_model_core.py`, `ml/ml_model_predict.py` and
-      `ml/ml_model_training.py` import 17 private names from each other. Cosmetic: rename them
-      with the next change that already retrains every checkpoint (`AGENTS.md` rule 14), not on
-      their own.
+- [x] Cross-module private imports left after `0.38.1`. Resolved in `0.59.6` (the strict pyright
+      cleanup, user-approved 2026-10-15): every helper another module imports is public, and
+      an AST scan by the independent reviewer finds no private import across `src/` modules.
+      Originally (an AST scan by the `0.38.1` implementer, not checked in):
+      `utils/polars/teamrankings.py` imported `_is_numeric_dtype` from `utils/polars/loaders.py`,
+      and `ml/ml_model_core.py`, `ml/ml_model_predict.py` and `ml/ml_model_training.py` imported
+      17 private names from each other.
 - [ ] (step 6, phase 5) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig

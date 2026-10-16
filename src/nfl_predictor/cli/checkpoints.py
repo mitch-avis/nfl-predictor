@@ -111,7 +111,7 @@ def scan_checkpoints(
         for match in set(pattern.findall(text)):
             references[match].add(file)
 
-    rows = []
+    rows: list[CheckpointDir] = []
     for directory in directories:
         files = [path for path in directory.rglob("*") if path.is_file()]
         newest = max((path.stat().st_mtime for path in files), default=None)

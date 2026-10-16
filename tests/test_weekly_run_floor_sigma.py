@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import pytest
@@ -18,8 +18,11 @@ from nfl_predictor.ml import artifacts, floor_sigma, ml_model_core, ml_model_tra
 from nfl_predictor.utils import fingerprints
 from nfl_predictor.weekly_run import config as run_config
 from nfl_predictor.weekly_run import pipeline, stage1
+from tests.fakes import returning
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from nfl_predictor.ml.ml_model_training import TrainingOptions
 
 
@@ -28,32 +31,64 @@ def _errors(rows: list[tuple[str, int, int, float]]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=list(floor_sigma.ERROR_COLUMNS))
 
 
-def test_the_reference_runs_default_to_the_gpu_reference_in_code_and_config() -> None:
+def _code_defaults() -> argparse.Namespace:
+    """Return the weekly run's parser defaults, without the shipped config."""
+    return run_config._build_parser().parse_args([])
+
+
+def _config_defaults() -> argparse.Namespace:
+    """Return the weekly run's options as read through the shipped config."""
+    return run_config._parse_args([])
+
+
+_DEFAULT_SOURCES = pytest.mark.parametrize(
+    "parse", [_code_defaults, _config_defaults], ids=["code", "config"]
+)
+
+
+@_DEFAULT_SOURCES
+def test_the_reference_runs_default_to_the_gpu_reference_in_code_and_config(
+    parse: Callable[[], argparse.Namespace],
+) -> None:
     """Both seeds of the reference walk-forward are the default pool, in code and shipped config."""
+    # Arrange
     expected = [Path(path) for path in constants.FLOOR_SIGMA_REFERENCE_RUNS]
 
-    assert run_config._build_parser().parse_args([]).floor_sigma_reference_runs == expected
-    assert run_config._parse_args([]).floor_sigma_reference_runs == expected
+    # Act
+    args = parse()
+
+    # Assert
+    assert args.floor_sigma_reference_runs == expected
 
 
-def test_a_config_can_name_other_reference_runs_or_none(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        ('{"floor_sigma_reference_runs": ["a/b", "/c"]}', [Path("a/b"), Path("/c")]),
+        ('{"floor_sigma_reference_runs": []}', []),
+    ],
+    ids=["named", "empty"],
+)
+def test_a_config_can_name_other_reference_runs_or_none(
+    tmp_path: Path, content: str, expected: list[Path]
+) -> None:
     """A config lists run directories; an empty list means no reference runs."""
+    # Arrange
     config_path = tmp_path / "weekly.json"
-    config_path.write_text('{"floor_sigma_reference_runs": ["a/b", "/c"]}', encoding="utf-8")
-    empty_path = tmp_path / "empty.json"
-    empty_path.write_text('{"floor_sigma_reference_runs": []}', encoding="utf-8")
+    config_path.write_text(content, encoding="utf-8")
 
-    named = run_config._parse_args(["--config", str(config_path)])
-    empty = run_config._parse_args(["--config", str(empty_path)])
+    # Act
+    args = run_config._parse_args(["--config", str(config_path)])
 
-    assert named.floor_sigma_reference_runs == [Path("a/b"), Path("/c")]
-    assert empty.floor_sigma_reference_runs == []
+    # Assert
+    assert args.floor_sigma_reference_runs == expected
 
 
 def test_stage1_walks_forward_with_the_history_and_saves_its_own_errors(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Stage 1 pools the reference errors and writes its folds' errors for the final fit."""
+    # Arrange
     seen: dict[str, object] = {}
     predictions = pd.DataFrame(
         {
@@ -72,6 +107,7 @@ def test_stage1_walks_forward_with_the_history_and_saves_its_own_errors(
     monkeypatch.setattr(walk_forward, "run_walk_forward_backtest", _fake_run)
     history = floor_sigma.ErrorPool(_errors([("r1", 2020, 1, 4.0)]), ("ref",))
 
+    # Act
     stage1.evaluate_production(
         pd.DataFrame(),
         stage1.ProductionOptions(
@@ -94,6 +130,7 @@ def test_stage1_walks_forward_with_the_history_and_saves_its_own_errors(
         ),
     )
 
+    # Assert
     assert seen["floor_sigma_history"] is history
     saved = stage1.read_margin_errors(tmp_path)
     assert saved["squared_error"].tolist() == [9.0, 16.0]
@@ -102,6 +139,7 @@ def test_stage1_walks_forward_with_the_history_and_saves_its_own_errors(
 
 def test_reading_missing_stage1_errors_is_an_error(tmp_path: Path) -> None:
     """The final fit never silently drops the current season's errors."""
+    # Act & Assert
     with pytest.raises(FileNotFoundError, match="wf_margin_errors"):
         stage1.read_margin_errors(tmp_path)
 
@@ -133,14 +171,17 @@ def test_the_reference_keeps_its_weeks_and_stage1_adds_the_rest_before_the_week(
     tmp_path: Path,
 ) -> None:
     """Stage 1's rows join only at weeks the reference lacks, and only before the predicted week."""
+    # Arrange
     _stage1_errors(tmp_path)
     reference = floor_sigma.ErrorPool(
         _errors([("r2023_3", 2023, 3, 100.0), ("r2024_3", 2024, 3, 100.0)]), ("ref",)
     )
     args = _args(tmp_path, pd.DataFrame({"season": [2024, 2024], "week": [5, 5]}))
 
+    # Act
     pool, week = pipeline._production_floor_sigma(args, tmp_path, reference)
 
+    # Assert
     assert week == (2024, 5)
     assert sorted(pool.errors["game_id"]) == ["r2023_3", "r2024_3", "s2024_4"]
     assert pool.sources == ("ref", str(stage1.margin_errors_path(tmp_path)))
@@ -148,6 +189,7 @@ def test_the_reference_keeps_its_weeks_and_stage1_adds_the_rest_before_the_week(
 
 def test_stage1_fills_every_season_after_the_reference(tmp_path: Path) -> None:
     """A reference ending in 2025: stage 1 adds all of 2026 and 2027 weeks 1-4, not 2025 again."""
+    # Arrange
     reference = floor_sigma.ErrorPool(
         _errors(
             [
@@ -170,8 +212,10 @@ def test_stage1_fills_every_season_after_the_reference(tmp_path: Path) -> None:
     )
     args = _args(tmp_path, pd.DataFrame({"season": [2027], "week": [5]}))
 
+    # Act
     pool, week = pipeline._production_floor_sigma(args, tmp_path, reference)
 
+    # Assert
     assert week == (2027, 5)
     errors = pool.errors
     assert sorted(errors.loc[errors["game_id"].str.startswith("r"), "season"].unique()) == list(
@@ -190,11 +234,14 @@ def test_a_multi_week_prediction_file_estimates_for_the_week_after_the_data(
     tmp_path: Path,
 ) -> None:
     """Without one predicted week, the sigma is for the week after the newest completed game."""
+    # Arrange
     _stage1_errors(tmp_path)
     args = _args(tmp_path, pd.DataFrame({"season": [2024, 2024], "week": [5, 6]}))
 
+    # Act
     _pool, week = pipeline._production_floor_sigma(args, tmp_path, floor_sigma.ErrorPool())
 
+    # Assert
     assert week == (2024, 5)
 
 
@@ -217,25 +264,38 @@ def _main_argv(tmp_path: Path, *extra: str) -> list[str]:
 
 def _stub_run_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub the dataset reads and every stage marker."""
-    monkeypatch.setattr(walk_forward, "load_games", lambda _path: pd.DataFrame())
-    monkeypatch.setattr(artifacts, "sha256_file", lambda _path: "hash")
-    monkeypatch.setattr(fingerprints, "dataset_fingerprint", lambda _path: {"sha256": "fp"})
-    monkeypatch.setattr(pipeline, "_stage_can_reuse", lambda *_args, **_kwargs: False)
+
+    def fake_load_games(_path: Path) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def fake_fingerprint(_path: Path) -> dict[str, Any]:
+        return {"sha256": "fp"}
+
+    monkeypatch.setattr(walk_forward, "load_games", fake_load_games)
+    monkeypatch.setattr(artifacts, "sha256_file", returning("hash"))
+    monkeypatch.setattr(fingerprints, "dataset_fingerprint", fake_fingerprint)
+    monkeypatch.setattr(pipeline, "_stage_can_reuse", returning(value=False))
 
 
 def test_a_missing_reference_run_stops_the_weekly_run_before_stage1(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The probability path never changes silently: a missing run is an error, not a fallback."""
+    # Arrange
     walked: list[object] = []
+
+    def fake_evaluate(*a: object, **_k: object) -> None:
+        walked.append(a)
+
     _stub_run_inputs(monkeypatch)
-    monkeypatch.setattr(stage1, "evaluate_production", lambda *a, **k: walked.append(a))
+    monkeypatch.setattr(stage1, "evaluate_production", fake_evaluate)
     monkeypatch.setattr(
         sys,
         "argv",
         _main_argv(tmp_path, "--floor-sigma-reference-runs", str(tmp_path / "gone")),
     )
 
+    # Act & Assert
     with pytest.raises(FileNotFoundError, match="gone"):
         pipeline.main()
     assert walked == []
@@ -246,6 +306,7 @@ def test_stage1_and_the_final_fit_receive_the_floor_sigma_pools(
 ) -> None:
     """Stage 1 gets the reference as its history; the final fit gets the production pool."""
 
+    # Arrange
     class _StopAtFinalFitError(Exception):
         """Stop weekly_run once the final fit's options have been captured."""
 
@@ -265,22 +326,23 @@ def test_stage1_and_the_final_fit_receive_the_floor_sigma_pools(
         raise _StopAtFinalFitError
 
     _stub_run_inputs(monkeypatch)
-    monkeypatch.setattr(floor_sigma, "load_reference_pool", lambda _paths: reference)
+    monkeypatch.setattr(floor_sigma, "load_reference_pool", returning(reference))
     monkeypatch.setattr(stage1, "evaluate_production", _fake_stage1)
-    monkeypatch.setattr(
-        pipeline, "_production_floor_sigma", lambda _a, _d, ref: (production, (2025, 2))
-    )
+    monkeypatch.setattr(pipeline, "_production_floor_sigma", returning((production, (2025, 2))))
     monkeypatch.setattr(pipeline, "train_margin_total_model_with_report", _fake_train)
     monkeypatch.setattr(sys, "argv", _main_argv(tmp_path))
 
+    # Act
     with pytest.raises(_StopAtFinalFitError):
         pipeline.main()
 
+    # Assert
     assert captured == {"stage1": reference, "pool": production, "week": (2025, 2)}
 
 
 def test_training_artifacts_record_the_models_floor_sigma(tmp_path: Path) -> None:
     """The saved model's metadata carries its sigma record, so it predicts without the pool."""
+    # Arrange
     record = floor_sigma.FloorSigma(
         sigma=13.2,
         fallback=False,
@@ -306,13 +368,22 @@ def test_training_artifacts_record_the_models_floor_sigma(tmp_path: Path) -> Non
         dataset_hash="hash",
         config_payload={},
     )
+
+    # Act
     paths = ml_model_training.write_training_artifacts(result, training_record, tmp_path)
 
+    # Assert
     metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
     assert floor_sigma.FloorSigma.from_dict(metadata["floor_sigma"]) == record
 
 
-def test_stage1_starts_at_week_1_so_every_week_reaches_the_pool() -> None:
+@_DEFAULT_SOURCES
+def test_stage1_starts_at_week_1_so_every_week_reaches_the_pool(
+    parse: Callable[[], argparse.Namespace],
+) -> None:
     """Weeks 1 and 2 are walked forward too, in code and in the shipped config."""
-    assert run_config._build_parser().parse_args([]).wf_start_week == 1
-    assert run_config._parse_args([]).wf_start_week == 1
+    # Act
+    args = parse()
+
+    # Assert
+    assert args.wf_start_week == 1

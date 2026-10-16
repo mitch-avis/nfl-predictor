@@ -18,12 +18,15 @@ import sys
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import joblib
 
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 @dataclass(frozen=True)
@@ -75,9 +78,11 @@ def to_jsonable(value: object) -> JsonValue:
     if is_dataclass(value) and not isinstance(value, type):
         return to_jsonable(asdict(value))
     if isinstance(value, dict):
-        return {str(k): to_jsonable(v) for k, v in value.items()}
+        mapping = cast("Mapping[object, object]", value)
+        return {str(k): to_jsonable(v) for k, v in mapping.items()}
     if isinstance(value, list | tuple | set):
-        return [to_jsonable(v) for v in value]
+        items = cast("Iterable[object]", value)
+        return [to_jsonable(v) for v in items]
     return _convert_by_protocol(value)
 
 

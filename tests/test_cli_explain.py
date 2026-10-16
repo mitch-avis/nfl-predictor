@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, cast
 
 import joblib
 import pytest
-from tests.test_feature_importance import _fit_rest_opp_model
 
 from nfl_predictor.cli import explain
 from nfl_predictor.ml import ml_model_core
+from tests.test_feature_importance import _fit_rest_opp_model
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -21,6 +21,7 @@ def test_explain_runs_without_the_shap_library(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """SHAP values come from XGBoost itself, so the command needs no ``shap`` package."""
+    # Arrange
     model, df = _fit_rest_opp_model()
     model_path = tmp_path / "model.joblib"
     data_path = tmp_path / "data.csv"
@@ -42,8 +43,11 @@ def test_explain_runs_without_the_shap_library(
         ],
     )
 
-    assert explain.main() == 0
+    # Act
+    code = explain.main()
 
+    # Assert
+    assert code == 0
     report = json.loads(out_path.read_text(encoding="utf-8"))
     assert report["sample_size"] == len(df)
     assert {row["feature"] for row in report["rows"]} == set(
@@ -53,6 +57,7 @@ def test_explain_runs_without_the_shap_library(
 
 def test_explain_refuses_a_saved_blend_model() -> None:
     """The blend model kind was retired, so a saved blend model is refused with the reason."""
+    # Arrange
     blend = ml_model_core.BlendedMarginTotalModel(
         team_model=cast("ml_model_core.MarginTotalModel", None),
         blend_layer=cast("ml_model_core.BlendLayer", None),
@@ -60,20 +65,36 @@ def test_explain_refuses_a_saved_blend_model() -> None:
         target_columns=("away_score", "home_score"),
     )
 
+    # Act & Assert
     with pytest.raises(TypeError, match="blend model kind was retired"):
         explain._select_model_component(blend)
 
 
 def test_explain_refuses_an_object_that_is_not_a_model() -> None:
     """A pickle that holds something other than a margin/total model is the wrong type."""
+    # Act & Assert
     with pytest.raises(TypeError, match="Unsupported model type: dict"):
         explain._select_model_component({"not": "a model"})
 
 
-def test_explain_accepts_only_the_margin_and_total_heads() -> None:
+@pytest.mark.parametrize(("target", "head"), [("margin", "margin_model"), ("total", "total_model")])
+def test_explain_accepts_only_the_margin_and_total_heads(target: str, head: str) -> None:
     """The target names one of the two heads."""
+    # Arrange
     model, _ = _fit_rest_opp_model()
-    assert explain._resolve_head(model, "margin") == (model.margin_model, "margin")
-    assert explain._resolve_head(model, "total") == (model.total_model, "total")
+
+    # Act
+    resolved = explain._resolve_head(model, target)
+
+    # Assert
+    assert resolved == (getattr(model, head), target)
+
+
+def test_explain_rejects_a_target_that_is_not_a_head() -> None:
+    """A target other than margin or total is refused."""
+    # Arrange
+    model, _ = _fit_rest_opp_model()
+
+    # Act & Assert
     with pytest.raises(ValueError, match=r"--target margin\|total"):
         explain._resolve_head(model, "spread")

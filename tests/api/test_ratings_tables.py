@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 import pytest
-from tests.api import ratings_factories as factories
 
 from nfl_predictor.api.ratings import tables
+from tests.api import ratings_factories as factories
 
 if TYPE_CHECKING:
     from nfl_predictor.api.schemas.ratings import EntityKind

@@ -9,6 +9,7 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from nfl_predictor import constants, data_collection
+from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.polars import strength_snapshot, strength_table, week_rows
 
 if TYPE_CHECKING:
@@ -321,13 +322,17 @@ def test_main_writes_the_strength_snapshot_file(
         del data_dir
         saved[name] = df
 
+    def keep(df: pl.DataFrame) -> pl.DataFrame:
+        return df
+
+    def keep_upcoming(df: pl.DataFrame, *_args: object) -> pl.DataFrame:
+        return df
+
     monkeypatch.setattr(data_collection, "collect_all_data", fake_collect)
     monkeypatch.setattr(data_collection, "save_dataframe", fake_save)
-    monkeypatch.setattr(data_collection.polars_utils, "remove_diff_columns", lambda df: df)
-    monkeypatch.setattr(data_collection.polars_utils, "filter_completed_games", lambda df: df)
-    monkeypatch.setattr(
-        data_collection.polars_utils, "filter_upcoming_games", lambda df, *_args: df
-    )
+    monkeypatch.setattr(polars_utils, "remove_diff_columns", keep)
+    monkeypatch.setattr(polars_utils, "filter_completed_games", keep)
+    monkeypatch.setattr(polars_utils, "filter_upcoming_games", keep_upcoming)
 
     # Act
     data_collection.main(

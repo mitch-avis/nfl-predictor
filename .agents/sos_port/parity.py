@@ -68,7 +68,7 @@ from sos_sources import PLAY_BY_PLAY, classify_game_log_columns
 from nfl_predictor import constants
 from nfl_predictor.utils.logger import log
 from nfl_predictor.utils.polars import loaders, nflverse_sources, player_team_repair
-from nfl_predictor.utils.polars.loaders import _pbp_cache_path, _prepare_pbp, _read_cached_frame
+from nfl_predictor.utils.polars.loaders import _pbp_cache_path, _prepare_pbp, read_cached_frame
 from nfl_predictor.utils.polars.pbp import (
     aggregate_pbp_team_box_score_stats,
     aggregate_pbp_team_game_stats,
@@ -185,7 +185,7 @@ def season_pbp(
     if not path.is_file():
         audit.fail("cache", f"{season}: {portable(str(path))} does not exist")
         return None
-    if _read_cached_frame(audit.record(path), tuple(constants.PBP_COLUMNS)) is None:
+    if read_cached_frame(audit.record(path), tuple(constants.PBP_COLUMNS)) is None:
         audit.fail("cache", f"{season}: {portable(str(path))} predates the columns the code reads")
         return None
     cached = loaders.load_pbp([season], cache_dir=cache_dir, current_season=CURRENT_SEASON)

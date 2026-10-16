@@ -13,16 +13,6 @@ import polars as pl
 import pytest
 from nflreadpy.downloader import get_downloader
 from polars.testing import assert_frame_equal
-from tests.ratings_league import (
-    BACKUP_ID,
-    SEASONS,
-    TEAMS,
-    League,
-    league,
-    starter_id,
-    with_player_sources,
-    with_season_stats_columns,
-)
 
 from nfl_predictor import constants
 from nfl_predictor.ratings.season import BootstrapSettings, build_qb_season
@@ -35,6 +25,16 @@ from nfl_predictor.utils.polars import (
     ratings_build,
     season_stats_build,
     season_stats_schema,
+)
+from tests.ratings_league import (
+    BACKUP_ID,
+    SEASONS,
+    TEAMS,
+    League,
+    league,
+    starter_id,
+    with_player_sources,
+    with_season_stats_columns,
 )
 
 if TYPE_CHECKING:
@@ -342,7 +342,7 @@ def test_a_failed_current_season_download_falls_back_to_the_cached_official_team
     cached = _official(data).filter(pl.col("season") == _LAST)
     source = season_stats_sources.OFFICIAL_TEAM_STATS
     path = source.cache_path(constants.NFLREADPY_CACHE_DIR, _LAST, regular_season_only=True)
-    loaders._write_cached_frame(cached, path, source.columns)
+    loaders.write_cached_frame(cached, path, source.columns)
     attempts: list[int] = []
     monkeypatch.setattr(nflreadpy, "load_team_stats", _failing_download(error, attempts))
 

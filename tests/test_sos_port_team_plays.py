@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import polars as pl
 import pytest
-from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor.ratings.inputs import team_game_rows
 from nfl_predictor.ratings.pbp_inputs import team_games_from_pbp
+from tests.sos_port_scripts import load_sos_port_script
 
 if TYPE_CHECKING:
     from pathlib import Path

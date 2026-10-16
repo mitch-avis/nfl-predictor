@@ -9,10 +9,11 @@ import numpy as np
 import pandas as pd
 import pytest
 import xgboost as xgb
-from tests.weekly_fixture import build_fixture
 
-from nfl_predictor.ml import ml_model_training
+from nfl_predictor.ml import feature_importance, ml_model_training
 from nfl_predictor.ml.ml_model_core import FeatureSpec, MarginTotalModel, OptunaConfig
+from tests.fakes import returning
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     from sklearn.compose import ColumnTransformer
@@ -45,8 +46,11 @@ def _feature_spec() -> FeatureSpec:
     )
 
 
-def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> None:
+def test_train_margin_total_model_with_report_collects_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Training with report collects expected metrics and splits."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2020, 2020, 2021, 2021, 2022, 2022],
@@ -85,7 +89,7 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
             return np.array([3.0, -4.0])
         return np.array([40.0, 35.0])
 
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
     monkeypatch.setattr(
         ml_model_training,
         "train_margin_total_model",
@@ -93,6 +97,7 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
     )
     monkeypatch.setattr(ml_model_training, "predict_xgb", fake_predict_xgb)
 
+    # Act
     result = ml_model_training.train_margin_total_model_with_report(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -118,6 +123,7 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
         )
     )
 
+    # Assert
     metrics = result.metrics_report["metrics"]["holdout"]
     assert metrics is not None
     assert metrics["margin_mae"] == 3.5
@@ -134,9 +140,10 @@ def test_train_margin_total_model_with_report_collects_metrics(monkeypatch) -> N
 
 
 def test_train_margin_total_model_with_report_explains_every_training_row(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """SHAP explains every row the trees trained on, the newest completed week included."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2020, 2020, 2021],
@@ -159,8 +166,8 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
         tuned_params=None,
         tuned_cv_summary=None,
     )
-    monkeypatch.setattr(ml_model_training, "_load_games", lambda _path: df)
-    monkeypatch.setattr(ml_model_training, "train_margin_total_model", lambda _options: model)
+    monkeypatch.setattr(ml_model_training, "load_games", returning(df))
+    monkeypatch.setattr(ml_model_training, "train_margin_total_model", returning(model))
     explained: list[pd.DataFrame] = []
 
     def fake_report(_model: object, shap_rows: pd.DataFrame | None = None) -> dict[str, Any]:
@@ -169,10 +176,9 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
         explained.append(shap_rows)
         return {"feature_names": []}
 
-    monkeypatch.setattr(
-        ml_model_training.feature_importance, "build_feature_importance_report", fake_report
-    )
+    monkeypatch.setattr(feature_importance, "build_feature_importance_report", fake_report)
 
+    # Act
     result = ml_model_training.train_margin_total_model_with_report(
         ml_model_training.TrainingOptions(
             data_path=Path("dummy.csv"),
@@ -198,6 +204,7 @@ def test_train_margin_total_model_with_report_explains_every_training_row(
         )
     )
 
+    # Assert
     assert result.splits == {"train_seasons": [2020, 2021], "holdout_seasons": []}
     assert [list(rows[["season", "week"]].itertuples(index=False)) for rows in explained] == [
         [(2020, 1), (2020, 2), (2021, 1)]
@@ -208,9 +215,11 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
     tmp_path: Path,
 ) -> None:
     """A real fit records mean |SHAP| for every base feature, over its training rows only."""
+    # Arrange
     completed = build_fixture(tmp_path)["completed"]
     games = pd.read_csv(completed)
 
+    # Act
     result = ml_model_training.train_margin_total_model_with_report(
         ml_model_training.TrainingOptions(
             data_path=completed,
@@ -236,6 +245,7 @@ def test_trained_report_ranks_base_features_by_shap_over_the_training_rows(
         )
     )
 
+    # Assert
     report = result.feature_importance
     assert report is not None
     completed_games = games.dropna(subset=["away_score", "home_score"])

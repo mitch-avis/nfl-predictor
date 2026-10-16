@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
 from nfl_predictor.ml import ml_utils
+from nfl_predictor.utils.logger import log
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def _capture_logs(messages: list[str]) -> Any:
@@ -17,10 +21,11 @@ def _capture_logs(messages: list[str]) -> Any:
     return _log
 
 
-def test_display_predictions_logs(monkeypatch) -> None:
+def test_display_predictions_logs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Predictions are logged in expected format."""
+    # Arrange
     messages: list[str] = []
-    monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
+    monkeypatch.setattr(log, "info", _capture_logs(messages))
 
     y_pred = np.array([0.7, 0.25])
     x_test = pd.DataFrame(
@@ -32,37 +37,47 @@ def test_display_predictions_logs(monkeypatch) -> None:
         }
     )
 
+    # Act
     ml_utils.display_predictions(y_pred, x_test)
 
+    # Assert
     assert len(messages) == 2
     assert "Season:" in messages[0]
 
 
-def test_display_weekly_predictions_empty(monkeypatch) -> None:
+def test_display_weekly_predictions_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     """Empty predictions DataFrame logs appropriate message."""
+    # Arrange
     messages: list[str] = []
-    monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
+    monkeypatch.setattr(log, "info", _capture_logs(messages))
 
+    # Act
     ml_utils.display_weekly_predictions(pd.DataFrame())
 
+    # Assert
     assert messages == ["No predictions to display."]
 
 
-def test_display_weekly_predictions_missing_team_columns(monkeypatch) -> None:
+def test_display_weekly_predictions_missing_team_columns(monkeypatch: pytest.MonkeyPatch) -> None:
     """Missing team columns log appropriate message."""
+    # Arrange
     messages: list[str] = []
-    monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
+    monkeypatch.setattr(log, "info", _capture_logs(messages))
 
     df = pd.DataFrame({"season": [2023], "week": [1]})
+
+    # Act
     ml_utils.display_weekly_predictions(df)
 
+    # Assert
     assert messages == ["Missing team columns for pretty output."]
 
 
-def test_display_weekly_predictions_formats(monkeypatch) -> None:
+def test_display_weekly_predictions_formats(monkeypatch: pytest.MonkeyPatch) -> None:
     """Weekly predictions are logged in expected format."""
+    # Arrange
     messages: list[str] = []
-    monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
+    monkeypatch.setattr(log, "info", _capture_logs(messages))
 
     df = pd.DataFrame(
         {
@@ -78,16 +93,21 @@ def test_display_weekly_predictions_formats(monkeypatch) -> None:
         }
     )
 
+    # Act
     ml_utils.display_weekly_predictions(df)
 
+    # Assert
     assert any("Weekly predictions" in msg for msg in messages)
     assert any(msg.startswith("#") for msg in messages if msg.startswith("#"))
 
 
-def test_display_weekly_predictions_confidence_strength_and_explicit_winner(monkeypatch) -> None:
+def test_display_weekly_predictions_confidence_strength_and_explicit_winner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Confidence-strength sorting and explicit winners should be preserved in pretty output."""
+    # Arrange
     messages: list[str] = []
-    monkeypatch.setattr(ml_utils.log, "info", _capture_logs(messages))
+    monkeypatch.setattr(log, "info", _capture_logs(messages))
 
     df = pd.DataFrame(
         {
@@ -102,8 +122,10 @@ def test_display_weekly_predictions_confidence_strength_and_explicit_winner(monk
         }
     )
 
+    # Act
     ml_utils.display_weekly_predictions(df)
 
+    # Assert
     assert messages[0] == "Weekly predictions"
     assert "#-- (Home A)" in messages[1]
     assert "70.0%" in messages[1]

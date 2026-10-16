@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING
 
 import joblib
 import pytest
-from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 from nfl_predictor.cli import rankings
+from nfl_predictor.ml import ml_model_core
 from nfl_predictor.reporting import rating_sources
+from tests.fakes import returning
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,14 +46,14 @@ def _base_args(tmp_path: Path) -> list[str]:
 def _captured_options(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: list[str]):
     """Run the command with ``extra`` and return the options it ranked with."""
     computed: list[RankingOptions] = []
-    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
 
     def fake_compute(_model: object, _inputs: RankingInputs, options: RankingOptions) -> str:
         computed.append(options)
         return "result"
 
     monkeypatch.setattr(rankings, "compute_power_rankings", fake_compute)
-    monkeypatch.setattr(rankings, "write_ranking_outputs", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(rankings, "write_ranking_outputs", returning(None))
     rankings.main([*_base_args(tmp_path), *extra])
     return computed[0]
 
@@ -105,7 +107,7 @@ def test_an_unavailable_rating_source_is_a_clear_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
 
     def unavailable(*_args: object) -> None:
         msg = "no ported team rating for 2024 week 4"
@@ -123,7 +125,7 @@ def test_a_missing_model_predictions_path_is_a_clear_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     missing = tmp_path / "no_such_run"
     args = [*_base_args(tmp_path), "--method", "model", "--model-predictions", str(missing)]
 
@@ -136,7 +138,7 @@ def test_an_unreadable_fold_file_is_a_clear_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     folds = tmp_path / "folds"
     folds.mkdir()
     joblib.dump(["not a fold"], folds / "fold_2024_w01.joblib")
@@ -167,7 +169,7 @@ def test_a_truncated_or_corrupt_fold_file_is_a_clear_error(
     damage: Callable[[bytes], bytes], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Arrange
-    monkeypatch.setattr(rankings.ml_model_core, "load_model_checkpoint", lambda *_args: None)
+    monkeypatch.setattr(ml_model_core, "load_model_checkpoint", returning(None))
     folds = write_fold_checkpoints(
         tmp_path / "folds", [fold_frame(2024, 1, [("BBB", "AAA", 3.0), ("DDD", "CCC", -1.0)])]
     )

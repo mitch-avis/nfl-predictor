@@ -16,12 +16,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from tests import snapshots
-from tests.weekly_fixture import build_fixture
 
 from nfl_predictor.cli import backtest, leakage_audit
 from nfl_predictor.ml import walk_forward
 from nfl_predictor.reporting import production_settings
+from tests import snapshots
+from tests.weekly_fixture import build_fixture
 
 if TYPE_CHECKING:
     import pytest
@@ -46,13 +46,18 @@ def test_leakage_audit_report_matches_snapshot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The audit passes the fixture and writes the same report as before."""
+    # Arrange
     paths = build_fixture(tmp_path)
     out_json = tmp_path / "leakage_audit.json"
+
+    # Act
     code = _run_main(
         leakage_audit,
         ["--data-path", str(paths["completed"]), "--out-json", str(out_json)],
         monkeypatch,
     )
+
+    # Assert
     report = json.loads(out_json.read_text(encoding="utf-8"))
     assert code == 0
     assert report["ok"] is True
@@ -67,6 +72,7 @@ def test_leakage_audit_fails_on_a_planted_target_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A feature that copies the home score is flagged and the audit exits non-zero."""
+    # Arrange
     paths = build_fixture(tmp_path)
     games = pd.read_csv(paths["completed"])
     position = list(games.columns).index("away_rest") + 1
@@ -75,10 +81,12 @@ def test_leakage_audit_fails_on_a_planted_target_copy(
     games.to_csv(leaky, index=False)
     out_json = tmp_path / "leakage_audit.json"
 
+    # Act
     code = _run_main(
         leakage_audit, ["--data-path", str(leaky), "--out-json", str(out_json)], monkeypatch
     )
 
+    # Assert
     report = json.loads(out_json.read_text(encoding="utf-8"))
     assert code == 1
     assert report["ok"] is False
@@ -89,12 +97,17 @@ def test_leakage_audit_reports_a_missing_dataset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A missing input file exits with status 2 and writes nothing."""
+    # Arrange
     out_json = tmp_path / "leakage_audit.json"
+
+    # Act
     code = _run_main(
         leakage_audit,
         ["--data-path", str(tmp_path / "missing.csv"), "--out-json", str(out_json)],
         monkeypatch,
     )
+
+    # Assert
     assert code == 2
     assert not out_json.exists()
 
@@ -103,8 +116,11 @@ def test_walk_forward_backtest_report_matches_snapshot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The benchmark configuration reports the same metrics on the fixture as before."""
+    # Arrange
     paths = build_fixture(tmp_path)
     out_json = tmp_path / "wf" / "metrics_report.json"
+
+    # Act
     _run_main(
         backtest,
         [
@@ -129,6 +145,8 @@ def test_walk_forward_backtest_report_matches_snapshot(
         ],
         monkeypatch,
     )
+
+    # Assert
     report = json.loads(out_json.read_text(encoding="utf-8"))
     for key in ("created_at", "run_id"):
         report.pop(key)

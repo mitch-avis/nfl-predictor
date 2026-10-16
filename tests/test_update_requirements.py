@@ -1,90 +1,26 @@
-"""Behavior of update_requirements.sh's environment health checks, with uv stubbed out."""
+"""Behavior of update_requirements.sh, the same script in every project, with uv stubbed out."""
 
 from __future__ import annotations
 
-import shutil
-import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "update_requirements.sh"
+from tests.update_requirements_harness import BASH, Stubs, run, write_tool
 
-BASH = shutil.which("bash")
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.skipif(BASH is None, reason="needs bash")
 
-# Sources the script's functions, then replaces uv, the prompt and the venv's interpreter with
-# stubs. The fake interpreter passes a check only while its state file says "ok"; the uv stub
-# logs every call and heals the interpreter when the test asks a given command to.
-HARNESS = r"""
-set -Eeuo pipefail
-source "$SCRIPT"
-VENV_PATH="$WORK/.venv"
-PYTHON_REQUEST=""
-cd "$WORK"
-confirm() { return 0; }
-uv() {
-	echo "uv $*" >>"$WORK/calls.log"
-	if [[ "$1 $2" == "python install" && -n "${HEAL_ON_REINSTALL:-}" ]]; then
-		echo ok >"$WORK/stdlib"
-	fi
-	if [[ "$1" == venv && "$*" == *--no-managed-python* ]]; then
-		echo ok >"$WORK/stdlib"
-	fi
-}
-"$@"
-"""
-
-FAKE_PYTHON = """#!/usr/bin/env bash
-if [[ "$2" == *numpy* ]]; then
-	[[ "$(cat "{work}/packages")" == ok ]]
-else
-	[[ "$(cat "{work}/stdlib")" == ok ]]
-fi
-"""
-
-
-def _run(
-    tmp_path: Path,
-    *command: str,
-    stdlib: str = "ok",
-    packages: str = "ok",
-    heal_on_reinstall: bool = False,
-    cuda_install_exit: int = 0,
-) -> tuple[subprocess.CompletedProcess[str], list[str]]:
-    venv_bin = tmp_path / ".venv" / "bin"
-    venv_bin.mkdir(parents=True)
-    (tmp_path / ".venv" / "pyvenv.cfg").write_text("version_info = 3.14\n", encoding="utf-8")
-    python = venv_bin / "python"
-    python.write_text(FAKE_PYTHON.format(work=tmp_path), encoding="utf-8")
-    python.chmod(0o755)
-    installer = venv_bin / "nfl-lightgbm-cuda-install"
-    installer.write_text(f"#!/usr/bin/env bash\nexit {cuda_install_exit}\n", encoding="utf-8")
-    installer.chmod(0o755)
-    (tmp_path / "stdlib").write_text(stdlib, encoding="utf-8")
-    (tmp_path / "packages").write_text(packages, encoding="utf-8")
-    env = {
-        "PATH": "/usr/bin:/bin",
-        "SCRIPT": str(SCRIPT),
-        "WORK": str(tmp_path),
-        "HEAL_ON_REINSTALL": "1" if heal_on_reinstall else "",
-    }
-    result = subprocess.run(
-        [str(BASH), "-c", HARNESS, "harness", *command],
-        capture_output=True,
-        text=True,
-        env=env,
-        check=False,
-    )
-    log = tmp_path / "calls.log"
-    calls = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
-    return result, calls
+SMOKE_IMPORTS_HOOK = 'hook_smoke_imports() { echo "import example_package"; }\n'
 
 
 def test_a_healthy_interpreter_is_left_alone(tmp_path: Path) -> None:
-    result, calls = _run(tmp_path, "ensure_venv_python_is_healthy")
+    # Act
+    result, calls = run(tmp_path, "ensure_venv_python_is_healthy")
+
+    # Assert
     assert result.returncode == 0, result.stderr
     assert calls == []
 
@@ -92,9 +28,13 @@ def test_a_healthy_interpreter_is_left_alone(tmp_path: Path) -> None:
 def test_a_damaged_interpreter_is_repaired_by_reinstalling_its_managed_python(
     tmp_path: Path,
 ) -> None:
-    result, calls = _run(
-        tmp_path, "ensure_venv_python_is_healthy", stdlib="bad", heal_on_reinstall=True
-    )
+    # Arrange
+    stubs = Stubs(stdlib="bad", heal_on_reinstall=True)
+
+    # Act
+    result, calls = run(tmp_path, "ensure_venv_python_is_healthy", stubs=stubs)
+
+    # Assert
     assert result.returncode == 0, result.stderr
     assert calls == [
         "uv python install --reinstall 3.14",
@@ -103,7 +43,10 @@ def test_a_damaged_interpreter_is_repaired_by_reinstalling_its_managed_python(
 
 
 def test_a_system_python_is_the_last_resort(tmp_path: Path) -> None:
-    result, calls = _run(tmp_path, "ensure_venv_python_is_healthy", stdlib="bad")
+    # Act
+    result, calls = run(tmp_path, "ensure_venv_python_is_healthy", stubs=Stubs(stdlib="bad"))
+
+    # Assert
     assert result.returncode == 0, result.stderr
     assert calls == [
         "uv python install --reinstall 3.14",
@@ -113,31 +56,194 @@ def test_a_system_python_is_the_last_resort(tmp_path: Path) -> None:
 
 
 def test_packages_that_import_pass_the_check(tmp_path: Path) -> None:
-    result, _ = _run(tmp_path, "ensure_venv_packages_import")
+    # Arrange
+    stubs = Stubs(hooks=SMOKE_IMPORTS_HOOK)
+
+    # Act
+    result, calls = run(tmp_path, "ensure_venv_packages_import", stubs=stubs)
+
+    # Assert
     assert result.returncode == 0, result.stderr
+    assert calls == ["python import check"]
 
 
 def test_packages_that_fail_to_import_stop_with_the_cache_fix(tmp_path: Path) -> None:
-    result, _ = _run(tmp_path, "ensure_venv_packages_import", packages="bad")
+    # Arrange
+    stubs = Stubs(packages="bad", hooks=SMOKE_IMPORTS_HOOK)
+
+    # Act
+    result, _ = run(tmp_path, "ensure_venv_packages_import", stubs=stubs)
+
+    # Assert
     assert result.returncode == 1
-    assert "uv cache clean" in result.stderr
-    assert "uv sync --active --reinstall" in result.stderr
+    assert "import example_package" in result.stderr
+    assert "uv cache clean && uv sync --reinstall" in result.stderr
 
 
-def test_a_cuda_build_that_installs_passes_quietly(tmp_path: Path) -> None:
-    result, _ = _run(tmp_path, "install_lightgbm_cuda_build")
+def test_without_hooks_there_is_no_import_check(tmp_path: Path) -> None:
+    # Act
+    result, calls = run(tmp_path, "ensure_venv_packages_import", stubs=Stubs(packages="bad"))
+
+    # Assert
     assert result.returncode == 0, result.stderr
-    assert "Warning" not in result.stderr
+    assert calls == []
 
 
-def test_a_failed_cuda_build_warns_and_continues(tmp_path: Path) -> None:
-    result, _ = _run(tmp_path, "install_lightgbm_cuda_build", cuda_install_exit=1)
+def test_a_refresh_needs_no_activated_venv(tmp_path: Path) -> None:
+    # Act
+    result, calls = run(tmp_path, "main")
+
+    # Assert
     assert result.returncode == 0, result.stderr
-    assert "Warning" in result.stderr
-    assert "CPU build" in result.stderr
+    assert "uv lock --upgrade" in calls
+    assert "uv sync" in calls
+    assert not [call for call in calls if "--active" in call]
 
 
-def test_the_package_check_runs_after_the_sync() -> None:
-    script = SCRIPT.read_text(encoding="utf-8")
-    main = script[script.index("main() {") :]
-    assert main.index("uv sync --active") < main.index("ensure_venv_packages_import")
+def test_hooks_add_sync_arguments_and_run_after_the_sync(tmp_path: Path) -> None:
+    # Arrange
+    stubs = Stubs(
+        hooks=(
+            'hook_sync_args() { printf "%s\\n" --extra "two words"; }\n'
+            'hook_after_sync() { echo "after sync" >>"$WORK/calls.log"; }\n'
+            f"{SMOKE_IMPORTS_HOOK}"
+        )
+    )
+
+    # Act
+    result, calls = run(tmp_path, "main", stubs=stubs)
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert calls[-3:] == ["uv sync --extra two words", "after sync", "python import check"]
+
+
+def test_a_missing_venv_is_created_and_the_refresh_continues(tmp_path: Path) -> None:
+    # Act
+    result, calls = run(tmp_path, "main", stubs=Stubs(venv=False))
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert calls.index("uv venv .venv") < calls.index("uv lock --upgrade")
+
+
+def test_a_python_request_reaches_the_new_venv(tmp_path: Path) -> None:
+    # Act
+    result, calls = run(tmp_path, "main", "--python", "3.13", stubs=Stubs(venv=False))
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert "uv venv .venv --python 3.13" in calls
+
+
+def test_an_unknown_option_stops_before_any_change(tmp_path: Path) -> None:
+    # Act
+    result, calls = run(tmp_path, "main", "--frobnicate")
+
+    # Assert
+    assert result.returncode == 1
+    assert "Unknown option: --frobnicate" in result.stderr
+    assert calls == []
+
+
+def test_a_uv_update_reports_the_old_and_new_versions(tmp_path: Path) -> None:
+    # Arrange
+    stubs = Stubs(env={"UV_UPDATE_TO": "uv 0.13.2"})
+
+    # Act
+    result, _ = run(tmp_path, "update_uv", stubs=stubs)
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert "uv 0.13.1 -> uv 0.13.2" in result.stdout
+
+
+def test_an_unchanged_uv_says_it_is_up_to_date(tmp_path: Path) -> None:
+    # Act
+    result, _ = run(tmp_path, "update_uv")
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert "uv is up to date (uv 0.13.1)" in result.stdout
+
+
+def test_a_failed_uv_update_says_so_and_keeps_going(tmp_path: Path) -> None:
+    # Arrange
+    stubs = Stubs(env={"UV_SELF_UPDATE_FAILS": "1"})
+
+    # Act
+    result, _ = run(tmp_path, "update_uv", stubs=stubs)
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert "keeping uv 0.13.1" in result.stdout
+
+
+def test_pre_commit_hook_versions_are_refreshed_when_the_project_uses_pre_commit(
+    tmp_path: Path,
+) -> None:
+    # Arrange
+    (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+    write_tool(tmp_path / ".venv" / "bin" / "pre-commit", tmp_path)
+
+    # Act
+    result, calls = run(tmp_path, "refresh_pre_commit_hooks")
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert calls == ["pre-commit autoupdate"]
+
+
+def test_pre_commit_is_left_alone_without_its_config(tmp_path: Path) -> None:
+    # Arrange
+    write_tool(tmp_path / ".venv" / "bin" / "pre-commit", tmp_path)
+
+    # Act
+    result, calls = run(tmp_path, "refresh_pre_commit_hooks")
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert calls == []
+
+
+def test_requirements_files_are_exported_from_the_lockfile(tmp_path: Path) -> None:
+    # Arrange
+    for name in ("requirements.txt", "requirements-dev.in", "requirements-dev.txt"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+
+    # Act
+    result, calls = run(tmp_path, "refresh_compatibility_requirements")
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert calls == [
+        (
+            "uv export --format requirements.txt --no-default-groups --no-emit-project"
+            " --no-hashes --output-file requirements.txt"
+        ),
+        (
+            "uv export --format requirements.txt --only-group dev --no-emit-project"
+            " --no-hashes --output-file requirements-dev.txt"
+        ),
+    ]
+
+
+def test_without_requirements_files_nothing_is_exported(tmp_path: Path) -> None:
+    # Act
+    result, calls = run(tmp_path, "refresh_compatibility_requirements")
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    assert calls == []
+
+
+def test_a_failed_step_names_its_command(tmp_path: Path) -> None:
+    # Arrange
+    stubs = Stubs(env={"UV_LOCK_FAILS": "1"})
+
+    # Act
+    result, _ = run(tmp_path, "main", stubs=stubs)
+
+    # Assert
+    assert result.returncode != 0
+    assert "uv lock --upgrade" in result.stderr

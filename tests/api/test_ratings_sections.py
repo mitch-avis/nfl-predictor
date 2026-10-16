@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import polars as pl
 import pytest
-from tests.api import ratings_factories as factories
 
 from nfl_predictor.api.ratings import files, sections
+from tests.api import ratings_factories as factories
 
 
 def _team_logs(team: str) -> pl.DataFrame:

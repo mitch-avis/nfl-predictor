@@ -15,44 +15,28 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Set up Python 3.14
-        uses: actions/setup-python@v6
+      # uv installs the Python that pyproject.toml asks for.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.2.0
         with:
-          python-version: "3.14"
-
-      - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v8.2.0
-        with:
-          version: "latest"
           enable-cache: true
 
-      - name: Create virtual environment
-        run: uv venv .venv
-
       - name: Sync dependencies
-        run: |
-          source .venv/bin/activate
-          uv sync --active --locked
+        run: uv sync --locked
 
       - name: Set up Node.js for markdownlint
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: "26"
 
-      - name: Install markdownlint
-        run: npm install --global markdownlint-cli
+      - name: Install markdownlint-cli2
+        run: npm install --global markdownlint-cli2
 
-      - name: Editable install smoke check
-        run: uv pip install --python .venv/bin/python -e . --no-deps
-
-      # The one gate: lock and sync checks, ruff format and lint, ty, pyright, pytest,
-      # markdownlint and every front-door command's --help, exactly as it runs locally.
+      # The one gate, exactly as it runs locally.
       - name: Gate
-        run: |
-          source .venv/bin/activate
-          scripts/gate.sh
+        run: scripts/gate.sh
 
   web:
     runs-on: ubuntu-latest
@@ -63,7 +47,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # pnpm goes first so setup-node can find it for the store cache.
       - name: Set up pnpm
@@ -72,7 +56,7 @@ jobs:
           version: 12
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "26"
           cache: pnpm

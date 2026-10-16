@@ -7,10 +7,10 @@ from datetime import date
 from typing import TYPE_CHECKING
 
 import pytest
-from tests.api import ratings_factories as factories
 
 from nfl_predictor.api.readers import cache
 from nfl_predictor.utils import clock
+from tests.api import ratings_factories as factories
 
 if TYPE_CHECKING:
     from pathlib import Path

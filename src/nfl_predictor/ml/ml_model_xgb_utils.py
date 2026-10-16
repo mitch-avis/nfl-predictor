@@ -14,7 +14,7 @@ import re
 import warnings
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import xgboost as xgb
@@ -99,7 +99,7 @@ def _as_matrix(result: object) -> np.ndarray | spmatrix:
     one of these two, and anything else is a bug worth failing on.
     """
     if isinstance(result, np.ndarray | spmatrix):
-        return result
+        return cast("np.ndarray | spmatrix", result)
     msg = f"Expected an array or sparse matrix from the preprocessor, got {type(result).__name__}"
     raise TypeError(msg)
 
@@ -152,16 +152,11 @@ def _log_gpu_fallback(message: str) -> None:
 def detect_xgb_cuda() -> bool:
     """Return True when this XGBoost build has CUDA and a GPU it can train on.
 
-    A build without CUDA answers without touching a device. Otherwise a one-round fit on two
-    rows asks for ``cuda`` and reads back the device XGBoost used: with no visible GPU it
-    moves the fit to the CPU with a warning instead of raising, so only the reported device
-    tells the two apart.
+    A one-round fit on two rows asks for ``cuda`` and reads back the device XGBoost used. A
+    build without CUDA raises or moves the fit to the CPU, and with no visible GPU a CUDA build
+    moves it to the CPU with a warning instead of raising, so only the reported device tells
+    a usable GPU apart.
     """
-    try:
-        if not xgb.build_info().get("USE_CUDA", False):
-            return False
-    except xgb.core.XGBoostError:
-        return False
     data = xgb.DMatrix(np.array([[0.0], [1.0]]), label=np.array([0.0, 1.0]))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -280,7 +275,7 @@ def resolve_xgb_params(
     return params
 
 
-def _build_xgb_fit_kwargs(
+def build_xgb_fit_kwargs(
     x_eval: np.ndarray | spmatrix | None,
     y_eval: np.ndarray | None,
     early_stopping_rounds: int | None,
@@ -301,11 +296,11 @@ def _build_xgb_fit_kwargs(
     if _xgb_fit_supports("early_stopping_rounds"):
         fit_kwargs["early_stopping_rounds"] = early_stopping_rounds
     # Newer XGBoost sklearn wrappers moved early-stopping to model params (init kwargs).
-    # We handle that in `_with_xgb_early_stopping_params`.
+    # We handle that in `with_xgb_early_stopping_params`.
     return fit_kwargs
 
 
-def _with_xgb_early_stopping_params(
+def with_xgb_early_stopping_params(
     params: dict[str, Any],
     early_stopping_rounds: int | None,
 ) -> dict[str, Any]:
@@ -333,7 +328,7 @@ def _with_xgb_early_stopping_params(
     return updated
 
 
-def _coerce_tree_method_on_error(
+def coerce_tree_method_on_error(
     params: dict[str, Any],
     exc: Exception,
 ) -> dict[str, Any] | None:
@@ -387,7 +382,8 @@ def fitted_xgb_device(model: object) -> str | None:
         getattr(model, "total_model", None),
     ]
     for attribute in ("margin_quantile_models", "total_quantile_models"):
-        heads.extend((getattr(model, attribute, None) or {}).values())
+        quantile_models: dict[str, object] = getattr(model, attribute, None) or {}
+        heads.extend(quantile_models.values())
     devices = {
         estimator.get_params().get("device")
         for estimator in heads

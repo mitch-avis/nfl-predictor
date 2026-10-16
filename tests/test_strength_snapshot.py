@@ -94,30 +94,39 @@ _OFFENSE = {"AAA": 0.30, "BBB": 0.18, "CCC": 0.06, "DDD": -0.06, "EEE": -0.18, "
 
 def test_snapshot_emits_every_documented_column_for_every_team() -> None:
     """The snapshot names one row per team with the full published column set."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3, 4), _TEAMS, offense=_OFFENSE)
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=5)
 
+    # Assert
     assert snapshot.columns == ["team_abbr", *constants.STRENGTH_SNAPSHOT_STATS]
     assert sorted(snapshot["team_abbr"].to_list()) == sorted(_TEAMS)
 
 
 def test_snapshot_orders_teams_by_their_known_offensive_strength() -> None:
     """A team given a stronger offense ranks above a weaker one on the adjusted value."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3, 4, 5, 6), _TEAMS, offense=_OFFENSE)
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=7)
-    ranked = snapshot.sort("adj_off_pass_epa_snap", descending=True)["team_abbr"].to_list()
 
+    # Assert
+    ranked = snapshot.sort("adj_off_pass_epa_snap", descending=True)["team_abbr"].to_list()
     assert ranked == sorted(_TEAMS, key=lambda team: -_OFFENSE[team])
 
 
 def test_adjusted_components_are_centered_across_the_league() -> None:
     """Offense and defense coefficients each average to zero across the league."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3, 4), _TEAMS, offense=_OFFENSE)
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=5)
 
+    # Assert
     for column in (
         "adj_off_pass_epa_snap",
         "adj_off_rush_epa_snap",
@@ -131,9 +140,12 @@ def test_adjusted_components_are_centered_across_the_league() -> None:
 
 def test_snapshot_uses_only_games_before_the_target_week() -> None:
     """Rewriting the target week and every later week cannot move a pre-week value."""
+    # Arrange
     baseline = strength_snapshot.build_strength_snapshot(
         _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE), season=2024, week=4
     )
+
+    # Act
     with_future = strength_snapshot.build_strength_snapshot(
         pl.concat(
             [
@@ -145,19 +157,24 @@ def test_snapshot_uses_only_games_before_the_target_week() -> None:
         week=4,
     )
 
+    # Assert
     assert_snapshots_equal(baseline, with_future)
 
 
 def test_snapshot_ignores_other_seasons() -> None:
     """Games from a different season never enter the solve for this one."""
+    # Arrange
     current = _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE)
     decoy = _round_robin(2023, (1, 2, 3), _TEAMS, offense=_OFFENSE, epa_scale=50.0)
 
     baseline = strength_snapshot.build_strength_snapshot(current, season=2024, week=4)
+
+    # Act
     with_decoy = strength_snapshot.build_strength_snapshot(
         pl.concat([current, decoy]), season=2024, week=4
     )
 
+    # Assert
     assert_snapshots_equal(baseline, with_decoy)
 
 
@@ -168,6 +185,7 @@ def test_playoff_week_uses_the_full_regular_season_and_ignores_playoff_games() -
     "everything before week N" cutoff would swallow them, so this pins the branch
     rather than relying on the target week already being the earliest playoff week.
     """
+    # Arrange
     regular_weeks = (1, 2, 3)
     regular_season_weeks = constants.get_regular_season_weeks(2024)
     earlier_playoff_weeks = (regular_season_weeks + 1, regular_season_weeks + 2)
@@ -178,19 +196,25 @@ def test_playoff_week_uses_the_full_regular_season_and_ignores_playoff_games() -
     full_season = strength_snapshot.build_strength_snapshot(
         regular, season=2024, week=regular_season_weeks + 1
     )
+
+    # Act
     later_round = strength_snapshot.build_strength_snapshot(
         pl.concat([regular, playoff]), season=2024, week=target_week
     )
 
+    # Assert
     assert_snapshots_equal(full_season, later_round)
 
 
 def test_week_one_without_a_prior_snapshot_returns_nulls_not_zeros() -> None:
     """With no in-season games and no prior season, the snapshot is null, not a fake zero."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE)
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=1)
 
+    # Assert
     assert snapshot.height == len(_TEAMS)
     for column in constants.STRENGTH_SNAPSHOT_STATS:
         if column == "strength_games_played":
@@ -202,6 +226,7 @@ def test_week_one_without_a_prior_snapshot_returns_nulls_not_zeros() -> None:
 
 def test_week_one_falls_back_to_the_regressed_prior_snapshot() -> None:
     """Week 1 carries the previous season's final snapshot regressed toward zero."""
+    # Arrange
     prior = pl.DataFrame(
         {
             "team_abbr": ["AAA", "BBB"],
@@ -210,10 +235,12 @@ def test_week_one_falls_back_to_the_regressed_prior_snapshot() -> None:
     )
     games = _round_robin(2024, (1, 2), ("AAA", "BBB"), offense={"AAA": 0.2})
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(
         games, season=2024, week=1, prior=strength_snapshot.StrengthPrior(prior)
     )
 
+    # Assert
     expected = 0.30 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
     row = snapshot.filter(pl.col("team_abbr") == "AAA").row(0, named=True)
     assert row["adj_off_pass_epa_snap"] == pytest.approx(expected)
@@ -221,6 +248,7 @@ def test_week_one_falls_back_to_the_regressed_prior_snapshot() -> None:
 
 def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     """The in-season weight is games / (games + K), so the prior fades as games accrue."""
+    # Arrange
     prior = pl.DataFrame(
         {
             "team_abbr": list(_TEAMS),
@@ -229,11 +257,14 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
     )
     games = _round_robin(2024, (1, 2), _TEAMS, offense=_OFFENSE)
 
+    in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
+
+    # Act
     blended = strength_snapshot.build_strength_snapshot(
         games, season=2024, week=3, prior=strength_snapshot.StrengthPrior(prior)
     )
-    in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
 
+    # Assert
     played = blended.filter(pl.col("team_abbr") == "AAA")["strength_games_played"].item()
     weight = played / (played + constants.PRIOR_BLEND_GAMES)
     regressed_prior = 1.0 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
@@ -246,6 +277,7 @@ def test_prior_blend_weight_follows_the_documented_games_formula() -> None:
 
 def test_prior_blend_games_sets_the_in_season_weight() -> None:
     """A smaller K gives the in-season solve more weight: games / (games + K)."""
+    # Arrange
     prior = pl.DataFrame(
         {
             "team_abbr": list(_TEAMS),
@@ -254,14 +286,17 @@ def test_prior_blend_games_sets_the_in_season_weight() -> None:
     )
     games = _round_robin(2024, (1, 2), _TEAMS, offense=_OFFENSE)
 
+    in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
+
+    # Act
     blended = strength_snapshot.build_strength_snapshot(
         games,
         season=2024,
         week=3,
         prior=strength_snapshot.StrengthPrior(prior, blend_games=2.0),
     )
-    in_season_only = strength_snapshot.build_strength_snapshot(games, season=2024, week=3)
 
+    # Assert
     played = blended.filter(pl.col("team_abbr") == "AAA")["strength_games_played"].item()
     weight = played / (played + 2.0)
     regressed_prior = 1.0 * (1.0 - constants.WEEK1_REGRESSION_FACTOR)
@@ -274,10 +309,13 @@ def test_prior_blend_games_sets_the_in_season_weight() -> None:
 
 def test_composite_uses_the_documented_weights_over_standardized_components() -> None:
     """The composite is the weighted sum of within-snapshot z-scored components."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3, 4), _TEAMS, offense=_OFFENSE)
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=5)
 
+    # Assert
     expected = [0.0] * snapshot.height
     for column, weight in strength_snapshot.COMPOSITE_WEIGHTS.items():
         values = snapshot[column].to_list()
@@ -292,19 +330,24 @@ def test_composite_uses_the_documented_weights_over_standardized_components() ->
 
 def test_composite_weights_are_documented_and_sum_to_one() -> None:
     """The default display weights are named per component and form a convex blend."""
-    assert set(strength_snapshot.COMPOSITE_WEIGHTS) == {
+    # Act
+    weights = strength_snapshot.COMPOSITE_WEIGHTS
+
+    # Assert
+    assert set(weights) == {
         "adj_off_pass_epa_snap",
         "adj_off_rush_epa_snap",
         "adj_def_pass_epa_snap",
         "adj_def_rush_epa_snap",
         "st_rating",
     }
-    assert sum(strength_snapshot.COMPOSITE_WEIGHTS.values()) == pytest.approx(1.0)
-    assert all(weight > 0.0 for weight in strength_snapshot.COMPOSITE_WEIGHTS.values())
+    assert sum(weights.values()) == pytest.approx(1.0)
+    assert all(weight > 0.0 for weight in weights.values())
 
 
 def test_a_better_defense_earns_a_higher_defense_rating() -> None:
     """A team that allows less EPA per snap scores higher, so the sign is not inverted."""
+    # Arrange
     rows: list[dict[str, object]] = []
     for week in (1, 2, 3):
         # STOUT smothers every opponent; SIEVE lets the same opponents move the ball.
@@ -317,41 +360,51 @@ def test_a_better_defense_earns_a_higher_defense_rating() -> None:
         rows.append(_TeamGame(2024, week, "OFFB", "STOUT", is_home=True, pass_epa=-0.20).row())
         rows.append(_TeamGame(2024, week, "STOUT", "OFFB", is_home=False, pass_epa=0.0).row())
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(pl.DataFrame(rows), season=2024, week=4)
-    ratings = dict(zip(snapshot["team_abbr"], snapshot["adj_def_pass_epa_snap"], strict=True))
 
+    # Assert
+    ratings = dict(zip(snapshot["team_abbr"], snapshot["adj_def_pass_epa_snap"], strict=True))
     assert ratings["STOUT"] > ratings["SIEVE"]
 
 
 def test_home_field_term_is_shared_by_every_team() -> None:
     """The solve fits one home-field value, so every row reports the same number."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE)
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=4)
 
+    # Assert
     assert snapshot["adj_hfa"].n_unique() == 1
 
 
 def test_empty_input_returns_a_typed_empty_snapshot() -> None:
     """No team-game rows at all yields the empty frame, not an exception."""
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(
         strength_snapshot.empty_snapshot(), season=2024, week=4
     )
 
+    # Assert
     assert snapshot.height == 0
     assert snapshot.columns == ["team_abbr", *constants.STRENGTH_SNAPSHOT_STATS]
 
 
 def test_special_teams_rating_is_null_when_the_source_is_missing() -> None:
     """A season without special-teams play data emits nulls rather than a zero rating."""
+    # Arrange
     games = _round_robin(2024, (1, 2, 3), _TEAMS, offense=_OFFENSE).with_columns(
         pl.lit(None, dtype=pl.Float64).alias("st_epa_for"),
         pl.lit(None, dtype=pl.Float64).alias("st_epa_against"),
         pl.lit(None, dtype=pl.Float64).alias("st_plays"),
     )
 
+    # Act
     snapshot = strength_snapshot.build_strength_snapshot(games, season=2024, week=4)
 
+    # Assert
     assert snapshot["st_rating"].null_count() == snapshot.height
     # The rest of the snapshot still solves.
     assert snapshot["adj_off_pass_epa_snap"].null_count() == 0

@@ -75,6 +75,26 @@ def _novig_pair(p_home_raw: float, p_away_raw: float) -> tuple[float, float]:
     return float(p_home_raw) / denom, float(p_away_raw) / denom
 
 
+def _novig_row(row: pd.Series) -> tuple[float, float]:
+    """Return the no-vig home and away probabilities of one prediction row."""
+    return _novig_pair(row["market_home_prob_raw"], row["market_away_prob_raw"])
+
+
+def _moneyline_value_side(row: pd.Series) -> str:
+    """Return the team whose moneyline the model favors over the market."""
+    return row["home_abbr"] if row["edge_home_prob"] >= 0 else row["away_abbr"]
+
+
+def _spread_value_side(row: pd.Series) -> str:
+    """Return the team the model's margin favors against the spread."""
+    return row["home_abbr"] if row["spread_edge_points_home"] >= 0 else row["away_abbr"]
+
+
+def _total_value_side(row: pd.Series) -> str:
+    """Return ``OVER`` when the predicted total reaches the line, else ``UNDER``."""
+    return "OVER" if row["predicted_total"] >= row["total_line"] else "UNDER"
+
+
 def _edge_to_confidence_1_to_10(edge: float) -> int:
     """Map absolute probability edge to a 1..10 confidence score.
 
@@ -164,11 +184,7 @@ def build_betting_report(
     df["market_home_prob_raw"] = df["home_moneyline"].map(_moneyline_to_implied_prob)
     df["market_away_prob_raw"] = df["away_moneyline"].map(_moneyline_to_implied_prob)
 
-    novig = df.apply(
-        lambda row: _novig_pair(row["market_home_prob_raw"], row["market_away_prob_raw"]),
-        axis=1,
-        result_type="expand",
-    )
+    novig = df.apply(_novig_row, axis=1, result_type="expand")
     df["market_home_prob_novig"] = novig[0]
     df["market_away_prob_novig"] = novig[1]
 
@@ -188,10 +204,7 @@ def build_betting_report(
     df["model_fair_home_moneyline"] = df["model_home_prob"].map(_implied_prob_to_moneyline)
     df["model_fair_away_moneyline"] = df["model_away_prob"].map(_implied_prob_to_moneyline)
 
-    df["moneyline_value_side"] = df.apply(
-        lambda row: row["home_abbr"] if row["edge_home_prob"] >= 0 else row["away_abbr"],
-        axis=1,
-    )
+    df["moneyline_value_side"] = df.apply(_moneyline_value_side, axis=1)
     df["moneyline_edge_prob"] = df[["edge_home_prob", "edge_away_prob"]].abs().max(axis=1)
     df["moneyline_confidence_1_10"] = df["moneyline_edge_prob"].map(_edge_to_confidence_1_to_10)
     df["moneyline_action"] = df["moneyline_edge_prob"].map(_edge_to_action)
@@ -201,12 +214,7 @@ def build_betting_report(
         df["spread_edge_points_home"] = df["predicted_margin"].astype(float) + df[
             "home_spread"
         ].astype(float)
-        df["spread_value_side"] = df.apply(
-            lambda row: (
-                row["home_abbr"] if row["spread_edge_points_home"] >= 0 else row["away_abbr"]
-            ),
-            axis=1,
-        )
+        df["spread_value_side"] = df.apply(_spread_value_side, axis=1)
         df["spread_edge_points"] = df["spread_edge_points_home"].abs()
     else:
         df["spread_value_side"] = None
@@ -216,10 +224,7 @@ def build_betting_report(
         df["total_edge_points"] = (
             df["predicted_total"].astype(float) - df["total_line"].astype(float)
         ).abs()
-        df["total_value_side"] = df.apply(
-            lambda row: "OVER" if row["predicted_total"] >= row["total_line"] else "UNDER",
-            axis=1,
-        )
+        df["total_value_side"] = df.apply(_total_value_side, axis=1)
     else:
         df["total_value_side"] = None
         df["total_edge_points"] = float("nan")

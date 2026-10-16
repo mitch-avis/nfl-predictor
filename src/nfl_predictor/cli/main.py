@@ -163,7 +163,7 @@ GROUP_TITLES = {
 def _command_list() -> str:
     """Return the grouped command table shown by ``nfl-predictor --help``."""
     width = max(len(command.name) for command in COMMANDS)
-    blocks = []
+    blocks: list[str] = []
     for group, title in GROUP_TITLES.items():
         rows = [
             f"  {command.name:<{width}}  {command.summary}"

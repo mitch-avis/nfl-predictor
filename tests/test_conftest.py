@@ -14,13 +14,14 @@ from typing import TYPE_CHECKING
 import polars as pl
 import threadpoolctl
 import xgboost
-from tests import data_isolation
-from tests.conftest import THREAD_VARIABLES, DataIsolation, limit_threads
 
 import nfl_predictor
 from nfl_predictor import constants, lines_refresh, week_builder
 from nfl_predictor.api.settings import Settings
 from nfl_predictor.reporting import power_rankings
+from nfl_predictor.utils.narrowing import as_str_dict
+from tests import data_isolation
+from tests.conftest import THREAD_VARIABLES, DataIsolation, limit_threads
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -72,7 +73,7 @@ def test_polars_starts_its_pool_at_the_configured_size() -> None:
 
 def test_openmp_and_blas_start_their_pools_at_the_configured_size() -> None:
     # Arrange
-    xgboost.build_info()  # loads XGBoost's native library, so its OpenMP runtime is reported too
+    xgboost.get_config()  # loads XGBoost's native library, so its OpenMP runtime is reported too
 
     # Act
     pools = threadpoolctl.threadpool_info()
@@ -218,7 +219,7 @@ def _path_inside(value: object, directory: Path) -> bool:
 def _function_defaults(label: str, function: object) -> list[tuple[str, object]]:
     """Return a function's positional and keyword-only defaults, labelled."""
     defaults = list(getattr(function, "__defaults__", None) or ())
-    keyword = getattr(function, "__kwdefaults__", None) or {}
+    keyword = as_str_dict(getattr(function, "__kwdefaults__", None)) or {}
     return [(f"{label}()", value) for value in [*defaults, *keyword.values()]]
 
 
@@ -229,10 +230,10 @@ def _class_defaults(label: str, cls: type) -> list[tuple[str, object]]:
         found.append((f"{label}.{name}", member))
         if inspect.isfunction(member):
             found.extend(_function_defaults(f"{label}.{name}", member))
+    model_fields = as_str_dict(getattr(cls, "model_fields", None))
     if dataclasses.is_dataclass(cls):
         found.extend((f"{label}.{field.name}", field.default) for field in dataclasses.fields(cls))
-    model_fields = getattr(cls, "model_fields", None)
-    if isinstance(model_fields, dict):
+    if model_fields is not None:
         found.extend(
             (f"{label}.{name}", getattr(info, "default", None))
             for name, info in model_fields.items()

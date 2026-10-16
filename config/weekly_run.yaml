@@ -7,6 +7,10 @@
 # file documents what a weekly run does rather than changing it. A key that is commented out uses
 # its code default, which is "automatic" or "none" for those keys. Changing a value changes what the weekly run produces;
 # decide such changes with a walk-forward measurement first.
+#
+# A relative path below, alone or in a list, is taken from the repository root whatever the working
+# directory, and a leading ~ is the home directory. Lists are YAML lists; the comma-separated form
+# is the command line's.
 
 ## General run settings:
 # run_id omitted so weekly_run generates a fresh artifact-friendly id by default.

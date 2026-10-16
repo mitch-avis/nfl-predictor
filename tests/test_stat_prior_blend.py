@@ -96,18 +96,26 @@ def _row(result: pl.DataFrame, away: str) -> dict[str, Any]:
 
 def test_week_one_rows_are_identical_with_and_without_the_blend() -> None:
     """Week 1 has zero in-season games, so the blend weight is zero and nothing moves."""
-    blended = _run_week(1)
+    # Arrange
     ablated = _run_week(1, blend_stat_prior=False)
 
+    # Act
+    blended = _run_week(1)
+
+    # Assert
     assert_frame_equal(blended, ablated, check_exact=True)
     assert _row(blended, "BUF")["away_pass_yards"] == pytest.approx(_REGRESSED_BUF_PASS_YARDS)
 
 
 def test_one_game_team_is_one_fifth_in_season_and_four_fifths_prior() -> None:
     """With K = 4 games, a one-game team is weighted 1 / (1 + 4) toward its own sample."""
+    # Arrange
     prior = _row(_run_week(1), "BUF")
+
+    # Act
     week_two = _row(_run_week(2), "BUF")
 
+    # Assert
     expected_away = 0.2 * 150.0 + 0.8 * float(prior["away_pass_yards"])
     expected_home = 0.2 * 250.0 + 0.8 * float(prior["home_pass_yards"])
     assert week_two["away_pass_yards"] == pytest.approx(expected_away)
@@ -116,30 +124,39 @@ def test_one_game_team_is_one_fifth_in_season_and_four_fifths_prior() -> None:
 
 def test_blended_rates_are_ratios_of_blended_sums() -> None:
     """A rate is rebuilt from the blended numerator and denominator, not blended itself."""
-    week_two = _row(_run_week(2), "BUF")
-
+    # Arrange
     blended_epa = 0.2 * 6.0 + 0.8 * 10.5
     blended_dropbacks = 0.2 * 60.0 + 0.8 * 30.0
     ratio_of_blended_sums = blended_epa / blended_dropbacks
     blend_of_rates = 0.2 * (6.0 / 60.0) + 0.8 * 0.35
 
+    # Act
+    week_two = _row(_run_week(2), "BUF")
+
+    # Assert
     assert week_two["away_epa_per_dropback"] == pytest.approx(ratio_of_blended_sums)
     assert week_two["away_epa_per_dropback"] != pytest.approx(blend_of_rates)
 
 
 def test_blend_games_sets_the_weight() -> None:
     """K = 1 weights a one-game team half in-season and half prior."""
+    # Arrange
     prior = _row(_run_week(1), "BUF")
+
+    # Act
     week_two = _row(_run_week(2, stat_prior_blend_games=1.0), "BUF")
 
+    # Assert
     expected = 0.5 * 150.0 + 0.5 * float(prior["away_pass_yards"])
     assert week_two["away_pass_yards"] == pytest.approx(expected)
 
 
 def test_disabling_the_blend_publishes_raw_in_season_means() -> None:
     """The ablation switch restores the plain mean of prior in-season games."""
+    # Act
     week_two = _row(_run_week(2, blend_stat_prior=False), "BUF")
 
+    # Assert
     assert week_two["away_pass_yards"] == pytest.approx(150.0)
     assert week_two["away_epa_per_dropback"] == pytest.approx(0.1)
 
@@ -151,46 +168,71 @@ def test_games_played_is_untouched_by_the_blend() -> None:
     fixture's schedule carries no scores, so both sides publish 0 whether the blend runs
     or not, which is the point -- the blend never writes this column.
     """
-    blended = _row(_run_week(2), "BUF")
+    # Arrange
     unblended = _row(_run_week(2, blend_stat_prior=False), "BUF")
 
+    # Act
+    blended = _row(_run_week(2), "BUF")
+
+    # Assert
     for side in ("away", "home"):
         assert blended[f"{side}_games_played"] == unblended[f"{side}_games_played"] == 0
 
 
 def test_team_without_a_prior_season_keeps_its_raw_in_season_means() -> None:
     """A team with no previous-season rows has nothing to blend toward."""
+    # Act
     week_two = _row(_run_week(2), "HOU")
 
+    # Assert
     assert week_two["away_pass_yards"] == pytest.approx(220.0)
     assert week_two["home_pass_yards"] == pytest.approx(180.0)
 
 
 def test_first_season_in_the_run_ignores_earlier_seasons() -> None:
     """The first processed season has no prior in this run, even when older rows exist."""
+    # Act
     week_two = _row(_run_week(2, min_season=2007), "BUF")
 
+    # Assert
     assert week_two["away_pass_yards"] == pytest.approx(150.0)
 
 
-def test_supplied_prior_season_stats_match_the_computed_fallback() -> None:
+@pytest.mark.parametrize("week", [2, 1])
+def test_supplied_prior_season_stats_match_the_computed_fallback(week: int) -> None:
     """Passing the precomputed prior gives the same rows as computing it inside."""
+    # Arrange
     prior = week_rows.build_prior_season_stats(_team_stats(), 2007, min_season=2006)
-
     assert prior is not None
-    assert_frame_equal(_run_week(2, prior_season_stats=prior), _run_week(2), check_exact=True)
-    assert_frame_equal(_run_week(1, prior_season_stats=prior), _run_week(1), check_exact=True)
+    computed = _run_week(week)
+
+    # Act
+    supplied = _run_week(week, prior_season_stats=prior)
+
+    # Assert
+    assert_frame_equal(supplied, computed, check_exact=True)
 
 
-def test_prior_season_stats_are_unavailable_for_the_first_season() -> None:
+@pytest.mark.parametrize(
+    ("source", "season"),
+    [("team_stats", 2006), ("team_stats", 2009), ("empty", 2007)],
+    ids=["first-season", "no-data-for-season", "empty-frame"],
+)
+def test_prior_season_stats_are_unavailable_for_the_first_season(source: str, season: int) -> None:
     """No prior is built for the first season in the run or when the data is absent."""
-    assert week_rows.build_prior_season_stats(_team_stats(), 2006, min_season=2006) is None
-    assert week_rows.build_prior_season_stats(_team_stats(), 2009, min_season=2006) is None
-    assert week_rows.build_prior_season_stats(pl.DataFrame(), 2007, min_season=2006) is None
+    # Arrange
+    stats = _team_stats() if source == "team_stats" else pl.DataFrame()
+
+    # Act
+    prior = week_rows.build_prior_season_stats(stats, season, min_season=2006)
+
+    # Assert
+    assert prior is None
 
 
 def test_blend_fills_a_missing_in_season_value_from_the_prior() -> None:
     """When only one side has a value, that side is published unchanged."""
+    # Arrange
     in_season = pl.DataFrame(
         {
             "team_abbr": ["AAA", "BBB"],
@@ -203,23 +245,29 @@ def test_blend_fills_a_missing_in_season_value_from_the_prior() -> None:
         {"team_abbr": ["AAA", "BBB"], "pass_yards": [None, 300.0], "games_played": [17, 17]}
     )
 
+    # Act
     blended = polars_utils.blend_with_prior_stats(in_season, prior, 4.0).sort("team_abbr")
 
+    # Assert
     assert blended["pass_yards"].to_list() == [pytest.approx(100.0), pytest.approx(300.0)]
     assert blended["games_played"].to_list() == [2, 2]
 
 
 def test_blend_is_a_no_op_without_a_prior() -> None:
     """An empty prior frame leaves the in-season frame exactly as it was."""
+    # Arrange
     in_season = pl.DataFrame({"team_abbr": ["AAA"], "pass_yards": [100.0], "games_played": [1]})
 
-    assert_frame_equal(
-        polars_utils.blend_with_prior_stats(in_season, pl.DataFrame(), 4.0), in_season
-    )
+    # Act
+    blended = polars_utils.blend_with_prior_stats(in_season, pl.DataFrame(), 4.0)
+
+    # Assert
+    assert_frame_equal(blended, in_season)
 
 
 def test_process_season_builds_the_prior_once_per_season(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every week of a season reuses one prior frame rather than rebuilding it."""
+    # Arrange
     calls: list[int] = []
     seen: list[object] = []
     sentinel = pl.DataFrame({"team_abbr": ["BUF"]})
@@ -250,17 +298,23 @@ def test_process_season_builds_the_prior_once_per_season(monkeypatch: pytest.Mon
             "home_abbr": ["KC"] * 3,
         }
     )
+
+    # Act
     data_collection.process_season(
         2007, schedule, pl.DataFrame(), data_collection.SeasonInputs(min_season=2006)
     )
 
+    # Assert
     assert calls == [2007]
     assert seen == [sentinel] * 3
 
 
 def test_prior_blend_games_is_the_default_of_both_early_season_blends() -> None:
     """Both early-season blends default to one named constant and are set separately."""
-    assert constants.PRIOR_BLEND_GAMES == 4.0
+    # Act
     inputs = data_collection.SeasonInputs(min_season=2006)
+
+    # Assert
+    assert constants.PRIOR_BLEND_GAMES == 4.0
     assert inputs.stat_prior_blend_games == constants.PRIOR_BLEND_GAMES
     assert inputs.strength_prior_blend_games == constants.PRIOR_BLEND_GAMES

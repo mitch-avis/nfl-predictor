@@ -1,0 +1,16 @@
+# markdownlint-cli2 settings; scripts/gate.sh lints every Markdown file .gitignore doesn't exclude.
+gitignore: true
+config:
+  default: true
+  no-hard-tabs: true
+  line-length:
+    line_length: 100
+    code_blocks: false
+    tables: false
+  no-duplicate-heading:
+    siblings_only: true
+  no-inline-html:
+    allowed_elements: [br, details, hr, kbd, summary, sup]
+# Session transcripts kept beside the plans are raw logs, not documents.
+ignores:
+  - ".agents/*transcript*.md"

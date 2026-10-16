@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 import joblib
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 
 from nfl_predictor import constants, ml_model
@@ -36,6 +37,7 @@ from nfl_predictor.ml import metrics as metrics_utils
 from nfl_predictor.ml.feature_spec import resolve_feature_group_columns
 from nfl_predictor.ml.sample_weights import combine_sample_weights, compute_recency_sample_weight
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -285,7 +287,7 @@ def summarize_eval_window(
             "regular_season_weeks": int(regular_weeks),
             "max_week_in_data": max_week,
             "eval_start_week": int(start_week),
-            "eval_end_week": int(eval_end_week) if eval_end_week is not None else None,
+            "eval_end_week": int(eval_end_week),
             "incomplete_regular_season": bool(incomplete_regular),
         }
 
@@ -538,7 +540,10 @@ def _estimator_best_iteration(estimator: object) -> int | None:
         return None
     num_boosted_rounds = getattr(get_booster(), "num_boosted_rounds", None)
     rounds = num_boosted_rounds() if callable(num_boosted_rounds) else None
-    return int(rounds) - 1 if isinstance(rounds, int | np.integer) else None
+    # A zero-dimensional array also converts with int(); only an integer is a round count.
+    if isinstance(rounds, np.integer):
+        rounds = rounds.item()
+    return int(rounds) - 1 if isinstance(rounds, int) else None
 
 
 def _iteration_details(models: dict[str, Any]) -> dict[str, Any]:
@@ -724,22 +729,23 @@ class _FoldCheckpointStore:
         ) as error:
             log.warning("Ignoring unreadable checkpoint %s (%s); training again.", path, error)
             return None
+        record = as_str_dict(payload)
         if not (
-            isinstance(payload, dict)
-            and payload.get("version") == FOLD_CHECKPOINT_VERSION
-            and payload.get("fingerprint") == self.fingerprint
-            and payload.get("season") == int(fold.season)
-            and payload.get("week") == int(fold.week)
-            and isinstance(payload.get("metrics"), dict)
-            and isinstance(payload.get("predictions"), pd.DataFrame)
-            and isinstance(payload.get("feature_columns"), list)
+            record is not None
+            and record.get("version") == FOLD_CHECKPOINT_VERSION
+            and record.get("fingerprint") == self.fingerprint
+            and record.get("season") == int(fold.season)
+            and record.get("week") == int(fold.week)
+            and isinstance(record.get("metrics"), dict)
+            and isinstance(record.get("predictions"), pd.DataFrame)
+            and isinstance(record.get("feature_columns"), list)
         ):
             log.warning("Ignoring checkpoint %s: it belongs to another run; training again.", path)
             return None
         return _RestoredFold(
-            metrics=payload["metrics"],
-            predictions=payload["predictions"],
-            feature_columns=list(payload["feature_columns"]),
+            metrics=record["metrics"],
+            predictions=record["predictions"],
+            feature_columns=list(record["feature_columns"]),
         )
 
     def save(
@@ -1099,9 +1105,9 @@ def _week_sigma(
 class _FoldProgress:
     """What the fold loop has gathered so far."""
 
-    per_week_metrics: list[dict[str, Any]] = field(default_factory=list)
-    prediction_frames: list[pd.DataFrame] = field(default_factory=list)
-    own_errors: list[pd.DataFrame] = field(default_factory=list)
+    per_week_metrics: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    prediction_frames: list[pd.DataFrame] = field(default_factory=list[pd.DataFrame])
+    own_errors: list[pd.DataFrame] = field(default_factory=list[pd.DataFrame])
     feature_list: list[str] | None = None
     restored_folds: int = 0
     computed_folds: int = 0
@@ -1132,11 +1138,12 @@ def _summarize_run(
     if sort_cols:
         predictions = predictions.sort_values(sort_cols).reset_index(drop=True)
 
+    observed_seasons: npt.NDArray[np.int64] = predictions["season"].dropna().unique()
     per_season_metrics = [
         _aggregate_metrics(
             predictions[predictions["season"] == season], market_anchor=run.market_anchor
         )
-        for season in sorted(predictions["season"].dropna().unique())
+        for season in sorted(int(value) for value in observed_seasons)
     ]
     overall_metrics = _aggregate_metrics(predictions, market_anchor=run.market_anchor)
     probability_windows = _probability_window_rows(predictions, seed=config.random_seed)
@@ -1358,10 +1365,10 @@ def _summarize_fold_metrics(per_week: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _aggregate_metrics(frame: pd.DataFrame, *, market_anchor: bool) -> dict[str, Any]:
-    actual_margin = frame["actual_margin"].to_numpy()
-    pred_margin = frame["predicted_margin"].to_numpy()
-    actual_total = frame["actual_total"].to_numpy()
-    pred_total = frame["predicted_total"].to_numpy()
+    actual_margin: npt.NDArray[np.float64] = frame["actual_margin"].to_numpy()
+    pred_margin: npt.NDArray[np.float64] = frame["predicted_margin"].to_numpy()
+    actual_total: npt.NDArray[np.float64] = frame["actual_total"].to_numpy()
+    pred_total: npt.NDArray[np.float64] = frame["predicted_total"].to_numpy()
     actual_home_win = frame["actual_home_win"].to_numpy()
     home_win_prob = frame["home_win_prob"].to_numpy()
 
@@ -1418,8 +1425,8 @@ def _aggregate_metrics(frame: pd.DataFrame, *, market_anchor: bool) -> dict[str,
     )
 
     if market_anchor and "market_baseline_margin" in frame.columns:
-        baseline_margin = frame["market_baseline_margin"].to_numpy()
-        baseline_total = frame["market_baseline_total"].to_numpy()
+        baseline_margin: npt.NDArray[np.float64] = frame["market_baseline_margin"].to_numpy()
+        baseline_total: npt.NDArray[np.float64] = frame["market_baseline_total"].to_numpy()
         actual_margin_resid = actual_margin - baseline_margin
         actual_total_resid = actual_total - baseline_total
         pred_margin_resid = pred_margin - baseline_margin
@@ -1437,8 +1444,8 @@ def _aggregate_metrics(frame: pd.DataFrame, *, market_anchor: bool) -> dict[str,
     total_p10 = "predicted_total_p10"
     total_p90 = "predicted_total_p90"
     if margin_p10 in frame.columns and margin_p90 in frame.columns:
-        lo = frame[margin_p10].to_numpy(dtype=float)
-        hi = frame[margin_p90].to_numpy(dtype=float)
+        lo: npt.NDArray[np.float64] = frame[margin_p10].to_numpy(dtype=float)
+        hi: npt.NDArray[np.float64] = frame[margin_p90].to_numpy(dtype=float)
         metrics["margin_p10_p90_coverage"] = float(
             np.mean((actual_margin >= lo) & (actual_margin <= hi))
         )
@@ -1521,8 +1528,8 @@ def _season_win_totals(predictions: pd.DataFrame) -> dict[str, Any]:
     ]
 
     def _summarize_totals(frame: pd.DataFrame, season: int | None) -> dict[str, Any]:
-        errors = frame["error"].to_numpy(dtype=float)
-        abs_errors = frame["abs_error"].to_numpy(dtype=float)
+        errors: npt.NDArray[np.float64] = frame["error"].to_numpy(dtype=float)
+        abs_errors: npt.NDArray[np.float64] = frame["abs_error"].to_numpy(dtype=float)
         rmse = float(np.sqrt(np.mean(errors**2))) if len(errors) else None
         return {
             "season": season,
@@ -1550,8 +1557,8 @@ def _calibration_drift(predictions: pd.DataFrame) -> dict[str, list[dict[str, An
         return {"per_week": [], "per_season": []}
 
     def _summarize(frame: pd.DataFrame) -> dict[str, Any]:
-        home_win_prob = frame["home_win_prob"].to_numpy(dtype=float)
-        actual_home_win = frame["actual_home_win"].to_numpy(dtype=float)
+        home_win_prob: npt.NDArray[np.float64] = frame["home_win_prob"].to_numpy(dtype=float)
+        actual_home_win: npt.NDArray[np.float64] = frame["actual_home_win"].to_numpy(dtype=float)
         prob_metrics = metrics_utils.probability_metrics(actual_home_win, home_win_prob)
         avg_pred = float(np.mean(home_win_prob)) if len(home_win_prob) else None
         avg_actual = float(np.mean(actual_home_win)) if len(actual_home_win) else None
@@ -1591,11 +1598,11 @@ def _build_metrics_summary_table(
 ) -> list[dict[str, Any]]:
     """Build a summary table for first-class metrics."""
     rows: list[dict[str, Any]] = []
-    fold_metrics = fold_summary.get("metrics", {}) if fold_summary else {}
+    fold_metrics: dict[str, Any] = fold_summary.get("metrics", {}) if fold_summary else {}
     for priority, specs in metrics_utils.METRIC_STRATEGY.items():
         for spec in specs:
             metric = spec["metric"]
-            stats = fold_metrics.get(metric, {})
+            stats: dict[str, Any] = fold_metrics.get(metric, {})
             rows.append(
                 {
                     "metric": metric,

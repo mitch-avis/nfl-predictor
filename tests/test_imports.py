@@ -8,13 +8,20 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 
 def test_import_nfl_predictor_package() -> None:
     """The top-level package imports cleanly."""
+    # Act & Assert
     importlib.import_module("nfl_predictor")
 
 
-def test_import_legacy_facades() -> None:
+@pytest.mark.parametrize(
+    "module_name",
+    ["nfl_predictor.ml_model", "nfl_predictor.utils.polars_utils"],
+)
+def test_import_legacy_facades(module_name: str) -> None:
     """Legacy facade modules import cleanly."""
-    importlib.import_module("nfl_predictor.ml_model")
-    importlib.import_module("nfl_predictor.utils.polars_utils")
+    # Act & Assert
+    importlib.import_module(module_name)

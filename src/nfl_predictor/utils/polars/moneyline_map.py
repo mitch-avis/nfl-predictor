@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
@@ -131,7 +131,8 @@ def _items(value: object) -> list[object]:
     if not isinstance(value, list):
         msg = f"expected a list, got {type(value).__name__}"
         raise TypeError(msg)
-    return value
+    # isinstance leaves the element type unknown, and every element is an object.
+    return cast("list[object]", value)
 
 
 def _number(value: object) -> float:

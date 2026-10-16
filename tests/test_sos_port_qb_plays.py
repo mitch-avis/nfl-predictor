@@ -5,11 +5,11 @@ from typing import Any
 import numpy as np
 import polars as pl
 import pytest
-from tests.sos_port_scripts import load_sos_port_script
 from threadpoolctl import threadpool_limits
 
 from nfl_predictor.ratings.ridge import UnitFit
-from nfl_predictor.ratings.team_rating import fit_team_ratings
+from nfl_predictor.ratings.team_rating import TeamRatingFit, fit_team_ratings
+from tests.sos_port_scripts import load_sos_port_script
 
 qb = load_sos_port_script("qb_plays_test")
 common = load_sos_port_script("rating_tests_common")
@@ -19,6 +19,10 @@ _QB = "00-QB"
 _RB = "00-RB"
 _C = "00-C"
 _FLAG_COLUMNS = ("rush", "qb_scramble", "aborted_play", "two_point_attempt")
+
+
+def _no_season_prior(_season: int) -> None:
+    """Return no preseason prior for any season."""
 
 
 def _play(play_type: str, epa: float, **values: object) -> dict[str, object]:
@@ -528,12 +532,16 @@ def _harness_inputs(weeks: int = 4) -> Any:
         for name in qb.CANDIDATES
     }
     history_rows = dict(team_rows)
+
+    def team_penalties(season: int) -> TeamRatingFit:
+        return fit_team_ratings(history_rows[season - 1])
+
     return qb.HarnessInputs(
         team_rows=team_rows,
         candidate_rows=candidate_rows,
         starters=starters,
-        team_penalties=lambda season: fit_team_ratings(history_rows[season - 1]),
-        season_prior=lambda season: None,
+        team_penalties=team_penalties,
+        season_prior=_no_season_prior,
     )
 
 
@@ -1036,13 +1044,20 @@ def test_evaluate_and_build_report_run_end_to_end_on_a_synthetic_league() -> Non
     # Arrange
     inputs = _synthetic_inputs()
     frames = qb.candidate_frames(inputs, (*qb.SCORED, qb.ZERO))
-    history = qb.PriorHistory(lambda season: inputs.team_rows[season], first_season=2005)
+
+    def season_rows(season: int) -> pl.DataFrame:
+        return inputs.team_rows[season]
+
+    def team_penalties(season: int) -> TeamRatingFit:
+        return history.cross_validated_fit(season - 1)
+
+    history = qb.PriorHistory(season_rows, first_season=2005)
     harness = qb.HarnessInputs(
         team_rows=inputs.team_rows,
         candidate_rows=frames,
         starters={season: data.starters for season, data in inputs.seasons.items()},
-        team_penalties=lambda season: history.cross_validated_fit(season - 1),
-        season_prior=lambda season: None,
+        team_penalties=team_penalties,
+        season_prior=_no_season_prior,
     )
     provenance = {
         "version": "test",

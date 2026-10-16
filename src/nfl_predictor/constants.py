@@ -5,6 +5,7 @@ modeling, and reporting code stay aligned.
 """
 
 from pathlib import Path
+from typing import NotRequired, TypedDict, overload
 
 # Project directory configurations
 ROOT_DIR = Path(__file__).parents[2]
@@ -168,9 +169,20 @@ TEAM_RANKINGS_STATS = {
     "opponent-two-point-conversion-pct": "opponent_two_point_conversion_pct",
 }
 
+
+class TeamMeta(TypedDict):
+    """One team's row in ``TEAM_MAPPING``: its names and every known abbreviation."""
+
+    canonical: str
+    name: str
+    city: str
+    aliases: list[str]
+    former_names: NotRequired[list[str]]
+
+
 # Unified team mapping table: canonical abbreviation -> all known aliases
 # The canonical abbreviation is the standardized form used throughout this project
-TEAM_MAPPING = {
+TEAM_MAPPING: dict[str, TeamMeta] = {
     "ARI": {
         "canonical": "ARI",
         "name": "Arizona Cardinals",
@@ -372,7 +384,7 @@ TEAM_MAPPING = {
 
 def _build_alias_to_canonical() -> dict[str, str]:
     """Build a reverse lookup from any alias to canonical abbreviation."""
-    mapping = {}
+    mapping: dict[str, str] = {}
     for team_abbr, team_meta in TEAM_MAPPING.items():
         for alias in team_meta["aliases"]:
             mapping[alias] = team_abbr
@@ -385,8 +397,12 @@ def _build_alias_to_canonical() -> dict[str, str]:
 ALIAS_TO_CANONICAL = _build_alias_to_canonical()
 
 
-def normalize_team_abbr(abbr: str) -> str:
-    """Normalize any team abbreviation to its canonical form."""
+@overload
+def normalize_team_abbr(abbr: str) -> str: ...
+@overload
+def normalize_team_abbr(abbr: None) -> None: ...
+def normalize_team_abbr(abbr: str | None) -> str | None:
+    """Normalize any team abbreviation to its canonical form; ``None`` passes through."""
     if abbr is None:
         return abbr
     return ALIAS_TO_CANONICAL.get(abbr, ALIAS_TO_CANONICAL.get(abbr.upper(), abbr))
@@ -396,7 +412,7 @@ def normalize_team_abbr(abbr: str) -> str:
 TEAM_ABBR = list(TEAM_MAPPING.keys())
 
 # Dictionary used to map team names/cities to abbreviations (for TeamRankings scraping)
-TEAMS_TO_ABBR = {}
+TEAMS_TO_ABBR: dict[str, str] = {}
 for canonical_abbr, team_info in TEAM_MAPPING.items():
     TEAMS_TO_ABBR[team_info["city"]] = canonical_abbr
     TEAMS_TO_ABBR[team_info["name"]] = canonical_abbr

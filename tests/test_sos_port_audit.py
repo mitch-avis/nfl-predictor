@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import pytest
 import yaml
-from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders, pbp
 from nfl_predictor.utils.polars.season_stats_schema import SEASON_STATS_SCHEMAS
+from tests.sos_port_scripts import load_sos_port_script
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -76,7 +76,7 @@ def _snapshot_and_cache(tmp_path: Path, *, cache_epa: float = 0.25, stale: bool 
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
     path = loaders._pbp_cache_path(cache_dir, 2025, regular_season_only=True)
-    loaders._write_cached_frame(prepared, path, requested)
+    loaders.write_cached_frame(prepared, path, requested)
     return cache_dir
 
 
@@ -698,7 +698,14 @@ def test_check_opponent_rows_complete_game_passes(parity: ModuleType) -> None:
 
 def test_load_pairs_unknown_row_fails_the_audit(parity: ModuleType) -> None:
     # Arrange
-    entry = {"id": "x", "ours": "a", "theirs": "b", "kind": "count", "causes": [], "row": "home"}
+    entry: dict[str, object] = {
+        "id": "x",
+        "ours": "a",
+        "theirs": "b",
+        "kind": "count",
+        "causes": [],
+        "row": "home",
+    }
     audit = parity.Audit()
 
     # Act

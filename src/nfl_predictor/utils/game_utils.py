@@ -198,7 +198,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict:
+def get_qb_elo_by_name(elo_df: pl.DataFrame, qb_name: str) -> dict[str, float | None]:
     """Get the most recent ELO values for a specific QB by name.
 
     Searches both qb1 and qb2 columns to find the most recent game
@@ -280,7 +280,7 @@ def fill_future_qb_data(
         return df
 
     # Build lookup dict for QBs
-    qb_lookup = {}
+    qb_lookup: dict[str, dict[str, Any]] = {}
     for row in latest_qbs.iter_rows(named=True):
         team = row["team_abbr"]
         qb_lookup[team] = {
@@ -411,7 +411,7 @@ def _future_line_updates(
     df: pl.DataFrame, spreads_data: dict[str, dict[int, float]]
 ) -> list[dict[str, Any]]:
     """Return new lines for each unplayed game that has no spread yet."""
-    updates = []
+    updates: list[dict[str, Any]] = []
     for row in df.iter_rows(named=True):
         week = row.get("week")
         home_abbr = row.get("home_abbr")

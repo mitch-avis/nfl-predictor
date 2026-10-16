@@ -27,7 +27,7 @@ the session that delegated the review.
 - Never check out a branch or change files in the main checkout: the user may be running
   `nfl-predictor web --reload` from it, and a checkout restarts the server and fails its running
   jobs. Read branches with `git diff <base>...<branch>`, `git show` and `git log`, and run commands
-  inside the worktree path your prompt gives you, with `VIRTUAL_ENV="$PWD/.venv"`.
+  inside the worktree path your prompt gives you, where the gate uses the worktree's own `.venv`.
 - The only file you write is the `REVIEW.md` your prompt asks for.
 
 ## Reviewing a code change
@@ -37,7 +37,7 @@ the session that delegated the review.
 2. Check the tests came first: each behavior change has a test that would fail without it, and each
    behavior-preserving move has characterization tests. Judge this from the diff; when you cannot
    tell, report that as a finding instead of guessing.
-3. Re-run `VIRTUAL_ENV="$PWD/.venv" scripts/gate.sh` in the worktree, with `--web` when `web/` or
+3. Re-run `scripts/gate.sh` in the worktree, with `--web` when `web/` or
    `src/nfl_predictor/api/` changed, and report its summary. Do not rely on the implementer's run.
 4. Review the diff with the code-review skill: correctness first, then data leakage (`AGENTS.md`,
    "No data leakage"), tests, living docs, commit hygiene, and whether it touches a fingerprinted

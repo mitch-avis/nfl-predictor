@@ -10,6 +10,7 @@ from nfl_predictor.utils import polars_utils
 
 def test_add_divisional_matchup_feature_flags_true_for_division_game() -> None:
     """Divisional opponents should yield `is_divisional_matchup == 1`."""
+    # Arrange
     df = pl.DataFrame(
         {
             "away_abbr": ["PHI"],
@@ -17,12 +18,16 @@ def test_add_divisional_matchup_feature_flags_true_for_division_game() -> None:
         }
     )
 
+    # Act
     out = polars_utils.add_divisional_matchup_feature(df)
+
+    # Assert
     assert out.select("is_divisional_matchup").to_series().to_list() == [1]
 
 
 def test_add_divisional_matchup_feature_flags_false_for_non_division_game() -> None:
     """Non-divisional opponents should yield `is_divisional_matchup == 0`."""
+    # Arrange
     df = pl.DataFrame(
         {
             "away_abbr": ["BUF"],
@@ -30,12 +35,16 @@ def test_add_divisional_matchup_feature_flags_false_for_non_division_game() -> N
         }
     )
 
+    # Act
     out = polars_utils.add_divisional_matchup_feature(df)
+
+    # Assert
     assert out.select("is_divisional_matchup").to_series().to_list() == [0]
 
 
 def test_add_divisional_matchup_feature_unknown_team_defaults_false() -> None:
     """Unknown team abbreviations should not crash and default to non-divisional."""
+    # Arrange
     df = pl.DataFrame(
         {
             "away_abbr": ["XXX"],
@@ -43,20 +52,26 @@ def test_add_divisional_matchup_feature_unknown_team_defaults_false() -> None:
         }
     )
 
+    # Act
     out = polars_utils.add_divisional_matchup_feature(df)
+
+    # Assert
     assert out.select("is_divisional_matchup").to_series().to_list() == [0]
 
 
 def test_add_divisional_matchup_feature_validates_schema() -> None:
     """Helper should raise a clear error if required columns are missing."""
+    # Arrange
     df = pl.DataFrame({"away_abbr": ["PHI"]})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="missing required columns"):
         polars_utils.add_divisional_matchup_feature(df)
 
 
 def test_add_divisional_matchup_feature_uses_historical_alignment_by_season() -> None:
     """Season-aware divisional flags should match the schedule flag in every season."""
+    # Arrange
     rows: list[dict[str, int | str]] = []
     for season in range(1999, 2027):
         if season < 2002:
@@ -73,7 +88,6 @@ def test_add_divisional_matchup_feature_uses_historical_alignment_by_season() ->
                     {"season": season, "away_abbr": "ARI", "home_abbr": "SF", "division": 1},
                 ]
             )
-
     df = pl.DataFrame(rows).with_columns(
         [
             pl.col("season").cast(pl.Int32),
@@ -81,6 +95,8 @@ def test_add_divisional_matchup_feature_uses_historical_alignment_by_season() ->
         ]
     )
 
+    # Act
     out = polars_utils.add_divisional_matchup_feature(df)
 
+    # Assert
     assert out["is_divisional_matchup"].to_list() == out["division"].to_list()

@@ -9,10 +9,10 @@ import pandas as pd
 import polars as pl
 import pytest
 from scipy.stats import norm
-from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 from nfl_predictor import constants
 from nfl_predictor.reporting import power_rankings, rating_sources
+from tests.rating_source_fixtures import fold_frame, write_fold_checkpoints
 
 if TYPE_CHECKING:
     from pathlib import Path

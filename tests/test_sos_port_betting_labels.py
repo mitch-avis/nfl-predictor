@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from scipy.stats import norm
-from tests.sos_port_scripts import load_sos_port_script
 
 from nfl_predictor.reporting import betting_report
+from tests.sos_port_scripts import load_sos_port_script
 
 if TYPE_CHECKING:
     from pathlib import Path

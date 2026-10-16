@@ -201,7 +201,7 @@ def cuda_training_works(runtime: Runtime) -> tuple[bool, str]:
 
 def remove_legacy_files(runtime: Runtime) -> list[Path]:
     """Delete the shim files an earlier installer left in site-packages; return them."""
-    removed = []
+    removed: list[Path] = []
     for name in _LEGACY_FILES:
         path = runtime.purelib / name
         if path.exists():

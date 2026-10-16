@@ -11,6 +11,7 @@ from nfl_predictor.ml import walk_forward
 
 def test_market_anchor_targets_residualize_baseline() -> None:
     """Market anchoring should train on residuals vs market baseline."""
+    # Arrange
     df = pd.DataFrame(
         {
             "away_score": [20, 10],
@@ -21,12 +22,14 @@ def test_market_anchor_targets_residualize_baseline() -> None:
     )
     target_cols = ("away_score", "home_score")
 
+    # Act
     margin, total, base_margin, base_total = ml_model.prepare_margin_total_targets_with_anchor(
         df,
         target_cols,
         market_anchor=True,
     )
 
+    # Assert
     actual_margin = df["home_score"].to_numpy(dtype=float) - df["away_score"].to_numpy(dtype=float)
     actual_total = df["home_score"].to_numpy(dtype=float) + df["away_score"].to_numpy(dtype=float)
 
@@ -40,10 +43,15 @@ def test_market_anchor_targets_residualize_baseline() -> None:
 
 def test_the_market_yardstick_uses_no_vig_moneyline_probabilities() -> None:
     """The scored market probability normalizes home/away implied probs to sum to one."""
+    # Arrange
     games_df = pd.DataFrame({"home_moneyline": [-150], "away_moneyline": [130]})
 
     home_raw = 150.0 / (150.0 + 100.0)
     away_raw = 100.0 / (130.0 + 100.0)
     expected = home_raw / (home_raw + away_raw)
 
-    assert np.allclose(walk_forward._resolve_market_home_win_prob(games_df), expected)
+    # Act
+    probability = walk_forward._resolve_market_home_win_prob(games_df)
+
+    # Assert
+    assert np.allclose(probability, expected)

@@ -30,8 +30,8 @@ user; you own the change.
 - Read the task's full entry in `.agents/TODO.md` and every `.agents/` doc that it or `AGENTS.md`
   points to for that area (for example `.agents/modeling_spec.md` before prediction, calibration,
   market, pool, evaluation, artifact, leakage-audit or feature code).
-- Set up the worktree once: run `uv sync`, then run every tool with `VIRTUAL_ENV="$PWD/.venv"` so it
-  uses this worktree's environment and not the main checkout's. `data/`, `models/` and
+- Set up the worktree once with `uv sync`. `uv` and the gate use this worktree's own `.venv`, and
+  every tool runs as `.venv/bin/<tool>` from the worktree root. `data/`, `models/` and
   `web/node_modules` are not in the worktree, and the tests do not need them. If the task has to read
   data, read it from the main checkout (the first path in `git worktree list`) and never write there.
 
@@ -59,7 +59,7 @@ Give your recommendation with each question (`AGENTS.md` rule 15), and stop for:
 - Keep `README.md` and the other living docs your change affects current.
 - Commit on your worktree branch as `AGENTS.md` ("Versions, changelog and commits") and the
   committing-code skill describe.
-- Done means `VIRTUAL_ENV="$PWD/.venv" scripts/gate.sh` exits `0` on your final tree, with `--web`
+- Done means `scripts/gate.sh` exits `0` on your final tree, with `--web`
   added when `web/` or `src/nfl_predictor/api/` changed. `--quick` is for iteration only.
 
 ## Report

@@ -14,6 +14,7 @@ from nfl_predictor.api.registry.columns import jsonable
 from nfl_predictor.api.schemas.ratings import MetricColumnOut, MetricTableOut
 from nfl_predictor.season_stats.metrics import get_registry
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_list
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -95,8 +96,9 @@ def metric_column(
 
 def _cell(value: object) -> object:
     """Return a JSON-safe cell, list cells element by element."""
-    if isinstance(value, list):
-        return [jsonable(item) for item in value]
+    items = as_list(value)
+    if items is not None:
+        return [jsonable(item) for item in items]
     return jsonable(value)
 
 

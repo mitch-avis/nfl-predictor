@@ -57,10 +57,13 @@ def test_install_does_nothing_when_cuda_already_works(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A build that already trains on the GPU is left alone: one smoke test, no uv call."""
+    # Arrange
     calls = _record_calls(monkeypatch, [True])
 
+    # Act
     result = lightgbm_cuda.install(runtime=_runtime(tmp_path))
 
+    # Assert
     assert result == lightgbm_cuda.InstallResult(status="cuda", rebuilt=False)
     assert calls == ["smoke"]
 
@@ -69,10 +72,13 @@ def test_install_reinstalls_the_cached_cuda_build(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A CPU wheel is replaced from uv's cache first, without compiling."""
+    # Arrange
     calls = _record_calls(monkeypatch, [False, True])
 
+    # Act
     result = lightgbm_cuda.install(runtime=_runtime(tmp_path))
 
+    # Assert
     assert result == lightgbm_cuda.InstallResult(status="installed", rebuilt=False)
     assert calls == ["smoke", "reinstall", "smoke"]
 
@@ -81,10 +87,13 @@ def test_install_rebuilds_without_the_cache_when_the_cached_build_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Only when the cached build still cannot train on the GPU is it compiled again."""
+    # Arrange
     calls = _record_calls(monkeypatch, [False, False, True])
 
+    # Act
     result = lightgbm_cuda.install(runtime=_runtime(tmp_path))
 
+    # Assert
     assert result == lightgbm_cuda.InstallResult(status="rebuilt", rebuilt=True)
     assert calls == ["smoke", "reinstall", "smoke", "rebuild", "smoke"]
 
@@ -92,12 +101,28 @@ def test_install_rebuilds_without_the_cache_when_the_cached_build_fails(
 def test_install_skips_without_a_cuda_toolkit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Without nvcc nothing runs, and ``--require-cuda`` turns the skip into an error."""
+    """Without nvcc nothing runs."""
+    # Arrange
     calls = _record_calls(monkeypatch, [])
     runtime = _runtime(tmp_path, nvcc=None, cuda_version=None)
 
-    assert lightgbm_cuda.install(runtime=runtime).status == "skipped-no-cuda"
+    # Act
+    result = lightgbm_cuda.install(runtime=runtime)
+
+    # Assert
+    assert result.status == "skipped-no-cuda"
     assert calls == []
+
+
+def test_require_cuda_turns_a_missing_toolkit_into_an_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--require-cuda`` turns the skip without nvcc into an error."""
+    # Arrange
+    _record_calls(monkeypatch, [])
+    runtime = _runtime(tmp_path, nvcc=None, cuda_version=None)
+
+    # Act & Assert
     with pytest.raises(RuntimeError, match="No CUDA toolkit"):
         lightgbm_cuda.install(require_cuda=True, runtime=runtime)
 
@@ -105,20 +130,36 @@ def test_install_skips_without_a_cuda_toolkit(
 def test_install_skips_an_nccl_built_for_another_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ubuntu's untagged NCCL stops the install before any build, and names the fix."""
+    """Ubuntu's untagged NCCL stops the install before any build."""
+    # Arrange
     calls = _record_calls(monkeypatch, [])
     runtime = _runtime(tmp_path, nccl_package_version="2.22.3-1-1")
 
-    assert lightgbm_cuda.install(runtime=runtime).status == "skipped-nccl-mismatch"
+    # Act
+    result = lightgbm_cuda.install(runtime=runtime)
+
+    # Assert
+    assert result.status == "skipped-nccl-mismatch"
     assert calls == []
+
+
+def test_require_cuda_names_the_nccl_fix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """With ``--require-cuda`` the NCCL mismatch is an error that names the matching package."""
+    # Arrange
+    _record_calls(monkeypatch, [])
+    runtime = _runtime(tmp_path, nccl_package_version="2.22.3-1-1")
+
+    # Act & Assert
     with pytest.raises(RuntimeError, match=r"\+cuda13\.3"):
         lightgbm_cuda.install(require_cuda=True, runtime=runtime)
 
 
 def test_install_reports_a_failed_build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-zero uv exit is an error, not a silent success."""
+    # Arrange
     _record_calls(monkeypatch, [False], build_code=1)
 
+    # Act & Assert
     with pytest.raises(RuntimeError, match="failed"):
         lightgbm_cuda.install(runtime=_runtime(tmp_path))
 
@@ -138,35 +179,69 @@ def test_nccl_matches_toolkit(
     tmp_path: Path, nccl: str | None, *, has_dpkg: bool, expected: bool
 ) -> None:
     """NCCL matches when its package names the toolkit's CUDA major version."""
+    # Arrange
     runtime = _runtime(tmp_path, nccl_package_version=nccl, has_dpkg=has_dpkg)
-    assert lightgbm_cuda.nccl_matches_toolkit(runtime) is expected
+
+    # Act
+    matches = lightgbm_cuda.nccl_matches_toolkit(runtime)
+
+    # Assert
+    assert matches is expected
 
 
-def test_uv_args_name_the_cuda_build_only_when_it_can_work(tmp_path: Path) -> None:
-    """The flags build LightGBM from source with CUDA; CPU-only or mismatched machines get none."""
+def test_uv_args_name_the_cuda_build(tmp_path: Path) -> None:
+    """The flags build LightGBM from source with CUDA."""
+    # Act
     args = lightgbm_cuda.uv_args(_runtime(tmp_path))
 
+    # Assert
     assert args[:2] == ["--no-binary-package", "lightgbm"]
     assert "lightgbm:cmake.define.USE_CUDA=ON" in args
-    assert lightgbm_cuda.uv_args(_runtime(tmp_path, nvcc=None)) == []
-    assert lightgbm_cuda.uv_args(_runtime(tmp_path, nccl_package_version="2.22.3-1-1")) == []
 
 
-def test_sync_command_bypasses_the_cache_only_for_a_rebuild(tmp_path: Path) -> None:
-    """Both commands force the LightGBM reinstall; only the rebuild turns the cache off."""
-    runtime = _runtime(tmp_path)
+@pytest.mark.parametrize(
+    "overrides",
+    [{"nvcc": None}, {"nccl_package_version": "2.22.3-1-1"}],
+    ids=["cpu-only", "nccl-mismatch"],
+)
+def test_uv_args_are_empty_where_the_cuda_build_cannot_work(
+    tmp_path: Path, overrides: dict[str, Any]
+) -> None:
+    """CPU-only or mismatched machines get no flags."""
+    # Act
+    args = lightgbm_cuda.uv_args(_runtime(tmp_path, **overrides))
 
-    cached = lightgbm_cuda.sync_command(runtime)
-    rebuild = lightgbm_cuda.sync_command(runtime, rebuild=True)
+    # Assert
+    assert args == []
 
+
+def test_sync_command_reinstalls_lightgbm_from_the_cache(tmp_path: Path) -> None:
+    """The plain command forces the LightGBM reinstall and keeps uv's cache."""
+    # Act
+    cached = lightgbm_cuda.sync_command(_runtime(tmp_path))
+
+    # Assert
     assert cached[:3] == ["uv", "sync", "--active"]
     assert cached[-2:] == ["--reinstall-package", "lightgbm"]
     assert "--no-cache" not in cached
+
+
+def test_sync_command_bypasses_the_cache_only_for_a_rebuild(tmp_path: Path) -> None:
+    """The rebuild is the cached command with the cache turned off."""
+    # Arrange
+    runtime = _runtime(tmp_path)
+    cached = lightgbm_cuda.sync_command(runtime)
+
+    # Act
+    rebuild = lightgbm_cuda.sync_command(runtime, rebuild=True)
+
+    # Assert
     assert rebuild == [*cached, "--no-cache"]
 
 
 def test_remove_legacy_files_deletes_only_the_old_shim(tmp_path: Path) -> None:
     """The old shim and its startup hook go; other site-packages files stay."""
+    # Arrange
     runtime = _runtime(tmp_path)
     runtime.purelib.mkdir(parents=True)
     for name in ("nfl_predictor_lightgbm_cuda_compat.pth", "liblightgbm_cuda_compat.so"):
@@ -174,8 +249,10 @@ def test_remove_legacy_files_deletes_only_the_old_shim(tmp_path: Path) -> None:
     keep = runtime.purelib / "other.pth"
     keep.write_text("x", encoding="utf-8")
 
+    # Act
     removed = lightgbm_cuda.remove_legacy_files(runtime)
 
+    # Assert
     assert sorted(path.name for path in removed) == [
         "liblightgbm_cuda_compat.so",
         "nfl_predictor_lightgbm_cuda_compat.pth",
@@ -183,36 +260,58 @@ def test_remove_legacy_files_deletes_only_the_old_shim(tmp_path: Path) -> None:
     assert keep.exists()
 
 
-def test_main_rejects_unknown_arguments(capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize("argv", [["frobnicate"], ["install", "--force"]], ids=["command", "flag"])
+def test_main_rejects_unknown_arguments(
+    capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
     """An unknown command or flag prints the usage and exits 2."""
-    assert lightgbm_cuda.main(["frobnicate"]) == 2
-    assert lightgbm_cuda.main(["install", "--force"]) == 2
+    # Act
+    status = lightgbm_cuda.main(argv)
+
+    # Assert
+    assert status == 2
     assert "Usage:" in capsys.readouterr().err
 
 
 def test_pyproject_exposes_the_installer_entrypoint() -> None:
     """The installer is a console script of the project."""
+    # Act
     config = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    # Assert
     assert config["project"]["scripts"]["nfl-lightgbm-cuda-install"] == (
         "nfl_predictor.lightgbm_cuda:main"
     )
 
 
 def test_gate_checks_the_environment_without_changing_it() -> None:
-    """The gate neither syncs nor rebuilds; its strict sync check gets the CUDA build flags."""
+    """The gate neither syncs nor rebuilds; its strict sync check gets the CUDA build flags.
+
+    The flags come from this repo's gate hooks file, which the shared gate sources.
+    """
+    # Act
+    hooks = (REPO_ROOT / "scripts" / "gate.hooks.sh").read_text(encoding="utf-8")
+
+    # Assert
     gate = (REPO_ROOT / "scripts" / "gate.sh").read_text(encoding="utf-8")
-    assert "nfl-lightgbm-cuda-install install" not in gate
-    assert 'run_step "uv sync --active"' not in gate
-    assert "nfl-lightgbm-cuda-install uv-args" in gate
-    assert 'uv sync --check --active "${LIGHTGBM_CUDA_ARGS[@]}"' in gate
+    assert "nfl-lightgbm-cuda-install install" not in gate + hooks
+    assert 'uv sync --check "${SYNC_ARGS[@]}"' in gate
+    sync_args = hooks[hooks.index("gate_sync_args() {") :]
+    assert "nfl-lightgbm-cuda-install uv-args" in sync_args[: sync_args.index("\n}")]
 
 
 def test_update_requirements_runs_the_installer_after_sync() -> None:
-    """Refreshing the environment syncs with the CUDA flags, then fixes LightGBM if needed."""
-    script = (REPO_ROOT / "update_requirements.sh").read_text(encoding="utf-8")
-    main = script[script.index("main() {") :]
-    sync = main.index('uv sync --active "${lightgbm_cuda_args[@]}"')
-    assert main.index("nfl-lightgbm-cuda-install uv-args") < sync
-    assert sync < main.index("install_lightgbm_cuda_build")
-    builder = script[script.index("install_lightgbm_cuda_build() {") :]
+    """Refreshing the environment syncs with the CUDA flags, then fixes LightGBM if needed.
+
+    The steps live in this repo's hooks file; tests/test_update_requirements_hooks.py runs them.
+    """
+    # Act
+    hooks = (REPO_ROOT / "update_requirements.hooks.sh").read_text(encoding="utf-8")
+
+    # Assert
+    sync_args = hooks[hooks.index("hook_sync_args() {") :]
+    assert "nfl-lightgbm-cuda-install uv-args" in sync_args[: sync_args.index("\n}")]
+    after_sync = hooks[hooks.index("hook_after_sync() {") :]
+    assert "install_lightgbm_cuda_build" in after_sync[: after_sync.index("\n}")]
+    builder = hooks[hooks.index("install_lightgbm_cuda_build() {") :]
     assert "nfl-lightgbm-cuda-install install" in builder[: builder.index("\n}")]

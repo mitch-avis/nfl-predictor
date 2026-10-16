@@ -18,9 +18,17 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Matches a suppression directive anywhere in a comment, including a second ``#`` after a reason.
+# Matches a directive that silences a finding anywhere in a comment, including a second ``#``
+# after a reason: line and file-level noqa, the type-checker ignores, pyright's basic mode or a
+# pyright rule switched off, and the coverage pragmas. Directives that tighten do not match.
 SUPPRESSION = re.compile(
-    r"#\s*(?:noqa\b|type:\s*ignore\b|pyright:\s*ignore\b|ty:\s*ignore\b|pragma:\s*no\s*cover\b)",
+    r"#\s*(?:"
+    r"(?:ruff:\s*|flake8:\s*)?noqa\b"
+    r"|(?:type|pyright|ty):\s*ignore\b"
+    r"|pyright:[^#]*\bbasic\b"
+    r"|pyright:[^#]*\breport\w+\s*=\s*(?:false|none)\b"
+    r"|pragma:\s*no\s*(?:cover|branch)\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -87,6 +95,7 @@ def test_tracked_python_files_carry_no_inline_suppressions() -> None:
         "# pyright: reportPrivateUsage=false",
         "# pyright: reportPrivateUsage = False",
         "# pyright: strict, reportUnknownMemberType=false",
+        "# pyright: reportPrivateUsage=none",
         "# pragma: no branch",
     ],
 )

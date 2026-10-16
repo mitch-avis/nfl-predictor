@@ -414,6 +414,9 @@ follow-ups below.
       defense-adjusted quarterback test (`models/step4/REVIEW.md`); the user dropped it
       (2026-10-02) and it was removed in `0.44.0`. The ridge form is no longer built here: it is
       the `nfl-sos-ratings` quarterback rating, ported in roadmap step 6, phase 3.
+      Deleted artifact: the contents of `models/step4/`, this test's `REVIEW.md` included, were
+      deleted on 2026-10-16 (inventory in `.agents/models_cleanup/`); its numbers stand as
+      reviewed in `.agents/benchmarks.md`, but cannot be rescored from disk.
 
 2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`--run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
@@ -484,7 +487,8 @@ Tasks:
       is confirmed on a six-season walk-forward against the `200` rung and on a second seed before
       it becomes a default (must-ask). The old studies under `models/weekly_2025_week_21/` and
       `models/weekly_2025_week_22/` are void: their trials early-stopped and they predate the
-      `0.6.2` guidance.
+      `0.6.2` guidance. Both directories were deleted on 2026-10-16 (inventory in
+      `.agents/models_cleanup/`); nothing in this task reads them.
 
 Note for any tuning: until the shared early-stopping callback was fixed (version `0.6.2`), every
 Optuna trial's total head stopped after one round, so the `combined_mae` objective scored a

@@ -1,8 +1,8 @@
-"""Keep inline lint and type-checker suppressions out of the tracked Python files.
+"""Keep inline lint and type-checker suppressions out of the tracked Python and stub files.
 
 The repository fixes what a linter or type checker flags; a genuine false positive goes in
 ``[tool.ruff.lint.per-file-ignores]`` in ``pyproject.toml`` with its reason. These tests scan the
-comments of every tracked Python file for the inline forms that would silence a finding instead.
+comments of every tracked Python and stub file for the inline forms that would silence a finding.
 """
 
 from __future__ import annotations
@@ -43,12 +43,12 @@ def suppression_hits(source: str, path: str) -> list[str]:
 
 
 def tracked_python_files() -> list[Path]:
-    """Return the tracked Python files, skipping the test when git cannot list them."""
+    """Return the tracked Python and stub files, skipping the test when git cannot list them."""
     git = shutil.which("git")
     if git is None:
         pytest.skip("git is not available to list the tracked Python files")
     listing = subprocess.run(
-        [git, "-C", str(REPO_ROOT), "ls-files", "-z", "*.py"],
+        [git, "-C", str(REPO_ROOT), "ls-files", "-z", "*.py", "*.pyi"],
         capture_output=True,
         text=True,
         check=False,

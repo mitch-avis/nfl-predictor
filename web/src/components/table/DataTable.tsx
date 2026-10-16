@@ -72,21 +72,27 @@ function HeaderLabel({ column, table }: HeaderContext<Features, Row, unknown>) {
   )
 }
 
-/** A cell: the page's renderer for its column when there is one, else the formatted value. */
-function BodyCell({ column, row, table, getValue }: CellContext<Features, Row, unknown>) {
+/**
+ * A cell: the page's renderer for its column when there is one, else the formatted value. It reads
+ * the payload value rather than the accessor's, so a renderer still sees `null` as `null`.
+ */
+function BodyCell({ column, row, table }: CellContext<Features, Row, unknown>) {
   const { columnMetadata, renderers } = tableMeta(table)
   const meta = columnMetadata[column.id]
-  const value = getValue() as Row[string]
+  const value = row.original[column.id]
   const custom = renderers?.[column.id]
   return custom ? custom(value, row.original, meta) : formatCell(meta, value)
 }
 
-/** Sort numbers as numbers and anything else as text, missing values last. */
+/**
+ * Sort numbers as numbers and anything else as text. Missing values never reach it: the accessor
+ * reads `null` as `undefined`, which `sortUndefined: 'last'` keeps last in both directions (the
+ * table flips this comparator's result on a descending sort, so it cannot place them itself).
+ */
 function compareCells(left: TableRow<Features, Row>, right: TableRow<Features, Row>, columnId: string): number {
   const av = left.original[columnId]
   const bv = right.original[columnId]
-  if (av === null || av === undefined) return 1
-  if (bv === null || bv === undefined) return -1
+  if (av === null || av === undefined || bv === null || bv === undefined) return 0
   if (typeof av === 'number' && typeof bv === 'number') return av - bv
   return String(av).localeCompare(String(bv))
 }
@@ -118,7 +124,7 @@ export function DataTable({
     () =>
       keys.map((key) => ({
         id: key,
-        accessorFn: (row) => row[key],
+        accessorFn: (row) => row[key] ?? undefined,
         header: HeaderLabel,
         cell: BodyCell,
         sortFn: compareCells,
@@ -151,6 +157,8 @@ export function DataTable({
                 const meta = table.column_metadata[header.column.id]
                 const sorted = header.column.getIsSorted()
                 const sticky = header.column.id in stickyOffsets
+                const primary = sorted && header.column.getSortIndex() === 0
+                const ariaSort = primary ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined
                 const style: CSSProperties | undefined = sticky
                   ? { position: 'sticky', left: stickyOffsets[header.column.id], minWidth: STICKY_WIDTH, zIndex: 30 }
                   : undefined
@@ -158,6 +166,7 @@ export function DataTable({
                   <th
                     key={header.id}
                     style={style}
+                    aria-sort={ariaSort}
                     className={cn(
                       'whitespace-nowrap border-b bg-card px-2.5 font-medium text-muted-foreground',
                       dense ? 'py-1.5' : 'py-2.5',

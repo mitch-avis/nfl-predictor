@@ -357,13 +357,24 @@ export interface PredictFile {
   path: string
 }
 
+/** One column the leakage audit flagged; the statistics appear only on the statistical flags. */
+export interface LeakageFlag {
+  column: string
+  /** `suspicious_name`, or a comma-joined subset of the statistical reasons. */
+  reason: string
+  corr_margin?: number | null
+  corr_total?: number | null
+  matches_home_score_rate?: number | null
+  matches_away_score_rate?: number | null
+}
+
 export interface LeakageAudit {
   ok: boolean
   row_count?: number
   feature_count?: number
-  failures?: unknown[]
-  warnings?: unknown[]
-  flagged_columns?: string[]
+  failures?: string[]
+  warnings?: string[]
+  flagged_columns?: LeakageFlag[]
   path?: string
   modified_at?: string
 }

@@ -324,7 +324,7 @@ describe('DataTable sorting', () => {
     expect(sortIcon('Team')).toContain('lucide-arrow-up-down')
   })
 
-  it('sorts a numeric column descending on the first click, with null values first', async () => {
+  it('sorts a numeric column descending on the first click, with null values last', async () => {
     // Arrange
     const user = userEvent.setup()
     renderTable({ table: sortPayload() })
@@ -333,8 +333,51 @@ describe('DataTable sorting', () => {
     await user.click(screen.getByRole('button', { name: 'Sort by Rating' }))
 
     // Assert
-    expect(columnText(0)).toEqual(['BUF', 'DET', 'KC', 'ARI'])
+    expect(columnText(0)).toEqual(['DET', 'KC', 'ARI', 'BUF'])
     expect(sortIcon('Rating')).toContain('lucide-arrow-down')
+  })
+
+  it('puts null values last when a text column sorts descending', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    const rows = [{ team: 'KC', rating: 1 }, { team: null, rating: 2 }, { team: 'ARI', rating: 3 }]
+    renderTable({ table: { ...sortPayload(), rows } })
+    const button = screen.getByRole('button', { name: 'Sort by Team' })
+    await user.click(button)
+
+    // Act
+    await user.click(button)
+
+    // Assert
+    expect(columnText(0)).toEqual(['KC', 'ARI', '—'])
+  })
+
+  it('puts a missing value last when a numeric column sorts descending', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    const rows: Row[] = [{ team: 'KC', rating: 3 }, { team: 'BUF' }, { team: 'DET', rating: 7 }]
+    renderTable({ table: { ...sortPayload(), rows } })
+
+    // Act
+    await user.click(screen.getByRole('button', { name: 'Sort by Rating' }))
+
+    // Assert
+    expect(columnText(0)).toEqual(['DET', 'KC', 'BUF'])
+  })
+
+  it('puts a missing value last when a numeric column sorts ascending', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    const rows: Row[] = [{ team: 'KC', rating: 3 }, { team: 'BUF' }, { team: 'DET', rating: 7 }]
+    renderTable({ table: { ...sortPayload(), rows } })
+    const button = screen.getByRole('button', { name: 'Sort by Rating' })
+    await user.click(button)
+
+    // Act
+    await user.click(button)
+
+    // Assert
+    expect(columnText(0)).toEqual(['KC', 'DET', 'BUF'])
   })
 
   it('sorts a numeric column ascending on the second click, with null values last', async () => {
@@ -381,5 +424,71 @@ describe('DataTable sorting', () => {
 
     // Assert
     expect(columnText(0)).toEqual(['ARI', 'KC', 'BUF'])
+  })
+
+  it('keeps null values last within ties of the primary sort when the secondary sorts descending', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    const table = sortPayload()
+    table.rows = [
+      { team: null, rating: 3 },
+      { team: 'KC', rating: 3 },
+      { team: 'BUF', rating: 7 },
+      { team: 'ARI', rating: 3 },
+    ]
+    renderTable({ table, defaultSort: { key: 'rating' } })
+    await user.keyboard('{Shift>}')
+    const button = screen.getByRole('button', { name: 'Sort by Team' })
+    await user.click(button)
+
+    // Act
+    await user.click(button)
+
+    // Assert
+    expect(columnText(0)).toEqual(['KC', 'ARI', '—', 'BUF'])
+  })
+})
+
+describe('DataTable aria-sort', () => {
+  /** The `aria-sort` of each header cell, in column order. */
+  function ariaSorts(): (string | null)[] {
+    return screen.getAllByRole('columnheader').map((th) => th.getAttribute('aria-sort'))
+  }
+
+  it('leaves aria-sort off every header when the table is unsorted', () => {
+    // Act
+    renderTable({ table: sortPayload() })
+
+    // Assert
+    expect(ariaSorts()).toEqual([null, null])
+  })
+
+  it('marks the sorted header ascending', () => {
+    // Act
+    renderTable({ table: sortPayload(), defaultSort: { key: 'rating' } })
+
+    // Assert
+    expect(ariaSorts()).toEqual([null, 'ascending'])
+  })
+
+  it('marks the sorted header descending', () => {
+    // Act
+    renderTable({ table: sortPayload(), defaultSort: { key: 'team', desc: true } })
+
+    // Assert
+    expect(ariaSorts()).toEqual(['descending', null])
+  })
+
+  it('marks only the primary header in a multi-sort', async () => {
+    // Arrange
+    const user = userEvent.setup()
+    renderTable({ table: sortPayload(), defaultSort: { key: 'rating' } })
+    await user.keyboard('{Shift>}')
+
+    // Act
+    await user.click(screen.getByRole('button', { name: 'Sort by Team' }))
+
+    // Assert
+    expect(ariaSorts()).toEqual([null, 'ascending'])
   })
 })

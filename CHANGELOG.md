@@ -26,6 +26,7 @@
   walk-forward measures it, so the weekly run, `train` and `backtest` train on the same columns as
   before. The help and the docs name `qb_adj` in the whole group lists for the stricter
   configurations.
+
 ## [0.59.7] - 2026-10-15
 
 ### Fixed

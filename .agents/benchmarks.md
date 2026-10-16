@@ -8,7 +8,8 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
 
 Run directories this section names under `models/` (`audit_m54_0_rebuild`,
 `wf_m54_0_2023_2025_from_week1`, `wf_m54_12_2023_2025_from_week1`,
-`wf_m54_flip_2023_2025_from_week1`) were deleted on 2026-10-16 (inventory in
+`wf_m54_flip_2023_2025_from_week1`, `wf_m55_8_2020_2025_half_life4`,
+`wf_m55_8_2020_2025_half_life8`) were deleted on 2026-10-16 (inventory in
 `.agents/models_cleanup/`); the numbers stand as reviewed.
 
 - The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
@@ -172,8 +173,12 @@ Run directories this section names under `models/` (`wf_m54_0_2023_2025_from_wee
 `wf_m55_7_2020_2025_trees598`, `wf_m59_2020_2025_auto_floor_baseline`,
 `wf_m59_2023_2025_from_week1`, `wf_m59_2023_2025_from_week1_auto_floor`,
 `wf_m59_rebuild_2023_2025_from_week1`, `wf_m59_rebuild_2023_2025_from_week1_seed7`,
-`wf_shrink_2023_2025_off`, `wf_strength_2023_2025_from_week1`) were deleted on 2026-10-16 (inventory
-in `.agents/models_cleanup/`); the numbers stand as reviewed.
+`wf_shrink_2023_2025_off`, `wf_strength_2023_2025_from_week1`,
+`wf_m59_2023_2025_from_week1_auto_sigma`, `wf_m59_2023_2025_from_week1_auto_sigma_centered`,
+`wf_m59_2023_2025_from_week1_auto_selected`, `wf_m55_8_2020_2025_half_life4`,
+`wf_m55_8_2020_2025_half_life4_seed7`, `wf_m55_8_2020_2025_half_life8`,
+`wf_m55_8_2020_2025_half_life32`, `wf_m55_8_2020_2025_half_life32_seed7`) were deleted on 2026-10-16
+(inventory in `.agents/models_cleanup/`); the numbers stand as reviewed.
 
 - **Current walk-forward benchmark**, measured 2026-09-19 on the `0.12.3` fit-parity code
   (no in-season early stopping) with `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`,
@@ -334,9 +339,13 @@ in `.agents/models_cleanup/`); the numbers stand as reviewed.
   half-life `8` at seed 42 only). Run directories `models/wf_m55_8_2020_2025_*/`, each with its
   `HYPOTHESIS.md` or a pointer to it; the second key for all nine is
   `models/wf_m55_8_review/INDEPENDENT_REVIEW.md` (a separate session that produced none of the
-  runs), reproduced with `.venv/bin/python models/wf_m55_8_review/independent_rescore.py`. Every
-  arm spent the full `200` trees in all 107 folds, and `auto` resolved to the deterministic floor.
-  Weeks 3-18, `1423` games, market Brier `0.20948`:
+  runs), reproduced with `.venv/bin/python models/wf_m55_8_review/independent_rescore.py`. The
+  half-life `4`, `4` seed 7, `8`, `32` and `32` seed 7 arms were deleted on 2026-10-16 with their
+  fold checkpoints (`.agents/models_cleanup/deleted_2026-10-16.txt`), so that rescore can no longer
+  be fully rerun: its JSON names the deleted checkpoints `2b9b6a6c`, `359abe3f`, `41cb4904`,
+  `92e351e4` and `f8efe644`; the numbers stand as reviewed. Every arm spent the full `200` trees in
+  all 107 folds, and `auto` resolved to the deterministic floor. Weeks 3-18, `1423` games, market
+  Brier `0.20948`:
 
   | arm | det Brier s42 / s7 | margin MAE s42 / s7 | pool pts s42 / s7 |
   | --- | --- | --- | --- |

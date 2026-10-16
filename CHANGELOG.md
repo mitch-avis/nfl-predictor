@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.63.1] - 2026-10-16
+
+### Fixed
+
+- The Stade de France (`PAR00`, `2026_07_PIT_NO`) and FC Bayern Munich Stadium (`MUN01`,
+  `2026_10_NE_DET`) get `stadium_roof` `outdoors` and `stadium_type` `open`: both are open-air
+  fields that nflverse's schedule lists as `dome`. The corrections sit in
+  `constants.STADIUM_ROOF_OVERRIDES` and apply to fresh and cached schedules alike; neither venue
+  hosted a game before 2026, so no earlier feature value changes.
+
 ## [0.63.0] - 2026-10-15
 
 ### Changed

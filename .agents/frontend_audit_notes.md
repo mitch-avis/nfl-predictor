@@ -29,6 +29,13 @@ leaving it stale.
   production run uses the market transform, so "Clean" may describe a different feature set from
   the one the weekly run trains on. Direction: show the audited file and its settings, and pick
   the audit attached to the active run.
+- 2026-10-16, Data status page, leakage audit card, presentation
+  (`web/src/pages/DataStatus.tsx:185-200`): the flagged-column list has no cap or scroll area, so a
+  long audit makes a very long card; the flag and failure lists have no heading or accessible name,
+  and failures differ from flags only by red text (`text-destructive`, line 196); each flag's
+  statistics (correlation with the margin and the total, score-match rates;
+  `ml/leakage_audit.py:111-119`) are not shown; `warnings` is typed (`web/src/api/types.ts:387`)
+  but never rendered (the audit writes none today).
 - 2026-10-16, Data status page, source caches card: only the `nflreadpy` and `nfelo` caches are
   listed (`api/routers/data.py:23`, `cache_files` at `api/readers/data_status.py:270`), and
   `etl_seasons/` is read only for its `season_YYYY` folders (`other_seasons`, line 313). Any other
@@ -79,6 +86,16 @@ leaving it stale.
 - 2026-10-16, `DataTable` empty state: the empty message
   (`web/src/components/table/DataTable.tsx:147`) is a plain `div` without `role="status"`. Loading
   and error states are handled per page and were not reviewed.
+- 2026-10-16, `DataTable` sort state when the columns change: `sorting`
+  (`web/src/components/table/DataTable.tsx:115`) survives a change of the `columns` prop (the
+  Ratings page switches `view.columns`, `web/src/pages/Ratings.tsx:117`). table-core 9 skips sort
+  entries whose column is gone (`createSortedRowModel.js:36-39` in table-core 9.3.1), so the rows
+  follow the remaining keys, but `aria-sort` goes only on the header with sort index 0 (line 160):
+  when the first key's column was removed, no header carries it, and that sort returns if the
+  column comes back. Direction: drop sort entries for columns no longer shown.
+- 2026-10-16, `DataTable` `compareCells` (`web/src/components/table/DataTable.tsx:95`) keeps a
+  null guard that `sortUndefined: 'last'` has made unreachable since 0.63.4: harmless; remove it
+  with the next change there.
 
 ## Fixed since noted
 

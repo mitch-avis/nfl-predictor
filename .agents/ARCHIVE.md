@@ -83,10 +83,11 @@ The follow-up row "6, phases 3-4 (from step 4)" in `TODO.md` was checked on 2026
 `.agents/sos_port/followup_check.py` (read-only), run on the main checkout's
 `data/completed_games_ml.csv` (544 columns) and `config/weekly_run.yaml`: production trains on 449
 feature columns, leaves out `strength, own_elo, own_elo_wt, qb_adj`, and ranks on the blend, whose
-ported-rating and model-rating code mentions neither the strength snapshot nor
-`PRIOR_BLEND_GAMES` (only the `composite` method reads the snapshot). An item that feeds neither
-the production model nor the default power rankings is retired here; one the integration already
-fixed is closed here with its record.
+ported-rating and model-rating code mentions neither the strength snapshot nor `PRIOR_BLEND_GAMES`.
+Only the `composite` method reads the snapshot, and it is the default of the `nfl-predictor
+rankings` command and of the web app's Power rankings job, so the snapshot item stays open in
+`TODO.md`. An item that feeds neither the production model nor the default power rankings is retired
+here; one the integration already fixed is closed here with its record.
 
 Retired (feeds neither):
 
@@ -95,11 +96,6 @@ Retired (feeds neither):
   group is left out since `0.59.0`); the blend does not read the snapshot.
 - **`sos_played_raw` is null in weeks 1 and 2** (Milestone 46). Its three columns are in the
   dataset and none is a production feature (the same group).
-- **The early-season strength prior's weight**, with the item "The early-season strength
-  snapshot, which drives the default power rankings and the `adj_*` model features, is dominated
-  by last season" (2026-09-25 review, step-3 merge test). The snapshot drives neither any more:
-  the default ranking is the blend (`0.58.0`) and the `strength` group is left out (`0.59.0`).
-  `nfl-predictor rankings --method composite` still reads it.
 - **The next-opponent identity columns** (2026-09-25 review). The pair is in the dataset, on
   `constants.PRUNED_FEATURE_COLUMNS` and among no production features (pruned by default since
   `0.44.0`, after the step-4 test).

@@ -16,8 +16,9 @@ score outputs are secondary and display-only.
   the core data source: every nflreadpy source caches per season under `data/cache/nflreadpy/`
   and degrades non-fatally when the current season is not published yet.
 - Reproducible artifacts: training and backtests write run directories with metadata and
-  metrics, and any number quoted in the docs is auditable from disk under `models/`. Outputs are
-  deterministic under fixed seeds.
+  metrics, and any number quoted in the docs is auditable from disk under `models/`, except
+  from the runs listed in `.agents/models_cleanup/`, whose directories were deleted after review.
+  Outputs are deterministic under fixed seeds.
 - Tests are required, test-first by default: before changing production code, make sure the
   lines you will touch are covered, adding characterization or failing tests first. Delegated
   work runs as planner, implementer and reviewer (the global rule); the task text carries the

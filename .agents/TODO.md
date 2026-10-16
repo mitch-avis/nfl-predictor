@@ -263,7 +263,7 @@ Steps:
    (two review rounds) and Milestone 58's live-betting design is archived (58.3); 58.1 waits for
    the user's acceptance of the exact survivor planner, and 58.2 for its done-criterion, a first
    look at a current-season team page in a browser (the data rebuild it also waited on is done
-   since 2026-10-14). The docs close-out is on `docs/step6-close-out` (2026-10-16, not merged).
+   since 2026-10-14). The docs close-out merged into `main` as `0.63.5` (2026-10-16).
    Step 6 closes when 58.1 and 58.2 are accepted.
 7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
    - done 2026-10-15 (`0.60.0`-`0.60.1`, independently reviewed, merged into `main`):
@@ -287,8 +287,9 @@ Steps:
      grouped measurement's new-file cut, two seeds, four runs, code at `main` `d791846`: a tie, the
      group stays in `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` and no default changes; the
      review's floor-sigma gap is fixed in `0.63.0` (`ARCHIVE.md`);
-   - open: `../nfeloqb`, a backup's first start in next-week projections rated as played rows
-     rate it (`get_value(team)` in place of `current_value`), test first;
+   - done 2026-10-16 (independently reviewed, fork `main` `0db2e40`, pushed): `../nfeloqb`, a
+     backup's first start in next-week projections rated as played rows rate it
+     (`get_value(team)` in place of `current_value`), test first;
    - open: the fork's win-total file ends at 2023: its own measurement after the grouped one,
      with a fork change and a third build, landing between game weeks.
 8. **Feature ideas** (raised by the user 2026-10-08; moved before the re-tune 2026-10-15, to be
@@ -608,8 +609,8 @@ happens on a fresh branch off `main` and merges back after each phase.
       Narrowed (2026-10-10): the pages, their API and the navigation landed on the step-6
       integration branch as `0.53.0`, over the ported ratings and season statistics, but the
       phase's done-criterion (a current-season team page with heatmaps and a game log) waited on
-      the production rebuild of `data/` and a first look in a browser; four source features are
-      logged as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
+      the production rebuild of `data/` and a first look in a browser; the source features not
+      ported are logged in `.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21.
       Status 2026-10-16: the rebuild is done (2026-10-14, `0.59.0`, with the 534 ported-ratings
       files); the browser look is still open.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed

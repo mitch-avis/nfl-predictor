@@ -1,6 +1,7 @@
 """Tests for the shared pieces of the rating-definition tests (``.agents/sos_port``)."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -234,13 +235,26 @@ def test_perturbed_numbers_changes_every_numeric_value_of_the_rows_only() -> Non
     assert changed.schema == frame.schema
 
 
+@pytest.fixture
+def no_git_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the variables a git hook exports, so git finds the repository from its directory."""
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        monkeypatch.delenv(name, raising=False)
+
+
 def _git(repo: Path, *args: str) -> str:
-    """Run git in ``repo`` with a fixed identity and return its output."""
+    """Run git in ``repo`` with a fixed identity and return its output.
+
+    Every ``GIT_*`` variable is dropped: inside a git hook, ``GIT_DIR`` and ``GIT_INDEX_FILE``
+    name the hook's repository, and git would act on it instead of ``repo``.
+    """
     git = shutil.which("git")
     assert git is not None
+    env = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
     return subprocess.run(
         [git, "-c", "user.name=Test", "-c", "user.email=test@example.com", *args],
         cwd=repo,
+        env=env,
         check=True,
         capture_output=True,
         text=True,
@@ -257,6 +271,50 @@ def _committed_repo(path: Path) -> tuple[Path, str]:
     return path, _git(path, "rev-parse", "HEAD")
 
 
+def _repo_state(repo: Path) -> tuple[str, str]:
+    """Return ``repo``'s commit and the staged entries of its index."""
+    return _git(repo, "rev-parse", "HEAD"), _git(repo, "ls-files", "--stage")
+
+
+def _point_git_at(monkeypatch: pytest.MonkeyPatch, repo: Path) -> None:
+    """Set the variables a git hook exports so that git would act on ``repo``."""
+    monkeypatch.setenv("GIT_DIR", str(repo / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(repo / ".git" / "index"))
+
+
+def test_git_helpers_leave_the_repository_named_by_the_environment_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    other, _ = _committed_repo(tmp_path / "other")
+    before = _repo_state(other)
+    _point_git_at(monkeypatch, other)
+
+    # Act
+    _committed_repo(tmp_path / "repo")
+
+    # Assert
+    assert _repo_state(other) == before
+
+
+def test_git_commit_leaves_the_repository_named_by_the_environment_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    other, _ = _committed_repo(tmp_path / "other")
+    repo, _ = _committed_repo(tmp_path / "repo")
+    (repo / "tracked.txt").write_text("two\n")
+    before = _repo_state(other)
+    _point_git_at(monkeypatch, other)
+
+    # Act
+    common.git_commit(repo)
+
+    # Assert
+    assert _repo_state(other) == before
+
+
+@pytest.mark.usefixtures("no_git_environment")
 def test_git_commit_clean_tree_is_the_bare_commit(tmp_path: Path) -> None:
     # Arrange
     repo, head = _committed_repo(tmp_path / "repo")
@@ -269,6 +327,7 @@ def test_git_commit_clean_tree_is_the_bare_commit(tmp_path: Path) -> None:
     assert commit == head
 
 
+@pytest.mark.usefixtures("no_git_environment")
 @pytest.mark.parametrize("stage", [False, True])
 def test_git_commit_changed_tracked_file_is_marked_dirty(tmp_path: Path, *, stage: bool) -> None:
     # Arrange
@@ -284,6 +343,7 @@ def test_git_commit_changed_tracked_file_is_marked_dirty(tmp_path: Path, *, stag
     assert commit == f"{head}-dirty"
 
 
+@pytest.mark.usefixtures("no_git_environment")
 def test_git_commit_outside_a_checkout_is_none(tmp_path: Path) -> None:
     # Arrange
     outside = tmp_path / "not_a_repo"

@@ -782,6 +782,28 @@ def test_dataset_files_cover_every_data_path_constant() -> None:
     assert set(DATASET_FILE_EXCLUSIONS) <= set(vars(constants))
 
 
+@pytest.mark.parametrize(
+    ("name", "reader"),
+    [
+        ("all_data_ml.csv", "power rankings"),
+        ("all_data.csv", "lines refresh rewrites"),
+        ("all_data.csv", "nfl-predictor validate"),
+        ("ratings/", "Ratings pages"),
+        ("market_lines_metadata.json", "stored-lines build"),
+    ],
+)
+def test_dataset_file_descriptions_name_their_readers(name: str, reader: str) -> None:
+    """Each description names the code that reads or rewrites the file."""
+    # Arrange
+    descriptions = dict(data_status.DATASET_FILES)
+
+    # Act
+    description = descriptions[name]
+
+    # Assert
+    assert reader in description
+
+
 def test_dataset_files_have_unique_names_and_descriptions() -> None:
     """Each listed file appears once and says what the pipeline does with it."""
     # Act

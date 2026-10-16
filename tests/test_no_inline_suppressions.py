@@ -20,14 +20,15 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Matches a directive that silences a finding anywhere in a comment, including a second ``#``
-# after a reason: line and file-level noqa, the type-checker ignores, pyright's basic mode or a
-# pyright rule switched off, and the coverage pragmas. Directives that tighten do not match.
+# after a reason: line and file-level noqa, the type-checker ignores, pyright's basic or standard
+# mode, a pyright rule switched off or downgraded below an error (the gate fails on errors only),
+# and the coverage pragmas. Directives that tighten do not match.
 SUPPRESSION = re.compile(
     r"#\s*(?:"
     r"(?:ruff:\s*|flake8:\s*)?noqa\b"
     r"|(?:type|pyright|ty):\s*ignore\b"
-    r"|pyright:[^#]*\bbasic\b"
-    r"|pyright:[^#]*\breport\w+\s*=\s*(?:false|none)\b"
+    r"|pyright:[^#]*\b(?:basic|standard)\b"
+    r"|pyright:[^#]*\breport\w+\s*=\s*(?:false|none|information|warning)\b"
     r"|pragma:\s*no\s*(?:cover|branch)\b"
     r")",
     re.IGNORECASE,

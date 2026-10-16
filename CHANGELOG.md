@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.63.8] - 2026-10-16
+
+### Fixed
+
+- No tracked Python file carries an inline lint or type-checker suppression any more, and
+  `tests/test_no_inline_suppressions.py` fails, naming `file:line`, on any `noqa`, `type: ignore`,
+  `pyright: ignore`, `ty: ignore` or `pragma: no cover` comment. Behavior is unchanged.
+- The m60 CLI inventory script is typed without ignores: it patches argparse through
+  `mock.patch.object`, finds dict keys by identity and casts its stand-in run.
+- The sos port scripts name their magic numbers (`CURRENT_SEASON`, `ONE_KEY_PER_LINE_DEPTH`,
+  `TRIPLE_LENGTH`); the `noqa` comments Ruff never read under `.agents/` become plain reasons.
+
 ## [0.63.5] - 2026-10-16
 
 ### Changed

@@ -8,8 +8,9 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## State (written 2026-10-15, 17:45 MDT)
 
-- **`chore/pyright-strict-cleanup`** (`0.59.5` and `0.59.6`, 256 commits on `main`, not merged)
-  makes strict pyright pass with 0 errors (3,146 before) and no inline suppressions:
+- **`main` is at `0.59.6`**: `chore/pyright-strict-cleanup` merged `--no-ff` on 2026-10-15
+  (user-approved; the branch is deleted). It makes strict pyright pass with 0 errors (3,146
+  before) and no inline suppressions:
   - `0.59.5` removes the unused `utils/changelog.py` and its tests;
   - `0.59.6`: local stubs in `typings/`; typed arrays in the model code;
     `tests/fakes.returning`; `utils/narrowing`; every test in Arrange-Act-Assert form;
@@ -22,9 +23,18 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
     user accepted reruns with `0.59.1`).
   - The test files were typed by seven worktree agents, one commit per file, merged `--no-ff`;
     every moved monkeypatch target was checked to be the same object the code looks up.
-    An independent review of the whole branch is next, then the merge with the user's approval.
+  - The independent review approved with findings (gate exit `0`, 4,298 tests; adversarial
+    tests uncommitted in `~/scratch/pyright_review/tests/test_pyright_review_adversarial.py`,
+    48 pass and 4 fail). The `is_numeric_dtype` change on dtype classes and one test's labels are
+    fixed; the other two are under "Open for the user". The TODO item is ticked.
+  - Re-predicting Week 6 with this code from the production run's saved model
+    (`models/weekly_20261015_022416_9a4c092c`, same `data/` sha256) gave identical predictions
+    (543 numeric columns), picks, confidence ranks and floor sigma (`13.3049`).
+  - The user skipped the planned Week 6 weekly rerun and the full walk-forward retrain for now;
+    a started run was stopped in its first stage and left `models/weekly_parity_0596_week06/`
+    (partial; deleting it is the user's call).
 
-- `main` is at `0.59.4` (not pushed): the step-6 port (`0.59.0`, adopted in production), the
+- Before that, `main` held (not pushed) the step-6 port (`0.59.0`, adopted in production), the
   merged `chore/pyproject-standards` (`0.59.1`, `659199b`) and the merged
   `chore/adopt-python-template` (`0.59.2` to `0.59.4`, `b596807`), both user-approved 2026-10-15.
   `data/` was rebuilt on 2026-10-14 (record in `.agents/benchmarks.md`, "Data state and ETL
@@ -51,7 +61,7 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   already did), a leading `~` is the home directory, and a comma-separated feature-group string
   in a config file is refused with the list to write. `0.59.4` removes the GitHub release
   workflow (the project publishes no releases). On `main` the gate fails only on pyright
-  (strict, 3,146 errors), fixed on `chore/pyright-strict-cleanup` above.
+  (strict, 3,146 errors), fixed in `0.59.6` above.
 - **The `qb_adj` review is done.** `feat/qb-adj-features` (`0.60.0`, `c637fc0`, harness worktree
   `.claude/worktrees/agent-afad3cf465d5bcba7`) passed an independent review against
   `.agents/qb_adj_task.md` with minor findings, all docs and tests. They are fixed on
@@ -190,8 +200,15 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Open for the user
 
-- Merge `chore/pyright-strict-cleanup` into `main` after its independent review, and tick the
-  `TODO.md` item on cross-module private imports, which its renames do.
+- The pyright review's two minor findings, neither changing a value production computes:
+  - `_boosted_rounds` (`ml/ml_model_core.py`) and `_estimator_best_iteration`
+    (`ml/walk_forward.py`) now accept a 0-d numpy array as a round count, where the old
+    `int | np.integer` check returned `None`; XGBoost returns a Python `int`. Recommended:
+    restore the old check with the next change that already retrains every checkpoint (rule 14),
+    since both files are fingerprinted.
+  - `.agents/m60/INVENTORY.md` and `PROPOSAL.md` still name `_run_optuna_search` and
+    `_build_xgb_fit_kwargs`; recommended: leave that historical audit frozen.
+- Delete the stopped run's `models/weekly_parity_0596_week06/`? Recommended: yes.
 - Approve fast-forwarding `feat/qb-adj-features` to `6bacd5e`, together with its merge after the
   Monday game.
 - Step 3's list includes `qb_adj` (`strength,elo,own_elo_wt,qb_adj`), where the 2026-10-14

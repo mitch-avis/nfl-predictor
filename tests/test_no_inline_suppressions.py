@@ -152,3 +152,11 @@ def test_suppression_hits_ignores_a_directive_that_does_not_silence(comment: str
 
     # Assert
     assert hits == []
+
+
+def test_tracked_python_files_include_the_type_stubs() -> None:
+    # Act
+    files = tracked_python_files()
+
+    # Assert
+    assert REPO_ROOT / "typings" / "joblib.pyi" in files

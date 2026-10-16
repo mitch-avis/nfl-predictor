@@ -66,8 +66,8 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Train with no game-line columns (spreads, totals, moneylines). The default groups "
             "keep the elo group's preseason win-total prior; for no market information pass "
-            "--disable-feature-groups strength,elo,own_elo_wt (keeps the market-free own Elo) "
-            "or strength,elo,own_elo,own_elo_wt (no Elo at all)."
+            "--disable-feature-groups strength,elo,own_elo_wt,qb_adj (keeps the market-free own "
+            "Elo) or strength,elo,own_elo,own_elo_wt,qb_adj (no Elo at all)."
         ),
     )
     parser.add_argument(

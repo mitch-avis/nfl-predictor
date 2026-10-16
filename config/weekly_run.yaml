@@ -65,16 +65,18 @@ wf_market_mode: hybrid
 # feature groups stage 1 and the final fit both leave out, every column of each: the columns
 # `nfl-predictor backtest --disable-feature-groups` drops for the same groups (the groups and their
 # column markers are constants.FEATURE_GROUP_COLUMN_MARKERS). Production leaves out the strength
-# snapshot (strength) and both presets of this repository's own Elo (own_elo, own_elo_wt), so it
-# trains on the ported team ratings (ratings) and the qb_elos.csv Elo (elo); leaving out strength
-# on data without the ported ratings stops the run. An empty list ([]) leaves no group out, and
-# the key with no value is refused. The saved model records them. An unknown group stops the run
+# snapshot (strength), both presets of this repository's own Elo (own_elo, own_elo_wt) and the
+# qb_elos.csv quarterback adjustment (qb_adj), so it trains on the ported team ratings (ratings)
+# and the qb_elos.csv Elo (elo); leaving out strength on data without the ported ratings stops
+# the run. An empty list ([]) leaves no group out, and the key with no value is refused.
+# The saved model records them. An unknown group stops the run
 # before the data refresh, and --disable-feature-groups on the command line takes them
-# comma-separated, an empty value for none (default: [strength, own_elo, own_elo_wt])
+# comma-separated, an empty value for none (default: [strength, own_elo, own_elo_wt, qb_adj])
 disable_feature_groups:
   - strength
   - own_elo
   - own_elo_wt
+  - qb_adj
 # include quantile models in walk-forward training (default: false)
 wf_include_quantiles: false
 

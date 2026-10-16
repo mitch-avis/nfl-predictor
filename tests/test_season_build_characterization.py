@@ -112,20 +112,32 @@ def _team_game(
 def _elo_row(
     rng: np.random.Generator, season: int, week: int, away: str, home: str
 ) -> dict[str, object]:
-    """Return one game's ELO row."""
+    """Return one game's ELO row.
+
+    The quarterback adjustments derive from the quarterback values instead of drawing from
+    ``rng``, so every other pinned value keeps its draw.
+    """
+    away_elo_pre = float(rng.normal(1500.0, 60.0))
+    home_elo_pre = float(rng.normal(1500.0, 60.0))
+    away_qb_elo_pre = float(rng.normal(0.0, 30.0))
+    home_qb_elo_pre = float(rng.normal(0.0, 30.0))
+    away_qb_value_pre = float(rng.normal(100.0, 20.0))
+    home_qb_value_pre = float(rng.normal(100.0, 20.0))
     return {
         "season": season,
         "week": week,
         "away_abbr": away,
         "home_abbr": home,
-        "away_elo_pre": float(rng.normal(1500.0, 60.0)),
-        "home_elo_pre": float(rng.normal(1500.0, 60.0)),
+        "away_elo_pre": away_elo_pre,
+        "home_elo_pre": home_elo_pre,
         "away_qb": f"QB {away}",
         "home_qb": f"QB {home}",
-        "away_qb_elo_pre": float(rng.normal(0.0, 30.0)),
-        "home_qb_elo_pre": float(rng.normal(0.0, 30.0)),
-        "away_qb_value_pre": float(rng.normal(100.0, 20.0)),
-        "home_qb_value_pre": float(rng.normal(100.0, 20.0)),
+        "away_qb_elo_pre": away_qb_elo_pre,
+        "home_qb_elo_pre": home_qb_elo_pre,
+        "away_qb_value_pre": away_qb_value_pre,
+        "home_qb_value_pre": home_qb_value_pre,
+        "away_qb_adj": round((away_qb_value_pre - 100.0) / 2.0, 3),
+        "home_qb_adj": round((home_qb_value_pre - 100.0) / 2.0, 3),
     }
 
 
@@ -282,6 +294,24 @@ def test_the_world_exercises_every_week_feature_family(build: _Build) -> None:
         (pl.col("season") == _UNPLAYED[0]) & (pl.col("week") == _UNPLAYED[1])
     ).get_column("away_elo_pre")
     assert unplayed_elo.null_count() == 0, "the unplayed week takes each team's latest ELO"
+
+
+def test_the_final_rows_carry_the_files_qb_adj_and_its_away_minus_home_diff(
+    build: _Build,
+) -> None:
+    """The quarterback adjustment reaches every final row, its diff away minus home.
+
+    Played weeks take the week's own ELO rows; the unplayed week takes each team's latest.
+    """
+    # Act
+    adjustments = build.games.select("away_qb_adj", "home_qb_adj", "qb_adj_diff")
+
+    # Assert
+    assert adjustments.null_count().row(0) == (0, 0, 0)
+    assert adjustments.get_column("away_qb_adj").n_unique() > 1
+    assert adjustments.get_column("qb_adj_diff").to_list() == pytest.approx(
+        (adjustments.get_column("away_qb_adj") - adjustments.get_column("home_qb_adj")).to_list()
+    )
 
 
 def test_season_build_rows_match_snapshots(build: _Build) -> None:

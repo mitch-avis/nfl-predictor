@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.60.1] - 2026-10-15
+
+### Fixed
+
+- The quarterback fill for future games leaves a played game (both scores in) as it is, fills a
+  side's ELO values only for the starter it filled, so a named starter never takes the team's
+  latest starter's values, and computes the filled values' away-minus-home diffs again, which
+  the week rows had computed before the fill. The measurement's builds change in no value: every
+  played game has its `qb_elos.csv` row with both starters and values, and the unplayed weeks
+  the file does not list already take each team's latest values from the ELO merge.
+
+## [0.60.0] - 2026-10-15
+
+### Changed
+
+- The default group list's change moves every walk-forward checkpoint fingerprint and the weekly
+  stage hashes, so the first weekly run after the upgrade retrains stage 1. Until the dataset is
+  rebuilt, a run that leaves out `qb_adj` logs that the group matches no column.
+- On a dataset with the new columns, a backtest recorded before 0.59.0 reproduces with
+  `--disable-feature-groups qb_adj` added, and a group list recorded before this version (such as
+  the step-6 arms' `strength,elo,own_elo_wt`) with `qb_adj` added to it.
+
+### Added
+
+- The ETL publishes the quarterback adjustment from `data/qb_elos.csv` (`qb1_adj` for the home
+  side, `qb2_adj` for the away side: the starter's quarterback value minus the team's usual one,
+  in Elo points) as `away_qb_adj`, `home_qb_adj` and the away-minus-home `qb_adj_diff`
+  (`constants.QB_ADJ_COLUMNS`). Upcoming weeks carry the file's next-week values, else each
+  team's latest value, else the latest starter row's, as `qb_value_pre` does; a copy of the file
+  without the columns still loads and leaves them null. The own Elo's internal adjustment never
+  reaches them.
+- The `qb_adj` feature group owns the three columns. It is not market-informed (box-score
+  quarterback values, no betting data) and is left out by default
+  (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`, `config/weekly_run.yaml`) until a two-seed
+  walk-forward measures it, so the weekly run, `train` and `backtest` train on the same columns as
+  before. The help and the docs name `qb_adj` in the whole group lists for the stricter
+  configurations.
+
 ## [0.59.7] - 2026-10-15
 
 ### Fixed

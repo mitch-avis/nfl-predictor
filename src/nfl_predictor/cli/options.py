@@ -79,7 +79,8 @@ def add_wf_window_options(parser: argparse.ArgumentParser) -> None:
 # What ``--disable-feature-groups`` means, wherever a command takes it.
 FEATURE_GROUPS_HELP = (
     "Comma-separated feature groups to leave out, every column of each (for example "
-    "'strength,own_elo,own_elo_wt,pbp'); the list replaces the default rather than adding to it. "
+    "'strength,own_elo,own_elo_wt,qb_adj,pbp'); the list replaces the default rather than adding "
+    "to it. "
     "A column belongs to a group when one of the group's markers in "
     "constants.FEATURE_GROUP_COLUMN_MARKERS is part of its name. An unknown group is an error."
 )

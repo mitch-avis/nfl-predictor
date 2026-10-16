@@ -879,7 +879,7 @@ def test_get_latest_elo_by_team_returns_one_row_per_team(
 
 _QB_ELO_HEADER = (
     "date,season,neutral,team1,team2,elo1_pre,elo2_pre,qbelo1_pre,qbelo2_pre,qb1,qb2,"
-    "qb1_value_pre,qb2_value_pre,qb1_adj,game_id,week"
+    "qb1_value_pre,qb2_value_pre,qb1_adj,qb2_adj,game_id,week"
 )
 
 
@@ -924,6 +924,7 @@ def _write_qb_elos_with_blank_history(tmp_path: Path, *, blank_rows: int = 150) 
             qb1_value_pre="1.5",
             qb2_value_pre="-0.75",
             qb1_adj="1.5",
+            qb2_adj="-12.25",
         )
     )
     lines.append(
@@ -973,6 +974,8 @@ def test_load_elo_ratings_types_columns_blank_for_the_first_rows(
             "away_qb_value_pre": pl.Float64,
             "home_qb_elo_pre": pl.Float64,
             "away_qb_elo_pre": pl.Float64,
+            "home_qb_adj": pl.Float64,
+            "away_qb_adj": pl.Float64,
         }
     )
     assert elo["week"].to_list() == [1, 2]
@@ -1005,12 +1008,53 @@ def test_load_raw_elo_data_types_columns_blank_for_the_first_rows(
         "qb2": pl.String,
         "qb1_value_pre": pl.Float64,
         "qb2_value_pre": pl.Float64,
+        "qb1_adj": pl.Float64,
+        "qb2_adj": pl.Float64,
         "week": pl.Float64,
     }
     assert {name: raw.schema[name] for name in expected} == expected
     dated = raw.filter(pl.col("week").is_not_null())
     assert dated["week"].to_list() == [1.0, 2.0]
     assert dated["qbelo2_pre"].to_list() == [1350.25, 1401.0]
+
+
+def test_load_elo_ratings_reads_the_quarterback_adjustment_per_side(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``qb1_adj`` is the home side's (``team1``), ``qb2_adj`` the away side's; blank is null."""
+    # Arrange
+    _write_qb_elos_with_blank_history(tmp_path)
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    # Act
+    elo = loaders.load_elo_ratings([2023])
+
+    # Assert
+    assert elo.select("home_abbr", "home_qb_adj", "away_qb_adj").rows() == [
+        ("AAA", 1.5, -12.25),
+        ("BBB", -0.5, None),
+    ]
+
+
+def test_load_elo_ratings_without_the_quarterback_adjustment_still_loads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A copy of the file without ``qb1_adj``/``qb2_adj`` loads without those columns."""
+    # Arrange
+    (tmp_path / "qb_elos.csv").write_text(
+        "season,week,team1,team2,elo1_pre,elo2_pre,qb1,qb2,qb1_value_pre,"
+        "qb2_value_pre,qbelo1_pre,qbelo2_pre\n"
+        "2023,1.0,AAA,BBB,1500,1450,QB1,QB2,1.5,1.0,1400,1350\n"
+    )
+    monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
+
+    # Act
+    elo = loaders.load_elo_ratings([2023])
+
+    # Assert
+    assert elo.height == 1
+    assert not {"home_qb_adj", "away_qb_adj"} & set(elo.columns)
+    assert elo.get_column("home_qb_value_pre").to_list() == [1.5]
 
 
 def test_load_elo_ratings_drops_rows_with_a_blank_week(

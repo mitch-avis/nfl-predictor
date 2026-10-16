@@ -128,6 +128,10 @@ def fill_missing_moneylines(df: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+# The latest starter's ELO values that fill an unplayed game's missing quarterback.
+_QB_VALUE_KEYS = ("qb_value_pre", "qb_elo_pre", "qb_adj")
+
+
 def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
     """Get the most recent starting QB for each team from ELO data.
 
@@ -138,7 +142,8 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
         elo_df: Raw ELO DataFrame with qb1, qb2, team1, team2 columns
 
     Returns:
-        DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre
+        DataFrame with columns: team_abbr, qb_name, qb_value_pre, qb_elo_pre, qb_adj (null
+        when the file lacks the quarterback adjustment)
 
     """
     required_cols = ["qb1", "qb2", "team1", "team2"]
@@ -153,6 +158,11 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
         ]
     )
 
+    def qb_adj(column: str) -> pl.Expr:
+        if column in elo_df.columns:
+            return pl.col(column).cast(pl.Float64).alias("qb_adj")
+        return pl.lit(None, dtype=pl.Float64).alias("qb_adj")
+
     # Get home team QBs (team1 = home, qb1 = home QB)
     home_qbs = elo_df.filter(pl.col("qb1").is_not_null() & (pl.col("qb1") != "")).select(
         [
@@ -161,6 +171,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
             pl.col("qb1").alias("qb_name"),
             pl.col("qb1_value_pre").alias("qb_value_pre"),
             pl.col("qbelo1_pre").alias("qb_elo_pre"),
+            qb_adj("qb1_adj"),
         ]
     )
 
@@ -172,6 +183,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
             pl.col("qb2").alias("qb_name"),
             pl.col("qb2_value_pre").alias("qb_value_pre"),
             pl.col("qbelo2_pre").alias("qb_elo_pre"),
+            qb_adj("qb2_adj"),
         ]
     )
 
@@ -185,6 +197,7 @@ def get_latest_qb_by_team(elo_df: pl.DataFrame) -> pl.DataFrame:
             pl.col("qb_name").first(),
             pl.col("qb_value_pre").first(),
             pl.col("qb_elo_pre").first(),
+            pl.col("qb_adj").first(),
         ]
     )
 
@@ -232,8 +245,12 @@ def fill_future_qb_data(
 ) -> pl.DataFrame:
     """Fill in QB data for future games using each team's most recent starter.
 
-    For games where away_qb/home_qb are null, looks up the most recent QB
-    for each team from the ELO data and fills in their name and ELO values.
+    For unplayed games where away_qb/home_qb are null, looks up the most recent QB for each
+    team from the ELO data and fills in their name and their ELO values where those are null.
+    A played game (both scores in) keeps what it has, since the latest starter was not known
+    before it, and a named starter never takes the latest starter's values. The week rows
+    computed the away-minus-home diffs of those values before this fill, so the filled rows'
+    diffs are computed again.
 
     Args:
         df: Combined data DataFrame with potential null QBs
@@ -250,10 +267,15 @@ def fill_future_qb_data(
     # Check if away_qb column exists; if not, all games need QB data
     has_away_qb = "away_qb" in df.columns
     has_home_qb = "home_qb" in df.columns
+    unplayed = (
+        pl.col("away_score").is_null() | pl.col("home_score").is_null()
+        if {"away_score", "home_score"}.issubset(df.columns)
+        else pl.lit(True)
+    )
 
-    null_away = df.filter(pl.col("away_qb").is_null()) if has_away_qb else df
+    null_away = df.filter(unplayed & pl.col("away_qb").is_null()) if has_away_qb else df
 
-    null_home = df.filter(pl.col("home_qb").is_null()) if has_home_qb else df
+    null_home = df.filter(unplayed & pl.col("home_qb").is_null()) if has_home_qb else df
 
     if null_away.height == 0 and null_home.height == 0:
         return df
@@ -278,13 +300,22 @@ def fill_future_qb_data(
             "qb_name": row["qb_name"],
             "qb_value_pre": row["qb_value_pre"],
             "qb_elo_pre": row["qb_elo_pre"],
+            "qb_adj": row["qb_adj"],
         }
 
     if null_away.height > 0:
-        df = _fill_side_qb(df, "away", qb_lookup, has_qb_column=has_away_qb)
+        df = _fill_side_qb(df, "away", qb_lookup, has_qb_column=has_away_qb, unplayed=unplayed)
     if null_home.height > 0:
-        df = _fill_side_qb(df, "home", qb_lookup, has_qb_column=has_home_qb)
-    return df
+        df = _fill_side_qb(df, "home", qb_lookup, has_qb_column=has_home_qb, unplayed=unplayed)
+    diffs = [
+        pl.when(unplayed)
+        .then(pl.col(f"away_{key}") - pl.col(f"home_{key}"))
+        .otherwise(pl.col(f"{key}_diff"))
+        .alias(f"{key}_diff")
+        for key in _QB_VALUE_KEYS
+        if {f"away_{key}", f"home_{key}", f"{key}_diff"}.issubset(df.columns)
+    ]
+    return df.with_columns(diffs) if diffs else df
 
 
 def _fill_side_qb(
@@ -293,8 +324,9 @@ def _fill_side_qb(
     qb_lookup: dict[str, dict[str, Any]],
     *,
     has_qb_column: bool,
+    unplayed: pl.Expr,
 ) -> pl.DataFrame:
-    """Fill one side's missing quarterback name and ELO values from the latest starters."""
+    """Fill one side's missing quarterback, and that starter's ELO values, on unplayed games."""
 
     def looked_up(key: str, dtype: type[pl.DataType]) -> pl.Expr:
         return pl.col(f"{side}_abbr").map_elements(
@@ -302,18 +334,19 @@ def _fill_side_qb(
         )
 
     qb_col = f"{side}_qb"
+    filled = unplayed & (pl.col(qb_col).is_null() if has_qb_column else pl.lit(True))
     new_cols = [
-        pl.when(pl.col(qb_col).is_null() if has_qb_column else pl.lit(True))
+        pl.when(filled)
         .then(looked_up("qb_name", pl.Utf8))
         .otherwise(pl.col(qb_col) if has_qb_column else pl.lit(None))
         .alias(qb_col),
     ]
-    # Only fill ELO values if columns exist and are null
-    for key in ("qb_value_pre", "qb_elo_pre"):
+    # Only fill ELO values if columns exist and are null, and only for the filled starter
+    for key in _QB_VALUE_KEYS:
         column = f"{side}_{key}"
         if column in df.columns:
             new_cols.append(
-                pl.when(pl.col(column).is_null())
+                pl.when(filled & pl.col(column).is_null())
                 .then(looked_up(key, pl.Float64))
                 .otherwise(pl.col(column))
                 .alias(column)

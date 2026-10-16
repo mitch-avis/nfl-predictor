@@ -626,10 +626,11 @@ margin MAE.
 The reference production adopts on 2026-10-14: `models/step6/ratings_anchored_seed42/` and
 `ratings_anchored_seed7/` (checkpoints `d97fab54e7261f18e349`, `2f7442e89fd6ff3981f4`), the ported
 ratings in place of the strength snapshot with the own Elo off (`--disable-feature-groups
-strength,own_elo,own_elo_wt`, production's default, 449 features). They also supply the floor's
-sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`). Input `models/step6/inputs/candidate.csv`
-(`74b21113d167...`, the through-2025 cut of the step-6 build: the ported ratings, the own Elo and
-the play-by-play corrections), code `d6064eb`, and otherwise the 2026-10-09 reference's command
+strength,own_elo,own_elo_wt`, production's default until `0.60.0`, 449 features). They also supply
+the floor's sigma (`constants.FLOOR_SIGMA_REFERENCE_RUNS`). Input
+`models/step6/inputs/candidate.csv` (`74b21113d167...`, the through-2025 cut of the step-6 build:
+the ported ratings, the own Elo and the play-by-play corrections), code `d6064eb`, and otherwise
+the 2026-10-09 reference's command
 (2007-2025 from week 1, 328 folds, 4943 games, market anchor and transform on, 200 trees,
 unweighted, every fold `cuda`). Rules: `HYPOTHESIS.md` there and `nogamelines_wt/HYPOTHESIS.md`;
 second key: `REVIEW.md` in each, by reviewers that did not produce the runs. Two seeds averaged
@@ -642,6 +643,15 @@ The other reference arms on the same build and code:
   `elo_marketfree_seed{42,7}` (`d8462a7de8d460c12491`, `54ec3f119f2d50ad6b14`).
 - Without betting lines or any Elo (`strength,elo,own_elo,own_elo_wt`, 427 features):
   `ratings_marketfree_seed{42,7}` (`75186da854af9d4eb24c`, `b074c98e1196a1da8af2`).
+
+**The `qb_adj` columns and these references (approved by the user on 2026-10-15, rule 11).**
+Since `0.60.0` production also leaves out `qb_adj` (`strength,own_elo,own_elo_wt,qb_adj`). The
+step-6 build has no `qb_adj` column, so the reference runs trained on the same columns production
+does, and the only effect of the longer list is a difference listed in `compare`'s
+production-settings section; nothing in the weekly run, `train` or `backtest` stops or warns on
+it (independent review, 2026-10-15). The difference is harmless until a measurement on a build
+with the columns replaces the reference. On such a build, each list above reproduces with
+`qb_adj` added.
 
 Results (deterministic Brier and log loss, other columns where an interval excludes zero):
 

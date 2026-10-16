@@ -426,3 +426,97 @@ def test_fill_future_game_lines_derives_moneylines_with_the_given_filler(
     # Assert
     row = filled.row(0, named=True)
     assert (row["home_moneyline"], row["away_moneyline"]) == (-999, 999)
+
+
+_QB_VALUE_KEYS = ("qb_value_pre", "qb_elo_pre", "qb_adj")
+
+
+def _latest_starters() -> pl.DataFrame:
+    """Return one dated ELO game: J. Allen's BUF at P. Mahomes's KC."""
+    return pl.DataFrame(
+        {
+            "date": [datetime(2024, 9, 1)],
+            "team1": ["KC"],
+            "team2": ["BUF"],
+            "qb1": ["P. Mahomes"],
+            "qb2": ["J. Allen"],
+            "qb1_value_pre": [3.0],
+            "qb2_value_pre": [2.8],
+            "qbelo1_pre": [200.0],
+            "qbelo2_pre": [180.0],
+            "qb1_adj": [4.0],
+            "qb2_adj": [-1.5],
+        }
+    )
+
+
+def _bills_at_chiefs(away_qbs: list[str | None], away_scores: list[float | None]) -> pl.DataFrame:
+    """Return BUF-at-KC rows, one per away starter, with no home starter or values."""
+    rows = len(away_qbs)
+    nulls: list[float | None] = [None] * rows
+    schema: dict[str, type[pl.DataType]] = {
+        "away_abbr": pl.String,
+        "home_abbr": pl.String,
+        "away_qb": pl.String,
+        "home_qb": pl.String,
+        "away_score": pl.Float64,
+        "home_score": pl.Float64,
+        **{f"{side}_{key}": pl.Float64 for side in ("away", "home") for key in _QB_VALUE_KEYS},
+        **{f"{key}_diff": pl.Float64 for key in _QB_VALUE_KEYS},
+    }
+    data: dict[str, list[str | float | None]] = {
+        "away_abbr": ["BUF"] * rows,
+        "home_abbr": ["KC"] * rows,
+        "away_qb": list(away_qbs),
+        "home_qb": [None] * rows,
+        "away_score": list(away_scores),
+        "home_score": [None if score is None else 17.0 for score in away_scores],
+        **{column: list(nulls) for column in schema if column.endswith(("_pre", "_adj", "_diff"))},
+    }
+    return pl.DataFrame(data, schema=schema)
+
+
+def test_fill_future_qb_data_leaves_a_played_game_alone() -> None:
+    """A game with both final scores keeps its missing starters and values missing."""
+    # Arrange
+    games = _bills_at_chiefs(away_qbs=[None, None], away_scores=[20.0, None])
+
+    # Act
+    filled = game_utils.fill_future_qb_data(games, _latest_starters())
+
+    # Assert
+    assert filled.row(0) == games.row(0)
+    assert filled.row(1, named=True)["away_qb"] == "J. Allen"
+
+
+def test_fill_future_qb_data_leaves_a_named_starters_missing_values_alone() -> None:
+    """The latest starter's values never stand in for a different starter's.
+
+    The second game has no starter, so the away side is filled in the same pass.
+    """
+    # Arrange
+    games = _bills_at_chiefs(away_qbs=["M. Trubisky", None], away_scores=[None, None])
+
+    # Act
+    filled = game_utils.fill_future_qb_data(games, _latest_starters())
+
+    # Assert
+    row = filled.row(0, named=True)
+    assert row["away_qb"] == "M. Trubisky"
+    assert [row[f"away_{key}"] for key in _QB_VALUE_KEYS] == [None, None, None]
+    assert row["home_qb"] == "P. Mahomes"
+    assert [row[f"home_{key}"] for key in _QB_VALUE_KEYS] == [3.0, 200.0, 4.0]
+    assert [row[f"{key}_diff"] for key in _QB_VALUE_KEYS] == [None, None, None]
+
+
+def test_fill_future_qb_data_recomputes_the_diffs_of_the_filled_values() -> None:
+    """Each filled value's diff is away minus home, as the week rows compute it."""
+    # Arrange
+    games = _bills_at_chiefs(away_qbs=[None], away_scores=[None])
+
+    # Act
+    filled = game_utils.fill_future_qb_data(games, _latest_starters())
+
+    # Assert
+    row = filled.row(0, named=True)
+    assert [row[f"{key}_diff"] for key in _QB_VALUE_KEYS] == pytest.approx([-0.2, -20.0, -5.5])

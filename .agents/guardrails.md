@@ -122,8 +122,10 @@ so these rules are not advisory.
       `--wf-start-week 1`; arms compared only with each other may keep the default.
     - recorded commands: since the adoption of the ported ratings (decided 2026-10-12), a
       backtest with no group option leaves out production's groups
-      (`strength,own_elo,own_elo_wt`), so a command recorded before it reproduces with
-      `--disable-feature-groups ''` added.
+      (`strength,own_elo,own_elo_wt,qb_adj`), so a command recorded before it reproduces with
+      `--disable-feature-groups qb_adj` added, and a group list recorded before 0.60.0 (for
+      example the step-6 arms' `strength,elo,own_elo_wt`, or `''`) reproduces with `qb_adj`
+      added to it.
 12. **A decision rule favors no outcome after the fact.** The rule written under rule 4 is
     applied as written. If the result falls between its branches, or its first condition fails
     and a fallback branch rescues the preferred outcome, the result goes to the user as a

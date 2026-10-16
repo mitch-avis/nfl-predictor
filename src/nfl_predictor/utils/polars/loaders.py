@@ -1306,6 +1306,8 @@ _QB_ELO_COLUMN_TYPES: dict[str, type[pl.DataType]] = {
     "qb2_value_pre": pl.Float64,
     "qbelo1_pre": pl.Float64,
     "qbelo2_pre": pl.Float64,
+    "qb1_adj": pl.Float64,
+    "qb2_adj": pl.Float64,
 }
 
 
@@ -1374,6 +1376,8 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
         "qb2_value_pre",
         "qbelo1_pre",
         "qbelo2_pre",
+        "qb1_adj",
+        "qb2_adj",
     ]
     available = [c for c in cols_to_keep if c in elo_df.columns]
     elo_df = elo_df.select(available)
@@ -1390,6 +1394,8 @@ def load_elo_ratings(seasons: list[int]) -> pl.DataFrame:
         "qb2_value_pre": "away_qb_value_pre",
         "qbelo1_pre": "home_qb_elo_pre",
         "qbelo2_pre": "away_qb_elo_pre",
+        "qb1_adj": "home_qb_adj",
+        "qb2_adj": "away_qb_adj",
     }
     rename_map = {k: v for k, v in rename_map.items() if k in elo_df.columns}
     elo_df = elo_df.rename(rename_map)
@@ -1439,8 +1445,9 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
         season: The season to get latest ratings from
 
     Returns:
-        DataFrame with columns: team_abbr, elo_pre, qb_value_pre, qb_elo_pre
-        One row per team with their most recent ELO values
+        DataFrame with columns: team_abbr, elo_pre, qb_value_pre, qb_elo_pre, qb_adj
+        One row per team with their most recent ELO values; qb_adj is null when the
+        file lacks the quarterback adjustment
 
     """
     if elo_df.height == 0:
@@ -1452,6 +1459,12 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
     if season_elo.height == 0:
         return pl.DataFrame()
 
+    def side_qb_adj(side: str) -> pl.Expr:
+        column = f"{side}_qb_adj"
+        if column in season_elo.columns:
+            return pl.col(column).alias("qb_adj")
+        return pl.lit(None, dtype=pl.Float64).alias("qb_adj")
+
     # We need to extract per-team ELO values. The data has away/home format.
     # Create a "melted" view with team_abbr and their ELO values
     away_elo = season_elo.select(
@@ -1461,6 +1474,7 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
         pl.col("away_elo_pre").alias("elo_pre"),
         pl.col("away_qb_value_pre").alias("qb_value_pre"),
         pl.col("away_qb_elo_pre").alias("qb_elo_pre"),
+        side_qb_adj("away"),
     )
 
     home_elo = season_elo.select(
@@ -1470,6 +1484,7 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
         pl.col("home_elo_pre").alias("elo_pre"),
         pl.col("home_qb_value_pre").alias("qb_value_pre"),
         pl.col("home_qb_elo_pre").alias("qb_elo_pre"),
+        side_qb_adj("home"),
     )
 
     # Combine and sort by week descending, then take first per team
@@ -1481,4 +1496,5 @@ def get_latest_elo_by_team(elo_df: pl.DataFrame, season: int) -> pl.DataFrame:
         pl.col("elo_pre").first(),
         pl.col("qb_value_pre").first(),
         pl.col("qb_elo_pre").first(),
+        pl.col("qb_adj").first(),
     )

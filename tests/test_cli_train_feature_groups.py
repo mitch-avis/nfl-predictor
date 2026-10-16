@@ -3,8 +3,8 @@
 The option takes what ``nfl-predictor backtest --disable-feature-groups`` takes, a
 comma-separated list of the groups in ``constants.FEATURE_GROUP_COLUMN_MARKERS``. It is checked
 when the arguments are parsed, so an unknown group stops the command before any data loads.
-Its default is the weekly run's: the strength snapshot and both own-Elo presets are left out, and
-an empty value leaves no group out.
+Its default is the weekly run's: the strength snapshot, both own-Elo presets and the quarterback
+adjustment are left out, and an empty value leaves no group out.
 The run's ``metadata.json`` records the option in its config and, beside the feature list, the
 groups the model was trained without and the columns they removed. A saved model predicts with
 the columns it was trained on, so ``nfl-predictor predict`` says the option does not apply.
@@ -30,8 +30,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-# The groups production leaves out: the strength snapshot and both presets of the own Elo.
-PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt")
+# The groups production leaves out: the strength snapshot, both presets of the own Elo and the
+# qb_elos.csv quarterback adjustment.
+PRODUCTION_GROUPS = ("strength", "own_elo", "own_elo_wt", "qb_adj")
 
 
 def _parse(argv: Sequence[str], monkeypatch: pytest.MonkeyPatch) -> argparse.Namespace:
@@ -135,7 +136,13 @@ def test_a_default_fit_records_the_weekly_runs_groups_and_keeps_the_ratings_and_
     # Arrange
     paths = build_group_fixture(tmp_path, ratings=True)
     run_dir = tmp_path / "run"
-    left_out = sorted(column for group in PRODUCTION_GROUPS for column in GROUP_COLUMNS[group])
+    # The fixture carries no column of the quarterback adjustment group, so it drops none.
+    left_out = sorted(
+        column
+        for group in PRODUCTION_GROUPS
+        if group in GROUP_COLUMNS
+        for column in GROUP_COLUMNS[group]
+    )
     monkeypatch.setattr(
         sys,
         "argv",

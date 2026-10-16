@@ -63,11 +63,12 @@ FLOOR_SIGMA_REFERENCE_RUNS = (
     "models/step6/ratings_anchored_seed7",
 )
 
-# The feature groups (FEATURE_GROUP_COLUMN_MARKERS) production leaves out: the strength snapshot
-# and both presets of this repository's own Elo, so production trains on the ported team ratings
-# (`ratings`) and the `qb_elos.csv` Elo (`elo`). The default of the weekly run,
-# `nfl-predictor train` and `nfl-predictor backtest`, so a backtest measures production's features.
-PRODUCTION_DISABLED_FEATURE_GROUPS = ("strength", "own_elo", "own_elo_wt")
+# The feature groups (FEATURE_GROUP_COLUMN_MARKERS) production leaves out: the strength snapshot,
+# both presets of this repository's own Elo and the `qb_elos.csv` quarterback adjustment
+# (`qb_adj`, unmeasured), so production trains on the ported team ratings (`ratings`) and the
+# `qb_elos.csv` Elo (`elo`). The default of the weekly run, `nfl-predictor train` and
+# `nfl-predictor backtest`, so a backtest measures production's features.
+PRODUCTION_DISABLED_FEATURE_GROUPS = ("strength", "own_elo", "own_elo_wt", "qb_adj")
 
 # URL for SurvivorGrid spreads (future games)
 SURVIVOR_GRID_URL = "https://www.survivorgrid.com/"
@@ -1009,6 +1010,11 @@ ELO_COLUMNS = [
     "qb_elo_pre",
 ]
 
+# The quarterback adjustment from `data/qb_elos.csv` (per team, prefixed with away_/home_, with an
+# away-minus-home `_diff`): the starter's quarterback value minus the team's usual one, in Elo
+# points (`qb1_adj`/`qb2_adj`). Its own feature group (`qb_adj`), apart from the `elo` group.
+QB_ADJ_COLUMNS = ["qb_adj"]
+
 # Four-week trends of the ELO_COLUMNS values (per team, and per quarterback for the QB ones).
 ELO_TREND_COLUMNS = [
     "elo_4wk_trend",
@@ -1283,6 +1289,9 @@ FEATURE_GROUP_COLUMN_MARKERS: dict[str, tuple[str, ...]] = {
     # betting win totals, so the group is market-informed (MARKET_INFORMED_FEATURE_GROUPS): a
     # run that leaves the market columns out keeps it unless it disables the group as well.
     "elo": (*ELO_COLUMNS, *ELO_TREND_COLUMNS),
+    # The `data/qb_elos.csv` quarterback adjustment (QB_ADJ_COLUMNS). Not market-informed: it is
+    # built from box-score quarterback values only, with no betting data.
+    "qb_adj": tuple(QB_ADJ_COLUMNS),
     # This repository's own Elo, market-free preset (OWN_ELO_COLUMNS).
     "own_elo": tuple(OWN_ELO_TEAM_STATS),
     # The own Elo's win-total preset (OWN_WT_ELO_COLUMNS). Market-informed like the `elo` group,

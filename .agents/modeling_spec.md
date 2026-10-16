@@ -77,16 +77,17 @@ When market lines exist, the system produces market-derived features and support
   (`nfl-predictor backtest --exclude-market --no-market-anchor --no-market-transform`, the weekly
   run's `--wf-market-mode none`) trains on no column derived from betting lines: the nine are listed
   by the generated inventory in `.agents/market_free/`. It still scores the market yardstick, and
-  with no group option it leaves out production's groups (`strength,own_elo,own_elo_wt`) and
+  with no group option it leaves out production's groups (`strength,own_elo,own_elo_wt,qb_adj`) and
   keeps the ported ratings and the `elo` group with its preseason win-total prior: the Elo
   columns from `data/qb_elos.csv` are not line columns, but `../nfeloqb` pulls each preseason Elo
   toward a rating built from betting win totals (2003-2023), and the repository's own Elo
   (`utils/polars/own_elo_build.py`) publishes its win-total preset as the `own_elo_wt` group. A
   group list replaces the default, so the two stricter variants name the whole list: no market
-  information with the market-free own Elo is `--disable-feature-groups strength,elo,own_elo_wt`
-  (`[strength, elo, own_elo_wt]` in the weekly config; reference runs
-  `models/step6/elo_marketfree_seed{42,7}`), and no market information and no Elo at all is
-  `strength,elo,own_elo,own_elo_wt` (reference runs `models/step6/ratings_marketfree_seed{42,7}`).
+  information with the market-free own Elo is
+  `--disable-feature-groups strength,elo,own_elo_wt,qb_adj` (`[strength, elo, own_elo_wt, qb_adj]`
+  in the weekly config; reference runs `models/step6/elo_marketfree_seed{42,7}`), and no market
+  information and no Elo at all is `strength,elo,own_elo,own_elo_wt,qb_adj` (reference runs
+  `models/step6/ratings_marketfree_seed{42,7}`).
   Leaving the market columns out does not leave these groups out
   (`constants.MARKET_INFORMED_FEATURE_GROUPS`); a run that keeps either of them logs a "No game
   lines" info message naming it (`ml/feature_spec.build_feature_spec`).
@@ -257,6 +258,12 @@ Feature areas tracked in `.agents/TODO.md` include (examples):
   `qb_stats.expected_starter_ids`, a completed game's play-by-play starter (known only at
   kickoff, the convention the `qb_elos.csv` columns share) and an upcoming game's projected
   starter
+- the `qb_elos.csv` quarterback adjustment (the `qb_adj` group, `constants.QB_ADJ_COLUMNS`):
+  `qb1_adj`/`qb2_adj`, the starter's quarterback value minus the team's usual one in Elo points,
+  published per side and as the away-minus-home `qb_adj_diff`. It is pre-game (a played row is
+  nfeloqb's pre-game value, an upcoming one its projection, else the team's latest value) and
+  built from box-score quarterback values with no betting data, so it is not market-informed;
+  production leaves it out until a walk-forward measures it
 - the team and quarterback ratings ported from `nfl-sos-ratings` (the `ratings` group,
   `utils/polars/ratings_build.py`): offense, defense, special-teams and team ratings and the
   head-to-head-excluded `sos`, and the starter's adjusted EPA per dropback, each fit only on the
@@ -285,13 +292,14 @@ Rules for stat-style features:
   names for them. An arm measured with `--disable-feature-groups` is adopted by listing the same
   groups in `config/weekly_run.yaml` (`disable_feature_groups`); that changes what a weekly run
   produces, so it is the user's decision.
-- Production leaves out the strength snapshot (`strength`) and both presets of the repository's
-  own Elo (`own_elo`, `own_elo_wt`), so it trains on the ported team ratings (`ratings`) and the
-  `qb_elos.csv` Elo (`elo`). That list (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`) is the
-  default of the weekly config, `nfl-predictor train` and `nfl-predictor backtest`, so a backtest
-  without the option leaves out what production leaves out; a list given replaces it, and an
-  empty one (`disable_feature_groups: []`, `--disable-feature-groups ''`) leaves no group out.
-  Leaving out `strength` on a build with the strength snapshot but no ported ratings (a ratings
+- Production leaves out the strength snapshot (`strength`), both presets of the repository's own Elo
+  (`own_elo`, `own_elo_wt`) and the `qb_elos.csv` quarterback adjustment (`qb_adj`), so it trains on
+  the ported team ratings (`ratings`) and the `qb_elos.csv` Elo (`elo`). That list
+  (`constants.PRODUCTION_DISABLED_FEATURE_GROUPS`) is the default of the weekly config,
+  `nfl-predictor train` and `nfl-predictor backtest`, so a backtest without the option leaves out
+  what production leaves out; a list given replaces it, and an empty one
+  (`disable_feature_groups: []`, `--disable-feature-groups ''`) leaves no group out. Leaving out
+  `strength` on a build with the strength snapshot but no ported ratings (a ratings
   column null in every row counts as missing) stops `train` and the weekly run, the latter
   before any work, and warns in the backtest (`feature_spec.check_ratings_replace_strength`).
 

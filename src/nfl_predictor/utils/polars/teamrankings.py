@@ -1176,6 +1176,7 @@ def get_stats_for_diff() -> list[str]:
 
     # ELO columns
     all_stats.extend(get_elo_columns())
+    all_stats.extend(constants.QB_ADJ_COLUMNS)
 
     # TeamRankings columns
     all_stats.extend(get_tr_columns())

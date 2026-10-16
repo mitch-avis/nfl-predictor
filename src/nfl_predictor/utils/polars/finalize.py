@@ -57,6 +57,7 @@ def build_final_column_order() -> list[str]:
     # generated below for nflreadpy stats.
     base_stats: list[str] = []
     base_stats.extend(elo_cols)
+    base_stats.extend(constants.QB_ADJ_COLUMNS)
     base_stats.extend(tr_cols)
     base_stats.extend(constants.TREND_FEATURE_COLUMNS)
     base_stats.extend(nflreadpy_stats)

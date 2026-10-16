@@ -126,8 +126,8 @@ def _parse_args() -> argparse.Namespace:
             "transformed). With --no-market-anchor and --no-market-transform the run uses no "
             "game lines; the market-implied probability is still scored as the yardstick. The "
             "default groups keep the elo group's preseason win-total prior; for no market "
-            "information pass --disable-feature-groups strength,elo,own_elo_wt (keeps the "
-            "market-free own Elo) or strength,elo,own_elo,own_elo_wt (no Elo at all)."
+            "information pass --disable-feature-groups strength,elo,own_elo_wt,qb_adj (keeps the "
+            "market-free own Elo) or strength,elo,own_elo,own_elo_wt,qb_adj (no Elo at all)."
         ),
     )
     parser.add_argument(

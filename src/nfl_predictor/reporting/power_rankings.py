@@ -914,7 +914,7 @@ def _load_current_records(
     through_week: int,
     include_postseason: bool = False,
 ) -> pd.DataFrame:
-    """Load current records through the specified week."""
+    """Load each team's record through the specified week, one row per team sorted by team."""
     df = (
         pl.read_csv(schedule_path, schema_overrides=_SCORE_DTYPES, infer_schema_length=None)
         .select(
@@ -965,6 +965,7 @@ def _load_current_records(
             ]
         )
         .with_columns((pl.col("wins") + pl.col("losses") + pl.col("ties")).alias("games_played"))
+        .sort("team_abbr")
     )
 
     return _pl_to_pandas(rec)

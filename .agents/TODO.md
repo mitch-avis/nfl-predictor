@@ -61,8 +61,9 @@ Agents and humans should not rely on the shell activation state.
       `0.60.0`; 2007-2025 from week 1, 328 folds, 4,943 games; independently reviewed), the
       floor-sigma reference since `0.62.0` (final pooled sigma `13.3184` and `13.3182`). It does
       not beat the pick-time line on any column in any window; against it, two seeds, the line
-      leads on margin MAE all weeks by `0.0484` `[0.0057, 0.0909]` and on week-1 Brier by
-      `0.00511` `[0.00007, 0.01030]` (`.agents/benchmarks.md`, "`qb_elos.csv` measurement").
+      leads on margin MAE all weeks by `0.0484` `[0.0057, 0.0909]`, on week-1 margin MAE by
+      `0.2107` `[0.0399, 0.3824]` and on week-1 Brier by `0.00511` `[0.00007, 0.01030]`
+      (`.agents/benchmarks.md`, "`qb_elos.csv` measurement").
 - Reference without game lines (`weekly --wf-market-mode none`, `train --exclude-market`):
       `models/qb_adj_no_lines/no_lines_seed{42,7}` (code `d791846`, `0.62.0`; leaves out
       `strength, elo, own_elo_wt, qb_adj`, 431 features; independently reviewed), the floor-sigma

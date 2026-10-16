@@ -1,13 +1,15 @@
 # Decisions in building and scoring the candidate power rankings (roadmap step 6, phase 5)
 
 Every judgment call made while turning the pre-registered design (the main checkout's
-`models/step6/rankings/HYPOTHESIS.md`, SHA-256 `44e3a33c...4f40`, unchanged) into code: the four
-candidate ratings (`src/nfl_predictor/reporting/rating_sources.py` and
-`power_rankings.composite_points_vs_average`), their score
-(`src/nfl_predictor/reporting/ranking_evaluation.py`, run by `.agents/sos_port/rankings_eval.py`)
-and the ranking methods behind a setting (`nfl-predictor rankings --method`, the weekly run's
-`power_rankings_method`). Each was decided before any candidate was scored, except decision 12,
-the user's switch of the weekly run's default to the blend after the measurement.
+`models/step6/rankings/HYPOTHESIS.md`, SHA-256
+`44e3a33c6d8a8fc37cf6237543eed830f8cd53459f3e24f0684dfdafe4a17f40`, unchanged; it matched its
+`.sha256` file on 2026-10-16) into code: the four candidate ratings
+(`src/nfl_predictor/reporting/rating_sources.py` and `power_rankings.composite_points_vs_average`),
+their score (`src/nfl_predictor/reporting/ranking_evaluation.py`, run by
+`.agents/sos_port/rankings_eval.py`) and the ranking methods behind a setting (`nfl-predictor
+rankings --method`, the weekly run's `power_rankings_method`). Each was decided before any candidate
+was scored, except decision 12, the user's switch of the weekly run's default to the blend after the
+measurement.
 
 No result of the measurement is quoted here: the numbers live in the generated
 `RANKINGS_EVAL.md` and wait for an independent review (`AGENTS.md` rule 3).

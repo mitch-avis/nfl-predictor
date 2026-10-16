@@ -6,6 +6,11 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
 
 ## Workstream history
 
+Run directories this section names under `models/` (`audit_m54_0_rebuild`,
+`wf_m54_0_2023_2025_from_week1`, `wf_m54_12_2023_2025_from_week1`,
+`wf_m54_flip_2023_2025_from_week1`) were deleted on 2026-10-16 (inventory in
+`.agents/models_cleanup/`); the numbers stand as reviewed.
+
 - The active workstream is feature engineering for true team strength: PBP-derived per-snap EPA
   families, weekly schedule-adjusted (ridge) team strength, continuous early-season shrinkage of
   every season-to-date family, power rankings on the adjusted composite, and the total-head fix
@@ -119,6 +124,10 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
 
 ## Data state and ETL rebuild records
 
+Run directories this section names under `models/` (`audit_m49_games_played`, `audit_m59_rebuild`,
+`etl_m59_rebuild`, `wf_m59_rebuild_2023_2025_from_week1`) were deleted on 2026-10-16 (inventory in
+`.agents/models_cleanup/`); the numbers stand as reviewed.
+
 - ETL rebuilt on 2026-10-14 at 20:12-20:18 MDT on `0.59.0` (`119a016`, the step-6 merge) with
   `nfl-predictor data` and its defaults, after the user approved the merge and the rebuild:
   `7340` completed rows, `541` columns, fingerprint `f3eca626...`, and `534` ported-ratings
@@ -157,6 +166,14 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
   stay auditable from the fold checkpoints named below.
 
 ## Walk-forward benchmark and reference arms
+
+Run directories this section names under `models/` (`wf_m54_0_2023_2025_from_week1`,
+`wf_m55_7_2020_2025_trees100`, `wf_m55_7_2020_2025_trees200`, `wf_m55_7_2020_2025_trees400`,
+`wf_m55_7_2020_2025_trees598`, `wf_m59_2020_2025_auto_floor_baseline`,
+`wf_m59_2023_2025_from_week1`, `wf_m59_2023_2025_from_week1_auto_floor`,
+`wf_m59_rebuild_2023_2025_from_week1`, `wf_m59_rebuild_2023_2025_from_week1_seed7`,
+`wf_shrink_2023_2025_off`, `wf_strength_2023_2025_from_week1`) were deleted on 2026-10-16 (inventory
+in `.agents/models_cleanup/`); the numbers stand as reviewed.
 
 - **Current walk-forward benchmark**, measured 2026-09-19 on the `0.12.3` fit-parity code
   (no in-season early stopping) with `data/completed_games_ml.m49_through_2025.deadweight_cut.csv`,
@@ -407,6 +424,10 @@ number). The roadmap order is in `AGENTS.md` and `.agents/TODO.md`.
 
 ## Step 3 evidence (2026-09-27, no retraining beyond one fold)
 
+Run directories this section names under `models/` (`step3_l0_gpu_check`, `step3_open_lines`,
+`step3_prob_paths`) were deleted on 2026-10-16 (inventory in `.agents/models_cleanup/`); the numbers
+stand as reviewed.
+
 Each item below has its hypothesis and rule (written before scoring), the producer's script, and
 an independent reviewer's own rescore and `REVIEW.md` in the run directory named.
 
@@ -451,6 +472,9 @@ an independent reviewer's own rescore and `REVIEW.md` in the run directory named
 
 ## GPU reference (2026-09-28, rungs L1-L2; superseded on 2026-10-09)
 
+Run directories this section names under `models/` (`step3_gpu_reference`) were deleted on
+2026-10-16 (inventory in `.agents/models_cleanup/`); the numbers stand as reviewed.
+
 The reference for every arm from 2026-09-28 to 2026-10-09, replaced by the adopted-settings
 reference (below): `models/step3_gpu_reference/l1_seed42/` and `l2_seed7/`
 (checkpoints named in each `metadata.json`), `nfl-predictor backtest` on
@@ -486,6 +510,9 @@ with `.venv/bin/python models/step3_gpu_reference/independent_rescore.py`.
 
 ## The spread in the probability floor (2026-09-28, rescoring the GPU reference)
 
+Run directories this section names under `models/` (`step3_sigma`) were deleted on 2026-10-16
+(inventory in `.agents/models_cleanup/`); the numbers stand as reviewed.
+
 `Phi(margin / sigma)` with the fixed `SCORE_DIFF_STD_DEV = 14.21` against sigmas estimated from the
 model's own earlier errors (root-mean-square of actual minus predicted margin over strictly
 earlier folds), scored on 2010-2025 (4175 games per seed, seeds 42 and 7), all weeks, candidate
@@ -503,6 +530,9 @@ Adopted by the user on 2026-09-28 as `0.35.0`: the floor uses the `expanding` si
 the reference lacks (2026 week 1 sigma `13.248`, both seeds averaged per game).
 
 ## Market transform on against off (2026-09-28, task 56.7(b))
+
+Run directories this section names under `models/` (`step3_market_transform`) were deleted on
+2026-10-16 (inventory in `.agents/models_cleanup/`); the numbers stand as reviewed.
 
 `models/step3_market_transform/`: the GPU reference's command on code `368570c` (`0.35.1`),
 2007-2025 from week 1 (328 folds, 4943 games), seeds `42` and `7`, `--market-transform`
@@ -527,6 +557,9 @@ Brier and log loss were scored at the fixed sigma, before `0.35.0`; `r_seed42`/`
 reference's current-code equivalent (the pooled sigma, checkpoints named in `REVIEW.md`).
 
 ## Step 4, Phase B feature-value arms (2026-10-02, `models/step4/`)
+
+Run directories this section names under `models/` (the contents of `step4/`) were deleted on
+2026-10-16 (inventory in `.agents/models_cleanup/`); the numbers stand as reviewed.
 
 Seven arms on code `c4dd24a` (`0.42.1`), each the GPU reference's command (2007-2025 from week 1,
 328 folds, 4943 games, the floor with each run's own sigma pool, market anchor and transform on,
@@ -569,6 +602,9 @@ accuracy S2, NO, R0, T2, QB, S8, PT. The T2 build also moves the `qb_def_adj` va
 the strength snapshot), so a QB-plus-new-`K` combination would differ from what QB measured.
 
 ## Adopted-settings reference and market-free baselines (2026-10-09, superseded on 2026-10-14)
+
+Run directories this section names under `models/` (the contents of `step4/`) were deleted on
+2026-10-16 (inventory in `.agents/models_cleanup/`); the numbers stand as reviewed.
 
 The GPU reference from 2026-10-09: `models/step4_reference/adopted_seed42/` and
 `adopted_seed7/`, on code `2522cb6` (`0.44.0`), input `inputs/adopted.csv` (`855a9088...`, the

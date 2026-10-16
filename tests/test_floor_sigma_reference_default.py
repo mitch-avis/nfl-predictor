@@ -1,8 +1,8 @@
 """The production floor-sigma pool defaults to the reviewed reference of production's features.
 
-Production trains on the ported team ratings with the strength snapshot and both own-Elo presets
-left out, market anchored; the two seeds of the walk-forward run with exactly those settings are
-the pool the weekly run and ``nfl-predictor train`` read by default.
+Production trains on the current ``qb_elos.csv`` with production's feature groups left out,
+market anchored; the two seeds of the walk-forward run with exactly those settings are the pool
+the weekly run and ``nfl-predictor train`` read by default.
 """
 
 from __future__ import annotations
@@ -13,12 +13,12 @@ from nfl_predictor import constants
 from nfl_predictor.weekly_run import config
 
 
-def test_production_pool_defaults_to_both_seeds_of_the_ratings_reference() -> None:
-    """The weekly run and ``train`` read the ratings-anchored reference runs by default."""
+def test_production_pool_defaults_to_both_seeds_of_the_new_file_reference() -> None:
+    """The weekly run and ``train`` read the new-file production-settings runs by default."""
     # Arrange
     expected = (
-        "models/step6/ratings_anchored_seed42",
-        "models/step6/ratings_anchored_seed7",
+        "models/qb_elos_measure/new_file_seed42",
+        "models/qb_elos_measure/new_file_seed7",
     )
 
     # Act

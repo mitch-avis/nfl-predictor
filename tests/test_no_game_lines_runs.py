@@ -170,7 +170,7 @@ def _weekly_frame() -> pd.DataFrame:
 
 
 @pytest.fixture(scope="module")
-def market_free_results() -> dict[str, object]:
+def no_game_lines_results() -> dict[str, object]:
     """Run a small walk-forward with no market feature, no anchor and no transform."""
     config = walk_forward.WalkForwardConfig(
         eval_seasons=[2023],
@@ -191,34 +191,34 @@ def market_free_results() -> dict[str, object]:
     return walk_forward.run_walk_forward_backtest(_weekly_frame(), config)
 
 
-def test_a_market_free_walk_forward_trains_on_no_line_column(
-    market_free_results: dict[str, object],
+def test_a_walk_forward_without_game_lines_trains_on_no_line_column(
+    no_game_lines_results: dict[str, object],
 ) -> None:
     """The fitted feature list holds the non-market columns only."""
     # Act
-    features = as_list(market_free_results["feature_list"])
+    features = as_list(no_game_lines_results["feature_list"])
 
     # Assert
     assert features is not None
     assert set(features) == {"away_rest", "home_rest", "elo_pre_diff"}
 
 
-def test_a_market_free_walk_forward_still_scores_the_market_yardstick(
-    market_free_results: dict[str, object],
+def test_a_walk_forward_without_game_lines_still_scores_the_market_yardstick(
+    no_game_lines_results: dict[str, object],
 ) -> None:
     """The market-implied probability is scored beside the model, never fed to it."""
     # Act
-    predictions = market_free_results["predictions"]
+    predictions = no_game_lines_results["predictions"]
 
     # Assert
     assert isinstance(predictions, pd.DataFrame)
     assert predictions["market_home_win_prob"].notna().all()
     assert "market_baseline_margin" not in predictions.columns
-    settings = market_free_results["resolved_settings"]
+    settings = no_game_lines_results["resolved_settings"]
     assert isinstance(settings, dict)
     assert (settings["include_market"], settings["market_anchor"]) == (False, False)
     assert settings["market_transform"] is False
-    overall = as_str_dict(market_free_results["overall"])
+    overall = as_str_dict(no_game_lines_results["overall"])
     assert overall is not None
     assert np.isfinite(overall["market_brier"])
 
@@ -241,10 +241,10 @@ def test_backtest_includes_market_features_by_default(monkeypatch: pytest.Monkey
     assert config.include_market is True
 
 
-def test_backtest_exclude_market_builds_a_market_free_config(
+def test_backtest_exclude_market_builds_a_no_game_lines_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The market-free command line turns off the features, the anchor and the transform."""
+    """The command line without game lines turns off the features, the anchor and the transform."""
     # Arrange
     args = _backtest_args(
         monkeypatch,
@@ -268,7 +268,7 @@ def test_backtest_exclude_market_builds_a_market_free_config(
 
 
 def test_weekly_market_mode_none_turns_off_the_features_and_the_anchor() -> None:
-    """The weekly run's market-free mode trains with neither market features nor anchoring."""
+    """The weekly run's no-game-lines mode trains with neither market features nor anchoring."""
     # Act
     flags = stage1.market_mode_flags("none")
 
@@ -289,10 +289,10 @@ def test_weekly_parser_accepts_market_mode_none(tmp_path: Path) -> None:
     assert args.wf_market_mode == "none"
 
 
-def test_train_exclude_market_builds_market_free_training_options(
+def test_train_exclude_market_builds_no_game_lines_training_options(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``nfl-predictor train --exclude-market`` trains market-free: no anchor or transform."""
+    """``nfl-predictor train --exclude-market`` runs without game lines: no anchor or transform."""
     # Arrange
     monkeypatch.setattr(sys, "argv", ["nfl-predictor train", "--exclude-market"])
     monkeypatch.setattr(floor_sigma, "load_reference_pool", returning(None))
@@ -317,7 +317,7 @@ def _weekly_args(tmp_path: Path, *extra: str) -> argparse.Namespace:
 
 
 def test_weekly_market_mode_none_runs_stage_one_without_the_transform() -> None:
-    """The market-free weekly walk-forward records the transform off, not resolved from lines."""
+    """The no-game-lines weekly walk-forward records the transform off, not resolved from lines."""
     # Arrange
     options = stage1.ProductionOptions(
         eval_last_n_seasons=3,
@@ -344,7 +344,7 @@ def test_weekly_market_mode_none_runs_stage_one_without_the_transform() -> None:
 def test_weekly_market_mode_none_trains_the_final_fit_without_the_transform(
     tmp_path: Path,
 ) -> None:
-    """The market-free weekly final fit records the transform off on a dataset with lines."""
+    """The no-game-lines weekly final fit records the transform off on a dataset with lines."""
     # Arrange
     args = _weekly_args(tmp_path, "--wf-market-mode", "none")
     frame = _weekly_frame()
@@ -394,10 +394,10 @@ def _recorded_warnings(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     ],
     ids=["none-with-transform", "none", "none-without-transform", "hybrid-with-transform"],
 )
-def test_weekly_warns_only_when_the_market_free_mode_overrides_a_requested_transform(
+def test_weekly_warns_only_when_the_no_game_lines_mode_overrides_a_requested_transform(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str], *, warned: bool
 ) -> None:
-    """Asking for the transform in the market-free mode is overridden, and the run says so."""
+    """Asking for the transform in the no-game-lines mode is overridden, and the run says so."""
     # Arrange
     warnings = _recorded_warnings(monkeypatch)
 

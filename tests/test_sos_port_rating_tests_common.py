@@ -119,7 +119,7 @@ def test_season_t_interval_season_without_rows_raises_a_value_error() -> None:
         common.season_t_interval(differences, [2000, 2001], 0.95)
 
 
-@pytest.mark.parametrize("seasons", [[2000], []])
+@pytest.mark.parametrize("seasons", [[2000], [], [2000, 2000]])
 def test_season_t_interval_fewer_than_two_seasons_raises_a_value_error(
     seasons: list[int],
 ) -> None:

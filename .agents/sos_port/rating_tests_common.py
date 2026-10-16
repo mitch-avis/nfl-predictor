@@ -420,12 +420,13 @@ def season_t_interval(
     """Return the mean of the season means and its Student-t interval (seasons - 1 df).
 
     Raises:
-        ValueError: If ``seasons`` holds fewer than two seasons, which leave no degree of freedom,
-            or if a season of ``seasons`` has no row.
+        ValueError: If ``seasons`` holds fewer than two distinct seasons, which leave no degree
+            of freedom, or if a season of ``seasons`` has no row.
 
     """
-    if len(seasons) < _MIN_T_SEASONS:
-        msg = f"a season t interval needs at least two seasons; got {len(seasons)}"
+    distinct = len(set(seasons))
+    if distinct < _MIN_T_SEASONS:
+        msg = f"a season t interval needs at least two seasons; got {distinct} distinct"
         raise ValueError(msg)
     _require_every_season(dict(differences.group_by("season").len().iter_rows()), seasons)
     means = dict(differences.group_by("season").agg(pl.col("difference").mean()).iter_rows())

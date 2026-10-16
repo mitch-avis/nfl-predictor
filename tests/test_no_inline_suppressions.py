@@ -8,6 +8,7 @@ comments of every tracked Python and stub file for the inline forms that would s
 from __future__ import annotations
 
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -56,6 +57,23 @@ def tracked_python_files() -> list[Path]:
     if listing.returncode != 0:
         pytest.skip(f"git ls-files failed: {listing.stderr.strip()}")
     return [REPO_ROOT / name for name in listing.stdout.split("\0") if name]
+
+
+class NotACheckoutError(Exception):
+    """Raised when the directory to scan is not a git checkout."""
+
+
+def tracked_sources(root: Path) -> list[Path]:
+    """Return the tracked Python and stub files under ``root``."""
+    listing = subprocess.run(
+        ["/usr/bin/git", "-C", str(root), "ls-files", "-z", "*.py", "*.pyi"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listing.returncode != 0:
+        raise RuntimeError(listing.stderr)
+    return [root / name for name in listing.stdout.split("\0") if name]
 
 
 def test_tracked_python_files_carry_no_inline_suppressions() -> None:
@@ -160,3 +178,50 @@ def test_tracked_python_files_include_the_type_stubs() -> None:
 
     # Assert
     assert REPO_ROOT / "typings" / "joblib.pyi" in files
+
+
+def _git_or_skip() -> str:
+    """Return the git executable, skipping the test when there is none."""
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("git is not available")
+    return git
+
+
+def test_tracked_sources_ignores_an_inherited_foreign_git_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Arrange
+    git = _git_or_skip()
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    subprocess.run([git, "init", "-q", str(tmp_path / "other")], check=True, env=env)
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "other" / ".git"))
+
+    # Act
+    files = tracked_sources(REPO_ROOT)
+
+    # Assert
+    assert Path(__file__).resolve() in files
+
+
+def test_tracked_sources_ignores_an_inherited_relative_index_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Arrange
+    _git_or_skip()
+    monkeypatch.setenv("GIT_INDEX_FILE", ".git/index")
+
+    # Act
+    files = tracked_sources(REPO_ROOT)
+
+    # Assert
+    assert Path(__file__).resolve() in files
+
+
+def test_tracked_sources_outside_a_git_checkout_raises_not_a_checkout(tmp_path: Path) -> None:
+    # Arrange
+    _git_or_skip()
+
+    # Act & Assert
+    with pytest.raises(NotACheckoutError, match="not a git checkout"):
+        tracked_sources(tmp_path)

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from pickle import UnpicklingError
-from typing import TYPE_CHECKING, Any, NamedTuple, SupportsIndex
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import joblib
 import numpy as np
@@ -540,7 +540,10 @@ def _estimator_best_iteration(estimator: object) -> int | None:
         return None
     num_boosted_rounds = getattr(get_booster(), "num_boosted_rounds", None)
     rounds = num_boosted_rounds() if callable(num_boosted_rounds) else None
-    return int(rounds) - 1 if isinstance(rounds, SupportsIndex) else None
+    # A zero-dimensional array also converts with int(); only an integer is a round count.
+    if isinstance(rounds, np.integer):
+        rounds = rounds.item()
+    return int(rounds) - 1 if isinstance(rounds, int) else None
 
 
 def _iteration_details(models: dict[str, Any]) -> dict[str, Any]:

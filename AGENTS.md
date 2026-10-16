@@ -153,7 +153,8 @@ Binding in every session; definitions, limits and examples are in `.agents/guard
   `pyright: ignore` or `pragma: no cover`. A genuine false positive, checked against Ruff's own
   settings first, goes in `[tool.ruff.lint.per-file-ignores]` in `pyproject.toml` with a one-line
   reason beside the rule. `tests/test_no_inline_suppressions.py` fails on any of these, on
-  `ty: ignore`, file-level `noqa` or a pyright rule switched off, in every tracked `.py` and `.pyi`.
+  `ty: ignore`, file-level `noqa` or a pyright rule switched off or downgraded, in every tracked
+  `.py` and `.pyi`.
 - Keep `README.md`, nested READMEs, `.agents/TODO.md`, `.agents/ARCHIVE.md`,
   `.agents/feature_crosswalk.md` and `CHANGELOG.md` in step with the repo after meaningful
   progress. No unrelated features, scrapers or external services, and no betting-profitability

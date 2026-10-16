@@ -413,6 +413,24 @@ def test_data_routes(project_root: Path, viewer_client: TestClient, app: FastAPI
     assert [f["name"] for f in payload["predict_files"]] == ["week_03_predictions.csv"]
 
 
+def test_data_status_survives_an_empty_dataset_csv(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """An empty dataset CSV shows as present without rows instead of failing the page."""
+    # Arrange
+    _seed(project_root, app)
+    (project_root / "data" / "all_data_ml.csv").write_bytes(b"")
+
+    # Act
+    response = viewer_client.get("/api/data/status")
+
+    # Assert
+    assert response.status_code == 200
+    names = {f["name"]: f for f in response.json()["files"]}
+    assert names["all_data_ml.csv"]["exists"] is True
+    assert names["all_data_ml.csv"]["rows"] is None
+
+
 def test_data_status_reports_the_caches_on_disk(
     project_root: Path, viewer_client: TestClient, app: FastAPI
 ) -> None:

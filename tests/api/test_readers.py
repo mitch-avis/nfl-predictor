@@ -829,6 +829,71 @@ def test_file_status_of_a_missing_file_does_not_exist(project_root: Path) -> Non
     assert not status.exists
 
 
+@pytest.mark.parametrize(
+    "content",
+    [b"", b"season,week\nabc,1\n"],
+    ids=["empty", "non-numeric-season"],
+)
+def test_file_status_of_an_unreadable_csv_exists_without_rows(
+    project_root: Path, content: bytes
+) -> None:
+    """A CSV whose shape cannot be read still exists, with no rows or seasons."""
+    # Arrange
+    data = project_root / "data"
+    (data / "all_data_ml.csv").write_bytes(content)
+
+    # Act
+    status = data_status.file_status(data, "all_data_ml.csv", "d")
+
+    # Assert
+    assert status.exists
+    assert status.size == len(content)
+    assert status.modified_at is not None
+    assert status.rows is None
+    assert status.seasons is None
+
+
+def test_file_status_of_a_csv_without_read_permission_exists_without_rows(
+    project_root: Path,
+) -> None:
+    """A CSV the server may not read still exists, with no rows or seasons."""
+    # Arrange
+    data = project_root / "data"
+    path = data / "all_data_ml.csv"
+    path.write_text("season,week\n2025,1\n", encoding="utf-8")
+    path.chmod(0)
+
+    # Act
+    try:
+        status = data_status.file_status(data, "all_data_ml.csv", "d")
+    finally:
+        path.chmod(0o644)
+
+    # Assert
+    assert status.exists
+    assert status.rows is None
+    assert status.seasons is None
+
+
+def test_file_status_of_an_unreadable_csv_logs_a_warning_naming_it(
+    project_root: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A CSV whose shape cannot be read is named in a warning."""
+    # Arrange
+    data = project_root / "data"
+    (data / "all_data_ml.csv").write_bytes(b"")
+
+    # Act
+    with caplog.at_level("WARNING"):
+        data_status.file_status(data, "all_data_ml.csv", "d")
+
+    # Assert
+    assert any(
+        record.levelname == "WARNING" and "all_data_ml.csv" in record.getMessage()
+        for record in caplog.records
+    )
+
+
 def test_file_status_of_a_json_file_has_size_without_rows(project_root: Path) -> None:
     """A JSON build record reports its size and time but no rows or seasons."""
     # Arrange

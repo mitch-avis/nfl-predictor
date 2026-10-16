@@ -196,6 +196,19 @@ def test_tracked_python_files_include_the_type_stubs() -> None:
     assert REPO_ROOT / "typings" / "joblib.pyi" in files
 
 
+@pytest.mark.parametrize(
+    "source",
+    ["x = (\n", "def f():\n        a = 1\n    b = 2\n"],
+    ids=["unclosed bracket", "inconsistent dedent"],
+)
+def test_suppression_hits_reports_a_file_that_does_not_tokenize(source: str) -> None:
+    # Act
+    hits = suppression_hits(source, "pkg/mod.py")
+
+    # Assert
+    assert hits == ["pkg/mod.py: does not tokenize"]
+
+
 def test_scan_files_skips_a_tracked_file_deleted_from_the_working_tree(tmp_path: Path) -> None:
     # Arrange
     (tmp_path / "kept.py").write_text("import os  # noqa: F401\n", encoding="utf-8")

@@ -5,6 +5,7 @@ These tests cover leakage-sensitive split helpers and missing-data summaries.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -199,3 +200,35 @@ def test_split_by_season_rejects_invalid_inputs(
     # Act & Assert
     with pytest.raises(ValueError, match=match):
         core.split_by_season(df, holdout_seasons=holdout_seasons)
+
+
+def _estimator_reporting(rounds: object) -> SimpleNamespace:
+    booster = SimpleNamespace(num_boosted_rounds=lambda: rounds)
+    return SimpleNamespace(get_booster=lambda: booster)
+
+
+@pytest.mark.parametrize(
+    ("rounds", "expected"),
+    [
+        pytest.param(7, 7, id="python-int"),
+        pytest.param(np.int64(7), 7, id="numpy-int64"),
+        pytest.param(np.int32(7), 7, id="numpy-int32"),
+        pytest.param(None, None, id="none"),
+        pytest.param(7.0, None, id="python-float"),
+        pytest.param(np.float64(7.0), None, id="numpy-float"),
+        pytest.param("7", None, id="string"),
+        pytest.param(np.array(7), None, id="zero-d-array"),
+    ],
+)
+def test_boosted_rounds_reads_only_integer_round_counts(
+    rounds: object, expected: int | None
+) -> None:
+    """Only a Python or numpy integer is a round count; anything else is unknown."""
+    # Arrange
+    estimator = _estimator_reporting(rounds)
+
+    # Act
+    result = core._boosted_rounds(estimator)
+
+    # Assert
+    assert result == expected

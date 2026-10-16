@@ -712,6 +712,6 @@ def test_provenance_records_the_git_commit_command_and_runtime(tmp_path: Path) -
     provenance = team._provenance(tmp_path, tmp_path, ledger, "python team.py", 61.0)
 
     # Assert
-    assert re.fullmatch(r"[0-9a-f]{40}", provenance["git_commit"])
+    assert re.fullmatch(r"[0-9a-f]{40}(-dirty)?", provenance["git_commit"])
     assert (provenance["command"], provenance["seconds"]) == ("python team.py", 61.0)
     assert provenance["input_fingerprint"] == ledger.fingerprint()

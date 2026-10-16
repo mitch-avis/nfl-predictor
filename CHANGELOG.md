@@ -19,6 +19,45 @@
 - The sos port scripts name their magic numbers (`CURRENT_SEASON`, `ONE_KEY_PER_LINE_DEPTH`,
   `TRIPLE_LENGTH`); the `noqa` comments Ruff never read under `.agents/` become plain reasons.
 
+## [0.63.7] - 2026-10-16
+
+### Added
+
+- A test drives the port parity audit's season loop through its opponent-row check, which only
+  direct calls covered.
+
+### Fixed
+
+- The power-ranking records (`reporting/power_rankings.py`) come back sorted by team, so their row
+  order no longer changes between runs; rankings are unchanged.
+- The weekly run logs a power ranking skipped for a missing season/week, dataset or schedule as a
+  warning instead of at info level.
+- `season_t_interval` in the rating-definition tests (`.agents/sos_port/rating_tests_common.py`)
+  raises a `ValueError` for fewer than two distinct seasons instead of returning NaN bounds.
+- The rating-definition tests record the commit with a `-dirty` suffix when tracked files differ
+  from it, as `git describe --dirty` does. Git runs without the caller's `GIT_*` variables, so
+  inside a git hook it reads this checkout rather than the hook's repository, and a bare
+  repository records no commit instead of raising.
+- The `git_commit` tests run git without the caller's `GIT_*` variables, so run from a git hook
+  they can no longer commit into the hook's repository.
+
+## [0.63.6] - 2026-10-16
+
+### Fixed
+
+- The web app's data status page lists every file the pipeline writes or reads under `data/`:
+  besides the four datasets and `qb_elos.csv`, the strength snapshot, the ratings directory (its
+  top-level Parquet tables as a count and total size), both build-record JSONs and the
+  quarterback identity file, each described with the code that reads or rewrites it. A test
+  checks every data-path and file-name constant in `constants.py` against the list.
+- A dataset CSV that cannot be read (empty, a non-numeric season, no read permission) shows as
+  present without rows instead of failing `/api/data/status`, and is named in a warning.
+- The page's cache card shows a season strip for every season-partitioned nflreadpy source, the
+  TeamRankings scrapes and the ETL's season builds, names the seasons missing inside a strip in
+  words (runs collapsed into ranges, such as `2000–2025`), and lists the nflreadpy and nfelo
+  cache entries that are not season files. The `/api/data/status` payload gains `cache_files`,
+  `other_seasons` and a directory's `file_count`; the `schedule` and `pbp` keys stay.
+
 ## [0.63.5] - 2026-10-16
 
 ### Changed

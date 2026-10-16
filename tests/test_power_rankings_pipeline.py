@@ -558,6 +558,39 @@ def test_load_current_records_compares_scores_as_numbers(tmp_path: Path) -> None
     assert records.loc["AAA", "wins"] == 0
 
 
+def test_load_current_records_returns_teams_sorted_by_abbreviation(tmp_path: Path) -> None:
+    """Records come back one row per team, sorted by abbreviation, on every call."""
+    # Arrange
+    schedule_path = tmp_path / "schedule.csv"
+    pairs = [("ZZZ", "YYY"), ("XXX", "WWW"), ("MMM", "NNN"), ("CCC", "BBB"), ("AAA", "QQQ")]
+    pd.DataFrame(
+        [
+            {
+                "season": 2024,
+                "week": 1,
+                "game_type": "REG",
+                "away_abbr": away,
+                "home_abbr": home,
+                "away_score": 17,
+                "home_score": 24,
+            }
+            for away, home in pairs
+        ]
+    ).to_csv(schedule_path, index=False)
+
+    # Act
+    orders = [
+        power_rankings._load_current_records(schedule_path, season=2024, through_week=1)[
+            "team_abbr"
+        ].tolist()
+        for _ in range(2)
+    ]
+
+    # Assert
+    expected = ["AAA", "BBB", "CCC", "MMM", "NNN", "QQQ", "WWW", "XXX", "YYY", "ZZZ"]
+    assert orders == [expected, expected]
+
+
 # Two seasons of a four-team league; week 3 of 2024 is still to be played.
 _FIXTURE_GAMES = (
     (2023, 1, "AAA", "BBB", 10, 27),

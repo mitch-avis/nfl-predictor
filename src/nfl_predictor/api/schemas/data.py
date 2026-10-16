@@ -126,7 +126,7 @@ class ModelOut(BaseModel):
 
 
 class DataFileOut(BaseModel):
-    """One dataset file."""
+    """One dataset file, or a directory (its name ends in ``/``) summarized by ``file_count``."""
 
     name: str
     description: str
@@ -135,10 +135,26 @@ class DataFileOut(BaseModel):
     modified_at: str | None
     rows: int | None
     seasons: tuple[int, int] | None
+    file_count: int | None = None
+
+
+class CacheFileOut(BaseModel):
+    """A cache entry that is not a season file; a directory reports its files."""
+
+    cache: str
+    name: str
+    file_count: int
+    size: int
+    modified_at: str | None
 
 
 class DataStatusOut(BaseModel):
-    """ETL and dataset health."""
+    """ETL and dataset health.
+
+    ``cache`` holds the seasons per nflreadpy source (``schedule`` and ``pbp`` always present),
+    ``cache_files`` the nflreadpy and nfelo cache entries that are not season files, and
+    ``other_seasons`` the TeamRankings scrapes and the incremental ETL's season builds.
+    """
 
     current_season: int
     current_week: int
@@ -146,4 +162,6 @@ class DataStatusOut(BaseModel):
     predict_files: list[dict[str, Any]]
     fingerprint: dict[str, Any] | None
     cache: dict[str, list[int]]
+    cache_files: list[CacheFileOut]
+    other_seasons: dict[str, list[int]]
     leakage_audit: dict[str, Any] | None

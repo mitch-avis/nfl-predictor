@@ -13,9 +13,9 @@
   present without rows instead of failing `/api/data/status`, and is named in a warning.
 - The page's cache card shows a season strip for every season-partitioned nflreadpy source, the
   TeamRankings scrapes and the ETL's season builds, names the seasons missing inside a strip in
-  words, and lists the nflreadpy and nfelo cache entries that are not season files. The
-  `/api/data/status` payload gains `cache_files`, `other_seasons` and a directory's
-  `file_count`; the `schedule` and `pbp` keys stay.
+  words (runs collapsed into ranges, such as `2000–2025`), and lists the nflreadpy and nfelo
+  cache entries that are not season files. The `/api/data/status` payload gains `cache_files`,
+  `other_seasons` and a directory's `file_count`; the `schedule` and `pbp` keys stay.
 
 ## [0.63.5] - 2026-10-16
 

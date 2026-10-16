@@ -14,6 +14,7 @@ import pytest
 from nfl_predictor import constants
 from nfl_predictor.api.readers import betting, cache, data_status, model, power, predictions
 from nfl_predictor.api.runs.files import resolve_run_files
+from tests import data_isolation
 from tests.api import factories
 
 if TYPE_CHECKING:
@@ -694,6 +695,68 @@ def _data_path_constants() -> dict[str, str]:
         ):
             found[name] = value.relative_to(constants.DATA_PATH).as_posix()
     return found
+
+
+def test_data_path_constants_find_a_path_under_the_checkout_data_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Path constant built from the checkout's data directory counts as a data file."""
+    # Arrange
+    monkeypatch.setattr(
+        constants, "NEW_FILE_PATH", data_isolation.PACKAGED_DATA_DIR / "new_file.csv", raising=False
+    )
+
+    # Act
+    found = _data_path_constants()
+
+    # Assert
+    assert found["NEW_FILE_PATH"] == "new_file.csv"
+
+
+def test_data_path_constants_find_a_path_under_the_redirected_data_directory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Path constant under the data directory the tests redirect to counts as a data file."""
+    # Arrange
+    monkeypatch.setattr(constants, "NEW_DIR_PATH", constants.DATA_PATH / "new_dir", raising=False)
+
+    # Act
+    found = _data_path_constants()
+
+    # Assert
+    assert found["NEW_DIR_PATH"] == "new_dir"
+
+
+def test_data_path_constants_skip_paths_under_the_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A Path constant under either data directory's cache is not a files-card entry."""
+    # Arrange
+    monkeypatch.setattr(
+        constants,
+        "NEW_CACHE_PATH",
+        data_isolation.PACKAGED_DATA_DIR / "cache" / "new_source",
+        raising=False,
+    )
+
+    # Act
+    found = _data_path_constants()
+
+    # Assert
+    assert "NEW_CACHE_PATH" not in found
+
+
+@pytest.mark.parametrize("constant", ["NEW_TABLE_FILENAME", "NEW_TABLE_FILE"])
+def test_data_path_constants_find_file_name_constants(
+    monkeypatch: pytest.MonkeyPatch, constant: str
+) -> None:
+    """``*_FILENAME`` and ``*_FILE`` string constants count as data files."""
+    # Arrange
+    monkeypatch.setattr(constants, constant, "new_table.csv", raising=False)
+
+    # Act
+    found = _data_path_constants()
+
+    # Assert
+    assert found[constant] == "new_table.csv"
 
 
 def test_dataset_files_cover_every_data_path_constant() -> None:

@@ -242,6 +242,15 @@ Steps:
       validation);
    6. its web pages (teams, quarterbacks, schedules, rank ranges, head-to-head) folded into this
       app, together with Milestone 58 phases 4-6.
+   The user's decisions of 2026-10-11, 2026-10-12 and 2026-10-14 are recorded in
+   `.agents/step6_plan.md` ("User decisions after the run"): the blend default merged last as a
+   minor version; the ported ratings replace the strength snapshot in production; the
+   play-by-play corrections stay (a tie); the `qb_elos.csv` columns stay and the own Elo stays
+   off, tentatively; the configuration without game lines is named "no game lines", keeps the own
+   Elo without win totals (measured a tie) and leaves out `strength, elo, own_elo_wt` (with
+   `qb_adj` since `0.61.0`); no rating-definition outcome is adopted before a post-merge
+   measurement; the merge itself. The reviews' small open findings are listed under "From the
+   step-6 integration reviews" below.
    Merged into `main` as `0.59.0` on 2026-10-14 with the user's approval. Its close-out is
    open: the docs close-out listed in `.agents/next_agent_session_prompt.md`, 58.1's survivor
    planner (the user's acceptance) and 58.2's browser check.
@@ -571,6 +580,25 @@ Acceptance:
 
 Each group names the archived milestone it came from; the milestone's full record is in
 `ARCHIVE.md`. Resolved items have moved there.
+
+### From the step-6 integration reviews (2026-10-14)
+
+Low-priority findings the independent reviews left open; the full list, with the ones already
+fixed, is in `.agents/step6_plan.md` ("Small open findings from the integration reviews").
+
+- [ ] No test covers the phase-1 audit's run-loop call to `check_opponent_rows`
+      (`.agents/sos_port/parity.py:578`); the tests call the function directly.
+- [ ] The open rating-definition tests: the quarterback test's calibration check reads the
+      recorded row count, not the fit, and no test shows `run_integrity_checks` calls it; the
+      information-set change leaves 1.75 and nulls as they were and the team check does not flip
+      later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds
+      for one season.
+- [ ] The blend ranking default: check the single manifest match against the run itself
+      (`wf_best.json` weeks or `created_at`); three older power-ranking skips log at info level
+      (`weekly_run/pipeline.py:563-569`).
+- [ ] Production adoption: the disabled-group lists are not normalized for order or duplicates;
+      no snapshot test of the default fit's predictions; the weekly refresh writes where
+      `--data-collection-args` say while the run reads `--data-path`.
 
 ### From the step-3 merge test (2026-09-28)
 

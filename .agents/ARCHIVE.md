@@ -109,6 +109,13 @@ Resolved by the integration (`0.54.0`, independently reviewed; records in
 - **Half of `PBP_COUNT_COLUMNS` is carried but unpublished** (Milestone 45): the nine counts no
   published rate read are no longer carried, and a test requires every carried count to move a
   published rate (entry 4.2). The counts feed production through those rates.
+- **`_attach_qb_features` requests a not-yet-published current season a second time** (2026-09-11
+  review), and every ETL run needs all play-by-play seasons from 1999 cached or downloadable:
+  the quarterback history now skips the seasons the run already requested (entry 1.6;
+  `requested_seasons` at `data_collection.py:511`, `:535` and `:1102`), so the current season is
+  asked for once. The full-history read is intended: career rates and the own Elo need every
+  earlier regular season, so a partial-season run produces the same values as a full rebuild (the
+  function's docstring, `data_collection.py:516-519`).
 
 ---
 

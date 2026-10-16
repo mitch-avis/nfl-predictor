@@ -2,6 +2,11 @@
 
 ## [0.63.7] - 2026-10-16
 
+### Added
+
+- A test drives the port parity audit's season loop through its opponent-row check, which only
+  direct calls covered.
+
 ### Fixed
 
 - The power-ranking records (`reporting/power_rankings.py`) come back sorted by team, so their row
@@ -16,11 +21,6 @@
   repository records no commit instead of raising.
 - The `git_commit` tests run git without the caller's `GIT_*` variables, so run from a git hook
   they can no longer commit into the hook's repository.
-
-### Added
-
-- A test drives the phase-1 parity audit's season loop through its opponent-row check, which only
-  direct calls covered.
 
 ## [0.63.5] - 2026-10-16
 

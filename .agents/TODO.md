@@ -306,8 +306,9 @@ Steps:
      - (a) nfelo's probability as a second outside benchmark beside the closing market, scored
        with the benchmark instrument on 2009-2025 (nfelo itself reads market lines, so it is a
        market-informed yardstick);
-     - (b) whether its opening prices or totals fill gaps in our line data (`data/nfl_lines.csv`
-       and the pick-time line logic);
+     - (b) whether its opening prices or totals fill gaps in our line data (the nflverse
+       schedule's lines, the nfelo market-lines cache under `data/cache/nfelo/` and the
+       pick-time line logic; nothing under `src/` reads `data/nfl_lines.csv`);
      - (c) its modifiers against our features, as feature ideas, measured with and without game
        lines.
      Leakage: the closing-line columns (`*_close`, the EV and CLV columns) are known only at

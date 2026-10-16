@@ -1,10 +1,10 @@
 """The feature groups a run leaves out by default, by whether it uses game lines.
 
 A run without game lines (the weekly run's ``--wf-market-mode none``; ``backtest`` or ``train``
-with no market feature, no anchor and no market transform) leaves out the reviewed list of the
-walk-forwards without game lines by default; every other run leaves out production's groups. An
-explicit list always wins. Production's own resolution, with the shipped config and the default
-market mode, is pinned exactly.
+with no market feature and no anchor, whatever the market transform) leaves out the reviewed list
+of the walk-forwards without game lines by default; every other run leaves out production's
+groups. An explicit list always wins. Production's own resolution, with the shipped config and the
+default market mode, is pinned exactly.
 """
 
 from __future__ import annotations
@@ -172,25 +172,22 @@ def test_the_no_game_lines_list_is_the_reviewed_list_plus_qb_adj() -> None:
 
 
 @pytest.mark.parametrize(
-    ("include_market", "market_anchor", "market_transform", "expected"),
+    ("include_market", "market_anchor", "expected"),
     [
-        (False, False, False, True),
-        (False, False, None, False),
-        (False, False, True, False),
-        (False, True, False, False),
-        (True, False, False, False),
-        (True, True, None, False),
+        (False, False, True),
+        (False, True, False),
+        (True, False, False),
+        (True, True, False),
     ],
-    ids=["none", "transform-unset", "transform-on", "anchor-on", "features-on", "production"],
+    ids=["none", "anchor-on", "features-on", "production"],
 )
-def test_a_run_uses_no_game_lines_only_with_all_three_off(
-    *, include_market: bool, market_anchor: bool, market_transform: bool | None, expected: bool
+def test_a_run_uses_no_game_lines_with_the_market_features_and_anchor_off(
+    *, include_market: bool, market_anchor: bool, expected: bool
 ) -> None:
+    """The transform only derives market features, so without them it adds no line column."""
     # Act
     without_game_lines = options.is_run_without_game_lines(
-        include_market=include_market,
-        market_anchor=market_anchor,
-        market_transform=market_transform,
+        include_market=include_market, market_anchor=market_anchor
     )
 
     # Assert
@@ -230,9 +227,10 @@ def test_an_explicit_list_wins_over_the_mode_default(
         ((*NO_GAME_LINES, "--disable-feature-groups", "elo,own_elo"), ("elo", "own_elo")),
         ((*NO_GAME_LINES, "--disable-feature-groups", ""), ()),
         (("--exclude-market",), PRODUCTION_GROUPS),
-        (("--exclude-market", "--no-market-anchor"), PRODUCTION_GROUPS),
+        (("--exclude-market", "--no-market-anchor"), NO_GAME_LINES_GROUPS),
+        (("--exclude-market", "--no-market-anchor", "--market-transform"), NO_GAME_LINES_GROUPS),
     ],
-    ids=["no-lines", "explicit", "explicit-empty", "anchor-on", "transform-unset"],
+    ids=["no-lines", "explicit", "explicit-empty", "anchor-on", "transform-unset", "transform-on"],
 )
 def test_a_backtest_resolves_its_groups_by_mode(
     monkeypatch: pytest.MonkeyPatch, argv: tuple[str, ...], expected: tuple[str, ...]
@@ -252,8 +250,9 @@ def test_a_backtest_resolves_its_groups_by_mode(
         ((*NO_GAME_LINES, "--disable-feature-groups", ""), ()),
         (("--exclude-market", "--market-anchor"), PRODUCTION_GROUPS),
         (("--exclude-market",), NO_GAME_LINES_GROUPS),
+        (("--exclude-market", "--market-transform"), NO_GAME_LINES_GROUPS),
     ],
-    ids=["no-lines", "explicit", "explicit-empty", "anchor-on", "anchor-and-transform-off"],
+    ids=["no-lines", "explicit", "explicit-empty", "anchor-on", "anchor-off", "transform-on"],
 )
 def test_train_resolves_its_groups_by_mode(
     monkeypatch: pytest.MonkeyPatch, argv: tuple[str, ...], expected: tuple[str, ...]

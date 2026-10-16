@@ -2,13 +2,19 @@
 
 ## [0.63.8] - 2026-10-16
 
+### Added
+
+- `tests/test_no_inline_suppressions.py` scans the comments of every tracked `.py` and `.pyi`
+  file and fails, naming `file:line`, on line or file-level `noqa`, `type: ignore`,
+  `pyright: ignore`, `ty: ignore`, pyright's basic mode or a pyright rule switched off, and
+  `pragma: no cover` or `no branch`. It lists files with inherited `GIT_*` variables removed,
+  skips only without git or outside a checkout, and reports a file that does not tokenize.
+
 ### Fixed
 
-- No tracked Python file carries an inline lint or type-checker suppression any more, and
-  `tests/test_no_inline_suppressions.py` fails, naming `file:line`, on any `noqa`, `type: ignore`,
-  `pyright: ignore`, `ty: ignore` or `pragma: no cover` comment. Behavior is unchanged.
-- The m60 CLI inventory script is typed without ignores: it patches argparse through
-  `mock.patch.object`, finds dict keys by identity and casts its stand-in run.
+- No tracked Python file carries an inline suppression any more; behavior is unchanged.
+- The CLI flag inventory script under `.agents/` is typed without ignores: it patches argparse
+  through `mock.patch.object`, finds dict keys by identity and casts its stand-in run.
 - The sos port scripts name their magic numbers (`CURRENT_SEASON`, `ONE_KEY_PER_LINE_DEPTH`,
   `TRIPLE_LENGTH`); the `noqa` comments Ruff never read under `.agents/` become plain reasons.
 

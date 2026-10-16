@@ -439,6 +439,14 @@ grows from about 437 MB to about 962 MB.
   `dome` (three) and `unknown` (Madrid).
 - **How to reverse it**: not applicable.
 - **Review**: not yet reviewed.
+- **Update 2026-10-16**: nflverse still listed `PAR00` (`2026_07_PIT_NO`) and `MUN01`
+  (`2026_10_NE_DET`) as `dome`, and the user chose to override both to `outdoors` before the
+  week-7 weekly run: `constants.STADIUM_ROOF_OVERRIDES`, keyed by `stadium_id` and applied by
+  `loaders._apply_schedule_enrichments` to fresh and cached schedules alike, so both games get
+  `stadium_type` `open`. Neither id appears on a cached schedule before 2026, so no earlier game
+  changes. `MEL00` (the Melbourne Cricket Ground, 2026 week 1, listed `dome`) and `RIO00` (the
+  Maracanã, 2026 week 3, listed `open`) are open-air fields too; by the user's choice they stay
+  as nflverse has them.
 
 ## Repairs the `nfl-sos-ratings` loader makes that this cache does not
 

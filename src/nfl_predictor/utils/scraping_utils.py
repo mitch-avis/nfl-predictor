@@ -222,8 +222,8 @@ def _parse_tr_rating_table(table: Tag) -> tuple[list[str], list[float]]:
         Tuple of (team_abbreviations, ratings)
 
     """
-    teams = []
-    ratings = []
+    teams: list[str] = []
+    ratings: list[float] = []
 
     rows = table.find_all("tr")
     for row in rows[1:]:  # Skip header row
@@ -257,8 +257,8 @@ def _parse_tr_stat_table(table: Tag) -> tuple[list[str], list[float]]:
         Tuple of (team_abbreviations, stat_values)
 
     """
-    teams = []
-    stats = []
+    teams: list[str] = []
+    stats: list[float] = []
 
     rows = table.find_all("tr")
     for row in rows[1:]:  # Skip header row
@@ -379,7 +379,7 @@ def update_season_team_rankings(season: int) -> None:
 
     """
     season_dir = constants.DATA_PATH / str(season)
-    all_weeks_data = []
+    all_weeks_data: list[pl.DataFrame] = []
 
     # Find and load all week files
     for week in range(1, 23):  # Up to playoff weeks
@@ -425,7 +425,7 @@ def scrape_survivor_grid_spreads() -> dict[str, dict[int, float]]:
     log.debug("Found SurvivorGrid week columns: %s", list(week_columns.values()))
 
     # Parse team rows
-    spreads = {}
+    spreads: dict[str, dict[int, float]] = {}
     for row in data_table.find_all("tr")[1:]:  # Skip header
         cells = row.find_all(["th", "td"])
         if len(cells) <= team_col_idx:
@@ -475,7 +475,7 @@ def _survivor_grid_columns(data_table: Tag) -> tuple[int, dict[int, int]] | None
     headers = [th.get_text(strip=True) for th in header_row.find_all(["th", "td"])]
 
     # Find which columns contain week numbers and which has Team
-    week_columns = {}  # index -> week number
+    week_columns: dict[int, int] = {}  # index -> week number
     team_col_idx = None
     for i, header in enumerate(headers):
         if header.isdigit():

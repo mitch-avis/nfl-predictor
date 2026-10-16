@@ -357,8 +357,8 @@ class _RatingBook:
 
     first_season: int
     preseason: _Preseason
-    ratings: dict[str, float] = field(default_factory=dict)
-    seasons: dict[str, int] = field(default_factory=dict)
+    ratings: dict[str, float] = field(default_factory=dict[str, float])
+    seasons: dict[str, int] = field(default_factory=dict[str, int])
 
     def pre_game(self, team: str, season: int) -> float:
         """Return a team's rating going into a game of ``season``, starting or reverting it."""

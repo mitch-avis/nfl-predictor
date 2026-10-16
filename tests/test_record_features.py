@@ -30,6 +30,7 @@ def _row_by_team(records_df: pl.DataFrame) -> dict[str, dict[str, int | float]]:
 
 def test_compute_team_records_before_week_week1_empty() -> None:
     """Week 1 should have no prior games, so record table is empty."""
+    # Arrange
     schedule_df = pl.DataFrame(
         {
             "season": [2024],
@@ -42,13 +43,16 @@ def test_compute_team_records_before_week_week1_empty() -> None:
         }
     )
 
+    # Act
     records = polars_utils.compute_team_records_before_week(schedule_df, season=2024, week=1)
+
+    # Assert
     assert records.height == 0
 
 
-def test_compute_team_records_before_week_overall_div_conf() -> None:
-    """Records should be computed from prior weeks only and split by division/conference."""
-    schedule_df = pl.DataFrame(
+def _two_week_schedule() -> pl.DataFrame:
+    """Return two weeks of 2024 games: BUF beats KC and DAL beats PHI, then BUF ties KC."""
+    return pl.DataFrame(
         {
             "season": [2024, 2024, 2024],
             "week": [1, 1, 2],
@@ -60,8 +64,17 @@ def test_compute_team_records_before_week_overall_div_conf() -> None:
         }
     )
 
+
+def test_compute_team_records_before_week_overall_div_conf() -> None:
+    """Records should be computed from prior weeks only and split by division/conference."""
+    # Arrange
+    schedule_df = _two_week_schedule()
+
+    # Act
     # Before week 2, only week 1 games count.
     records_w2 = polars_utils.compute_team_records_before_week(schedule_df, season=2024, week=2)
+
+    # Assert
     by_team_w2 = _row_by_team(records_w2)
 
     assert by_team_w2["BUF"]["wins"] == 1
@@ -97,8 +110,16 @@ def test_compute_team_records_before_week_overall_div_conf() -> None:
     assert by_team_w2["PHI"]["games_played"] == 1
     assert by_team_w2["PHI"]["win_pct"] == 0.0
 
-    # Before week 3, week 1 and week 2 games count.
+
+def test_compute_team_records_before_week_counts_every_prior_week() -> None:
+    """Before week 3, week 1 and week 2 games count, ties included."""
+    # Arrange
+    schedule_df = _two_week_schedule()
+
+    # Act
     records_w3 = polars_utils.compute_team_records_before_week(schedule_df, season=2024, week=3)
+
+    # Assert
     by_team_w3 = _row_by_team(records_w3)
 
     # BUF and KC tied in week 2.
@@ -114,14 +135,17 @@ def test_compute_team_records_before_week_overall_div_conf() -> None:
 
 def test_compute_team_records_before_week_validates_schema() -> None:
     """Helper should raise a clear error if the schedule schema is incomplete."""
+    # Arrange
     bad_schedule_df = pl.DataFrame({"season": [2024], "week": [1]})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="missing required columns"):
         polars_utils.compute_team_records_before_week(bad_schedule_df, season=2024, week=2)
 
 
 def test_compute_team_records_before_week_uses_historical_divisions_before_2002() -> None:
     """Pre-2002 division splits should use the historical alignment."""
+    # Arrange
     schedule_df = pl.DataFrame(
         {
             "season": [2001],
@@ -134,7 +158,10 @@ def test_compute_team_records_before_week_uses_historical_divisions_before_2002(
         }
     )
 
+    # Act
     records = polars_utils.compute_team_records_before_week(schedule_df, season=2001, week=2)
+
+    # Assert
     by_team = _row_by_team(records)
 
     assert by_team["ARI"]["division_wins"] == 1

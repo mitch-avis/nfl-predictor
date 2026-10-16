@@ -1002,7 +1002,7 @@ def build_qb_trends(
 
     long_df = long_df.sort(["qb_name", "week"])
 
-    exprs = []
+    exprs: list[pl.Expr] = []
     if "qb_elo_pre" in long_df.columns:
         prior_elo = (
             pl.col("qb_elo_pre")
@@ -1127,7 +1127,7 @@ def build_team_stat_trends(
 
     # Each team's trends after each of its games: the mean of its last `window` games through
     # that game minus its season-to-date mean through it, with the count of games with a value.
-    after_game = []
+    after_game: list[pl.Expr] = []
     for stat in available_stats:
         recent_mean = pl.col(stat).rolling_mean(window_size=window, min_samples=1)
         cum_count = pl.col(stat).cum_count()

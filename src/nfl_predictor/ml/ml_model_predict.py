@@ -13,13 +13,13 @@ import numpy as np
 from nfl_predictor.ml import ml_utils
 from nfl_predictor.ml.ml_model_core import (
     MarginTotalModel,
-    _build_prediction_output,
-    _derive_scores_from_margin_total,
-    _load_games,
-    _predict_margin_total_from_model,
-    _predict_margin_total_quantiles_from_model,
+    build_prediction_output,
+    derive_scores_from_margin_total,
+    load_games,
     margin_to_home_win_prob,
     model_floor_sigma,
+    predict_margin_total_from_model,
+    predict_margin_total_quantiles_from_model,
 )
 from nfl_predictor.utils.logger import log
 
@@ -44,14 +44,14 @@ def predict_week_margin_total(
     ``floor_sigma`` and ``floor_sigma_fallback`` columns say which. The margin and total
     quantiles, when the model has them, are added as interval columns.
     """
-    games_df = _load_games(games_path)
-    pred_margin, pred_total = _predict_margin_total_from_model(model, games_df)
-    margin_quantiles, total_quantiles = _predict_margin_total_quantiles_from_model(model, games_df)
-    pred_away, pred_home = _derive_scores_from_margin_total(pred_margin, pred_total)
+    games_df = load_games(games_path)
+    pred_margin, pred_total = predict_margin_total_from_model(model, games_df)
+    margin_quantiles, total_quantiles = predict_margin_total_quantiles_from_model(model, games_df)
+    pred_away, pred_home = derive_scores_from_margin_total(pred_margin, pred_total)
     sigma, fallback = model_floor_sigma(model)
     _log_floor_sigma(model, games_df, sigma)
     home_win_prob = margin_to_home_win_prob(pred_margin, sigma)
-    output_df = _build_prediction_output(
+    output_df = build_prediction_output(
         games_df,
         pred_away,
         pred_home,

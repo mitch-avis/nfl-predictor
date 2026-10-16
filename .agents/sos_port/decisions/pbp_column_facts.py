@@ -81,7 +81,7 @@ def _changed_codes() -> list[str]:
 
 def _size(frame: pl.DataFrame, columns: list[str], path: Path) -> int:
     """Write ``frame[columns]`` with the loader's cache writer and return the file size."""
-    loaders._write_cached_frame(frame.select(columns), path, columns)
+    loaders.write_cached_frame(frame.select(columns), path, columns)
     return path.stat().st_size
 
 

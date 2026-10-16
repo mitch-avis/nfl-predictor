@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "nfl-predictor"
-version = "0.59.4"
+version = "0.59.6"
 description = "NFL game score and outcome prediction with a margin/total ML model, calibrated win probabilities, and tooling for Pick 'Em and Confidence Pools."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -49,6 +49,7 @@ nfl-predictor = "nfl_predictor.cli.main:main"
 
 [dependency-groups]
 dev = [
+    "cryptography>=50.0.2",
     "httpx2>=2.13", # FastAPI's TestClient
     "pandas-stubs>=3.0",
     "pre-commit>=4.7",
@@ -158,6 +159,15 @@ extend-allowed-calls = ["polars.lit"]
 "src/nfl_predictor/api/auth/cli.py" = [
     "S105", # PASSWORD_ENV holds the name of an environment variable, not a password
 ]
+"typings/joblib.pyi" = [
+    "ANN401", # joblib.load unpickles an object of any type, as typeshed types pickle.load
+]
+"typings/sklearn/*.pyi" = [
+    "N803", # sklearn names its data argument `X`; the stub keeps the keyword callers can pass
+]
+"typings/threadpoolctl.pyi" = [
+    "N801", # the stub keeps the library's own lowercase class name, threadpool_limits
+]
 
 # --------------------------------------------------------------------------------------------
 # Type checking: ty and pyright (strict)
@@ -176,6 +186,11 @@ pythonPlatform = "Linux"
 venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["."]           # keeps `tests.*` imports resolving from the repo root
+reportPrivateUsage = false   # unit tests import their own module's private helpers
 
 # --------------------------------------------------------------------------------------------
 # Tests and coverage

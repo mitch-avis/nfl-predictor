@@ -18,6 +18,7 @@ from nfl_predictor.api.readers.cache import cached
 from nfl_predictor.utils import clock
 from nfl_predictor.utils.fingerprints import dataset_fingerprint
 from nfl_predictor.utils.logger import log
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -130,10 +131,10 @@ def latest_leakage_audit(*roots: Path) -> dict[str, Any] | None:
         return None
     newest = max(candidates, key=lambda p: p.stat().st_mtime)
     try:
-        payload = json.loads(newest.read_text(encoding="utf-8"))
+        payload = as_str_dict(json.loads(newest.read_text(encoding="utf-8")))
     except OSError, ValueError:
         return None
-    if not isinstance(payload, dict):
+    if payload is None:
         return None
     payload["path"] = str(newest)
     payload["modified_at"] = _iso(newest.stat().st_mtime)
@@ -158,11 +159,11 @@ class FingerprintCache:
         stored = self._db.get_value(key)
         if stored:
             try:
-                payload = json.loads(stored)
+                payload = as_str_dict(json.loads(stored))
             except ValueError:
                 payload = None
             if (
-                isinstance(payload, dict)
+                payload is not None
                 and payload.get("size") == stat.st_size
                 and payload.get("mtime") == stat.st_mtime
             ):

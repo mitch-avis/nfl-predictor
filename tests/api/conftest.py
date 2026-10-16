@@ -18,6 +18,8 @@ from nfl_predictor.api.settings import CSRF_HEADER_VALUE, Settings
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
+    from fastapi import FastAPI
+
     from nfl_predictor.api.jobs.catalog import JobTemplate
 
 TEST_SECRET = "test-secret-" * 4
@@ -52,13 +54,13 @@ def db(settings: Settings) -> Database:
 
 
 @pytest.fixture
-def app(settings: Settings):
+def app(settings: Settings) -> FastAPI:
     """Return the application for ``settings``."""
     return create_app(settings)
 
 
 @pytest.fixture
-def client(app) -> Iterator[TestClient]:
+def client(app: FastAPI) -> Iterator[TestClient]:
     """Return an anonymous client that sends the CSRF header."""
     with TestClient(app, base_url="http://testserver") as test_client:
         test_client.headers.update(CSRF_HEADERS)
@@ -74,7 +76,7 @@ def login(test_client: TestClient, username: str, password: str) -> None:
 
 
 @pytest.fixture
-def admin_client(app, db: Database) -> Iterator[TestClient]:
+def admin_client(app: FastAPI, db: Database) -> Iterator[TestClient]:
     """Return a client logged in as an admin user named ``admin``."""
     user_store.create_user(db, "admin", ADMIN_PASSWORD, "admin")
     with TestClient(app, base_url="http://testserver") as test_client:
@@ -84,7 +86,7 @@ def admin_client(app, db: Database) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def viewer_client(app, db: Database) -> Iterator[TestClient]:
+def viewer_client(app: FastAPI, db: Database) -> Iterator[TestClient]:
     """Return a client logged in as a viewer named ``viewer``."""
     user_store.create_user(db, "viewer", VIEWER_PASSWORD, "viewer")
     with TestClient(app, base_url="http://testserver") as test_client:

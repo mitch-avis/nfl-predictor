@@ -615,12 +615,13 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       stage-1 re-selection is retired and the floor is submitted. Originally: this week's
       stage 1 chose `none` (the deterministic map) over 2025 weeks 3-18, Brier `0.2161`, with
       `elo` + blend `0.2173`; last week it chose `elo` + blend. The winner flips on noise.
-- [ ] Cross-module private imports left after `0.38.1` (an AST scan by the `0.38.1` implementer,
-      not checked in): `utils/polars/teamrankings.py` imports `_is_numeric_dtype` from
-      `utils/polars/loaders.py`; `ml/ml_model_core.py`, `ml/ml_model_predict.py` and
-      `ml/ml_model_training.py` import 17 private names from each other. Cosmetic: rename them
-      with the next change that already retrains every checkpoint (`AGENTS.md` rule 14), not on
-      their own.
+- [x] Cross-module private imports left after `0.38.1`. Resolved in `0.59.6` (the strict pyright
+      cleanup, user-approved 2026-10-15): every helper another module imports is public, and
+      an AST scan by the independent reviewer finds no private import across `src/` modules.
+      Originally (an AST scan by the `0.38.1` implementer, not checked in):
+      `utils/polars/teamrankings.py` imported `_is_numeric_dtype` from `utils/polars/loaders.py`,
+      and `ml/ml_model_core.py`, `ml/ml_model_predict.py` and `ml/ml_model_training.py` imported
+      17 private names from each other.
 - [ ] (step 6, phase 5) **Betting report edges.** The largest moneyline "edges" in Week 3
       mostly reflect the gap between each game's spread and its moneyline (the market-anchored
       margin maps through the deterministic curve, while the edge compares with the no-vig

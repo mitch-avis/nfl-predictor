@@ -10,6 +10,7 @@ from nfl_predictor.utils.polars import teamrankings
 
 def test_combine_stats_creates_combined_and_drops() -> None:
     """Derived columns are computed and source columns are dropped."""
+    # Arrange
     df = pl.DataFrame(
         {
             "sack_fumbles": [1],
@@ -33,8 +34,10 @@ def test_combine_stats_creates_combined_and_drops() -> None:
         }
     )
 
+    # Act
     combined = polars_utils.combine_stats(df)
 
+    # Assert
     assert combined.select("fumbles").item() == 6
     assert combined.select("fumbles_lost").item() == 2
     assert combined.select("first_downs").item() == 9
@@ -63,6 +66,7 @@ def test_combine_stats_creates_combined_and_drops() -> None:
 
 def test_add_scoring_data_to_team_stats() -> None:
     """Schedule scores are joined into per-team stats."""
+    # Arrange
     team_stats = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -81,8 +85,10 @@ def test_add_scoring_data_to_team_stats() -> None:
         }
     )
 
+    # Act
     scored = polars_utils.add_scoring_data_to_team_stats(team_stats, schedule)
 
+    # Assert
     away_row = scored.filter(pl.col("team_abbr") == "BUF").row(0, named=True)
     home_row = scored.filter(pl.col("team_abbr") == "KC").row(0, named=True)
 
@@ -96,6 +102,7 @@ def test_add_scoring_data_to_team_stats() -> None:
 
 def test_add_per_game_opponent_stats() -> None:
     """Opponent stats are attached per game based on opponent_abbr."""
+    # Arrange
     team_stats = pl.DataFrame(
         {
             "season": [2024, 2024],
@@ -106,8 +113,10 @@ def test_add_per_game_opponent_stats() -> None:
         }
     )
 
+    # Act
     result = polars_utils.add_per_game_opponent_stats(team_stats)
 
+    # Assert
     away_row = result.filter(pl.col("team_abbr") == "BUF").row(0, named=True)
     home_row = result.filter(pl.col("team_abbr") == "KC").row(0, named=True)
 
@@ -117,6 +126,7 @@ def test_add_per_game_opponent_stats() -> None:
 
 def test_aggregate_team_stats_to_week_regular() -> None:
     """Rolling averages aggregate correctly up to a target week."""
+    # Arrange
     team_stats = pl.DataFrame(
         {
             "season": [2024, 2024, 2024, 2024],
@@ -129,8 +139,10 @@ def test_aggregate_team_stats_to_week_regular() -> None:
         }
     )
 
+    # Act
     agg = polars_utils.aggregate_team_stats_to_week(team_stats, target_week=3, season=2024)
 
+    # Assert
     buf_row = agg.filter(pl.col("team_abbr") == "BUF").row(0, named=True)
     assert buf_row["games_played"] == 2
     assert buf_row["pass_yards"] == pytest.approx(250.0)
@@ -139,6 +151,7 @@ def test_aggregate_team_stats_to_week_regular() -> None:
 
 def test_calculate_stat_differentials_skips_non_numeric() -> None:
     """Stat differentials are only computed for numeric columns."""
+    # Arrange
     df = pl.DataFrame(
         {
             "away_elo_pre": [1500.0],
@@ -148,8 +161,10 @@ def test_calculate_stat_differentials_skips_non_numeric() -> None:
         }
     )
 
+    # Act
     result = polars_utils.calculate_stat_differentials(df, ["elo_pre", "qb"])
 
+    # Assert
     assert "elo_pre_diff" in result.columns
     assert result.select("elo_pre_diff").item() == pytest.approx(100.0)
     assert "qb_diff" not in result.columns
@@ -157,13 +172,19 @@ def test_calculate_stat_differentials_skips_non_numeric() -> None:
 
 def test_build_final_column_order_metadata_first() -> None:
     """Final column ordering starts with metadata columns."""
+    # Act
     final_order = polars_utils.build_final_column_order()
+
+    # Assert
     assert final_order[: len(constants.METADATA_COLUMNS)] == constants.METADATA_COLUMNS
 
 
 def test_build_final_column_order_has_no_duplicates_and_includes_lines_results() -> None:
     """Final column ordering has no duplicates and includes lines/result columns."""
+    # Act
     final_order = polars_utils.build_final_column_order()
+
+    # Assert
     assert len(final_order) == len(set(final_order))
 
     for col in (*constants.LINES_COLUMNS, *constants.RESULT_COLUMNS):
@@ -171,17 +192,32 @@ def test_build_final_column_order_has_no_duplicates_and_includes_lines_results()
 
 
 def test_get_pbp_columns_returns_a_copy_of_the_published_contract() -> None:
-    """Play-by-play stat accessor returns a defensive copy of the constant."""
+    """Play-by-play stat accessor returns the published constant's values."""
+    # Act
     cols = polars_utils.get_pbp_columns()
 
+    # Assert
     assert cols == constants.PBP_STATS
+
+
+def test_get_pbp_columns_returns_a_defensive_copy() -> None:
+    """Mutating the returned columns leaves the published constant unchanged."""
+    # Arrange
+    cols = polars_utils.get_pbp_columns()
+
+    # Act
     cols.append("mutated")
+
+    # Assert
     assert "mutated" not in constants.PBP_STATS
 
 
 def test_build_final_column_order_publishes_pbp_stats_without_opponent_mirrors() -> None:
     """Every play-by-play stat is published per team and as a diff, with no generic mirror."""
+    # Act
     final_order = polars_utils.build_final_column_order()
+
+    # Assert
     ordered = set(final_order)
 
     for stat in constants.PBP_STATS:
@@ -198,8 +234,10 @@ def test_build_final_column_order_publishes_pbp_stats_without_opponent_mirrors()
 
 def test_get_stats_for_diff_includes_pbp_stats() -> None:
     """Differentials are calculated for the published play-by-play stats."""
+    # Act
     stats = polars_utils.get_stats_for_diff()
 
+    # Assert
     for stat in constants.PBP_STATS:
         assert stat in stats
     assert len(stats) == len(set(stats))
@@ -211,6 +249,7 @@ def test_pbp_derived_rates_are_ratios_of_sums() -> None:
     Aggregation stores the mean per-game count, so mean(numerator) / mean(denominator)
     equals sum(numerator) / sum(denominator) because the game count cancels.
     """
+    # Arrange
     # Two games: 60 and 40 offensive snaps, 6.0 and 2.0 pass EPA.
     # Ratio of sums = 8.0 / 100 = 0.08; the aggregated means are 50 snaps and 4.0 EPA.
     agg = pl.DataFrame(
@@ -244,7 +283,10 @@ def test_pbp_derived_rates_are_ratios_of_sums() -> None:
         }
     )
 
+    # Act
     out = teamrankings._compute_derived_metrics(agg)
+
+    # Assert
     row = out.row(0, named=True)
 
     assert row["off_pass_epa_per_snap"] == pytest.approx(4.0 / 50.0)
@@ -274,6 +316,7 @@ def test_pbp_derived_rates_are_ratios_of_sums() -> None:
 
 def test_pbp_derived_rates_are_null_on_zero_denominators() -> None:
     """A zero denominator yields a null rate rather than a divide-by-zero or a fake zero."""
+    # Arrange
     agg = pl.DataFrame(
         {
             "team_abbr": ["AAA"],
@@ -305,7 +348,10 @@ def test_pbp_derived_rates_are_null_on_zero_denominators() -> None:
         }
     )
 
+    # Act
     out = teamrankings._compute_derived_metrics(agg)
+
+    # Assert
     row = out.row(0, named=True)
 
     for stat in constants.PBP_STATS:
@@ -316,9 +362,13 @@ def test_pbp_derived_rates_are_null_on_zero_denominators() -> None:
 
 def test_pbp_derived_rates_are_null_when_source_counts_are_missing() -> None:
     """A season without play-by-play still emits every rate column, as nulls."""
+    # Arrange
     agg = pl.DataFrame({"team_abbr": ["AAA"], "points_scored": [21.0]})
 
+    # Act
     out = teamrankings._compute_derived_metrics(agg)
+
+    # Assert
     row = out.row(0, named=True)
 
     for stat in constants.PBP_STATS:
@@ -333,6 +383,7 @@ def test_pbp_situational_rates_are_derived_from_counts() -> None:
     name, and the red-zone rate divides touchdown drives by red-zone trips rather than
     touchdowns by red-zone snaps.
     """
+    # Arrange
     agg = pl.DataFrame(
         {
             "team_abbr": ["AAA"],
@@ -355,7 +406,10 @@ def test_pbp_situational_rates_are_derived_from_counts() -> None:
         }
     )
 
+    # Act
     out = teamrankings._compute_derived_metrics(agg)
+
+    # Assert
     row = out.row(0, named=True)
 
     assert row["third_down_pct"] == pytest.approx(100.0 * 7.0 / 14.0)
@@ -370,6 +424,7 @@ def test_pbp_situational_rates_are_derived_from_counts() -> None:
 
 def test_pbp_situational_rates_are_null_on_zero_denominators() -> None:
     """A zero attempt count leaves each situational rate null rather than forcing zero."""
+    # Arrange
     agg = pl.DataFrame(
         {
             "team_abbr": ["AAA"],
@@ -392,7 +447,10 @@ def test_pbp_situational_rates_are_null_on_zero_denominators() -> None:
         }
     )
 
+    # Act
     out = teamrankings._compute_derived_metrics(agg)
+
+    # Assert
     row = out.row(0, named=True)
 
     assert row["third_down_pct"] is None

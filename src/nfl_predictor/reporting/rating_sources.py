@@ -31,6 +31,7 @@ import polars as pl
 
 from nfl_predictor import constants
 from nfl_predictor.reporting import run_comparison
+from nfl_predictor.utils.narrowing import as_str_dict
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -478,8 +479,8 @@ def _fold_predictions(path: Path) -> pl.DataFrame:
             flag is kept, a null read as not neutral (`fit_model_ratings`).
 
     """
-    payload = joblib.load(path)
-    frame = payload.get("predictions") if isinstance(payload, dict) else None
+    payload = as_str_dict(joblib.load(path))
+    frame = payload.get("predictions") if payload is not None else None
     if not isinstance(frame, pd.DataFrame):
         msg = f"{path} holds no prediction frame"
         raise TypeError(msg)

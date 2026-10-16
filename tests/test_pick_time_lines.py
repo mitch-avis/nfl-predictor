@@ -100,8 +100,10 @@ def _lines_of(frame: pl.DataFrame, game_id: str) -> dict[str, object]:
 
 def test_a_completed_game_with_a_real_opener_takes_the_opening_line() -> None:
     """The opening spread replaces the stored one; a missing opening moneyline is left to derive."""
+    # Act
     lines, _report = _apply([_game("1", 2015)], [_line("1", 2015, total_line_open=46.5)])
 
+    # Assert
     assert _lines_of(lines, "1") == {
         "home_spread": -6.0,
         "away_spread": 6.0,
@@ -113,28 +115,36 @@ def test_a_completed_game_with_a_real_opener_takes_the_opening_line() -> None:
 
 def test_a_missing_opening_total_falls_back_to_the_stored_total() -> None:
     """Before nfelo published opening totals, the stored total stays."""
+    # Act
     lines, report = _apply([_game("1", 2015)], [_line("1", 2015)])
 
+    # Assert
     assert _lines_of(lines, "1")["total_line"] == pytest.approx(44.0)
     assert report.row(0, named=True)["opener_with_stored_total"] == 1
 
 
 def test_real_opening_moneylines_are_kept_as_a_pair() -> None:
     """From 2024 nfelo publishes opening moneylines, and they are used."""
+    # Act
     lines, _report = _apply(
         [_game("1", 2024)],
         [_line("1", 2024, home_ml_open=-250, away_ml_open=205, total_line_open=45.0)],
     )
 
+    # Assert
     assert _lines_of(lines, "1")["home_moneyline"] == -250
     assert _lines_of(lines, "1")["away_moneyline"] == 205
 
 
 def test_a_single_opening_moneyline_is_not_kept_without_its_pair() -> None:
     """A lone opening moneyline is dropped, so both sides derive from the opening spread."""
+    # Arrange
     line = _line("1", 2024, total_line_open=45.0, home_ml_open=-250)
+
+    # Act
     lines, _report = _apply([_game("1", 2024)], [line])
 
+    # Assert
     assert _lines_of(lines, "1")["home_moneyline"] is None
     assert _lines_of(lines, "1")["away_moneyline"] is None
 
@@ -142,8 +152,10 @@ def test_a_single_opening_moneyline_is_not_kept_without_its_pair() -> None:
 @pytest.mark.parametrize("season", [2005, 2022])
 def test_a_season_without_real_openers_keeps_the_stored_line(season: int) -> None:
     """Before 2007 and in 2022 nfelo's openers are not real, so the stored line is kept."""
+    # Act
     lines, report = _apply([_game("1", season)], [_line("1", season)])
 
+    # Assert
     assert _lines_of(lines, "1") == {
         "home_spread": -3.0,
         "away_spread": 3.0,
@@ -156,10 +168,12 @@ def test_a_season_without_real_openers_keeps_the_stored_line(season: int) -> Non
 
 def test_a_game_without_an_opener_or_an_nfelo_row_keeps_the_stored_line() -> None:
     """A null opener, or a game nfelo does not list, is a counted fallback row."""
+    # Act
     lines, report = _apply(
         [_game("1", 2024), _game("2", 2024)], [_line("1", 2024, home_spread_open=None)]
     )
 
+    # Assert
     assert _lines_of(lines, "1")["home_spread"] == pytest.approx(-3.0)
     assert _lines_of(lines, "2")["home_spread"] == pytest.approx(-3.0)
     season = report.row(0, named=True)
@@ -171,8 +185,10 @@ def test_a_game_without_an_opener_or_an_nfelo_row_keeps_the_stored_line() -> Non
 
 def test_an_upcoming_game_takes_nfelo_s_latest_line() -> None:
     """Before kickoff the latest nfelo line, moneylines and total are used."""
+    # Act
     lines, report = _apply([_game("1", 2026, played=False)], [_line("1", 2026)])
 
+    # Assert
     assert _lines_of(lines, "1") == {
         "home_spread": -7.0,
         "away_spread": 7.0,
@@ -185,6 +201,7 @@ def test_an_upcoming_game_takes_nfelo_s_latest_line() -> None:
 
 def test_an_upcoming_game_without_a_latest_line_uses_the_opener_then_nflverse() -> None:
     """nfelo's opener stands in for a missing latest line; without either, nflverse's line."""
+    # Act
     lines, report = _apply(
         [_game("1", 2026, played=False), _game("2", 2026, played=False)],
         [
@@ -200,6 +217,7 @@ def test_an_upcoming_game_without_a_latest_line_uses_the_opener_then_nflverse() 
         ],
     )
 
+    # Assert
     assert _lines_of(lines, "1") == {
         "home_spread": -6.0,
         "away_spread": 6.0,
@@ -216,6 +234,7 @@ def test_an_upcoming_game_without_a_latest_line_uses_the_opener_then_nflverse() 
 
 def test_an_upcoming_game_with_no_line_anywhere_stays_empty() -> None:
     """With no nfelo or nflverse line the game is left for SurvivorGrid, and counted."""
+    # Act
     lines, report = _apply(
         [
             _game(
@@ -232,18 +251,22 @@ def test_an_upcoming_game_with_no_line_anywhere_stays_empty() -> None:
         [],
     )
 
+    # Assert
     assert _lines_of(lines, "1")["home_spread"] is None
     assert report.row(0, named=True)["upcoming_without_line"] == 1
 
 
 def test_the_schedule_keeps_its_rows_order_and_types() -> None:
     """Only the five line columns change; row order and column types stay."""
+    # Arrange
     games = [_game(str(index), 2015) for index in range(5)]
     schedule = pl.DataFrame(games, schema=_SCHEDULE_SCHEMA)
     nfelo = pl.DataFrame([_line("3", 2015), _line("1", 2015)], schema=_NFELO_SCHEMA)
 
+    # Act
     lines, _report = pick_time_lines.apply_pick_time_lines(schedule, nfelo)
 
+    # Assert
     assert lines.schema == schedule.schema
     assert lines.get_column("game_id").to_list() == ["0", "1", "2", "3", "4"]
     assert lines.drop(pick_time_lines.LINE_COLUMNS).equals(
@@ -253,11 +276,13 @@ def test_the_schedule_keeps_its_rows_order_and_types() -> None:
 
 def test_the_report_counts_each_season_separately() -> None:
     """Per-season counts: games, matches, openers and fallback rows."""
+    # Act
     _lines, report = _apply(
         [_game("1", 2005), _game("2", 2015), _game("3", 2015)],
         [_line("1", 2005), _line("2", 2015)],
     )
 
+    # Assert
     assert report.select("season", "games", "matched", "opener", "stored_fallback").rows() == [
         (2005, 1, 1, 0, 1),
         (2015, 2, 1, 1, 1),
@@ -278,6 +303,7 @@ def _price_history() -> pl.DataFrame:
 
 def test_prepare_fits_the_maps_on_earlier_seasons_and_records_the_run(tmp_path: Path) -> None:
     """Preparation applies the line order, fits each season's map and records both."""
+    # Arrange
     schedule = pl.DataFrame([_game("1", 2015)], schema=_SCHEDULE_SCHEMA)
     snapshot = nfelo_lines.NfeloLinesSnapshot(
         frame=pl.DataFrame([_line("1", 2015)], schema=_NFELO_SCHEMA),
@@ -290,9 +316,12 @@ def test_prepare_fits_the_maps_on_earlier_seasons_and_records_the_run(tmp_path: 
     lines, prepared = pick_time_lines.prepare_pick_time_lines(
         schedule, history=_price_history(), snapshot=snapshot
     )
-    filled = prepared.fill_moneylines(lines)
-    metadata = prepared.metadata()
 
+    # Act
+    filled = prepared.fill_moneylines(lines)
+
+    # Assert
+    metadata = prepared.metadata()
     expected_map = moneyline_map.fit_spread_moneyline_map(_price_history())
     assert expected_map is not None
     assert filled.row(0, named=True)["home_moneyline"] == expected_map.moneylines(-6.0)[0]
@@ -319,6 +348,7 @@ def test_prepare_fits_the_maps_on_earlier_seasons_and_records_the_run(tmp_path: 
 
 def test_prepare_uses_the_run_s_own_seasons_for_earlier_season_maps(tmp_path: Path) -> None:
     """The schedule's own prices count toward a later season's map, never toward its own."""
+    # Arrange
     history = _price_history().with_columns(pl.col("season").cast(pl.Int32))
     schedule = pl.concat(
         [
@@ -345,10 +375,12 @@ def test_prepare_uses_the_run_s_own_seasons_for_earlier_season_maps(tmp_path: Pa
         snapshot_path=None,
     )
 
+    # Act
     _lines, prepared = pick_time_lines.prepare_pick_time_lines(
         schedule, history=pl.DataFrame(), snapshot=snapshot
     )
 
+    # Assert
     assert prepared.maps[2014] is None
     assert prepared.maps[2015] is not None
     assert prepared.maps[2015].seasons == (2014,)
@@ -356,6 +388,7 @@ def test_prepare_uses_the_run_s_own_seasons_for_earlier_season_maps(tmp_path: Pa
 
 def test_the_report_counts_opener_sign_flips_against_the_stored_line() -> None:
     """An opener of at least 3 points on the other side of a stored line of 3+ is counted."""
+    # Act
     _lines, report = _apply(
         [
             _game("1", 2015, home_spread=-3.5, away_spread=3.5),
@@ -369,11 +402,13 @@ def test_the_report_counts_opener_sign_flips_against_the_stored_line() -> None:
         ],
     )
 
+    # Assert
     assert report.row(0, named=True)["opener_sign_flips"] == 1
 
 
 def test_the_report_counts_upcoming_nfelo_sign_flips_against_nflverse() -> None:
     """An upcoming game whose nfelo line and nflverse line of 3+ disagree in sign is counted."""
+    # Act
     _lines, report = _apply(
         [
             _game("1", 2026, played=False, home_spread=-7.0, away_spread=7.0),
@@ -382,6 +417,7 @@ def test_the_report_counts_upcoming_nfelo_sign_flips_against_nflverse() -> None:
         [_line("1", 2026, home_spread_last=7.0), _line("2", 2026)],
     )
 
+    # Assert
     row = report.row(0, named=True)
     assert row["upcoming_nfelo_sign_flips"] == 1
     assert row["opener_sign_flips"] == 0
@@ -389,6 +425,7 @@ def test_the_report_counts_upcoming_nfelo_sign_flips_against_nflverse() -> None:
 
 def test_filling_twice_counts_each_derived_game_once(tmp_path: Path) -> None:
     """A game whose away side stays missing is not counted again by a second fill."""
+    # Arrange
     schedule = pl.DataFrame([_game("1", 2005)], schema=_SCHEDULE_SCHEMA)
     snapshot = nfelo_lines.NfeloLinesSnapshot(
         frame=pl.DataFrame(schema=_NFELO_SCHEMA),
@@ -406,8 +443,12 @@ def test_filling_twice_counts_each_derived_game_once(tmp_path: Path) -> None:
         pl.lit(None, dtype=pl.Int32).alias("away_moneyline"),
     )
 
-    prepared.fill_moneylines(prepared.fill_moneylines(games))
+    filled_once = prepared.fill_moneylines(games)
 
+    # Act
+    prepared.fill_moneylines(filled_once)
+
+    # Assert
     assert prepared.derived[2005] == {
         "moneylines_from_map": 0,
         "moneylines_from_fixed_conversion": 1,

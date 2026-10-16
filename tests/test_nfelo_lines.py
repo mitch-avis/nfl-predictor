@@ -38,8 +38,10 @@ def _failing_fetch(_url: str) -> bytes:
 
 def test_a_download_is_cached_and_kept_as_a_snapshot_named_by_its_hash(tmp_path: Path) -> None:
     """A fetched file becomes the cached copy and a content-addressed snapshot."""
+    # Act
     snapshot = nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=lambda _url: _FIRST)
 
+    # Assert
     digest = hashlib.sha256(_FIRST).hexdigest()
     assert snapshot.origin == "download"
     assert snapshot.sha256 == digest
@@ -51,10 +53,13 @@ def test_a_download_is_cached_and_kept_as_a_snapshot_named_by_its_hash(tmp_path:
 
 def test_a_failed_download_falls_back_to_the_cached_copy(tmp_path: Path) -> None:
     """When the source is unreachable the last cached copy is used, without failing."""
+    # Arrange
     nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=lambda _url: _FIRST)
 
+    # Act
     snapshot = nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=_failing_fetch)
 
+    # Assert
     assert snapshot.origin == "cache"
     assert snapshot.sha256 == hashlib.sha256(_FIRST).hexdigest()
     assert snapshot.frame.height == 2
@@ -62,9 +67,13 @@ def test_a_failed_download_falls_back_to_the_cached_copy(tmp_path: Path) -> None
 
 def test_a_newer_download_replaces_the_cache_and_keeps_both_snapshots(tmp_path: Path) -> None:
     """Every run's snapshot stays on disk, while the cached copy follows the latest download."""
+    # Arrange
     first = nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=lambda _url: _FIRST)
+
+    # Act
     second = nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=lambda _url: _SECOND)
 
+    # Assert
     assert first.snapshot_path is not None
     assert second.snapshot_path is not None
     assert first.snapshot_path.read_bytes() == _FIRST
@@ -74,20 +83,25 @@ def test_a_newer_download_replaces_the_cache_and_keeps_both_snapshots(tmp_path: 
 
 def test_an_unreadable_download_keeps_the_cached_copy(tmp_path: Path) -> None:
     """A response that is not the lines file never overwrites the cache."""
+    # Arrange
     nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=lambda _url: _FIRST)
 
+    # Act
     snapshot = nfelo_lines.load_nfelo_lines(
         cache_dir=tmp_path, fetch=lambda _url: b"<html>rate limited</html>"
     )
 
+    # Assert
     assert snapshot.origin == "cache"
     assert (tmp_path / "lines.csv").read_bytes() == _FIRST
 
 
 def test_no_download_and_no_cache_degrades_to_an_empty_frame(tmp_path: Path) -> None:
     """Without any copy the getter reports the source unavailable and returns no rows."""
+    # Act
     snapshot = nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=_failing_fetch)
 
+    # Assert
     assert snapshot.origin == "unavailable"
     assert snapshot.sha256 is None
     assert snapshot.snapshot_path is None
@@ -97,11 +111,16 @@ def test_no_download_and_no_cache_degrades_to_an_empty_frame(tmp_path: Path) -> 
 
 def test_the_metadata_records_the_hash_origin_and_snapshot(tmp_path: Path) -> None:
     """The run metadata names exactly which copy of the file the run used."""
+    # Arrange
     snapshot = nfelo_lines.load_nfelo_lines(
         cache_dir=tmp_path, url="https://example.test/lines.csv", fetch=lambda _url: _FIRST
     )
 
-    assert snapshot.metadata() == {
+    # Act
+    metadata = snapshot.metadata()
+
+    # Assert
+    assert metadata == {
         "url": "https://example.test/lines.csv",
         "origin": "download",
         "sha256": hashlib.sha256(_FIRST).hexdigest(),
@@ -112,6 +131,7 @@ def test_the_metadata_records_the_hash_origin_and_snapshot(tmp_path: Path) -> No
 
 def test_normalization_maps_team_codes_to_the_canonical_abbreviations() -> None:
     """nfelo's historical codes (OAK, WAS, STL) join the schedule's canonical teams."""
+    # Arrange
     raw = pl.read_csv(
         _csv(
             "0,2019_01_OAK_WAS,2019,1,WAS,OAK,3.0,2.5,,,,,,44.5",
@@ -119,8 +139,10 @@ def test_normalization_maps_team_codes_to_the_canonical_abbreviations() -> None:
         )
     )
 
+    # Act
     normalized = nfelo_lines.normalize_nfelo_lines(raw)
 
+    # Assert
     assert normalized.select("season", "week", "away_abbr", "home_abbr").rows() == [
         (2019, 1, "LV", "WSH"),
         (1999, 1, "BAL", "LAR"),
@@ -129,6 +151,7 @@ def test_normalization_maps_team_codes_to_the_canonical_abbreviations() -> None:
 
 def test_normalization_types_the_lines_and_keeps_the_first_duplicate() -> None:
     """Lines are floats, moneylines whole numbers, and a repeated game keeps its first row."""
+    # Arrange
     raw = pl.read_csv(
         _csv(
             "0,2019_01_PIT_NE,2019,1,NE,PIT,-6,-5.5,,,-245,205,,49",
@@ -136,8 +159,10 @@ def test_normalization_types_the_lines_and_keeps_the_first_duplicate() -> None:
         )
     )
 
+    # Act
     normalized = nfelo_lines.normalize_nfelo_lines(raw)
 
+    # Assert
     assert normalized.height == 1
     row = normalized.row(0, named=True)
     assert row["home_spread_open"] == pytest.approx(-6.0)
@@ -149,9 +174,12 @@ def test_normalization_types_the_lines_and_keeps_the_first_duplicate() -> None:
 
 def test_an_unreadable_cache_is_treated_as_no_copy(tmp_path: Path) -> None:
     """A damaged cached file degrades to the unavailable result rather than failing the run."""
+    # Arrange
     (tmp_path / "lines.csv").write_bytes(b"not,the,file\n1,2,3\n")
 
+    # Act
     snapshot = nfelo_lines.load_nfelo_lines(cache_dir=tmp_path, fetch=_failing_fetch)
 
+    # Assert
     assert snapshot.origin == "unavailable"
     assert snapshot.frame.height == 0

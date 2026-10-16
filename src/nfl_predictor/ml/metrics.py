@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import numpy.typing as npt
 from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
 
 from nfl_predictor import constants
@@ -108,7 +109,7 @@ def probability_pick_accuracy(actual_margin: np.ndarray, home_win_prob: np.ndarr
         return 0.0
     predicted_home = picks_home(probs)
     actual_home = margins > 0
-    correct = (predicted_home == actual_home) & (margins != 0)
+    correct: npt.NDArray[np.bool_] = (predicted_home == actual_home) & (margins != 0)
     return float(np.mean(correct))
 
 

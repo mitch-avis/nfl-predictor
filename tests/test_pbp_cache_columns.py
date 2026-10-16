@@ -6,11 +6,13 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+import nflreadpy as nfl
 import polars as pl
 import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils.polars import loaders
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -262,7 +264,7 @@ def test_load_pbp_earlier_cache_file_is_downloaded_again(
     )
     stale.write_parquet(tmp_path / "pbp_2020_reg.parquet", metadata=metadata)
     fresh = _download(_ADDED_COLUMNS)
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda seasons: fresh)
+    monkeypatch.setattr(nfl, "load_pbp", returning(fresh))
 
     # Act
     loaded = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
@@ -298,7 +300,7 @@ def test_load_pbp_fallback_to_an_earlier_cache_file_names_the_columns_it_lacks(
         schema={column: loaders._PBP_COLUMN_DTYPES[column] for column in _EARLIER_PBP_COLUMNS},
     )
     stale.write_parquet(tmp_path / "pbp_2026_reg.parquet")
-    monkeypatch.setattr(loaders.nfl, "load_pbp", _unavailable)
+    monkeypatch.setattr(nfl, "load_pbp", _unavailable)
     caplog.set_level(logging.WARNING)
     lacking = [column for column in constants.PBP_COLUMNS if column not in _EARLIER_PBP_COLUMNS]
 
@@ -323,7 +325,7 @@ def test_load_pbp_fallback_to_a_complete_cache_file_names_no_columns(
         schema=loaders._PBP_COLUMN_DTYPES,
     )
     complete.write_parquet(tmp_path / "pbp_2026_reg.parquet")
-    monkeypatch.setattr(loaders.nfl, "load_pbp", _unavailable)
+    monkeypatch.setattr(nfl, "load_pbp", _unavailable)
     caplog.set_level(logging.WARNING)
 
     # Act
@@ -339,7 +341,7 @@ def test_load_pbp_keeps_every_added_column_as_published(
 ) -> None:
     """Each added column reaches the cache and the caller with its published value."""
     # Arrange
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda seasons: _download(_ADDED_COLUMNS))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_download(_ADDED_COLUMNS)))
 
     # Act
     loaded = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
@@ -353,9 +355,9 @@ def test_load_pbp_reads_the_added_columns_back_from_the_cache(
 ) -> None:
     """A season cached with the added columns is served from the cache, columns included."""
     # Arrange
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda seasons: _download(_ADDED_COLUMNS))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_download(_ADDED_COLUMNS)))
     downloaded = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
-    monkeypatch.setattr(loaders.nfl, "load_pbp", _fail_download)
+    monkeypatch.setattr(nfl, "load_pbp", _fail_download)
 
     # Act
     cached = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
@@ -382,7 +384,7 @@ def test_load_pbp_normalizes_the_added_team_code_columns(
 ) -> None:
     """Historical and alias team codes in the added team columns become canonical codes."""
     # Arrange
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda seasons: _download(_TEAM_CODE_ALIASES))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_download(_TEAM_CODE_ALIASES)))
 
     # Act
     loaded = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
@@ -398,7 +400,7 @@ def test_load_pbp_keeps_yard_line_text_as_published(
 ) -> None:
     """Yard lines written as a team code and a number keep the code nflverse wrote."""
     # Arrange
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda seasons: _download(_YARD_LINE_TEXT))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_download(_YARD_LINE_TEXT)))
 
     # Act
     loaded = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
@@ -418,7 +420,11 @@ def test_load_pbp_stacks_seasons_that_type_goal_to_go_differently(
             pl.lit(0.0, dtype=pl.Float64).alias("goal_to_go")
         ),
     }
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda seasons: downloads[seasons[0]])
+
+    def load_pbp(seasons: list[int]) -> pl.DataFrame:
+        return downloads[seasons[0]]
+
+    monkeypatch.setattr(nfl, "load_pbp", load_pbp)
 
     # Act
     loaded = loaders.load_pbp([2003, 2020], cache_dir=tmp_path, current_season=2024)

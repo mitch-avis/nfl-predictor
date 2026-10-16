@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 def test_get_target_columns_returns_away_home_scores() -> None:
     """Returns the canonical away/home score columns when present."""
+    # Arrange
     df = pd.DataFrame(
         {
             "away_score": [17.0],
@@ -29,19 +30,26 @@ def test_get_target_columns_returns_away_home_scores() -> None:
         }
     )
 
-    assert core._get_target_columns(df) == ("away_score", "home_score")
+    # Act
+    columns = core._get_target_columns(df)
+
+    # Assert
+    assert columns == ("away_score", "home_score")
 
 
 def test_get_target_columns_raises_without_both_scores() -> None:
     """Raises when the expected away/home score targets are unavailable."""
+    # Arrange
     df = pd.DataFrame({"away_score": [17.0], "home_team": ["KC"]})
 
+    # Act & Assert
     with pytest.raises(ValueError, match="Expected away/home score columns"):
         core._get_target_columns(df)
 
 
 def test_load_games_reads_csv(tmp_path: Path) -> None:
     """Loads a CSV file into a DataFrame without changing its rows."""
+    # Arrange
     csv_path = tmp_path / "games.csv"
     expected = pd.DataFrame(
         {
@@ -53,13 +61,16 @@ def test_load_games_reads_csv(tmp_path: Path) -> None:
     )
     expected.to_csv(csv_path, index=False)
 
-    actual = core._load_games(csv_path)
+    # Act
+    actual = core.load_games(csv_path)
 
+    # Assert
     pdt.assert_frame_equal(actual, expected)
 
 
 def test_summarize_missing_data_counts_nulls_and_missing_columns() -> None:
     """Counts nulls for present groups and reports missing groups without crashing."""
+    # Arrange
     line_columns = list(constants.LINES_COLUMNS)
     record_columns = list(constants.RECORD_FEATURE_COLUMNS)
 
@@ -71,8 +82,10 @@ def test_summarize_missing_data_counts_nulls_and_missing_columns() -> None:
         }
     )
 
-    summary = core._summarize_missing_data(df)
+    # Act
+    summary = core.summarize_missing_data(df)
 
+    # Assert
     assert summary["total_rows"] == 2
 
     lines = summary["groups"]["lines"]
@@ -102,13 +115,19 @@ def test_summarize_missing_data_counts_nulls_and_missing_columns() -> None:
 
 def test_filter_season_bounds_returns_same_frame_without_season_column() -> None:
     """Leaves frames without a season column unchanged."""
+    # Arrange
     df = pd.DataFrame({"week": [1, 2], "value": [10, 20]})
 
-    assert core._filter_season_bounds(df, min_season=2020, max_season=2024) is df
+    # Act
+    filtered = core.filter_season_bounds(df, min_season=2020, max_season=2024)
+
+    # Assert
+    assert filtered is df
 
 
 def test_filter_season_bounds_filters_min_and_max_seasons() -> None:
     """Filters rows to the requested inclusive season window."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2021, 2022, 2023, 2024],
@@ -116,13 +135,16 @@ def test_filter_season_bounds_filters_min_and_max_seasons() -> None:
         }
     )
 
-    filtered = core._filter_season_bounds(df, min_season=2022, max_season=2023)
+    # Act
+    filtered = core.filter_season_bounds(df, min_season=2022, max_season=2023)
 
+    # Assert
     assert filtered["season"].tolist() == [2022, 2023]
 
 
 def test_split_by_season_partitions_latest_holdout_seasons() -> None:
     """Uses the newest seasons as holdout data and keeps earlier rows for training."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2021, 2022, 2023, 2024],
@@ -130,15 +152,18 @@ def test_split_by_season_partitions_latest_holdout_seasons() -> None:
         }
     )
 
-    train_df, holdout_df, holdout = core._split_by_season(df, holdout_seasons=2)
+    # Act
+    train_df, holdout_df, holdout = core.split_by_season(df, holdout_seasons=2)
 
+    # Assert
     assert holdout == [2023, 2024]
     assert train_df["season"].tolist() == [2021, 2022]
     assert holdout_df["season"].tolist() == [2023, 2024]
 
 
 def test_split_by_season_zero_holdout_and_invalid_inputs() -> None:
-    """Handles zero-holdout mode and rejects invalid season inputs."""
+    """Handles zero-holdout mode by keeping every row for training."""
+    # Arrange
     df = pd.DataFrame(
         {
             "season": [2022, 2023],
@@ -146,14 +171,31 @@ def test_split_by_season_zero_holdout_and_invalid_inputs() -> None:
         }
     )
 
-    train_df, holdout_df, holdout = core._split_by_season(df, holdout_seasons=0)
+    # Act
+    train_df, holdout_df, holdout = core.split_by_season(df, holdout_seasons=0)
 
+    # Assert
     assert holdout == []
     pdt.assert_frame_equal(train_df, df)
     assert holdout_df.empty
 
-    with pytest.raises(ValueError, match="Expected a season column"):
-        core._split_by_season(pd.DataFrame({"week": [1]}), holdout_seasons=1)
 
-    with pytest.raises(ValueError, match="Not enough seasons"):
-        core._split_by_season(df, holdout_seasons=2)
+@pytest.mark.parametrize(
+    ("df", "holdout_seasons", "match"),
+    [
+        pytest.param(pd.DataFrame({"week": [1]}), 1, "Expected a season column", id="no_season"),
+        pytest.param(
+            pd.DataFrame({"season": [2022, 2023], "week": [1, 2]}),
+            2,
+            "Not enough seasons",
+            id="too_few_seasons",
+        ),
+    ],
+)
+def test_split_by_season_rejects_invalid_inputs(
+    df: pd.DataFrame, holdout_seasons: int, match: str
+) -> None:
+    """Rejects frames without a season column or with too few seasons for the holdout."""
+    # Act & Assert
+    with pytest.raises(ValueError, match=match):
+        core.split_by_season(df, holdout_seasons=holdout_seasons)

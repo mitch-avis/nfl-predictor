@@ -6,37 +6,68 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
+import nflreadpy as nfl
 import polars as pl
 import pytest
 
 from nfl_predictor import constants
 from nfl_predictor.utils import polars_utils
 from nfl_predictor.utils.polars import loaders, teamrankings
+from tests.fakes import returning
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_is_numeric_dtype() -> None:
+@pytest.mark.parametrize(
+    ("dtype", "expected"),
+    [
+        pytest.param(pl.Int32(), True, id="int32"),
+        pytest.param(pl.Float64(), True, id="float64"),
+        pytest.param(pl.Utf8(), False, id="utf8"),
+        pytest.param(pl.Decimal(10, 2), True, id="decimal"),
+        pytest.param(pl.Int64, True, id="int64-class"),
+        pytest.param(pl.Float32, True, id="float32-class"),
+        pytest.param(pl.Utf8, False, id="utf8-class"),
+    ],
+)
+def test_is_numeric_dtype(dtype: pl.DataType | type[pl.DataType], *, expected: bool) -> None:
     """Check numeric dtype detection works as expected."""
-    assert loaders._is_numeric_dtype(pl.Int32())
-    assert loaders._is_numeric_dtype(pl.Float64())
-    assert not loaders._is_numeric_dtype(pl.Utf8())
+    # Act
+    is_numeric = loaders.is_numeric_dtype(dtype)
+
+    # Assert
+    assert is_numeric is expected
 
 
 def test_polars_utils_facade() -> None:
     """Polars utils facade exposes expected functions."""
-    assert hasattr(polars_utils, "load_schedule")
-    assert "load_schedule" in dir(polars_utils)
+    # Act
+    has_attribute = hasattr(polars_utils, "load_schedule")
+
+    # Assert
+    assert has_attribute
+
+
+def test_polars_utils_facade_lists_its_functions() -> None:
+    """Polars utils facade lists the forwarded functions in ``dir``."""
+    # Act
+    names = dir(polars_utils)
+
+    # Assert
+    assert "load_schedule" in names
 
 
 def test_add_stadium_location() -> None:
     """Stadium location data is added correctly based on stadium_id."""
+    # Arrange
     stadium_id = next(iter(constants.STADIUMS.keys()))
     df = pl.DataFrame({"stadium_id": [stadium_id]})
 
+    # Act
     out = loaders._add_stadium_location(df)
 
+    # Assert
     assert "stadium_name" in out.columns
     assert "stadium_city" in out.columns
     assert "stadium_state" in out.columns
@@ -46,6 +77,7 @@ def test_add_stadium_location() -> None:
 
 def test_add_stadium_features() -> None:
     """Stadium features include type/altitude with safe defaults."""
+    # Arrange
     df = pl.DataFrame(
         {
             "stadium_id": ["DEN00", "XXX00"],
@@ -54,8 +86,10 @@ def test_add_stadium_features() -> None:
         }
     )
 
+    # Act
     out = loaders._add_stadium_features(df)
 
+    # Assert
     assert out["stadium_type"].to_list() == ["open", "dome"]
     assert out["stadium_elevation"][0] == 5280.0
     assert out["stadium_elevation"][1] == 0.0
@@ -64,10 +98,16 @@ def test_add_stadium_features() -> None:
     assert out.select(pl.col("stadium_state").is_null().all()).item() is True
 
 
-def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:
+def _keep_team_column(df: pl.DataFrame, _column: str) -> pl.DataFrame:
+    """Return the frame unchanged in place of the team-column normalizer."""
+    return df
+
+
+def test_load_schedule_transforms(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Schedule loading applies expected transformations."""
 
-    def fake_load_schedules(seasons):
+    # Arrange
+    def fake_load_schedules(seasons: list[int]) -> pl.DataFrame:
         """Fake schedule loader for testing."""
         _ = seasons
         return pl.DataFrame(
@@ -85,11 +125,13 @@ def test_load_schedule_transforms(monkeypatch, tmp_path: Path) -> None:
             }
         )
 
-    monkeypatch.setattr(loaders.nfl, "load_schedules", fake_load_schedules)
-    monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
+    monkeypatch.setattr(nfl, "load_schedules", fake_load_schedules)
+    monkeypatch.setattr(loaders, "normalize_team_column", _keep_team_column)
 
+    # Act
     df = loaders.load_schedule([2023], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert "away_abbr" in df.columns
     assert "home_abbr" in df.columns
     assert df["neutral"][0] == 1
@@ -142,19 +184,27 @@ def _fail_load_schedules(*_args: object, **_kwargs: object) -> pl.DataFrame:
     raise AssertionError(msg)
 
 
-def test_load_schedule_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+def test_load_schedule_uses_cache_for_historical_seasons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A cache file with every column the loader produces is reused, even an older one."""
+    # Arrange
     cached = loaders._prepare_schedule(_raw_schedule(game_id="cached_game"))
     cached.write_parquet(tmp_path / "schedule_2020.parquet")
-    monkeypatch.setattr(loaders.nfl, "load_schedules", _fail_load_schedules)
+    monkeypatch.setattr(nfl, "load_schedules", _fail_load_schedules)
 
+    # Act
     df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["game_id"][0] == "cached_game"
 
 
-def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> None:
+def test_load_schedule_refreshes_current_season(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Current season schedules are refreshed even when cached."""
+    # Arrange
     cached = pl.DataFrame(
         {
             "game_id": ["old_game"],
@@ -168,7 +218,7 @@ def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> 
     cache_path = tmp_path / "schedule_2024.parquet"
     cached.write_parquet(cache_path)
 
-    def fake_load_schedules(seasons):
+    def fake_load_schedules(seasons: list[int]) -> pl.DataFrame:
         """Return a fresh schedule payload."""
         _ = seasons
         return pl.DataFrame(
@@ -185,11 +235,13 @@ def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> 
             }
         )
 
-    monkeypatch.setattr(loaders.nfl, "load_schedules", fake_load_schedules)
-    monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
+    monkeypatch.setattr(nfl, "load_schedules", fake_load_schedules)
+    monkeypatch.setattr(loaders, "normalize_team_column", _keep_team_column)
 
+    # Act
     df = loaders.load_schedule([2024], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["game_id"][0] == "fresh_game"
     refreshed = pl.read_parquet(cache_path)
     assert refreshed["game_id"][0] == "fresh_game"
@@ -197,9 +249,13 @@ def test_load_schedule_refreshes_current_season(monkeypatch, tmp_path: Path) -> 
 
 def test_schedule_requested_columns_follow_the_preparation() -> None:
     """The requested schedule columns are the prepared names, not the raw nflreadpy names."""
+    # Arrange
+    prepared = loaders._prepare_schedule(_raw_schedule(game_id="g"))
+
+    # Act
     requested = loaders._schedule_requested_columns()
 
-    prepared = loaders._prepare_schedule(_raw_schedule(game_id="g"))
+    # Assert
     assert requested == tuple(prepared.columns)
     renamed = constants.NFLREADPY_SCHEDULE_RENAME
     assert set(renamed.values()) <= set(requested)
@@ -209,93 +265,105 @@ def test_schedule_requested_columns_follow_the_preparation() -> None:
 
 
 def test_load_schedule_refetches_a_cache_that_lacks_a_requested_column(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A historical cache missing a column the loader now produces is a cache miss."""
+    # Arrange
     stale = loaders._prepare_schedule(_raw_schedule(game_id="stale_game")).drop("home_spread")
     stale.write_parquet(tmp_path / "schedule_2020.parquet")
-    monkeypatch.setattr(
-        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="fresh_game")
-    )
+    monkeypatch.setattr(nfl, "load_schedules", returning(_raw_schedule(game_id="fresh_game")))
 
+    # Act
     df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["game_id"].to_list() == ["fresh_game"]
     assert df["home_spread"].to_list() == [3.0]
     assert pl.read_parquet(tmp_path / "schedule_2020.parquet").equals(df)
 
 
-def test_load_schedule_records_the_requested_columns(monkeypatch, tmp_path: Path) -> None:
+def test_load_schedule_records_the_requested_columns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A schedule cache file records the columns the loader requested when writing it."""
-    monkeypatch.setattr(loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="g"))
+    # Arrange
+    monkeypatch.setattr(nfl, "load_schedules", returning(_raw_schedule(game_id="g")))
 
+    # Act
     loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     recorded = loaders._recorded_requested_columns(tmp_path / "schedule_2020.parquet")
     assert recorded == frozenset(loaders._schedule_requested_columns())
 
 
 def test_load_schedule_refetches_when_the_selected_columns_grow(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Selecting another nflreadpy schedule column invalidates older cache files."""
-    monkeypatch.setattr(
-        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="old_game")
-    )
+    # Arrange
+    monkeypatch.setattr(nfl, "load_schedules", returning(_raw_schedule(game_id="old_game")))
     loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
     grown = [*constants.NFLREADPY_SCHEDULE_COLUMNS, "referee"]
     monkeypatch.setattr(constants, "NFLREADPY_SCHEDULE_COLUMNS", grown)
     monkeypatch.setattr(
-        loaders.nfl,
+        nfl,
         "load_schedules",
-        lambda seasons: _raw_schedule(game_id="new_game").with_columns(referee=pl.lit("Ref")),
+        returning(_raw_schedule(game_id="new_game").with_columns(referee=pl.lit("Ref"))),
     )
 
+    # Act
     df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["game_id"].to_list() == ["new_game"]
     assert df["referee"].to_list() == ["Ref"]
 
 
-def test_load_schedule_refetches_when_a_rename_changes(monkeypatch, tmp_path: Path) -> None:
+def test_load_schedule_refetches_when_a_rename_changes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Renaming a selected schedule column invalidates older cache files."""
-    monkeypatch.setattr(
-        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="old_game")
-    )
+    # Arrange
+    monkeypatch.setattr(nfl, "load_schedules", returning(_raw_schedule(game_id="old_game")))
     loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
     renamed = {**constants.NFLREADPY_SCHEDULE_RENAME, "home_coach": "home_head_coach"}
     monkeypatch.setattr(constants, "NFLREADPY_SCHEDULE_RENAME", renamed)
-    monkeypatch.setattr(
-        loaders.nfl, "load_schedules", lambda seasons: _raw_schedule(game_id="new_game")
-    )
+    monkeypatch.setattr(nfl, "load_schedules", returning(_raw_schedule(game_id="new_game")))
 
+    # Act
     df = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["game_id"].to_list() == ["new_game"]
     assert "home_head_coach" in df.columns
 
 
 def test_load_schedule_reuses_a_cache_whose_source_lacked_columns(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A column the source never published does not force a refetch on every run."""
+    # Arrange
     sparse = _raw_schedule(game_id="sparse_game").drop("spread_line", "away_coach")
-    monkeypatch.setattr(loaders.nfl, "load_schedules", lambda seasons: sparse)
+    monkeypatch.setattr(nfl, "load_schedules", returning(sparse))
     first = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
-    monkeypatch.setattr(loaders.nfl, "load_schedules", _fail_load_schedules)
+    monkeypatch.setattr(nfl, "load_schedules", _fail_load_schedules)
 
+    # Act
     second = loaders.load_schedule([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert second.equals(first)
     assert "home_spread" not in second.columns
 
 
-def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:
+def test_load_team_stats_combines(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Team stats loading combines related columns correctly."""
 
-    def fake_load_team_stats(seasons):
+    # Arrange
+    def fake_load_team_stats(seasons: list[int]) -> pl.DataFrame:
         """Fake team stats loader for testing."""
         _ = seasons
         return pl.DataFrame(
@@ -311,13 +379,15 @@ def test_load_team_stats_combines(monkeypatch, tmp_path: Path) -> None:
             }
         )
 
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", fake_load_team_stats)
-    monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
+    monkeypatch.setattr(nfl, "load_team_stats", fake_load_team_stats)
+    monkeypatch.setattr(loaders, "normalize_team_column", _keep_team_column)
 
+    # Act
     df = loaders.load_team_stats(
         [2023], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert "team_abbr" in df.columns
     assert "opponent_abbr" in df.columns
     assert "fumbles" in df.columns
@@ -347,30 +417,38 @@ def _raw_team_stats(*, season: int, team: str) -> pl.DataFrame:
     )
 
 
-def test_load_team_stats_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+def test_load_team_stats_uses_cache_for_historical_seasons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A cache file with every column the loader produces is reused, even an older one."""
+    # Arrange
     cached = loaders._prepare_team_stats(
         _raw_team_stats(season=2021, team="AAA"), regular_season_only=True
     )
     cache_path = tmp_path / "team_stats_2021_reg.parquet"
     cached.write_parquet(cache_path)
 
-    def fail_load_team_stats(*_args, **_kwargs):
+    def fail_load_team_stats(*_args: object, **_kwargs: object) -> pl.DataFrame:
         """Fail if nflreadpy is called."""
         msg = "nflreadpy team stats load should not be called"
         raise AssertionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+    monkeypatch.setattr(nfl, "load_team_stats", fail_load_team_stats)
 
+    # Act
     df = loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert df["team_abbr"][0] == "AAA"
 
 
-def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -> None:
+def test_load_team_stats_refreshes_current_season(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Current season team stats are refreshed even when cached."""
+    # Arrange
     cached = pl.DataFrame(
         {
             "season": [2024],
@@ -383,7 +461,7 @@ def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -
     cache_path = tmp_path / "team_stats_2024_reg.parquet"
     cached.write_parquet(cache_path)
 
-    def fake_load_team_stats(seasons):
+    def fake_load_team_stats(seasons: list[int]) -> pl.DataFrame:
         """Return fresh team stats payload."""
         _ = seasons
         return pl.DataFrame(
@@ -399,37 +477,45 @@ def test_load_team_stats_refreshes_current_season(monkeypatch, tmp_path: Path) -
             }
         )
 
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", fake_load_team_stats)
-    monkeypatch.setattr(loaders, "normalize_team_column", lambda df, _col: df)
+    monkeypatch.setattr(nfl, "load_team_stats", fake_load_team_stats)
+    monkeypatch.setattr(loaders, "normalize_team_column", _keep_team_column)
 
+    # Act
     df = loaders.load_team_stats(
         [2024], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert df["team_abbr"][0] == "NEW"
 
 
-def test_load_team_stats_handles_unavailable_current_season(monkeypatch, tmp_path: Path) -> None:
+def test_load_team_stats_handles_unavailable_current_season(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Current-season team stats should degrade gracefully when nflreadpy has no file yet."""
 
-    def fail_load_team_stats(*_args, **_kwargs):
+    # Arrange
+    def fail_load_team_stats(*_args: object, **_kwargs: object) -> pl.DataFrame:
         """Simulate nflreadpy not publishing the current season stats parquet yet."""
         msg = "404 Client Error: stats_team_week_2026.parquet"
         raise ConnectionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+    monkeypatch.setattr(nfl, "load_team_stats", fail_load_team_stats)
 
+    # Act
     df = loaders.load_team_stats(
         [2026], regular_season_only=True, cache_dir=tmp_path, current_season=2026
     )
 
+    # Assert
     assert df.is_empty()
 
 
 def test_load_team_stats_uses_cached_fallback_when_current_refresh_fails(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Current-season team stats should reuse cache when refresh fails after a prior run."""
+    # Arrange
     cached = pl.DataFrame(
         {
             "season": [2026],
@@ -442,30 +528,36 @@ def test_load_team_stats_uses_cached_fallback_when_current_refresh_fails(
     cache_path = tmp_path / "team_stats_2026_reg.parquet"
     cached.write_parquet(cache_path)
 
-    def fail_load_team_stats(*_args, **_kwargs):
+    def fail_load_team_stats(*_args: object, **_kwargs: object) -> pl.DataFrame:
         """Simulate nflreadpy not publishing the current season stats parquet yet."""
         msg = "404 Client Error: stats_team_week_2026.parquet"
         raise ConnectionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+    monkeypatch.setattr(nfl, "load_team_stats", fail_load_team_stats)
 
+    # Act
     df = loaders.load_team_stats(
         [2026], regular_season_only=True, cache_dir=tmp_path, current_season=2026
     )
 
+    # Assert
     assert df["team_abbr"][0] == "AAA"
 
 
-def test_load_team_stats_reraises_historical_download_failures(monkeypatch, tmp_path: Path) -> None:
+def test_load_team_stats_reraises_historical_download_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Historical-season download failures should still surface instead of being hidden."""
 
-    def fail_load_team_stats(*_args, **_kwargs):
+    # Arrange
+    def fail_load_team_stats(*_args: object, **_kwargs: object) -> pl.DataFrame:
         """Simulate a broken historical load."""
         msg = "historical load failed"
         raise ConnectionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", fail_load_team_stats)
+    monkeypatch.setattr(nfl, "load_team_stats", fail_load_team_stats)
 
+    # Act & Assert
     with pytest.raises(ConnectionError, match="historical load failed"):
         loaders.load_team_stats(
             [2024], regular_season_only=True, cache_dir=tmp_path, current_season=2026
@@ -479,23 +571,26 @@ def _fail_load_team_stats(*_args: object, **_kwargs: object) -> pl.DataFrame:
 
 
 def test_load_team_stats_refetches_a_cache_that_lacks_a_produced_column(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A historical cache missing a column the loader now produces is a cache miss."""
+    # Arrange
     stale = pl.DataFrame(
         {"season": [2021], "week": [1], "team_abbr": ["OLD"], "opponent_abbr": ["BBB"]}
     )
     stale.write_parquet(tmp_path / "team_stats_2021_reg.parquet")
-    monkeypatch.setattr(
-        loaders.nfl,
-        "load_team_stats",
-        lambda seasons: _raw_team_stats(season=seasons[0], team="NEW"),
-    )
 
+    def load_team_stats(seasons: list[int]) -> pl.DataFrame:
+        return _raw_team_stats(season=seasons[0], team="NEW")
+
+    monkeypatch.setattr(nfl, "load_team_stats", load_team_stats)
+
+    # Act
     df = loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert df["team_abbr"].to_list() == ["NEW"]
     assert "pass_yards" in df.columns
     assert pl.read_parquet(tmp_path / "team_stats_2021_reg.parquet").equals(df)
@@ -503,58 +598,67 @@ def test_load_team_stats_refetches_a_cache_that_lacks_a_produced_column(
 
 @pytest.mark.parametrize("derived", ["total_yards", "turnover_margin"])
 def test_load_team_stats_refetches_a_cache_that_lacks_a_derived_column(
-    monkeypatch, tmp_path: Path, derived: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, derived: str
 ) -> None:
     """A historical cache missing a column the stat combination derives is a cache miss."""
+    # Arrange
     stale = loaders._prepare_team_stats(
         _raw_team_stats(season=2021, team="OLD"), regular_season_only=True
     ).drop(derived)
     stale.write_parquet(tmp_path / "team_stats_2021_reg.parquet")
-    monkeypatch.setattr(
-        loaders.nfl,
-        "load_team_stats",
-        lambda seasons: _raw_team_stats(season=seasons[0], team="NEW"),
-    )
 
+    def load_team_stats(seasons: list[int]) -> pl.DataFrame:
+        return _raw_team_stats(season=seasons[0], team="NEW")
+
+    monkeypatch.setattr(nfl, "load_team_stats", load_team_stats)
+
+    # Act
     df = loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert df["team_abbr"].to_list() == ["NEW"]
     assert derived in df.columns
 
 
-def test_load_team_stats_refetches_when_the_mapping_grows(monkeypatch, tmp_path: Path) -> None:
+def test_load_team_stats_refetches_when_the_mapping_grows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Adding a renamed column to the team-stat mapping invalidates older cache files."""
-    monkeypatch.setattr(
-        loaders.nfl, "load_team_stats", lambda seasons: _raw_team_stats(season=seasons[0], team="A")
-    )
+    # Arrange
+
+    def load_old_team_stats(seasons: list[int]) -> pl.DataFrame:
+        return _raw_team_stats(season=seasons[0], team="A")
+
+    monkeypatch.setattr(nfl, "load_team_stats", load_old_team_stats)
     loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
     grown = {**constants.NFLREADPY_TEAM_STATS_MAPPING, "penalty_yards": "penalty_yards_lost"}
     monkeypatch.setattr(constants, "NFLREADPY_TEAM_STATS_MAPPING", grown)
-    monkeypatch.setattr(
-        loaders.nfl,
-        "load_team_stats",
-        lambda seasons: _raw_team_stats(season=seasons[0], team="B").with_columns(
-            penalty_yards=pl.lit(40)
-        ),
-    )
 
+    def load_new_team_stats(seasons: list[int]) -> pl.DataFrame:
+        return _raw_team_stats(season=seasons[0], team="B").with_columns(penalty_yards=pl.lit(40))
+
+    monkeypatch.setattr(nfl, "load_team_stats", load_new_team_stats)
+
+    # Act
     df = loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert df["team_abbr"].to_list() == ["B"]
     assert df["penalty_yards_lost"].to_list() == [40]
 
 
 def test_load_team_stats_reuses_a_cache_whose_source_lacked_columns(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A column the source never published does not force a refetch on every run."""
+    # Arrange
     sparse = pl.DataFrame(
         {
             "season": [2021],
@@ -565,21 +669,24 @@ def test_load_team_stats_reuses_a_cache_whose_source_lacked_columns(
             "passing_yards": [250],
         }
     )
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", lambda **_kwargs: sparse)
+    monkeypatch.setattr(nfl, "load_team_stats", returning(sparse))
     first = loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
-    monkeypatch.setattr(loaders.nfl, "load_team_stats", _fail_load_team_stats)
+    monkeypatch.setattr(nfl, "load_team_stats", _fail_load_team_stats)
 
+    # Act
     second = loaders.load_team_stats(
         [2021], regular_season_only=True, cache_dir=tmp_path, current_season=2024
     )
 
+    # Assert
     assert second.equals(first)
 
 
 def test_add_scoring_data_to_team_stats() -> None:
     """Schedule scores are joined into per-team stats."""
+    # Arrange
     team_stats = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -598,14 +705,17 @@ def test_add_scoring_data_to_team_stats() -> None:
         }
     )
 
+    # Act
     out = loaders.add_scoring_data_to_team_stats(team_stats, schedule)
 
+    # Assert
     assert "points_scored" in out.columns
     assert "points_allowed" in out.columns
 
 
 def test_combine_stats_turnovers_and_yards() -> None:
     """Combining stats computes turnovers and total yards correctly."""
+    # Arrange
     df = pl.DataFrame(
         {
             "sack_fumbles": [1],
@@ -629,8 +739,10 @@ def test_combine_stats_turnovers_and_yards() -> None:
         }
     )
 
+    # Act
     out = loaders.combine_stats(df)
 
+    # Assert
     assert "fumbles" in out.columns
     assert "fumbles_lost" in out.columns
     assert "first_downs" in out.columns
@@ -649,15 +761,19 @@ def test_combine_stats_total_yards_subtracts_sack_yards_only_when_present(
     sack_yards: dict[str, list[int]], expected: int
 ) -> None:
     """Total yards need only passing and rushing yards; sack yards are subtracted if given."""
+    # Arrange
     df = pl.DataFrame({"pass_yards": [200], "rush_yards": [100], **sack_yards})
 
+    # Act
     out = loaders.combine_stats(df)
 
+    # Assert
     assert out["total_yards"].to_list() == [expected]
 
 
 def test_add_per_game_opponent_stats() -> None:
     """Per-game opponent stats are added correctly."""
+    # Arrange
     df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -668,8 +784,10 @@ def test_add_per_game_opponent_stats() -> None:
         }
     )
 
+    # Act
     out = loaders.add_per_game_opponent_stats(df)
 
+    # Assert
     assert "opponent_pass_yards" in out.columns
     assert out.filter(pl.col("team_abbr") == "AAA")["opponent_pass_yards"][0] == 150
 
@@ -681,6 +799,7 @@ def test_add_per_game_opponent_stats_keeps_the_times_sacked_intermediate() -> No
     rush attempts and times sacked, so that one excluded mirror must still be built per game;
     `opponent_def_sacks` stays out because nothing downstream reads it.
     """
+    # Arrange
     df = pl.DataFrame(
         {
             "season": [2023, 2023],
@@ -693,16 +812,18 @@ def test_add_per_game_opponent_stats_keeps_the_times_sacked_intermediate() -> No
         }
     )
 
+    # Act
     out = loaders.add_per_game_opponent_stats(df)
 
+    # Assert
     assert "opponent_times_sacked" in out.columns
     assert "opponent_def_sacks" not in out.columns
     assert "opponent_points_allowed" not in out.columns
     assert out.filter(pl.col("team_abbr") == "AAA")["opponent_times_sacked"][0] == 5
 
 
-def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
-    """Elo ratings loading and latest extraction work as expected."""
+def _write_two_team_qb_elos(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Write a two-week, two-team ``qb_elos.csv`` and point the data path at it."""
     qb_path = tmp_path / "qb_elos.csv"
     qb_path.write_text(
         "season,week,team1,team2,elo1_pre,elo2_pre,qb1,qb2,qb1_value_pre,"
@@ -712,16 +833,47 @@ def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch) -> None:
     )
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
+
+def test_load_elo_ratings_and_latest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Elo ratings loading works as expected."""
+    # Arrange
+    _write_two_team_qb_elos(tmp_path, monkeypatch)
+
+    # Act
     elo = loaders.load_elo_ratings([2023])
 
+    # Assert
     assert "away_abbr" in elo.columns
     assert "home_abbr" in elo.columns
     assert elo["week"].dtype in (pl.Int64, pl.Int32)
 
+
+def test_load_raw_elo_data_keeps_the_source_columns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The raw Elo loader keeps the file's own team columns."""
+    # Arrange
+    _write_two_team_qb_elos(tmp_path, monkeypatch)
+
+    # Act
     raw = loaders.load_raw_elo_data()
+
+    # Assert
     assert "team1" in raw.columns
 
+
+def test_get_latest_elo_by_team_returns_one_row_per_team(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Latest Elo extraction keeps one row for each team."""
+    # Arrange
+    _write_two_team_qb_elos(tmp_path, monkeypatch)
+    elo = loaders.load_elo_ratings([2023])
+
+    # Act
     latest = loaders.get_latest_elo_by_team(elo, season=2023)
+
+    # Assert
     assert latest.height == 2
 
 
@@ -799,11 +951,14 @@ def test_load_elo_ratings_types_columns_blank_for_the_first_rows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Numeric columns stay numeric when the first hundred-plus rows leave them blank."""
+    # Arrange
     _write_qb_elos_with_blank_history(tmp_path)
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
+    # Act
     elo = loaders.load_elo_ratings([2023])
 
+    # Assert
     assert elo.schema == pl.Schema(
         {
             "season": pl.Int64,
@@ -829,11 +984,14 @@ def test_load_raw_elo_data_types_columns_blank_for_the_first_rows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The raw rows carry numeric weeks and ratings even when early rows are blank."""
+    # Arrange
     _write_qb_elos_with_blank_history(tmp_path)
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
+    # Act
     raw = loaders.load_raw_elo_data()
 
+    # Assert
     expected = {
         "date": pl.String,
         "season": pl.Int64,
@@ -859,6 +1017,7 @@ def test_load_elo_ratings_drops_rows_with_a_blank_week(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Rows without a week are dropped whether or not the first rows carry weeks."""
+    # Arrange
     lines = [
         _QB_ELO_HEADER,
         _qb_elo_line("2023-09-10", ("AAA", "BBB"), week="1.0"),
@@ -868,8 +1027,10 @@ def test_load_elo_ratings_drops_rows_with_a_blank_week(
     (tmp_path / "qb_elos.csv").write_text("\n".join(lines) + "\n")
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
+    # Act
     elo = loaders.load_elo_ratings([2023])
 
+    # Assert
     assert elo.select("week", "home_abbr").rows() == [(1, "AAA"), (2, "BBB")]
 
 
@@ -877,6 +1038,7 @@ def test_load_raw_elo_data_rejects_text_in_a_numeric_column(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A text token in a numeric column fails the read and names the column."""
+    # Arrange
     lines = [
         _QB_ELO_HEADER,
         _qb_elo_line("2023-09-10", ("AAA", "BBB"), week="1.0", qb1_value_pre="NA"),
@@ -884,6 +1046,7 @@ def test_load_raw_elo_data_rejects_text_in_a_numeric_column(
     (tmp_path / "qb_elos.csv").write_text("\n".join(lines) + "\n")
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
+    # Act & Assert
     with pytest.raises(pl.exceptions.ComputeError, match="qb1_value_pre"):
         loaders.load_raw_elo_data()
 
@@ -892,6 +1055,7 @@ def test_load_raw_elo_data_reads_a_blank_numeric_value_as_null(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A blank numeric value reads as null rather than failing the read."""
+    # Arrange
     lines = [
         _QB_ELO_HEADER,
         _qb_elo_line("2023-09-10", ("AAA", "BBB"), week="1.0", qb2_value_pre="0.5"),
@@ -899,8 +1063,10 @@ def test_load_raw_elo_data_reads_a_blank_numeric_value_as_null(
     (tmp_path / "qb_elos.csv").write_text("\n".join(lines) + "\n")
     monkeypatch.setattr(constants, "DATA_PATH", tmp_path)
 
+    # Act
     raw = loaders.load_raw_elo_data()
 
+    # Assert
     assert raw.select("qb1_value_pre", "qb2_value_pre").rows() == [(None, 0.5)]
 
 
@@ -942,44 +1108,55 @@ def _complete_pbp_cache(*, season: int, posteam: str) -> pl.DataFrame:
     return pl.DataFrame([row], schema=loaders._PBP_COLUMN_DTYPES)
 
 
-def test_load_pbp_uses_cache_for_historical_seasons(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_uses_cache_for_historical_seasons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A cache file with every requested column is reused, even an older one."""
+    # Arrange
     _complete_pbp_cache(season=2020, posteam="CACHED").write_parquet(
         tmp_path / "pbp_2020_reg.parquet"
     )
 
-    def fail_load_pbp(*_args, **_kwargs) -> pl.DataFrame:
+    def fail_load_pbp(*_args: object, **_kwargs: object) -> pl.DataFrame:
         """Fail if nflreadpy is called."""
         msg = "nflreadpy play-by-play load should not be called"
         raise AssertionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", fail_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", fail_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["posteam"].to_list() == ["CACHED"]
 
 
-def test_load_pbp_writes_cache_on_miss(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_writes_cache_on_miss(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A historical cache miss downloads play-by-play data and writes the parquet cache."""
 
+    # Arrange
     def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Return a raw play-by-play payload for the requested season."""
         assert seasons == [2020]
         return _pbp_payload()
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", fake_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     cache_path = tmp_path / "pbp_2020_reg.parquet"
     assert cache_path.exists()
     assert "extra_unused_column" not in df.columns
     assert pl.read_parquet(cache_path).equals(df)
 
 
-def test_load_pbp_force_refresh_ignores_cache(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_force_refresh_ignores_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """force_refresh re-downloads play-by-play data even when a cache exists."""
+    # Arrange
     stale = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["STALE"]})
     stale.write_parquet(tmp_path / "pbp_2020_reg.parquet")
 
@@ -988,10 +1165,12 @@ def test_load_pbp_force_refresh_ignores_cache(monkeypatch, tmp_path: Path) -> No
         _ = seasons
         return _pbp_payload(posteam="FRESH")
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", fake_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024, force_refresh=True)
 
+    # Assert
     assert df["posteam"].to_list() == ["FRESH"]
 
 
@@ -1002,55 +1181,73 @@ def _fail_load_pbp(*_args: object, **_kwargs: object) -> pl.DataFrame:
 
 
 def test_load_pbp_refetches_a_cache_that_lacks_a_requested_column(
-    monkeypatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A historical cache missing a requested column is a cache miss and is rewritten."""
+    # Arrange
     stale = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["STALE"]})
     stale.write_parquet(tmp_path / "pbp_2020_reg.parquet")
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="FRESH"))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_pbp_payload(posteam="FRESH")))
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["posteam"].to_list() == ["FRESH"]
     assert pl.read_parquet(tmp_path / "pbp_2020_reg.parquet").equals(df)
 
 
-def test_load_pbp_refetches_when_the_requested_columns_grow(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_refetches_when_the_requested_columns_grow(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Growing the requested play-by-play columns invalidates older cache files."""
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="OLD"))
+    # Arrange
+    monkeypatch.setattr(nfl, "load_pbp", returning(_pbp_payload(posteam="OLD")))
     loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
     monkeypatch.setattr(constants, "PBP_COLUMNS", [*constants.PBP_COLUMNS, "extra_unused_column"])
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="NEW"))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_pbp_payload(posteam="NEW")))
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["posteam"].to_list() == ["NEW"]
     assert df["extra_unused_column"].to_list() == [1]
 
 
-def test_load_pbp_reuses_a_cache_whose_source_lacked_columns(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_reuses_a_cache_whose_source_lacked_columns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A column the source never published does not force a refetch on every run."""
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="ONCE"))
+    # Arrange
+    monkeypatch.setattr(nfl, "load_pbp", returning(_pbp_payload(posteam="ONCE")))
     first = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
-    monkeypatch.setattr(loaders.nfl, "load_pbp", _fail_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", _fail_load_pbp)
 
+    # Act
     second = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert second.equals(first)
 
 
-def test_load_pbp_drops_cached_columns_no_longer_requested(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_drops_cached_columns_no_longer_requested(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A cache hit returns only the requested columns, as a fresh download would."""
+    # Arrange
     grown = [*constants.PBP_COLUMNS, "extra_unused_column"]
     with monkeypatch.context() as patch:
         patch.setattr(constants, "PBP_COLUMNS", grown)
-        patch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload())
+        patch.setattr(nfl, "load_pbp", returning(_pbp_payload()))
         loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
-    monkeypatch.setattr(loaders.nfl, "load_pbp", _fail_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", _fail_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert "extra_unused_column" not in df.columns
     assert df["posteam"].to_list() == ["AAA"]
 
@@ -1065,23 +1262,29 @@ def test_load_pbp_drops_cached_columns_no_longer_requested(monkeypatch, tmp_path
     ids=["not-json", "object", "non-string-entry"],
 )
 def test_load_pbp_refetches_a_cache_with_an_unreadable_column_record(
-    monkeypatch, tmp_path: Path, record: str
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, record: str
 ) -> None:
     """A recorded request that is not a JSON list of column names makes the file unreadable."""
+    # Arrange
     stale = pl.DataFrame({"season": [2020], "week": [1], "posteam": ["STALE"]})
     stale.write_parquet(
         tmp_path / "pbp_2020_reg.parquet",
         metadata={loaders._REQUESTED_COLUMNS_METADATA_KEY: record},
     )
-    monkeypatch.setattr(loaders.nfl, "load_pbp", lambda **_kwargs: _pbp_payload(posteam="FRESH"))
+    monkeypatch.setattr(nfl, "load_pbp", returning(_pbp_payload(posteam="FRESH")))
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["posteam"].to_list() == ["FRESH"]
 
 
-def test_load_pbp_current_season_failure_uses_cache(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_current_season_failure_uses_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A current-season connection failure falls back to cached play-by-play data."""
+    # Arrange
     cached = pl.DataFrame({"season": [2024], "week": [1], "posteam": ["CACHED"]})
     cached.write_parquet(tmp_path / "pbp_2024_reg.parquet")
 
@@ -1091,26 +1294,33 @@ def test_load_pbp_current_season_failure_uses_cache(monkeypatch, tmp_path: Path)
         msg = "boom"
         raise ConnectionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", failing_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2024], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["posteam"].to_list() == ["CACHED"]
 
 
-def test_load_pbp_current_season_failure_without_cache(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_current_season_failure_without_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A current-season failure without a cache returns a typed empty frame."""
 
+    # Arrange
     def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Simulate an nflreadpy outage."""
         _ = seasons
         msg = "boom"
         raise ConnectionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", failing_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2024], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df.height == 0
     assert df.columns == list(constants.PBP_COLUMNS)
     assert df.schema["game_id"] == pl.Utf8
@@ -1119,24 +1329,31 @@ def test_load_pbp_current_season_failure_without_cache(monkeypatch, tmp_path: Pa
     assert df.schema["epa"] == pl.Float64
 
 
-def test_load_pbp_historical_failure_raises(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_historical_failure_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A historical connection failure is treated as a bug and re-raised."""
 
+    # Arrange
     def failing_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Simulate an nflreadpy outage."""
         _ = seasons
         msg = "boom"
         raise ConnectionError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", failing_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", failing_load_pbp)
 
+    # Act & Assert
     with pytest.raises(ConnectionError):
         loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
 
-def test_load_pbp_tolerates_missing_optional_columns(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_tolerates_missing_optional_columns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Seasons missing optional play-by-play columns load with only the present ones."""
 
+    # Arrange
     def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Return a sparse play-by-play payload."""
         _ = seasons
@@ -1150,17 +1367,20 @@ def test_load_pbp_tolerates_missing_optional_columns(monkeypatch, tmp_path: Path
             }
         )
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", fake_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df.columns == ["game_id", "season", "week", "posteam", "epa"]
     assert df.height == 1
 
 
-def test_load_pbp_normalizes_team_aliases(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_normalizes_team_aliases(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Legacy team abbreviations are normalized to canonical values."""
 
+    # Arrange
     def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Return play-by-play rows using relocated-franchise abbreviations."""
         _ = seasons
@@ -1179,10 +1399,12 @@ def test_load_pbp_normalizes_team_aliases(monkeypatch, tmp_path: Path) -> None:
             }
         )
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", fake_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2005], cache_dir=tmp_path, current_season=2024)
 
+    # Assert
     assert df["posteam"][0] == constants.ALIAS_TO_CANONICAL["OAK"]
     assert df["defteam"][0] == constants.ALIAS_TO_CANONICAL["SD"]
     assert df["home_team"][0] == constants.ALIAS_TO_CANONICAL["STL"]
@@ -1191,60 +1413,93 @@ def test_load_pbp_normalizes_team_aliases(monkeypatch, tmp_path: Path) -> None:
     assert df["penalty_team"][0] == constants.ALIAS_TO_CANONICAL["SD"]
 
 
-def test_load_pbp_regular_season_filter(monkeypatch, tmp_path: Path) -> None:
-    """The regular-season filter drops postseason plays and switches the cache filename."""
+def _patch_reg_and_post_pbp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make ``nfl.load_pbp`` return one regular season and one postseason play."""
 
     def fake_load_pbp(seasons: list[int]) -> pl.DataFrame:
         """Return one regular season and one postseason play."""
         _ = seasons
         return _pbp_payload(season_types=["REG", "POST"])
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", fake_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", fake_load_pbp)
 
+
+def test_load_pbp_regular_season_filter(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The regular-season filter drops postseason plays and uses the regular-season cache."""
+    # Arrange
+    _patch_reg_and_post_pbp(monkeypatch)
+
+    # Act
     reg_only = loaders.load_pbp([2020], cache_dir=tmp_path, current_season=2024)
+
+    # Assert
     assert reg_only["season_type"].to_list() == ["REG"]
     assert (tmp_path / "pbp_2020_reg.parquet").exists()
 
+
+def test_load_pbp_without_the_regular_season_filter_keeps_every_play(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Turning the regular-season filter off keeps postseason plays and switches the cache."""
+    # Arrange
+    _patch_reg_and_post_pbp(monkeypatch)
+
+    # Act
     all_types = loaders.load_pbp(
         [2020], cache_dir=tmp_path, current_season=2024, regular_season_only=False
     )
+
+    # Assert
     assert all_types["season_type"].to_list() == ["REG", "POST"]
     assert (tmp_path / "pbp_2020_all.parquet").exists()
 
 
 def test_load_pbp_empty_seasons_returns_empty_frame() -> None:
     """An empty season list short-circuits to an empty frame."""
-    assert loaders.load_pbp([]).height == 0
+    # Act
+    df = loaders.load_pbp([])
+
+    # Assert
+    assert df.height == 0
 
 
-def test_load_pbp_current_season_out_of_range_is_non_fatal(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_current_season_out_of_range_is_non_fatal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A current season nflreadpy refuses to serve degrades instead of failing the run.
 
     Before kickoff the current season has no play-by-play at all, and nflreadpy signals
     that with a ValueError rather than a connection failure. The pipeline must still run.
     """
 
+    # Arrange
     def out_of_range_load_pbp(seasons: list[int]) -> pl.DataFrame:
         msg = "Season must be between 1999 and 2025"
         raise ValueError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", out_of_range_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", out_of_range_load_pbp)
 
+    # Act
     df = loaders.load_pbp([2026], cache_dir=tmp_path, current_season=2026)
 
+    # Assert
     assert df.height == 0
     assert "posteam" in df.columns
 
 
-def test_load_pbp_historical_out_of_range_still_raises(monkeypatch, tmp_path: Path) -> None:
+def test_load_pbp_historical_out_of_range_still_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A historical season that cannot be served is a real failure and is not swallowed."""
 
+    # Arrange
     def out_of_range_load_pbp(seasons: list[int]) -> pl.DataFrame:
         msg = "Season must be between 1999 and 2025"
         raise ValueError(msg)
 
-    monkeypatch.setattr(loaders.nfl, "load_pbp", out_of_range_load_pbp)
+    monkeypatch.setattr(nfl, "load_pbp", out_of_range_load_pbp)
 
+    # Act & Assert
     with pytest.raises(ValueError, match="Season must be between"):
         loaders.load_pbp([2015], cache_dir=tmp_path, current_season=2026)
 
@@ -1291,8 +1546,10 @@ def _coverage_team_stats() -> pl.DataFrame:
 
 def test_build_team_game_skeleton_has_two_rows_per_completed_game() -> None:
     """The skeleton carries exactly two team rows for every completed game."""
+    # Act
     skeleton = loaders.build_team_game_skeleton(_coverage_schedule())
 
+    # Assert
     assert skeleton.height == 4
     per_game = skeleton.group_by(["season", "week"]).len().sort("week")
     assert per_game["len"].to_list() == [2, 2]
@@ -1304,10 +1561,13 @@ def test_build_team_game_skeleton_has_two_rows_per_completed_game() -> None:
 
 def test_attach_team_stats_to_schedule_keeps_the_missing_team_game() -> None:
     """A team-game absent from team stats survives as a row with null stats."""
+    # Arrange
     team_stats = _coverage_team_stats()
 
+    # Act
     attached = loaders.attach_team_stats_to_schedule(team_stats, _coverage_schedule())
 
+    # Assert
     assert set(attached.columns) == set(team_stats.columns)
     assert attached.height == 4
     jax = attached.filter(pl.col("team_abbr") == "JAX").sort("week")
@@ -1318,9 +1578,13 @@ def test_attach_team_stats_to_schedule_keeps_the_missing_team_game() -> None:
 
 def test_attach_team_stats_to_schedule_counts_games_from_the_schedule() -> None:
     """Season-to-date counts follow the schedule and rates stay ratios of sums."""
+    # Arrange
     attached = loaders.attach_team_stats_to_schedule(_coverage_team_stats(), _coverage_schedule())
 
+    # Act
     agg = teamrankings.aggregate_team_stats_to_week(attached, target_week=3, season=2001)
+
+    # Assert
     jax = agg.filter(pl.col("team_abbr") == "JAX")
 
     assert jax["games_played"].to_list() == [2]
@@ -1331,10 +1595,13 @@ def test_attach_team_stats_to_schedule_warns_about_coverage_gaps(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Every season and team whose stat rows differ from the schedule is logged."""
+    # Arrange
     caplog.set_level(logging.WARNING)
 
+    # Act
     loaders.attach_team_stats_to_schedule(_coverage_team_stats(), _coverage_schedule())
 
+    # Assert
     messages = [record.message for record in caplog.records if "coverage gap" in record.message]
     gap_messages = [message for message in messages if "JAX" in message]
     assert gap_messages, messages
@@ -1347,6 +1614,7 @@ def test_attach_team_stats_to_schedule_warns_about_coverage_gaps(
 
 def test_attach_team_stats_to_schedule_keeps_rows_the_schedule_does_not_cover() -> None:
     """Stat rows from seasons the schedule omits are never dropped."""
+    # Arrange
     team_stats = pl.concat(
         [
             _coverage_team_stats(),
@@ -1364,14 +1632,17 @@ def test_attach_team_stats_to_schedule_keeps_rows_the_schedule_does_not_cover() 
         ]
     )
 
+    # Act
     attached = loaders.attach_team_stats_to_schedule(team_stats, _coverage_schedule())
 
+    # Assert
     assert attached.filter(pl.col("season") == 2000).height == 1
     assert attached.height == 5
 
 
 def test_attach_team_stats_to_schedule_keeps_a_stat_row_the_schedule_omits() -> None:
     """A stat row with no scheduled counterpart is kept rather than dropped."""
+    # Arrange
     team_stats = pl.concat(
         [
             _coverage_team_stats(),
@@ -1389,8 +1660,10 @@ def test_attach_team_stats_to_schedule_keeps_a_stat_row_the_schedule_omits() -> 
         ]
     )
 
+    # Act
     attached = loaders.attach_team_stats_to_schedule(team_stats, _coverage_schedule())
 
+    # Assert
     assert attached.filter(pl.col("week") == 9).height == 1
     assert attached.height == 5
 
@@ -1438,10 +1711,13 @@ def _collapsed_row_team_stats() -> pl.DataFrame:
 
 def test_attach_team_stats_to_schedule_nulls_a_box_score_that_covers_both_teams() -> None:
     """The surviving row of a one-sided game loses a box score it cannot own."""
+    # Arrange
     team_stats = _collapsed_row_team_stats()
 
+    # Act
     attached = loaders.attach_team_stats_to_schedule(team_stats, _collapsed_row_schedule())
 
+    # Assert
     assert set(attached.columns) == set(team_stats.columns)
     week_one = attached.filter(pl.col("week") == 1).sort("team_abbr")
     assert week_one["team_abbr"].to_list() == ["CLE", "JAX"]
@@ -1458,11 +1734,14 @@ def test_attach_team_stats_to_schedule_nulls_a_box_score_that_covers_both_teams(
 
 def test_attach_team_stats_to_schedule_leaves_a_game_neither_team_covers() -> None:
     """A game missing from the source on both sides has no box score to repair."""
+    # Arrange
     schedule = _collapsed_row_schedule()
     team_stats = _collapsed_row_team_stats().filter(pl.col("week") == 2)
 
+    # Act
     attached = loaders.attach_team_stats_to_schedule(team_stats, schedule)
 
+    # Assert
     week_one = attached.filter(pl.col("week") == 1)
     assert week_one.height == 2
     assert week_one["penalties"].to_list() == [None, None]
@@ -1474,10 +1753,13 @@ def test_attach_team_stats_to_schedule_logs_the_repaired_rows(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The repaired season, week and team are named, with how many rows were repaired."""
+    # Arrange
     caplog.set_level(logging.WARNING)
 
+    # Act
     loaders.attach_team_stats_to_schedule(_collapsed_row_team_stats(), _collapsed_row_schedule())
 
+    # Assert
     messages = [record.message for record in caplog.records]
     repaired = [message for message in messages if "CLE" in message and "2001" in message]
     assert repaired, messages
@@ -1487,8 +1769,11 @@ def test_attach_team_stats_to_schedule_logs_the_repaired_rows(
 
 def test_attach_team_stats_to_schedule_without_a_schedule_is_a_no_op() -> None:
     """With no schedule rows the team stats are returned untouched."""
+    # Arrange
     team_stats = _coverage_team_stats()
 
+    # Act
     attached = loaders.attach_team_stats_to_schedule(team_stats, pl.DataFrame())
 
+    # Assert
     assert attached.equals(team_stats)

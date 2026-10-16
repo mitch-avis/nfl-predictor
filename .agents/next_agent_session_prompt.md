@@ -6,9 +6,35 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 and `models/qb_elos_measure/HYPOTHESIS.md` (main checkout; `models/` is not in git) before reading
 the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 15:00 MDT)
+## State (written 2026-10-15, 17:45 MDT)
 
-- `main` is at `0.59.4` (not pushed): the step-6 port (`0.59.0`, adopted in production), the
+- **`main` is at `0.59.6`**: `chore/pyright-strict-cleanup` merged `--no-ff` on 2026-10-15
+  (user-approved; the branch is deleted). It makes strict pyright pass with 0 errors (3,146
+  before) and no inline suppressions:
+  - `0.59.5` removes the unused `utils/changelog.py` and its tests;
+  - `0.59.6`: local stubs in `typings/`; typed arrays in the model code;
+    `tests/fakes.returning`; `utils/narrowing`; every test in Arrange-Act-Assert form;
+    python-template `0.1.3` (tests may import their module's private helpers); `cryptography` in
+    the dev group;
+  - the 21 cross-module private helpers are public, which does the `TODO.md` item "Cross-module
+    private imports left after `0.38.1`" (closing it is the user's call);
+  - the GPU check decides from its probe fit alone, and the unused season fold builder is gone;
+  - `src/nfl_predictor/ml/*.py` changed, so every walk-forward checkpoint fingerprint moves (the
+    user accepted reruns with `0.59.1`).
+  - The test files were typed by seven worktree agents, one commit per file, merged `--no-ff`;
+    every moved monkeypatch target was checked to be the same object the code looks up.
+  - The independent review approved with findings (gate exit `0`, 4,298 tests; adversarial
+    tests uncommitted in `~/scratch/pyright_review/tests/test_pyright_review_adversarial.py`,
+    48 pass and 4 fail). The `is_numeric_dtype` change on dtype classes and one test's labels are
+    fixed; the other two are under "Open for the user". The TODO item is ticked.
+  - Re-predicting Week 6 with this code from the production run's saved model
+    (`models/weekly_20261015_022416_9a4c092c`, same `data/` sha256) gave identical predictions
+    (543 numeric columns), picks, confidence ranks and floor sigma (`13.3049`).
+  - The user skipped the planned Week 6 weekly rerun and the full walk-forward retrain for now;
+    a started run was stopped in its first stage and left `models/weekly_parity_0596_week06/`
+    (partial; deleting it is the user's call).
+
+- Before that, `main` held (not pushed) the step-6 port (`0.59.0`, adopted in production), the
   merged `chore/pyproject-standards` (`0.59.1`, `659199b`) and the merged
   `chore/adopt-python-template` (`0.59.2` to `0.59.4`, `b596807`), both user-approved 2026-10-15.
   `data/` was rebuilt on 2026-10-14 (record in `.agents/benchmarks.md`, "Data state and ETL
@@ -34,10 +60,8 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
   read relative entries of the two path lists from the repository root (as `ml/floor_sigma.py`
   already did), a leading `~` is the home directory, and a comma-separated feature-group string
   in a config file is refused with the list to write. `0.59.4` removes the GitHub release
-  workflow (the project publishes no releases); `src/nfl_predictor/utils/changelog.py` and its
-  tests served only that workflow and are now unused, a removal the user has not decided. The
-  gate fails only on pyright (strict, 3,146 errors), the user's separate cleanup; every other
-  step passes (3,764 tests).
+  workflow (the project publishes no releases). On `main` the gate fails only on pyright
+  (strict, 3,146 errors), fixed in `0.59.6` above.
 - **The `qb_adj` review is done.** `feat/qb-adj-features` (`0.60.0`, `c637fc0`, harness worktree
   `.claude/worktrees/agent-afad3cf465d5bcba7`) passed an independent review against
   `.agents/qb_adj_task.md` with minor findings, all docs and tests. They are fixed on
@@ -176,8 +200,15 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 
 ## Open for the user
 
-- Remove `src/nfl_predictor/utils/changelog.py` and `tests/test_changelog_utils.py`, unused
-  since the release workflow went in `0.59.4`? Recommended: yes, a patch release.
+- The pyright review's two minor findings, neither changing a value production computes:
+  - `_boosted_rounds` (`ml/ml_model_core.py`) and `_estimator_best_iteration`
+    (`ml/walk_forward.py`) now accept a 0-d numpy array as a round count, where the old
+    `int | np.integer` check returned `None`; XGBoost returns a Python `int`. Recommended:
+    restore the old check with the next change that already retrains every checkpoint (rule 14),
+    since both files are fingerprinted.
+  - `.agents/m60/INVENTORY.md` and `PROPOSAL.md` still name `_run_optuna_search` and
+    `_build_xgb_fit_kwargs`; recommended: leave that historical audit frozen.
+- Delete the stopped run's `models/weekly_parity_0596_week06/`? Recommended: yes.
 - Approve fast-forwarding `feat/qb-adj-features` to `6bacd5e`, together with its merge after the
   Monday game.
 - Step 3's list includes `qb_adj` (`strength,elo,own_elo_wt,qb_adj`), where the 2026-10-14
@@ -227,8 +258,8 @@ the measurement. `.agents/step6_plan.md` and `.agents/sos_port/DECISIONS.md` hol
 - Reviewers get a detached scratch worktree with a synced venv, cap pytest with
   `PYTEST_ADDOPTS="-n 8"` when several run at once, and write only their report; at most four at
   once. Every measured number goes through an independent rescore before it enters a doc.
-- Run a worktree's gate with `VIRTUAL_ENV` set to that worktree's `.venv`. A backgrounded gate
-  wrapper must `exit` the gate's code, never echo after it.
+- A worktree's gate uses that worktree's own `.venv`. A backgrounded gate wrapper must keep the
+  gate's exit code (`exit` it or write it to the log).
 - The bash-guard hook blocks commands containing `git merge` in the main checkout (including
   `merge-tree`) and bare `python3`; use `git diff A...B`, `git rev-list --count A..B` and
   `.venv/bin/python`.

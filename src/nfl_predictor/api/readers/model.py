@@ -10,6 +10,7 @@ import polars as pl
 from nfl_predictor.api.readers.cache import cached
 from nfl_predictor.api.registry import project
 from nfl_predictor.api.registry.model import WF_COMPARE_COLUMNS
+from nfl_predictor.utils.narrowing import as_list, as_str_dict
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,17 +27,18 @@ METADATA_KEYS = (
 
 def _dict(value: object) -> dict[str, Any]:
     """Return ``value`` when it is a dict, else an empty dict."""
-    return value if isinstance(value, dict) else {}
+    record = as_str_dict(value)
+    return {} if record is None else record
 
 
 def _opt_dict(value: object) -> dict[str, Any] | None:
     """Return ``value`` when it is a dict, else ``None``."""
-    return value if isinstance(value, dict) else None
+    return as_str_dict(value)
 
 
 def _opt_list(value: object) -> list[Any] | None:
     """Return ``value`` when it is a list, else ``None``."""
-    return value if isinstance(value, list) else None
+    return as_list(value)
 
 
 def _read_json(path: Path) -> object:
@@ -104,8 +106,8 @@ def _empty_importance() -> dict[str, Any]:
 
 def _value_at(block: dict[str, Any], key: str, index: int) -> float | None:
     """Return ``block[key][index]`` as a float when it is a number, else ``None``."""
-    values = block.get(key)
-    if isinstance(values, list) and index < len(values):
+    values = as_list(block.get(key))
+    if values is not None and index < len(values):
         value = values[index]
         return float(value) if isinstance(value, int | float) else None
     return None
@@ -207,10 +209,10 @@ def best_candidate_calibration(files: RunFiles) -> dict[str, Any] | None:
         return None
     for candidate in sorted(directory.glob("wf_candidate_*.json")):
         try:
-            payload = load_json(candidate)
+            payload = _opt_dict(load_json(candidate))
         except ValueError:
             continue
-        if not isinstance(payload, dict) or payload.get("candidate_key") != key:
+        if payload is None or payload.get("candidate_key") != key:
             continue
         bins = _opt_list(_dict(payload.get("metrics")).get("reliability"))
         if bins is not None:

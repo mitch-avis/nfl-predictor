@@ -36,7 +36,9 @@ none of the pool modules or `margin_rows`.
   ```
 
 - **How to reverse it:** revert `f30ac07`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 2. The active run keeps its own week when later weeks are predicted into it
 
@@ -63,7 +65,9 @@ none of the pool modules or `margin_rows`.
 - **Data:** reproduced by `tests/api/test_run_weeks.py` (a week-5 weekly run holding a week-6
   file).
 - **How to reverse it:** revert `db81f1c` and `b66cbe2`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 3. The week selector changes the week in one URL update (a correction)
 
@@ -78,7 +82,9 @@ none of the pool modules or `margin_rows`.
 - **Reasoning:** a bug with one plausible fix that changes no model output (`AGENTS.md` rule 2,
   "correcting is not narrowing").
 - **How to reverse it:** revert `494c35e`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 4. What the confidence sheet reads and how it scores
 
@@ -100,7 +106,9 @@ none of the pool modules or `margin_rows`.
   times and can raise a false warning; the warning only advises.
 - **How to reverse it:** `src/nfl_predictor/api/pool/sheet.py` and `results.py` (commit
   `e08ec30`).
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 5. The tiebreaker card's games, entries and extreme scores
 
@@ -169,7 +177,9 @@ none of the pool modules or `margin_rows`.
   ```
 
 - **How to reverse it:** `src/nfl_predictor/api/pool/tiebreakers.py` (commit `e08ec30`).
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 6. The survivor planner's objective and lookahead (search method superseded by entry 9)
 
@@ -206,7 +216,9 @@ none of the pool modules or `margin_rows`.
 - **Decision:** the picks route takes `source` like the predictions and pool routes.
 - **Reasoning:** the Pool page's download should hand over the file its sheet shows.
 - **How to reverse it:** revert `3229b58`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 8. The live betting design (58.3)
 
@@ -226,7 +238,9 @@ none of the pool modules or `margin_rows`.
   repository's rule that the market enters only as features and anchoring, and adds no external
   service until the user picks one.
 - **How to reverse it:** edit the Phase 6 section; nothing is built.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 9. The survivor planner is solved exactly (a substitute method, on the user's approval list)
 
@@ -290,7 +304,9 @@ none of the pool modules or `margin_rows`.
 - **Data:** `tests/api/test_pool_routes.py` (a week re-predicted after the fixture week's lock,
   with the picks file dated before and after it) and `tests/api/test_pool_sheet.py`.
 - **How to reverse it:** revert `f5d3087` and `cc15481`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 11. The survivor panel keeps each season's used teams
 
@@ -302,7 +318,9 @@ none of the pool modules or `margin_rows`.
   list kept its earlier teams.
 - **Reasoning:** the guard then holds wherever the panel is used.
 - **How to reverse it:** revert `5719161`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 12. A survivor request lists at most 32 used teams
 
@@ -311,7 +329,9 @@ none of the pool modules or `margin_rows`.
 - **Decision:** `max_length=32`, the number of teams in the league (a longer list is a 422); no
   debounce, since the exact planner costs a few milliseconds per request.
 - **How to reverse it:** revert `94a4d27`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 13. The frontend's plan labels are removed (a correction)
 
@@ -322,7 +342,9 @@ none of the pool modules or `margin_rows`.
   route shows a not-found page ("This page doesn't exist.", the path, a link to the overview).
 - **Reasoning:** a fact with one plausible fix that changes no model output (`AGENTS.md` rule 2).
 - **How to reverse it:** revert `1ba8867`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 14. A newer run's own week outranks a file predicted ahead into the active run
 
@@ -344,7 +366,9 @@ none of the pool modules or `margin_rows`.
   week-6 run, with and without its stage marker; and an older marked week-6 run beside a newer
   unmarked one).
 - **How to reverse it:** revert `74a879b` and `485696f`.
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.
 
 ## 15. Live odds poll on a credit budget
 
@@ -359,4 +383,6 @@ none of the pool modules or `margin_rows`.
   60-second interval.
 - **Reasoning:** a budget adapts to a paid plan or a short month without retuning an interval.
 - **How to reverse it:** edit the Phase 6 section of `.agents/web_ui_plan.md` (`76a756d`).
-- **Review:** not yet reviewed.
+- **Review:** covered by the `0.48.0` release's review (three independent rounds; the last found
+  every code fix correct; [the decision index](../DECISIONS.md)); no separate re-run of this entry
+  is recorded.

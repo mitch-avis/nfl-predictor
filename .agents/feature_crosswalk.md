@@ -387,7 +387,8 @@ pick accuracy `0.6833`, margin MAE `9.8954`, total MAE `10.1021`, ECE `0.1308`) 
 `models/review_walk_forward_2023_2025.json` with a config matching today's defaults, but the
 default configuration did not reproduce it on the pre-change dataset and the cause was not found;
 compare future work against the working baseline in `.agents/benchmarks.md`, within one dataset
-build and code version.
+build and code version. That file was deleted on 2026-10-16
+(`.agents/models_cleanup/deleted_2026-10-16.txt`); the numbers stand as recorded here.
 
 ## 8. Guardrails specific to the PBP work
 

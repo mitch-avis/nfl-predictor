@@ -45,7 +45,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none.
 - **How to reverse it**: move the modules; the imports in `ratings_build.py`,
   `data_collection.py` and the tests follow.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 2. The adapter keeps `nfl-sos-ratings`' definitions, not this repository's
 
@@ -73,7 +74,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   the ratings parity audit already explains), none outside, no structural difference.
 - **Feature-value impact**: the rating features are the ported method's values.
 - **How to reverse it**: not applicable while the ratings are the ported ones.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 3. A neutral site keeps the schedule's home team
 
@@ -90,7 +92,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: the home-field term reaches those 66 games (132 team-game rows).
 - **How to reverse it**: in `pbp_inputs._team_scores`, set `is_home` null where the schedule's
   `neutral` is 1, then rebuild.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 4. Empty team codes and the fields blanked in early seasons
 
@@ -110,7 +113,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `test_team_games_leave_out_plays_without_both_teams`.
 - **Feature-value impact**: none (those plays are no-plays, so no snap is dropped).
 - **How to reverse it**: drop `_known_team` from `pbp_inputs`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 5. This repository's team codes
 
@@ -124,7 +128,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `constants.ALIAS_TO_CANONICAL` before comparing and finds no difference.
 - **Feature-value impact**: none.
 - **How to reverse it**: not applicable.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 6. The quarterback identity known before a week
 
@@ -151,7 +156,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   in instead (checked by a temporary edit, not kept).
 - **Feature-value impact**: none measured on the snapshot.
 - **How to reverse it**: in `ratings_build.RatingsBuild`, drop `load_qb_games_before`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 - **After the review** (`4fb3905`): the leakage case now runs on the synthetic league with weekly
   player stats and snap counts filled in, and rewrites from the week on the plays' EPA, passer
   ids and names and dropback, pass, run, kneel, spike and special-teams flags, the player
@@ -174,7 +180,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `test_quarterback_rows_before_a_week_sort_by_team_week_game_and_id` pins the pre-week order.
 - **Feature-value impact**: in the last bits of a pre-week quarterback rating at most.
 - **How to reverse it**: the `order` lists in `pbp_inputs.quarterback_rows`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 8. The expected starter is the quarterback family's
 
@@ -191,7 +198,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Data**: `tests/test_qb_starter_ids.py`; `tests/test_qb_stats.py` passes before and after.
 - **Feature-value impact**: none for the quarterback family.
 - **How to reverse it**: inline the function back into `attach_qb_features`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 - **After the merge with the play-by-play integration**: the function takes the run's
   play-by-play starters, so a completed game's side reads its play-by-play starter and every
   other side its named one (`2c5d028`; `integration_pbp_elo.md`, entry 1.7), and its name
@@ -218,7 +226,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `test_attach_gives_week_one_starters_no_rating_and_zero_dropbacks`.
 - **Feature-value impact**: defines the column.
 - **How to reverse it**: `_QB_FEATURES` in `ratings_build.py`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 10. The feature names and the group's markers
 
@@ -238,7 +247,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   list, tuple, set or mapping in `constants.py`.
 - **Feature-value impact**: none.
 - **How to reverse it**: `constants.RATINGS_FEATURE_STATS`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 11. Which tables the ETL publishes
 
@@ -257,7 +267,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `test_published_tables_are_named_by_season_and_kind`.
 - **Feature-value impact**: none.
 - **How to reverse it**: add `qb_season` in `RatingsBuild._tables`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 - **After the review** (`37599f3`): every table is written to a temporary file in the same
   directory and moved over the published one, as `lines_refresh._write_atomic` does, so a web
   page that reads `data/ratings/` during a web-launched ETL sees the old file or the new one,
@@ -285,7 +296,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   qualified passers. `test_build_of_a_season_without_a_qualified_passer_publishes_only_team_tables`.
 - **Feature-value impact**: none (the features read the pre-week tables).
 - **How to reverse it**: `_has_qualified_passer` in `ratings_build.py`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 - **After the review** (`9f2e7a3`): the guard asks for a qualified passer among the passers the
   fit rates (a game with a dropback). A season whose qualified passers had no dropback recorded
   passed the old guard and then stopped the ETL with `ColumnNotFoundError` in the rank summary,
@@ -308,7 +320,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `test_a_postseason_week_takes_the_whole_regular_season`.
 - **Feature-value impact**: defines the postseason rows' values.
 - **How to reverse it**: `RatingsBuild._weeks`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 14. How the ratings' sources load
 
@@ -328,7 +341,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Data**: `tests/test_ratings_build_sources.py`.
 - **Feature-value impact**: none.
 - **How to reverse it**: `ratings_build.load_ratings_sources`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 - **After the merge with the play-by-play integration**: the loader asks only for the
   play-by-play seasons before the first one the ETL loaded, so the current season, which has no
   plays before kickoff, is requested once (`0cb7c00`;
@@ -357,7 +371,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the `ratings` field of `season_cache.SeasonBuild` and the ratings
   frames from `data_collection._open_season_cache`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 16. One BLAS thread, a fixed row order, and the order guard
 
@@ -379,7 +394,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   before and after the change.
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the `threadpool_limits` context in `RatingsBuild.build`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 17. Building the ridge designs from plain values
 
@@ -400,7 +416,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   `ADAPTER_PARITY.md`'s counts are unchanged.
 - **Feature-value impact**: none.
 - **How to reverse it**: revert `e21da94`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 18. The time the ratings add to the ETL
 
@@ -428,7 +445,8 @@ Scripts and their reports, run from the repository root with the worktree's envi
   season finished.
 - **Feature-value impact**: none.
 - **How to reverse it**: not applicable.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 19. A team whose games have no final score keeps its ratings row
 
@@ -444,4 +462,5 @@ Scripts and their reports, run from the repository root with the worktree's envi
   parity test is unchanged, so every table with its scores present is the same.
 - **Feature-value impact**: none (the features read the pre-week tables).
 - **How to reverse it**: the inner joins in `build_team_ratings`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.54.0` release's review (two independent reviews of two rounds each;
+  [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.

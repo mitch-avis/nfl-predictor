@@ -61,12 +61,12 @@ _MARKET_MODE_FLAGS = {
 }
 # The market modes, in the order the weekly options list them.
 MARKET_MODES = tuple(_MARKET_MODE_FLAGS)
-# The market-free mode: no market feature, no anchor and no transform.
+# The no-game-lines mode: no market feature, no anchor and no transform.
 MARKET_MODE_NONE = "none"
 
 
 def market_mode_transform(mode: str, *, market_transform: bool | None) -> bool | None:
-    """Return the market transform a mode trains with: always off in the market-free mode.
+    """Return the market transform a mode trains with: always off in the no-game-lines mode.
 
     The transform only reshapes market features, so a run without any records it off rather
     than resolving it from the dataset's lines; every other mode keeps ``market_transform``.

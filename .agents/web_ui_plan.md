@@ -25,7 +25,7 @@ Exploration findings that shape the design:
   glossary) onto shadcn primitives rather than forking its 923-line `App.tsx`.
 - There is no "latest model" concept. `src/nfl_predictor/ml/artifacts.py` only builds paths
   (`resolve_run_paths` L117). The weekly run writes a self-contained run dir
-  (`models/weekly_2025_week_22/` is the canonical example) with stage markers
+  (`models/weekly_20261015_022416_9a4c092c/` is a current example) with stage markers
   `{wf_compare,train,predictions,reports}_state.json`; a run is complete iff
   `reports_state.json` exists. Power rankings in a run are stamped `week = predictions_week - 1`.
 - Scripts are subprocess-only: every `main()` except `data_collection.main(argv)` reads
@@ -409,7 +409,8 @@ validation; the adapters with fakes; the poller and `/api/live`; the live views.
 - Frontend: `pnpm run lint`, `pnpm run typecheck`, `pnpm exec vitest run`, `pnpm run build`;
   OpenAPI type drift check (`pnpm run gen:api` regenerates `src/api/schema.d.ts`; CI diffs it).
 - End to end: build `web/`, start `.venv/bin/python -m nfl_predictor.api`, log in as the
-  bootstrap admin, activate `models/weekly_2025_week_22`, and check every page on desktop and at
+  bootstrap admin, activate a current weekly run (for example
+  `models/weekly_20261015_022416_9a4c092c`), and check every page on desktop and at
   400px width; run `validate_offline` and `lines_refresh` from the Jobs page and watch logs stream.
 - Use the `run` skill for launching and screenshotting the app during implementation.
 

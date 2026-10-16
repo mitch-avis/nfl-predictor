@@ -12,3 +12,6 @@ backend's are in `src/nfl_predictor/api/AGENTS.md`.
   (`package-lock.json`) that nothing reads.
 - Tests for the backend live in `tests/api/`; the design, decisions and phase status live in
   `.agents/web_ui_plan.md`, and `web/README.md` documents the runtime configuration.
+- `.agents/frontend_audit_notes.md` collects problems noticed in the app while doing other work;
+  read it before changing a page, add an entry (with `file:line` on `main`) when you see one, and
+  move an entry to its "Fixed since noted" section when your change fixes it.

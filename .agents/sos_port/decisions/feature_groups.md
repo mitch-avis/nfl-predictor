@@ -41,7 +41,8 @@ groups added inside the feature range.
   test files fail; after the move every one passes unedited (commit `0e26b3e`).
 - **How to reverse it**: move the function back into `walk_forward.py`; training then needs
   another route to it.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 2. Where the final fit drops the columns
 
@@ -68,7 +69,8 @@ groups added inside the feature range.
   stage-1 summary row from `nfl-predictor train` and the weekly run.
 - **How to reverse it**: remove the drop from `_load_training_games` and the field from
   `TrainingOptions`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 3. The setting's form in the config file and on the command line
 
@@ -89,7 +91,8 @@ groups added inside the feature range.
   override (including the empty value) and the refused string.
 - **How to reverse it**: accept a string in `_normalize_config_defaults` by splitting it with
   `cli.options.parse_feature_groups`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 4. When an unknown group fails
 
@@ -114,7 +117,8 @@ groups added inside the feature range.
   `test_an_unknown_group_stops_the_command_and_names_the_group`, gets the same for `train`.
 - **How to reverse it**: drop the two parse-time checks; the resolver still raises when a run
   reaches it.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 5. The weekly stages' resume hashes
 
@@ -136,7 +140,8 @@ groups added inside the feature range.
   setting changes both.
 - **How to reverse it**: hash the settings directly instead of through `_marker_settings`;
   existing run directories then retrain once when resumed.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 6. What a saved model records
 
@@ -157,7 +162,8 @@ groups added inside the feature range.
   columns to -999 in the week to predict and gets identical predictions from the reloaded model.
 - **How to reverse it**: remove the two fields from `artifacts.TrainedModelDetails` and
   `TrainingResult`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 7. How the settings-versus-production section compares groups
 
@@ -176,7 +182,8 @@ groups added inside the feature range.
   `test_a_backtest_and_production_with_the_same_groups_show_no_group_difference`.
 - **How to reverse it**: replace `_feature_groups` in `reporting/production_settings.py` with
   `list`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 8. Stage 1's candidate key
 
@@ -192,7 +199,8 @@ groups added inside the feature range.
   `wf_compare/wf_candidate_*.json`; `tests/test_weekly_run_feature_groups.py`,
   `test_stage1s_run_fingerprint_covers_the_groups`, shows the fingerprint changes with them.
 - **How to reverse it**: add the groups to `CandidateSpec` and to the key's payload.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 9. `nfl-predictor predict` and the option
 
@@ -206,7 +214,8 @@ groups added inside the feature range.
 - **Data**: `tests/test_cli_train_feature_groups.py`,
   `test_predicting_with_a_saved_model_says_the_option_does_not_apply`.
 - **How to reverse it**: call `parser.error` in `cli/train.py` when both options are given.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 10. Where the warning for a group that matches no column comes from
 
@@ -232,4 +241,5 @@ groups added inside the feature range.
   `test_a_group_the_data_lacks_drops_nothing_and_warns`, covers the final fit.
 - **How to reverse it**: drop the keyword and stage 1's drop; then move the backtest's group drop
   into the walk-forward so it resolves once.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.52.0` release's review (one independent round, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.

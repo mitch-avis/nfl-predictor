@@ -53,7 +53,8 @@ Commands run from this repository's root with the worktree's environment:
   nfl_predictor\.' src/nfl_predictor/season_stats/metrics/*.py | grep -v season_stats.metrics`).
 - **Feature-value impact**: none; no fingerprint or cache key changes.
 - **How to reverse it**: move `metrics/` to another package and update its imports.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 2. The rank-range settings the registry describes are restated, not imported
 
@@ -78,7 +79,8 @@ Commands run from this repository's root with the worktree's environment:
 - **How to reverse it**: import the three from `nfl_predictor.ratings.rating_ranges` in
   `metrics/registry.py`, delete `rank_ranges.py`, and drop the numpy test, accepting that the
   registry then loads numpy.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 3. The inputs come through this repository's loaders, plus what that project's loaders added
 
@@ -103,7 +105,8 @@ Commands run from this repository's root with the worktree's environment:
   these loaders; the parity tests do the same for five games served as nflreadpy served them.
 - **Feature-value impact**: none.
 - **How to reverse it**: replace `load_season_inputs` with direct nflreadpy reads.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 4. The official weekly team stats have their own cached source
 
@@ -127,7 +130,8 @@ Commands run from this repository's root with the worktree's environment:
 - **Feature-value impact**: none; once the integration stream runs it, one new cache file per
   season.
 - **How to reverse it**: point `load_season_inputs` at another team-stat loader.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 5. Washington is `WSH` in every table
 
@@ -144,7 +148,8 @@ Commands run from this repository's root with the worktree's environment:
   Washington's 17 games.
 - **Feature-value impact**: none.
 - **How to reverse it**: map `WSH` to `WAS` on the tables' team columns before writing them.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 6. Whole numbers from this repository's loaders are 64-bit
 
@@ -160,7 +165,8 @@ Commands run from this repository's root with the worktree's environment:
 - **Feature-value impact**: none.
 - **How to reverse it**: cast those columns in `game_logs.build_team_game_logs` and
   `build_qb_game_logs`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 7. The row order every float sum reads is fixed
 
@@ -201,7 +207,8 @@ Commands run from this repository's root with the worktree's environment:
   `build_qb_game_stats`, and `season.build_season_tables`, and the `maintain_order` arguments in
   `team_stats.compute_team_stats_excluding_opponents` and
   `qb_opponent_stats._qb_allowed_stats_by_pair`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 8. The published-log check covers the rate parts the published logs determine
 
@@ -239,7 +246,8 @@ Commands run from this repository's root with the worktree's environment:
 - **How to reverse it**: drop `_PUBLISHED_COUNTS`, `_WHOLE_NUMBER_TOTALS` and
   `_WHOLE_NUMBER_RATES` from `published_logs.py`; extend them if a later published log carries
   more parts.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 9. The published-log check takes each team's opponents from the schedule
 
@@ -260,7 +268,8 @@ Commands run from this repository's root with the worktree's environment:
   `test_the_season_without_a_games_play_by_play_still_counts_it_as_an_opponent` pins it.
 - **Feature-value impact**: none.
 - **How to reverse it**: not advised; it would drop opponents with games without play-by-play.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 10. The play-by-play columns the build reads
 
@@ -279,7 +288,8 @@ Commands run from this repository's root with the worktree's environment:
   tests still set the list to exactly these 122, so the build reads nothing else.
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the guard in `load_season_inputs`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 11. What was not ported, and why
 
@@ -310,7 +320,8 @@ Commands run from this repository's root with the worktree's environment:
   equal; the season column is `Int64` here and `Int32` there.
 - **Feature-value impact**: none.
 - **How to reverse it**: port a part when a stream needs it.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 12. The stats catalogs live beside the package
 
@@ -328,7 +339,8 @@ Commands run from this repository's root with the worktree's environment:
   `9081bce`); only the header lines differ.
 - **Feature-value impact**: none.
 - **How to reverse it**: change `catalog_docs.CATALOG_PATHS`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 13. Smaller adaptations of the ported code
 
@@ -349,7 +361,8 @@ Commands run from this repository's root with the worktree's environment:
 - **Data**: the audit (every cell bit-identical).
 - **Feature-value impact**: none.
 - **How to reverse it**: per item, in the named modules.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 14. Parity: what is compared, the tolerance, and the fixtures
 
@@ -375,7 +388,8 @@ Commands run from this repository's root with the worktree's environment:
   `.venv/bin/python .agents/sos_port/season_stats_fixtures.py` write identical files.
 - **Feature-value impact**: none.
 - **How to reverse it**: change `FLOAT_TOLERANCE` in the audit and the parity tests.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 15. A season with no game played yet has no tables
 
@@ -398,4 +412,5 @@ Commands run from this repository's root with the worktree's environment:
   `ColumnNotFoundError` for `points_for`.
 - **Feature-value impact**: none.
 - **How to reverse it**: remove the check at the top of `build_season_tables`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.51.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.

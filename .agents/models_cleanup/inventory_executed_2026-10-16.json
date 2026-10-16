@@ -1,0 +1,1550 @@
+{
+  "entries": [
+    {
+      "name": "audit_m49_games_played",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "audit_m53_6_drop",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "audit_m54_0_rebuild",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "audit_m54_12_candidate",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "audit_m54_flip_rebuild",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "audit_m59_rebuild",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "etl_m54_0_rebuild",
+      "bytes": 33039,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "etl_m54_1_candidate",
+      "bytes": 29788,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "etl_m54_flip_rebuild",
+      "bytes": 23155,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "etl_m59_rebuild",
+      "bytes": 94394,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "feature_audit_2026_09_18",
+      "bytes": 418168,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "leakage_audit.json",
+      "bytes": 480,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "m60_web_live_checks",
+      "bytes": 42218,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "pbp_vs_nflverse_m54_2",
+      "bytes": 26684,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "qb_adj_no_lines",
+      "bytes": 8162339,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/",
+        "kept by the user's decision of 2026-10-16"
+      ]
+    },
+    {
+      "name": "qb_elos_measure",
+      "bytes": 133860059,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/",
+        "kept by the user's decision of 2026-10-16"
+      ]
+    },
+    {
+      "name": "qb_wt_measure",
+      "bytes": 6607272,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "kept by the user's decision of 2026-10-16"
+      ]
+    },
+    {
+      "name": "review_walk_forward_2023_2025.json",
+      "bytes": 95101,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "review_wf_2023_2025_pbp_off",
+      "bytes": 199473,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "review_wf_2023_2025_pbp_on",
+      "bytes": 199299,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "smoke_20260911",
+      "bytes": 35077060,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "smoke_20260911_workaround",
+      "bytes": 7074187,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "step3_gpu_reference",
+      "bytes": 7842592,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "step3_l0_gpu_check",
+      "bytes": 604722,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "step3_market_transform",
+      "bytes": 7484715,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "step3_open_lines",
+      "bytes": 289670,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "step3_prob_paths",
+      "bytes": 114579,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "step3_sigma",
+      "bytes": 87584,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "step4",
+      "bytes": 307529195,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": [
+        "partial: a script names ['cut_through_2025.py']; the rest is deleted"
+      ],
+      "keep_only": [
+        "cut_through_2025.py"
+      ]
+    },
+    {
+      "name": "step4_reference",
+      "bytes": 72164833,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "a script names a directory in it"
+      ]
+    },
+    {
+      "name": "step6",
+      "bytes": 83558247,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/",
+        "kept by the user's decision of 2026-10-16"
+      ]
+    },
+    {
+      "name": "train_20260929_061431",
+      "bytes": 4727177,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "week01_2026_refreshed",
+      "bytes": 9523608,
+      "kind": "training",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a training run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "week01_2026_strength",
+      "bytes": 9347004,
+      "kind": "training",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a training run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "week01_2026_totalfix",
+      "bytes": 10088734,
+      "kind": "training",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a training run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "week01_2026_totalref",
+      "bytes": 9525907,
+      "kind": "training",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a training run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_2025_week_21",
+      "bytes": 7289497,
+      "kind": "weekly",
+      "season": 2025,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "weekly_2025_week_22",
+      "bytes": 13737628,
+      "kind": "weekly",
+      "season": 2025,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "weekly_20261008_223743_0325cb35",
+      "bytes": 8612965,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_20261008_234130_eee65bf5",
+      "bytes": 8613105,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_20261014_235354_01c52e35",
+      "bytes": 8673116,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_20261015_022416_9a4c092c",
+      "bytes": 9708371,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_2026_week_02",
+      "bytes": 36611896,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_2026_week_02_refresh",
+      "bytes": 41710682,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_2026_week_03_fast",
+      "bytes": 19309523,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_2026_week_03_full",
+      "bytes": 34240299,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "weekly_2026_week_04_refresh",
+      "bytes": 8540670,
+      "kind": "weekly",
+      "season": 2026,
+      "keep": true,
+      "reasons": [
+        "a weekly run of season 2026 (API indexer; the power page's movement reads the previous week's run)"
+      ]
+    },
+    {
+      "name": "wf_deadweight_2023_2025_pruned",
+      "bytes": 138477,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m49_gp_2023_2025_pruned",
+      "bytes": 140285,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m54_0_2023_2025_from_week1",
+      "bytes": 376346,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m54_12_2023_2025_from_week1",
+      "bytes": 373155,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m54_flip_2023_2025_from_week1",
+      "bytes": 378796,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_7_2020_2025_trees100",
+      "bytes": 657748,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_7_2020_2025_trees1200",
+      "bytes": 6566,
+      "kind": null,
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_7_2020_2025_trees200",
+      "bytes": 658289,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_7_2020_2025_trees400",
+      "bytes": 665729,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_7_2020_2025_trees598",
+      "bytes": 657713,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life16",
+      "bytes": 640850,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life16_seed7",
+      "bytes": 642072,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life32",
+      "bytes": 639870,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life32_seed7",
+      "bytes": 638949,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life4",
+      "bytes": 640247,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life4_seed7",
+      "bytes": 638242,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_8_2020_2025_half_life8",
+      "bytes": 640184,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m55_8_2020_2025_unweighted",
+      "bytes": 644014,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "wf_m55_8_2020_2025_unweighted_seed7",
+      "bytes": 643460,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "wf_m55_8_review",
+      "bytes": 383661,
+      "kind": null,
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named in src/ or config/"
+      ]
+    },
+    {
+      "name": "wf_m59_2020_2025_auto_floor_baseline",
+      "bytes": 404550,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2020_2025_rare_events_off",
+      "bytes": 403221,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2020_2025_regularized_gamma5_mcw5",
+      "bytes": 404623,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2023_2025_from_week1",
+      "bytes": 238888,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2023_2025_from_week1_auto_floor",
+      "bytes": 238767,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2023_2025_from_week1_auto_selected",
+      "bytes": 238861,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2023_2025_from_week1_auto_sigma",
+      "bytes": 238757,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_2023_2025_from_week1_auto_sigma_centered",
+      "bytes": 238785,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_rebuild_2023_2025_from_week1",
+      "bytes": 378572,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_m59_rebuild_2023_2025_from_week1_seed7",
+      "bytes": 343356,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_qb_2023_2025_off",
+      "bytes": 261109,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_qb_2023_2025_on",
+      "bytes": 308946,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_qbsched_2023_2025_off",
+      "bytes": 188104,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_qbsched_2023_2025_on",
+      "bytes": 188238,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_shrink_2023_2025_off",
+      "bytes": 259932,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_shrink_2023_2025_on",
+      "bytes": 307255,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_strength_2023_2025_from_week1",
+      "bytes": 138286,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_totalfix_2023_2025_anchored",
+      "bytes": 259335,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_totalfix_2023_2025_unanchored",
+      "bytes": 253088,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_totalref_2023_2025_unanchored",
+      "bytes": 253456,
+      "kind": "walk_forward",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/02a3a730da026668dffe",
+      "bytes": 5611516,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/034cece58f31e85a43bb",
+      "bytes": 34262224,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/09a60441e87d86c894ba",
+      "bytes": 11145760,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/0de8fb56f4995236b4ed",
+      "bytes": 32355455,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/0eef45a96551b4ce0bb3",
+      "bytes": 34262232,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/108942ddbf45c226edf7",
+      "bytes": 34262233,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/14cfd02c06408f3b80bb",
+      "bytes": 34245151,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/1ca801a7b58256dc1442",
+      "bytes": 5672151,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/2108d71fbe1e0b36f5df",
+      "bytes": 32500274,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/24911e0fe833c3ac3ed4",
+      "bytes": 34005305,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/263bd0ac6e5f5379985e",
+      "bytes": 11145730,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/27f1cd2a30b2f1a91a9a",
+      "bytes": 5523670,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/2b585f2cd1f4e626373b",
+      "bytes": 32860043,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/2b9b6a6cb83107f66dfa",
+      "bytes": 11145730,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/2d811cadc6afc717a63d",
+      "bytes": 34262225,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/2f7442e89fd6ff3981f4",
+      "bytes": 33519106,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/303d85338c828f278a0e",
+      "bytes": 5524054,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/34c17e508ab015a80662",
+      "bytes": 5630742,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/359abe3f4b284b04ceb1",
+      "bytes": 11145730,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/3863bd37678f4b9a4dae",
+      "bytes": 5523670,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/39009519ac25ab98ff96",
+      "bytes": 34616681,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/3ba24ca9187c189f1888",
+      "bytes": 34127985,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/3bd2b79b36c6ed70e0e5",
+      "bytes": 33519123,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/3f38eaafc58d78b0542b",
+      "bytes": 10116375,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/41cb4904e5e1a8878fd1",
+      "bytes": 11145730,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/4254785c4d21eb188b8e",
+      "bytes": 34616680,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/439f44b54b152dd45004",
+      "bytes": 5414829,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/4a11092b7602fe1fe710",
+      "bytes": 34190521,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/4d3d719961e770509891",
+      "bytes": 32738836,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/4e729a9c5751ba978a71",
+      "bytes": 5630275,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/524400106ab720ccfb3e",
+      "bytes": 32346290,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/54ec3f119f2d50ad6b14",
+      "bytes": 32346273,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/55a1388a301ce116b10a",
+      "bytes": 5350846,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/5ea347bc3339f5d3a9e3",
+      "bytes": 5414829,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/6024b0fcaebe9c480dd4",
+      "bytes": 5414845,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/66012805bb408cc709d1",
+      "bytes": 34262233,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/6dd8bdb5e886caa894fb",
+      "bytes": 34262232,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/6e8ec19833318631e24d",
+      "bytes": 32346289,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/73b4794bdc4b2102d459",
+      "bytes": 34262233,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/75186da854af9d4eb24c",
+      "bytes": 32133995,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/77f3a4b4c04eb360238a",
+      "bytes": 34262232,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/7e1e9343fb8596950136",
+      "bytes": 32500273,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/8431001f74f2766a8c44",
+      "bytes": 11146643,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/849c353f7074fedb0538",
+      "bytes": 11146672,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/85760def37b42ddcd594",
+      "bytes": 5610411,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/85d4d2e75d86643cf98a",
+      "bytes": 32738835,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/874765072f2bcfe9a9c1",
+      "bytes": 11145730,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/89dc69c3f18d74ad205b",
+      "bytes": 5630741,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/8a8857d261e9999c9165",
+      "bytes": 33861770,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/8cc0bf9724c5bab18002",
+      "bytes": 10934568,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/8eb0587a0da4c6ab57cc",
+      "bytes": 5350846,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/90d8d9374d2d9cc3d55c",
+      "bytes": 33671906,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/92e351e472bcb4cfd7ca",
+      "bytes": 11145729,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/9708c4d5d1331d5bba96",
+      "bytes": 34127984,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/9779c1cbb0701d23661a",
+      "bytes": 5630275,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/98696fa36a5ae245740b",
+      "bytes": 33519122,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/988441baadcd2d3e2634",
+      "bytes": 33519122,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/9c6c7c53d2d8563d953b",
+      "bytes": 34260913,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/9fced6852bb8fbbffd18",
+      "bytes": 34262233,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/a1e047a11237c39d013d",
+      "bytes": 5523718,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/a5e76d54187e27ca7370",
+      "bytes": 11145760,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/a5e76d54187e27ca7370_2023_2025",
+      "bytes": 5629014,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/a6acc6d874d9b3bdb00b",
+      "bytes": 33671907,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/a75322959a223e38576c",
+      "bytes": 11145731,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/ab173f4fb240abfe577d",
+      "bytes": 34190538,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/b074c98e1196a1da8af2",
+      "bytes": 32133994,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/b098f0544b3a6aa10d89",
+      "bytes": 34262233,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/b28803f516bfdd5396a4",
+      "bytes": 34190522,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/bae0e56db951d1a890d4",
+      "bytes": 5417319,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/be38b8d37d9ab698570c",
+      "bytes": 34190537,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata",
+        "modified in the last 24 hours"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/c11316698f8b83a57544",
+      "bytes": 33519123,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/c39db4f843175eaab09f",
+      "bytes": 5414829,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/c641473671fc9f9b2f5f",
+      "bytes": 10934515,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/cb41507aa5be425f3c3f",
+      "bytes": 5611491,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/cbbd138cce670199c89f",
+      "bytes": 34260914,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/d112ebcba3115bafe9d9",
+      "bytes": 5630275,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/d51959f8b4a8b33f5dbf",
+      "bytes": 11145731,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/d8462a7de8d460c12491",
+      "bytes": 32346274,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/d97fab54e7261f18e349",
+      "bytes": 33519107,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/daac2683b2ea12f32ab9",
+      "bytes": 32860044,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/dae6e566c49df933fa90",
+      "bytes": 33861771,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/db9467e8359975436d4c",
+      "bytes": 34262232,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/ddd3f302de00ddd1cdf6",
+      "bytes": 32355454,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/ddff6bcf1868bed366c2",
+      "bytes": 34262232,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/df20b775abf7f2657d13",
+      "bytes": 34245152,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": true,
+      "reasons": [
+        "named by a kept run's metadata"
+      ]
+    },
+    {
+      "name": "wf_checkpoints/e2d3e97461576e8802c7",
+      "bytes": 34005304,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/f6ff076066674127b163",
+      "bytes": 5523670,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    },
+    {
+      "name": "wf_checkpoints/f8efe644dc594e426061",
+      "bytes": 11145731,
+      "kind": "checkpoints",
+      "season": null,
+      "keep": false,
+      "reasons": []
+    }
+  ],
+  "referenced_checkpoints_missing": [
+    "46340de24a3e0a02c26a"
+  ]
+}

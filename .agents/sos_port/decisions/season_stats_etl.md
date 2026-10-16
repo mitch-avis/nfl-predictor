@@ -64,7 +64,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **How to reverse it**: drop the `season_stats` argument where `data_collection._load_sources`
   builds the `RatingsBuild` (the ETL then writes the ratings tables only), or revert `735109e` and
   `e3dee51` for the whole step.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 2. No source is read twice; the official weekly team stats are the one new load
 
@@ -101,7 +102,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **Feature-value impact**: none.
 - **How to reverse it**: in `season_stats_build.load_season_stats_sources`, load the other
   sources per season instead of taking them from the ratings' frames.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 3. The ETL's play-by-play: repaired first, then prepared, and only the columns read
 
@@ -127,7 +129,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   tables equal those built from `load_season_inputs` over the same frames).
 - **Feature-value impact**: none.
 - **How to reverse it**: in `SeasonStatsBuild.season_inputs`, keep every column of the plays.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 4. The rating columns come from the season's fit, as `main.run_season` fed them
 
@@ -150,7 +153,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **Feature-value impact**: none.
 - **How to reverse it**: pass other frames as `team_ratings` and `qb_ratings` in
   `RatingsBuild.build`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 5. A season without a qualified passer leaves the passers' ratings null
 
@@ -166,7 +170,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   `test_a_season_without_a_qualified_passer_leaves_the_passer_ratings_null`.
 - **Feature-value impact**: none.
 - **How to reverse it**: give `RatingsBuild._tables` a quarterback fit for such a season.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 6. A missing source: build without it, keep every column, and say what is missing
 
@@ -234,7 +239,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **How to reverse it**: drop the `conform_table` call in `SeasonStatsBuild.tables` (the tables
   then keep the builders' columns and types); `season_stats_build.log_missing_sources` and the
   early return in `SeasonStatsBuild.tables` for the rest.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 7. The season cache keeps a finished season's tables, keyed on what they read
 
@@ -274,7 +280,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **How to reverse it**: for (d), build the tables after the season loop of
   `data_collection.collect_all_data` rather than in `RatingsBuild.build`, and drop the season
   statistics' part of `_season_frames`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 8. Those frames are keyed as the season's own, not through the season
 
@@ -291,7 +298,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   moves 2019's key and keeps 2020's).
 - **Feature-value impact**: none.
 - **How to reverse it**: return the frames from `RatingsBuild.key_frames` instead.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 9. Determinism: a two-run test, and the row-order guard over the package as ported
 
@@ -321,7 +329,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   tables written with one Polars thread and with 24, in two processes, have the same digest.
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the package from `_ETL_PATHS` and the list from the test.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 10. The web empty states say the ETL writes the tables, in words only
 
@@ -338,7 +347,8 @@ GPU and CPU), so they are inflated; each output records the load averages beside
 - **Feature-value impact**: none.
 - **How to reverse it**: the texts in `web/src/components/ratings/RatingsStates.tsx` and
   `web/src/pages/Schedules.tsx`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 11. The time the step adds to the ETL
 
@@ -358,4 +368,5 @@ GPU and CPU), so they are inflated; each output records the load averages beside
   tables 13.3 s, the key 9.4 s.
 - **Feature-value impact**: none.
 - **How to reverse it**: not applicable.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.56.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.

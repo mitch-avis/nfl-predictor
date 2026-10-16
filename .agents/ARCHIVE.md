@@ -77,6 +77,52 @@ Follow-ups resolved after their milestones closed:
 
 ---
 
+## Roadmap step 6 - Follow-ups from step 4, retired or resolved (2026-10-16)
+
+The follow-up row "6, phases 3-4 (from step 4)" in `TODO.md` was checked on 2026-10-16 with
+`.agents/sos_port/followup_check.py` (read-only), run on the main checkout's
+`data/completed_games_ml.csv` (544 columns) and `config/weekly_run.yaml`: production trains on 449
+feature columns, leaves out `strength, own_elo, own_elo_wt, qb_adj`, and ranks on the blend, whose
+ported-rating and model-rating code mentions neither the strength snapshot nor `PRIOR_BLEND_GAMES`.
+Only the `composite` method reads the snapshot, and it is the default of the `nfl-predictor
+rankings` command and of the web app's Power rankings job, so the snapshot item stays open in
+`TODO.md`. An item that feeds neither the production model nor the default power rankings is retired
+here; one the integration already fixed is closed here with its record.
+
+Retired (feeds neither):
+
+- **The raw `adj_off_*` / `adj_def_*` columns drift in scale across a season** (Milestone 46). All
+  32 strength-group columns are in the dataset and none is a production feature (the `strength`
+  group is left out since `0.59.0`). The composite rankings of `nfl-predictor rankings` and the
+  web Power rankings job still read the four EPA components, but the composite standardizes each
+  within its week (`utils/polars/strength_snapshot.py:365-377`), so a drift in scale across weeks
+  cannot reorder the teams of any one week; what is left of the item is the early-season
+  shrinkage, which stays open with the strength-snapshot item in `TODO.md`.
+- **`sos_played_raw` is null in weeks 1 and 2** (Milestone 46). Its three columns are in the
+  dataset and none is a production feature (the same group).
+- **The next-opponent identity columns** (2026-09-25 review). The pair is in the dataset, on
+  `constants.PRUNED_FEATURE_COLUMNS` and among no production features (pruned by default since
+  `0.44.0`, after the step-4 test).
+
+Resolved by the integration (`0.54.0`, independently reviewed; records in
+`.agents/sos_port/decisions/integration_pbp_elo.md`):
+
+- **`strength_games_played_diff` has zero importance** (Milestone 46): no longer computed or
+  published (entry 4.1); the script finds it in none of the dataset's columns and still on the
+  constants lists, so a dataset that carries it trains the same way.
+- **Half of `PBP_COUNT_COLUMNS` is carried but unpublished** (Milestone 45): the nine counts no
+  published rate read are no longer carried, and a test requires every carried count to move a
+  published rate (entry 4.2). The counts feed production through those rates.
+- **`_attach_qb_features` requests a not-yet-published current season a second time** (2026-09-11
+  review), and every ETL run needs all play-by-play seasons from 1999 cached or downloadable:
+  the quarterback history now skips the seasons the run already requested (entry 1.6;
+  `requested_seasons` at `data_collection.py:511`, `:535` and `:1102`), so the current season is
+  asked for once. The full-history read is intended: career rates and the own Elo need every
+  earlier regular season, so a partial-season run produces the same values as a full rebuild (the
+  function's docstring, `data_collection.py:516-519`).
+
+---
+
 ## Roadmap step 5 - Market-free baseline (closed 2026-10-10)
 
 Approved 2026-10-08, closed by the user on 2026-10-10. Run on the decisions chunk's code

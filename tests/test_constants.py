@@ -230,7 +230,7 @@ def test_pbp_count_columns_are_excluded_from_opponent_generation() -> None:
 
 
 def test_pbp_columns_include_box_score_source_fields() -> None:
-    """The cached PBP shape includes the raw fields needed for the 54.2 box-score overlay."""
+    """The cached PBP shape includes the raw fields the play-by-play box-score overlay needs."""
     # Arrange
     required = {
         "fumble",

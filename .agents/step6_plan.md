@@ -227,6 +227,81 @@ Asked at the user's check-in, each with its context and a recommendation; record
   today's labels, and any switch goes back to the user.
 - **Feature ideas** (referee, weather, attendance, team health): a later session.
 
+## User decisions after the run (2026-10-11 to 2026-10-14)
+
+Recorded from the handoff of 2026-10-14 (`git show 5b73686:.agents/next_agent_session_prompt.md`,
+"Decisions on record" and "Open for the user").
+
+2026-10-11, on the session audit:
+
+- The blend default merges whole, last of the four integration branches, as a minor version, and
+  reaches `main` only with the user's approval.
+- Decision 1 (the ported ratings in place of the strength snapshot) waits for the reviewed
+  diagnostic, since reviewed. The ten-run ladder is ratified.
+- The live-betting design and the margin-only switch stay archived at the merge.
+- No rating-definition outcome (every penalty-wiped snap, every quarterback play, the botched-snap
+  removal) is adopted before the merge; each is logged as a post-merge measured change.
+- The rating tests' skipped ESPN QBR extras and passer holdout are accepted departures.
+- The betting report's three new columns and its sigma check are approved, the labels unchanged.
+- `feat/sos-port-inventory` is deleted.
+
+2026-10-12, on the review session's questions:
+
+- Production replaces the strength snapshot with the ported ratings (decision 1): production leaves
+  out `strength, own_elo, own_elo_wt`.
+- The play-by-play corrections, a tie, stay as correctness fixes; the tie is recorded in
+  `.agents/benchmarks.md`.
+- The `qb_elos.csv` columns stay and the own Elo stays optional and off (decision 2), tentatively;
+  the user may revisit it.
+- The own Elo joins the configuration without game lines, in whichever variant measures stronger
+  there (with or without the win-total pull). Measured on 2026-10-14
+  (`models/step6/nogamelines_wt/REVIEW.md`): a tie, so the variant without win totals (`own_elo`)
+  stays.
+- The kickoff-starter point is a shared convention, not a caveat on adoption: `qb_elos.csv` also
+  rates past games for the actual starter, and the user sets each week's projected starters by
+  hand before running `../nfeloqb`. Recorded once in `.agents/benchmarks.md`.
+- The blend default's failure handling: read the reference runs only in week 1; on a skip, log an
+  error, keep the standings, do not mark the stage done; no fallback to `composite`.
+- Two walk-forwards approved: the own Elo's win-total variant without game lines, rule
+  pre-registered in `models/step6/nogamelines_wt/HYPOTHESIS.md` (sha256
+  `08bc8c7fdd902e730c0f9de31f41cf657f35aaf11b8a75eeb94959a649970caf`).
+- Naming: the configuration without the market's game lines, anchor or transform is "no game
+  lines"; "market-free test bench" stays the name of the strict reference without game lines or
+  Elo (`models/step4_reference/marketfree_all_seed{42,7}`).
+
+2026-10-14:
+
+- The missing-ratings check as narrowed (stops `train` and the weekly run, warns in `backtest`,
+  fires only when the data has strength columns but no ratings): accepted.
+- The no-game-lines mode leaves out `strength, elo, own_elo_wt` (the reviewed list of
+  `models/step6/elo_marketfree_seed{42,7}`): approved, landed in `0.61.0` (with `qb_adj` added).
+- The merge of step 6 into `main`: approved after a preliminary Week 6 run and the user's review of
+  it and of the `../nfeloqb` changes; merged as `0.59.0`, then `data/` backed up and rebuilt.
+- `../nfeloqb`: the user allowed this session to run the weekly process for Week 6 and approved
+  taking upstream's Elo fix (`90e19d9`).
+- The top-decile ranking is the two-seed mean (`.agents/sos_port/DECISIONS.md`).
+
+## Small open findings from the integration reviews (2026-10-14)
+
+Low-priority findings (P3) the independent reviews left open; status as checked on 2026-10-16.
+
+- Betting-edge split: `floor_sigma.home_win_prob` accepted an infinite sigma. Fixed in `0.59.0`
+  (`ml/floor_sigma.py` refuses a sigma that is not finite and positive).
+- Phase-1 audit refresh: no test covers the run loop's call to `check_opponent_rows`
+  (`.agents/sos_port/parity.py:578`); the tests call the function directly. Open.
+- Open rating-definition tests, open and not re-checked: the quarterback test's calibration check
+  reads the recorded row count, not the fit, and no test shows `run_integrity_checks` calls it;
+  the information-set change leaves 1.75 and nulls as they were and the team check does not flip
+  later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds for
+  one season.
+- Blend ranking default: check the single manifest match against the run itself (`wf_best.json`
+  weeks or `created_at`), open and not re-checked; three older power-ranking skips log at info
+  level (`weekly_run/pipeline.py:563-569`), open; the "market-free" wording in `stage1.py`, fixed
+  on 2026-10-16.
+- Production adoption, open and not re-checked: the disabled-group lists are not normalized for
+  order or duplicates; no snapshot test of the default fit's predictions; the weekly refresh
+  writes where `--data-collection-args` say while the run reads `--data-path`.
+
 ## Snapshots and timings
 
 - Upstream inputs for the candidate build were copied into `~/scratch/step6/data/` on 2026-10-10

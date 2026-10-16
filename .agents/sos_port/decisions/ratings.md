@@ -42,7 +42,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none; no checkpoint fingerprint or ETL cache key changes.
 - **How to reverse it**: move the package or its names; the walk-forward checkpoints and the
   season cache then rebuild.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 2. The quarterback rows carry the EPA on the dropbacks, not EPA per dropback
 
@@ -64,7 +65,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none.
 - **How to reverse it**: make `qb_epa_per_dropback` the input column in
   `inputs.QB_GAME_SCHEMA` and drop the division in `qb_rating._rated_rows`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 3. Row order: the fits keep the caller's order; the adapter supplies that project's
 
@@ -101,7 +103,8 @@ Commands run from this repository's root with the worktree's environment. "The a
   rates (decision 4).
 - **Feature-value impact**: none.
 - **How to reverse it**: sort inside `ridge.build_unit_design` and accept tolerance-level parity.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 4. The quarterback season summary is ported in part, keyed by passer id
 
@@ -127,7 +130,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none; the raw season rate is a display column.
 - **How to reverse it**: group by `["qb_id", "qb_name"]` in `qb_season_summary`; carry
   `qb_passing_epa` and `qb_spike_epa` separately to make the raw rate bit-identical.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 5. SRS comes from this repository's existing solver
 
@@ -146,7 +150,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none.
 - **How to reverse it**: copy `srs.solve_srs` into the package and import it in
   `season.build_team_ratings`.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 6. Pre-week quarterback ratings use the previous season's penalty
 
@@ -175,7 +180,8 @@ Commands run from this repository's root with the worktree's environment. "The a
   measured as a feature; the integration's walk-forward measures it.
 - **How to reverse it**: in `RatingsHistory.qb_penalty`, return the season's own cross-validated
   penalty.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 7. The pre-week ratings of the first season are null
 
@@ -194,7 +200,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: yes, once integrated: 1999's rows carry nulls for these features.
 - **How to reverse it**: in `RatingsHistory.pre_week_teams` and `qb_penalty`, use the first
   season's own cross-validated fits instead of returning nulls.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 8. What week 1, a team without a game, and a postseason week return
 
@@ -228,7 +235,8 @@ Commands run from this repository's root with the worktree's environment. "The a
   features.
 - **How to reverse it**: in `RatingsHistory.pre_week_teams`, return null ratings when no game has
   been played (drop the `_preseason_ratings` branch).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 9. A team without a previous season raises in a season with a prior
 
@@ -246,7 +254,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none today.
 - **How to reverse it**: give such teams a zero raw prior in `team_prior.prior_means` (that
   project's function, so a departure from it).
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 10. What the parity checks compare, and the tolerance
 
@@ -304,7 +313,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none.
 - **How to reverse it**: write CSV in the generator, drop the `.gitignore` line, and read CSV in
   the tests with the published schemas.
-- **Review**: not yet reviewed.
+- **Review**: covered by the `0.49.0` release's review (two independent rounds, verdict "merge as
+  is"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 12. Schedule strength adds its opponents in the ratings' order
 
@@ -330,7 +340,8 @@ Commands run from this repository's root with the worktree's environment. "The a
 - **Feature-value impact**: none.
 - **How to reverse it**: drop `maintain_order="right"` from the join in
   `team_rating.compute_team_schedule_strength`.
-- **Review**: requested by the independent review; the change itself not yet reviewed.
+- **Review**: requested by the first independent round; the second round (verdict "merge as
+  is", [the decision index](../DECISIONS.md)) covered the change.
 
 ## 13. The input rows refuse empty ids and team codes
 
@@ -350,7 +361,8 @@ Commands run from this repository's root with the worktree's environment. "The a
   `test_qb_game_rows_empty_passer_id_raises` in `tests/test_ratings_inputs.py`.
 - **Feature-value impact**: none.
 - **How to reverse it**: drop the blank check in `inputs._conformed`.
-- **Review**: requested by the independent review; the change itself not yet reviewed.
+- **Review**: requested by the first independent round; the second round (verdict "merge as
+  is", [the decision index](../DECISIONS.md)) covered the change.
 
 ## Notes for the integration
 

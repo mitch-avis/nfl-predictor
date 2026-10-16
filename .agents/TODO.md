@@ -49,30 +49,35 @@ Agents and humans should not rely on the shell activation state.
 - Use `.venv/bin/python ...` or the tool-specific binary under `.venv/bin/`.
 - Use `uv ...` from `PATH` for dependency management and environment sync.
 
-### Current validated baseline (2026-09-25, version `0.28.1`, `main` after the Milestone 60 merge)
+### Current validated baseline (2026-10-16, production as of `0.63.0`)
 
-- Milestone 60 is closed: `feat/m60-cli-consolidation` merged into `main` with `--no-ff` on
-      2026-09-25 (the user's approval) and the local branch was deleted. Not pushed; pushing is
-      must-ask. `scripts/gate.sh --web` exits `0` on the merged tree (`1032 passed`, coverage
-      `92.21%` against the `90%` floor, 22 frontend tests).
-- One front door: `nfl-predictor <command>` runs every task (`nfl-predictor --help`); `scripts/`
-      holds only `gate.sh`, which CI runs. Every web job runs `<python> -m nfl_predictor
-      <command>`. `nfl-predictor compare` is the paired walk-forward comparison.
-- Checkpoint fingerprints changed in `0.20.0`, `0.22.0` and `0.26.0` and no walk-forward has run
-      since, so the next reference run retrains from scratch.
-- Data: the 2026-09-21 full rebuild on the `pbp`-default sources produced the walk-forward input
-      `data/completed_games_ml.m54_flip_through_2025.csv` (`7261` rows, `2d4111a6...`; leakage
-      audit `models/audit_m54_flip_rebuild/leakage_audit.json`, `463` features, `0` flags). The
-      weekly runs since have refreshed the current-season rows of the top-level CSVs; the
-      through-2025 cut is unchanged.
-- Production trains unweighted (task 55.8, `0.18.0`), with the shared `200`-tree default
-      (task 55.7, `0.13.0`). The weekly run reads `config/weekly_run.yaml` by default (`0.23.0`).
-- Reference arms on the pre-flip and default sources, both three-season ties on weeks 3-18:
-      `models/wf_m54_0_2023_2025_from_week1/` (checkpoints
-      `models/wf_checkpoints/d112ebcba3115bafe9d9/`) and the default-flip verification arm
-      `models/wf_m54_flip_2023_2025_from_week1/` (checkpoints
-      `models/wf_checkpoints/9779c1cbb0701d23661a/`); numbers in `.agents/benchmarks.md`.
-      Both predate the fingerprint changes above.
+- Production (`config/weekly_run.yaml`, code defaults): the XGBoost margin and total heads, 200
+      trees, unweighted, market mode `hybrid` (line features and the anchor, the transform on),
+      the GPU when present, and the deterministic floor `Phi(margin / sigma)`. It leaves out
+      `strength, own_elo, own_elo_wt, qb_adj`, so it trains on the ported team ratings
+      (`ratings`) and the `qb_elos.csv` Elo (`elo`): 449 features on the through-2025 cut. The
+      power rankings rank on the blend of the ported rating and the model rating at weight `0.5`.
+- Reference with game lines: `models/qb_elos_measure/new_file_seed{42,7}` (code `c637fc0`,
+      `0.60.0`; 2007-2025 from week 1, 328 folds, 4,943 games; independently reviewed), the
+      floor-sigma reference since `0.62.0` (final pooled sigma `13.3184` and `13.3182`). It does
+      not beat the pick-time line on any column in any window; against it, two seeds, the line
+      leads on margin MAE all weeks by `0.0484` `[0.0057, 0.0909]`, on week-1 margin MAE by
+      `0.2107` `[0.0399, 0.3824]` and on week-1 Brier by `0.00511` `[0.00007, 0.01030]`
+      (`.agents/benchmarks.md`, "`qb_elos.csv` measurement").
+- Reference without game lines (`weekly --wf-market-mode none`, `train --exclude-market`):
+      `models/qb_adj_no_lines/no_lines_seed{42,7}` (code `d791846`, `0.62.0`; leaves out
+      `strength, elo, own_elo_wt, qb_adj`, 431 features; independently reviewed), the floor-sigma
+      reference of that mode since `0.63.0` (final pooled sigma `13.3969` and `13.4341`). The
+      pick-time line leads it all weeks on Brier by `0.00373` `[0.00162, 0.00579]`, log loss by
+      `0.00839` `[0.00351, 0.01313]` and margin MAE by `0.1197` `[0.0469, 0.1901]`
+      (`.agents/benchmarks.md`, "The quarterback adjustment without game lines").
+- Data: the ETL rebuilt on 2026-10-14 on `0.59.0` (7,340 completed rows, 541 columns,
+      fingerprint `f3eca626...`, 534 ported-ratings files under `data/ratings/`); leakage audit
+      `models/leakage_audit.json`, 490 features, 0 flags. Both references read the walk-forward
+      input `models/qb_elos_measure/inputs/new_file.csv` (7,261 rows, 544 columns,
+      `b9772e3e...49f0`).
+- Run directories that predate step 6 and were deleted on 2026-10-16 are listed in
+      `.agents/models_cleanup/`; numbers quoted from them stand as reviewed.
 
 ---
 
@@ -242,9 +247,24 @@ Steps:
       validation);
    6. its web pages (teams, quarterbacks, schedules, rank ranges, head-to-head) folded into this
       app, together with Milestone 58 phases 4-6.
-   Merged into `main` as `0.59.0` on 2026-10-14 with the user's approval. Its close-out is
-   open: the docs close-out listed in `.agents/next_agent_session_prompt.md`, 58.1's survivor
-   planner (the user's acceptance) and 58.2's browser check.
+   The user's decisions of 2026-10-11, 2026-10-12 and 2026-10-14 are recorded in
+   `.agents/step6_plan.md` ("User decisions after the run"): the blend default merged last as a
+   minor version; the ported ratings replace the strength snapshot in production; the
+   play-by-play corrections stay (a tie); the `qb_elos.csv` columns stay and the own Elo stays
+   off, tentatively; the configuration without game lines is named "no game lines", keeps the own
+   Elo without win totals (measured a tie) and leaves out `strength, elo, own_elo_wt` (with
+   `qb_adj` since `0.61.0`); no rating-definition outcome is adopted before a post-merge
+   measurement; the merge itself. The reviews' small open findings are listed under "From the
+   step-6 integration reviews" below.
+   Merged into `main` as `0.59.0` on 2026-10-14 with the user's approval.
+   Status 2026-10-16: phases 1-5 are done and independently reviewed (the release index in
+   `.agents/sos_port/DECISIONS.md`, `0.46.0`-`0.59.0`), the ported ratings adopted in production
+   in `0.59.0`. Phase 6 is done except for two narrowed items: the web pages landed in `0.53.0`
+   (two review rounds) and Milestone 58's live-betting design is archived (58.3); 58.1 waits for
+   the user's acceptance of the exact survivor planner, and 58.2 for its done-criterion, a first
+   look at a current-season team page in a browser (the data rebuild it also waited on is done
+   since 2026-10-14). The docs close-out is on `docs/step6-close-out` (2026-10-16, not merged).
+   Step 6 closes when 58.1 and 58.2 are accepted.
 7. **The Elo inputs** (added by the user 2026-10-15; each on its own branch off `main`):
    - done 2026-10-15 (`0.60.0`-`0.60.1`, independently reviewed, merged into `main`):
      `qb_elos.csv`'s `qb1_adj`/`qb2_adj` published as the `qb_adj` group, off in production until
@@ -276,6 +296,27 @@ Steps:
    1999, full crews in `load_officials`), game-day weather (temperature and wind for outdoor
    games), attendance, and team health (nflverse injury reports since 2009). Each first passes a
    pick-time check (what is known before Thursday for an upcoming game), then a measured arm.
+   - [ ] Investigation (not a milestone, added 2026-10-16): `data/nfelo_games.csv`, downloaded by
+     the user from Robert Greer's `greerreNFL/nfelo`, keyed by `game_id` (4,723 games from 2009
+     week 1 to 2026 week 6, counted 2026-10-16). It holds nfelo's pre-game home win probability
+     at the open and the close (`nfelo_home_probability_open`, `_close`), its line projections
+     (`nfelo_home_line_open`, `_close`), opening and closing spreads and totals with their
+     prices, and its situational modifiers (`hfa_mod`, `home_bye_mod`, `away_bye_mod`,
+     `div_game_mod`, `dif_surface_mod`, `home_time_advantage_mod`, `home_538_qb_adj`). Three
+     questions:
+     - (a) nfelo's probability as a second outside benchmark beside the closing market, scored
+       with the benchmark instrument on 2009-2025 (nfelo itself reads market lines, so it is a
+       market-informed yardstick);
+     - (b) whether its opening prices or totals fill gaps in our line data (the nflverse
+       schedule's lines, the nfelo market-lines cache under `data/cache/nfelo/` and the
+       pick-time line logic; nothing under `src/` reads `data/nfl_lines.csv`);
+     - (c) its modifiers against our features, as feature ideas, measured with and without game
+       lines.
+     Leakage: the closing-line columns (`*_close`, the EV and CLV columns) are known only at
+     kickoff, so they are benchmark-only, never features; the opening columns need their
+     timestamps checked against pick time before any use.
+     Also recorded: `data/nfl_elo.csv`, 538's old team Elo file (hand-updated until December
+     of 2025), was read only by the data-status page and was deleted on 2026-10-16.
 9. **Tasks 55.9 + 56.3** (new branch). The Optuna re-tune on the final features and device, its
    three prerequisites first, then the study, a six-season confirmation on two seeds, and 56.3
    (wiring the chosen settings into the weekly run and the benchmark, one shared source).
@@ -315,7 +356,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
 | 4, first | Done, apart from the low-priority schedule fallback (step-3 merge test group). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run), the split-review follow-ups and the schedule cache were resolved in `0.37.2`-`0.38.2` |
-| 6, phases 3-4 (from step 4) | Unused `PBP_COUNT_COLUMNS` (Milestone 45); `strength_games_played_diff` zero importance, `adj_*` scale drift, `sos_played_raw` null in weeks 1-2 (Milestone 46); the blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3); `_attach_qb_features` double request, scramble attribution, the QB identity chain (2026-09-11 review, with 53.7); the early-season strength prior's weight and the next-opponent identity columns (2026-09-25 review) |
+| 6, phases 3-4 (from step 4) | Checked 2026-10-16 by `.agents/sos_port/followup_check.py`: three retired (feed neither the production model nor the default power rankings) and three resolved in `0.54.0`, recorded in `ARCHIVE.md`, "Roadmap step 6 - Follow-ups from step 4". Still open: the early-season strength snapshot, which drives the composite rankings of `nfl-predictor rankings` and the web Power rankings job; and, each feeding production, the early-season stat blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3 in step 9); what is left of scramble attribution and of the QB identity chain (2026-09-11 review) |
 
 Rules for every feature milestone:
 
@@ -338,7 +379,8 @@ Rules for every feature milestone:
   plus a one-hop schedule-strength companion. The QB milestone tried the same two lenses on
   quarterbacks (task 53.6) and dropped them; its remaining form is the adjusted rate (53.7).
 - Keep walk-forward comparison artifacts under `models/`; numbers reported in these files must be
-  auditable from disk.
+  auditable from disk, except from the runs listed in
+  `.agents/models_cleanup/deleted_2026-10-16.txt`, whose directories were deleted on 2026-10-16.
 
 ---
 
@@ -374,6 +416,9 @@ follow-ups below.
       defense-adjusted quarterback test (`models/step4/REVIEW.md`); the user dropped it
       (2026-10-02) and it was removed in `0.44.0`. The ridge form is no longer built here: it is
       the `nfl-sos-ratings` quarterback rating, ported in roadmap step 6, phase 3.
+      Deleted artifact: the contents of `models/step4/`, this test's `REVIEW.md` included, were
+      deleted on 2026-10-16 (inventory in `.agents/models_cleanup/`); its numbers stand as
+      reviewed in `.agents/benchmarks.md`, but cannot be rescored from disk.
 
 2026 Week 2 weekly run: completed 2026-09-17 18:36 MDT (`--run-id
 weekly_2026_week_02`, ETL then `--skip-data-refresh` to chain in), started too late (~18:04 MDT)
@@ -444,7 +489,8 @@ Tasks:
       is confirmed on a six-season walk-forward against the `200` rung and on a second seed before
       it becomes a default (must-ask). The old studies under `models/weekly_2025_week_21/` and
       `models/weekly_2025_week_22/` are void: their trials early-stopped and they predate the
-      `0.6.2` guidance.
+      `0.6.2` guidance. Both directories were deleted on 2026-10-16 (inventory in
+      `.agents/models_cleanup/`); nothing in this task reads them.
 
 Note for any tuning: until the shared early-stopping callback was fixed (version `0.6.2`), every
 Optuna trial's total head stopped after one round, so the `combined_mae` objective scored a
@@ -547,10 +593,11 @@ happens on a fresh branch off `main` and merges back after each phase.
 - [ ] 58.2 Phase 5: team and QB pages over the `nfl-sos-ratings` Parquet outputs.
       Narrowed (2026-10-10): the pages, their API and the navigation landed on the step-6
       integration branch as `0.53.0`, over the ported ratings and season statistics, but the
-      phase's done-criterion (a current-season team page with heatmaps and a game log) waits on
-      the production rebuild of `data/` (held for the user's approval; the ETL step that writes the
-      tables landed in `0.56.0`) and a first look in a browser; four source features are logged
-      as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
+      phase's done-criterion (a current-season team page with heatmaps and a game log) waited on
+      the production rebuild of `data/` and a first look in a browser; four source features are
+      logged as not ported (`.agents/sos_port/decisions/web_pages.md`, entries 13 and 19-21).
+      Status 2026-10-16: the rebuild is done (2026-10-14, `0.59.0`, with the 534 ported-ratings
+      files); the browser look is still open.
 - [x] 58.4 Housekeeping: the `web` extra and the ETL's upstream data-directory paths. Closed
       2026-09-21 (`0.12.12`, narrowed and accepted by the user's decision): the `web` extra is
       dropped, and `etl_full`/`validate_offline`/`validate_live` now take `--data-dir` with the
@@ -572,6 +619,25 @@ Acceptance:
 Each group names the archived milestone it came from; the milestone's full record is in
 `ARCHIVE.md`. Resolved items have moved there.
 
+### From the step-6 integration reviews (2026-10-14)
+
+Low-priority findings the independent reviews left open; the full list, with the ones already
+fixed, is in `.agents/step6_plan.md` ("Small open findings from the integration reviews").
+
+- [ ] No test covers the phase-1 audit's run-loop call to `check_opponent_rows`
+      (`.agents/sos_port/parity.py:578`); the tests call the function directly.
+- [ ] The open rating-definition tests: the quarterback test's calibration check reads the
+      recorded row count, not the fit, and no test shows `run_integrity_checks` calls it; the
+      information-set change leaves 1.75 and nulls as they were and the team check does not flip
+      later sites; the recorded commit lacks a dirty mark; `season_t_interval` returns NaN bounds
+      for one season.
+- [ ] The blend ranking default: check the single manifest match against the run itself
+      (`wf_best.json` weeks or `created_at`); three older power-ranking skips log at info level
+      (`weekly_run/pipeline.py:563-569`).
+- [ ] Production adoption: the disabled-group lists are not normalized for order or duplicates;
+      no snapshot test of the default fit's predictions; the weekly refresh writes where
+      `--data-collection-args` say while the run reads `--data-path`.
+
 ### From the step-3 merge test (2026-09-28)
 
 - [ ] (low priority) `reporting/power_rankings.py` `_load_current_records` groups with `group_by`
@@ -590,19 +656,27 @@ Each group names the archived milestone it came from; the milestone's full recor
       the identity pair (on/off, two seeds) with the other feature-value changes. Measured in the
       next-opponent identity test (a tie, `models/step4/REVIEW.md`); dropped from the model by
       the user (2026-10-02) and pruned by default in `0.44.0`. The ETL still writes the pair.
+      The contents of `models/step4/`, that `REVIEW.md` included, were deleted on 2026-10-16
+      (`.agents/models_cleanup/deleted_2026-10-16.txt`); the result stands as reviewed.
 - [ ] (step 6, phase 3) The early-season strength snapshot, which drives the default power
       rankings and the `adj_*` model features, is dominated by last season. At 2026 snapshot week
       3 (two games per team) the published composite correlates far more with the regressed 2025
       full-season solve than with the 2026 in-season solve, and for the four EPA components the
       prior contributes about three times the spread (`strength_prior_share.py`). Two causes: the
-      in-season solve is shrunk twice, once by the ridge penalty (stronger with fewer games; see
-      the `adj_*` scale-drift item under Milestone 46) and again by the blend weight
-      `games / (games + PRIOR_BLEND_GAMES)`, while the prior is a 17-game solve regressed by
-      one third; and the prior carries no off-season information. The composite also reads
-      per-snap EPA and special teams only, not wins or points, so a head-to-head result moves it
-      only through that game's EPA. Task 55.3 measures `K`; it should take the double shrinkage
-      into account, because `K = 4` does not give the in-season solve the weight its comment in
-      `constants.py` describes.
+      in-season solve is shrunk twice, once by the ridge penalty (stronger with fewer games) and
+      again by the blend weight `games / (games + PRIOR_BLEND_GAMES)`, while the prior is a
+      17-game solve regressed by one third; and the prior carries no off-season information. The
+      composite also reads per-snap EPA and special teams only, not wins or points, so a
+      head-to-head result moves it only through that game's EPA. Task 55.3 measures `K`; it
+      should take the double shrinkage into account, because `K = 4` does not give the in-season
+      solve the weight its comment in `constants.py` describes.
+      Status 2026-10-16: no longer a model input (the `strength` group is left out since
+      `0.59.0`), and the weekly run ranks on the blend (`weekly_run/config.py:46`), but the
+      snapshot still drives two default rankings through the composite: `nfl-predictor rankings`
+      without `--method` (`reporting/power_rankings.py:1264` `resolve_ranking_options`,
+      `cli/rankings.py:113`, `README.md:1064`), and the web app's Power rankings job, which passes
+      no `--method` (`api/jobs/catalog.py:279-297` `_build_power_rankings`) and whose rankings the
+      Power page shows. Open.
 
 ### From the 2026 Week 3 weekly run (2026-09-24)
 
@@ -663,26 +737,6 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       `td_team == posteam`; see `ARCHIVE.md`, Milestone 54). The raw count still is not published
       as a standalone column, but the corrected count now feeds the published `red_zone_td_pct`
       rate (`--tr-stats-source pbp`).
-- [ ] Half of `PBP_COUNT_COLUMNS` (third/fourth down, red zone, two-point, total plays) is joined,
-      aggregated and regressed but never published as raw counts. Milestone 54 published derived
-      rates from some of them (`red_zone_td_pct`, `two_point_conversion_pct`, and the third/fourth
-      down percentages) via `--tr-stats-source pbp`; the raw counts themselves remain unpublished
-      intermediates. Publish the raw counts or stop carrying the ones no rate reads.
-
-### From Milestone 46 (schedule-adjusted strength)
-
-- [ ] `strength_games_played_diff` has a gain-based importance of exactly `0.0`: the two teams in a
-      game have almost always played the same number of games, so the diff is a constant zero
-      outside bye weeks. Drop the `_diff` companion (keep the per-team columns, which do rank) the
-      next time the strength schema is touched.
-- [ ] The raw `adj_off_*` / `adj_def_*` columns drift in scale across a season because the frozen
-      ridge penalty shrinks harder when fewer games have been played (about 30% of true magnitude
-      at 4 games, about 50% by 17). They rank far below the standardized composite. Consider either
-      a games-aware penalty or publishing only the composite plus `adj_srs`, and measure it.
-- [ ] `sos_played_raw` is null for every week-1 and week-2 row (11.7% of the dataset) because a
-      week-2 opponent's only prior game is the one against the subject. That is the method being
-      correct, but a documented fallback (prior-season profile, or the adjusted lens) would make
-      the column usable in the two weeks where schedule strength is least knowable.
 
 ### From Milestone 49 (continuous early-season shrinkage)
 
@@ -695,6 +749,10 @@ on 2026-09-24 (`ARCHIVE.md`, resolved follow-ups).
       `ARCHIVE.md`, Milestone 49, "`games_played` as evidence". Do not reopen it as a new column.
 - [ ] Weeks 3-18 margin MAE got worse with the blend (`9.8952` to `9.9578`) and season Brier is
       slightly worse in 2024 and 2025. The `K` check is task 55.3.
+      Status 2026-10-16 (`.agents/sos_port/followup_check.py`): still feeds production. The
+      strength snapshot's blend no longer does (the `strength` group is left out), but every
+      season-to-date stat is blended with the prior season by the same `K`
+      (`stat_prior_blend_games` in `utils/polars/week_rows.py`); stays with 55.3 in step 9.
 
 ### From the 2026-09-11 code review of `0.6.1`-`0.7.0`
 
@@ -733,10 +791,6 @@ the identity warning. Still open:
       `tests/test_ml_model_training_additional.py`).
       Done in `0.30.1`: the split returns a `TrainCalibrationSplit` carrying `window_pairs`,
       pinned by characterization tests written before the change.
-- [ ] `_attach_qb_features` requests a not-yet-published current season a second time before
-      kickoff (the first `load_pbp` skipped it, so it is "missing"), doubling that network attempt
-      and its warning; and every ETL run, however narrow its `--min-season`, needs all
-      `1999..max_season` play-by-play seasons cached or downloadable.
 - [ ] `qb_stats`: scrambles (dropbacks without a passer id) go to the team-game's plurality
       passer, so a starter who leaves early has his scrambles booked to the backup; the recent
       window counts any week with one dropback as a full game; `completions` and the recent
@@ -745,10 +799,19 @@ the identity warning. Still open:
       since `0.10.0`, the reuse stays); `_ratio` is still
       a third copy of the null-safe ratio in `teamrankings._safe_ratio` and `strength_snapshot`
       (consolidating it touches three modules, so it was left out of that task).
+      Status 2026-10-16: scrambles go to the rusher since `0.54.0` (entry 1.4) and the unread
+      completion and CPOE sums are gone (entry 1.5); left: the recent window's game count (not
+      re-checked) and the `_ratio` copy, still in `utils/polars/qb_stats.py`. Feeds production.
 - [ ] The QB identity chain (Elo name to GSIS id via a copy of the nfeloqb metadata, aliases and
       an `F.Last` fallback) could key completed games on the nflverse schedule's
       `away_qb_id` / `home_qb_id` directly if those columns joined `NFLREADPY_SCHEDULE_COLUMNS`;
       name resolution would then be needed only for future-week rows.
+      Status 2026-10-16: open, low priority. Since `0.54.0`
+      (`.agents/sos_port/decisions/integration_pbp_elo.md` entry 1.3) a completed regular-season
+      game keys on its play-by-play starter, so the chain serves only postseason games, the six
+      team-games of entry 1.2, the four team-games of the two games without play-by-play, and
+      upcoming games. There it still feeds the quarterback family's production features; the
+      schedule's starter ids are still not downloaded.
 
 ### From task 56.4 (rolling calibration window)
 

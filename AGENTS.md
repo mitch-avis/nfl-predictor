@@ -16,8 +16,10 @@ score outputs are secondary and display-only.
   the core data source: every nflreadpy source caches per season under `data/cache/nflreadpy/`
   and degrades non-fatally when the current season is not published yet.
 - Reproducible artifacts: training and backtests write run directories with metadata and
-  metrics, and any number quoted in the docs is auditable from disk under `models/`. Outputs are
-  deterministic under fixed seeds.
+  metrics, and any number quoted in the docs is auditable from disk under `models/`, except
+  from the runs listed in `.agents/models_cleanup/deleted_2026-10-16.txt`, whose directories were
+  deleted on 2026-10-16.
+  Outputs are deterministic under fixed seeds.
 - Tests are required, test-first by default: before changing production code, make sure the
   lines you will touch are covered, adding characterization or failing tests first. Delegated
   work runs as planner, implementer and reviewer (the global rule); the task text carries the
@@ -46,7 +48,9 @@ score outputs are secondary and display-only.
 - `.agents/guardrails.md` is the long form of the delegation guardrails below, and
   `.agents/guardrail_history.md` the incidents behind them. `.agents/walk_forward_runbook.md`
   has run timings, machine load and how to launch a run. `.agents/feature_crosswalk.md` is the
-  cross-repo feature review. `CHANGELOG.md` is the release history.
+  cross-repo feature review. `.agents/frontend_audit_notes.md` collects web-app problems noticed
+  in passing (wrong data on a page, component and accessibility defects): add one when you see
+  one. `CHANGELOG.md` is the release history.
 - Nested instructions load on demand: `src/nfl_predictor/ml/AGENTS.md`,
   `src/nfl_predictor/api/AGENTS.md`, `web/AGENTS.md`, and the path-scoped rules under
   `.claude/rules/` for `constants.py`, the ETL helpers and the model code.

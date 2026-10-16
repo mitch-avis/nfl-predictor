@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.63.5] - 2026-10-16
+
+### Changed
+
+- A docstring in `weekly_run/stage1.py` and the tests' file name call a run without market
+  features and anchor a run without game lines; behavior is unchanged.
+- `config/weekly_run.yaml` and `README.md` describe the power-ranking records by title instead of
+  by task number.
+- Close out roadmap step 6's records: `RANKINGS_EVAL.md` regenerated to match its review; the
+  ported-rating decision files name the release review that covered each entry; the step-6 plan
+  records the user's decisions after the run and the open findings of the integration reviews;
+  `.agents/benchmarks.md` records the full hypothesis checksums.
+- `.agents/TODO.md` has a refreshed validated baseline (production as of `0.63.0`), the step-6
+  status, the step-4 follow-ups' checked status, and an investigation item for nfelo's games file;
+  three step-4 follow-ups that feed neither the production model nor any default power ranking
+  were retired and three resolved in `0.54.0` were closed, both recorded in `.agents/ARCHIVE.md`.
+  The early-season strength snapshot item stays open: the `nfl-predictor rankings` command and the
+  web Power rankings job rank with the composite, which reads it.
+- `AGENTS.md` excepts the runs listed in `.agents/models_cleanup/deleted_2026-10-16.txt` from the
+  rule that every quoted number is auditable from disk; the benchmark sections, open items and
+  living docs that quote them say so.
+
+### Added
+
+- `.agents/sos_port/followup_check.py`: a read-only check of whether each step-4 follow-up still
+  feeds the production model or a default power ranking (the weekly run's, the `rankings`
+  command's and the web job's).
+- `.agents/models_cleanup/`: the inventory script, the executed inventory and the list of run
+  directories deleted from `models/` on 2026-10-16.
+- `.agents/frontend_audit_notes.md`: web-app problems noticed in passing, pointed to from
+  `AGENTS.md` and `web/AGENTS.md`.
+
 ## [0.63.4] - 2026-10-16
 
 ### Fixed

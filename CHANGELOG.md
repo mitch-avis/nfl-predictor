@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.62.1] - 2026-10-15
+
+### Changed
+
+- Coverage measures `src/` alone (`[tool.coverage.run]` `source`); `tests/` no longer counts
+  toward the reported total or the `fail_under` bar. Measured on `0.62.0`, the `src/` total is
+  96%, against 98% with `tests/` included; `scripts/gate.sh`'s separate `src/` step is unchanged.
+
 ## [0.62.0] - 2026-10-15
 
 ### Changed

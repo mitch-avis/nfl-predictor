@@ -799,3 +799,104 @@ production's floor-sigma reference (`constants.FLOOR_SIGMA_REFERENCE_RUNS`), by 
 decision on 2026-10-15. They replace the step-6 runs, which trained on the `qb_elos.csv` before
 its refresh. From `REVIEW.md`: "the sigma moves by under `0.005` points (final
 `13.3184`/`13.3182` against `13.3195`/`13.3227`), so probabilities barely change".
+
+## The quarterback adjustment without game lines (2026-10-15, `models/qb_adj_no_lines/`)
+
+Whether the run without game lines gains from the quarterback adjustment group (`qb_adj`:
+`away_qb_adj`, `home_qb_adj`, `qb_adj_diff`), which the market-anchored model measured as a tie
+above. Four runs, two arms on two seeds each, all in `models/qb_adj_no_lines/` (checkpoint
+directories for seeds 42 and 7):
+
+- The reference, the default without game lines (`--disable-feature-groups
+  strength,elo,own_elo_wt,qb_adj`, 431 features): `no_lines_seed{42,7}`
+  (`524400106ab720ccfb3e`, `6e8ec19833318631e24d`).
+- The candidate, the same with the quarterback adjustment kept (`strength,elo,own_elo_wt`, 434
+  features): `no_lines_qb_adj_seed{42,7}` (`2108d71fbe1e0b36f5df`, `7e1e9343fb8596950136`).
+
+Input: `models/qb_elos_measure/inputs/new_file.csv` (`b9772e3e...49f0`, the new-file cut of the
+measurement above, no new build); its `qb_adj` columns have no nulls from 2007 on. Code `d791846`
+(`0.62.0`) in all four runs. Command (`driver.sh`): `nfl-predictor backtest --calibration auto
+--eval-seasons 2007..2025 --wf-start-week 1 --random-seed {42,7} --exclude-market
+--no-market-anchor --no-market-transform --disable-feature-groups <arm's groups>`: 328 folds, 4943
+games, 200 trees with no early stop, calibration `none` in every fold, unweighted, every fold
+`cuda`, each run's own floor-sigma pool. Rules: `HYPOTHESIS.md` there (sha256
+`8c1028438a66594c8ecb1445ed8fcf4403ccf0e7a8c2cd3a1f1ed4c34519ce06`, committed on `main` in
+`7b1560b` before the launch, unamended); second key: `REVIEW.md` there, by a reviewer that did not
+produce the runs. Two seeds averaged per game, candidate minus reference, 95% intervals.
+
+Provenance (`REVIEW.md`): each candidate differs from its reference only in the disabled groups,
+and its features only by the three `qb_adj` columns; every run computed all 328 folds and restored
+none, the four ran back to back with no overlap, and the reference runs reproduce the step-6 runs
+without game lines (`models/step6/elo_marketfree_seed{42,7}`) bit for bit on all 4,943 games. The
+reviewer's own rescore from the fold checkpoints matches `nfl-predictor compare` on every point
+estimate and on which intervals exclude zero.
+
+Results, by rule (governing window all weeks; Brier selects, log loss must not lose, then pool
+points and margin MAE break ties):
+
+- All weeks: Brier `+0.00007` `[-0.00050, +0.00064]`, log loss `+0.00027` `[-0.00100, +0.00151]`,
+  pool points `+19.0` `[-84.0, +120.5]`, margin MAE `-0.0053` `[-0.0275, +0.0174]`. A tie, the
+  rule's second branch and not between branches: `qb_adj` stays in
+  `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` (the simpler setting), and no default changes.
+  The two seeds' all-weeks Brier contrasts (`-0.00004`, `+0.00018`) straddle zero.
+- Weeks 1 and 2: no two-seed interval excludes zero on any column, so nothing is flagged. The point
+  estimates lean the hypothesised way: Brier week 1 `-0.00049` `[-0.00255, +0.00162]`, week 2
+  `-0.00063` `[-0.00289, +0.00167]` (weeks 3-18 `+0.00016` `[-0.00045, +0.00075]`); log loss
+  `-0.00084` `[-0.00522, +0.00364]` and `-0.00137` `[-0.00624, +0.00352]`; pool points `+11.0`
+  `[-19.0, +40.0]` and `+8.0` `[-29.5, +46.5]`; margin MAE `-0.0200` `[-0.1014, +0.0618]` and
+  `-0.0366` `[-0.1233, +0.0519]`; pick accuracy `+0.0066` in both.
+
+Every paired interval `REVIEW.md` lists as excluding zero (rule 9):
+
+- The candidate minus the reference: none, in any window, on two seeds or on either seed alone.
+- Against the pick-time line on each arm's own rows (two seeds), all for the line: the candidate
+  weeks 3-18 Brier `+0.00370` `[+0.00149, +0.00592]`, log loss `+0.00846` `[+0.00342, +0.01358]`,
+  pool points `-316.5` `[-576.5, -52.5]`, margin MAE `+0.1139` `[+0.0393, +0.1888]`, total MAE
+  `+0.1863` `[+0.1114, +0.2602]`; all weeks Brier `+0.00381` `[+0.00172, +0.00586]`, log loss
+  `+0.00865` `[+0.00385, +0.01341]`, pool points `-362.5` `[-661.5, -71.5]`, margin MAE `+0.1143`
+  `[+0.0417, +0.1832]`, total MAE `+0.1944` `[+0.1237, +0.2651]`. The reference weeks 3-18 Brier
+  `+0.00354` `[+0.00133, +0.00577]`, log loss `+0.00800` `[+0.00293, +0.01312]`, pool points
+  `-316.5` `[-580.0, -61.0]`, margin MAE `+0.1160` `[+0.0405, +0.1914]`, total MAE `+0.1831`
+  `[+0.1062, +0.2573]`; all weeks Brier `+0.00373` `[+0.00162, +0.00579]` (the step-6 record's
+  `+0.00373` `[+0.00161, +0.00580]`), log loss `+0.00839` `[+0.00351, +0.01313]`, pool points
+  `-381.5` `[-677.0, -92.5]`, margin MAE `+0.1197` `[+0.0469, +0.1901]`, total MAE `+0.1923`
+  `[+0.1204, +0.2632]`. Neither arm's interval against the line excludes zero in week 1 or week 2,
+  or on pick accuracy in any window.
+- Seed 7 minus seed 42 within an arm (outside the instrument): the candidate's total MAE in week 1
+  `-0.1428` `[-0.2698, -0.0136]`, weeks 3-18 `-0.0386` `[-0.0762, -0.0011]` and all weeks
+  `-0.0449` `[-0.0800, -0.0099]`, for seed 7; the reference's all-weeks margin MAE `+0.0360`
+  `[+0.0020, +0.0692]`, for seed 42. A seed moves the error columns about as much as the arms
+  differ.
+
+Ranks, two-seed means with the line: the line ranks first on every column in every window. All
+weeks, the reference leads on Brier, log loss and total MAE, the candidate on pick accuracy, pool
+points and margin MAE. Weeks 3-18 the same, except that the arms tie on pool points (24,590.5
+each). Weeks 1 and 2, the candidate leads on every column except week 2 total MAE. The rank table
+for every window and column is in `REVIEW.md`.
+
+**The floor sigma in a weekly run without game lines: an open rule-11 gap.** The reviewer's one
+rule-11 finding (severity P2). The reference arm is what `nfl-predictor weekly --wf-market-mode
+none` (and `train` and `backtest` without market features or anchor) does, except for the floor
+sigma's source. The weekly run loads its floor-sigma reference runs in every market mode
+(`weekly_run/pipeline.py`, `floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)`;
+`ml/floor_sigma.py` has no market-mode branch). Those are the market-anchored
+`models/qb_elos_measure/new_file_seed{42,7}` (`config/weekly_run.yaml`,
+`constants.FLOOR_SIGMA_REFERENCE_RUNS`), so a weekly run with `--wf-market-mode none` would take its
+sigma from the anchored model's out-of-fold errors (final pooled `13.3184` and `13.3182`), while
+every walk-forward without game lines, these runs and step 6's, pools its own (final `13.3969` and
+`13.4341` for the reference). That weekly run's probabilities would be slightly sharper than the
+ones measured here (a sigma about `0.1` lower). The difference is not approved. The fix is the
+user's decision, due when a weekly prediction without game lines is adopted (`HYPOTHESIS.md`
+scopes the reference question out until then); the reviewer suggests pointing mode `none` at a
+reference without game lines (`no_lines_seed{42,7}` here qualify) or warning when the mode and the
+reference runs' market settings disagree. The weekly run with game lines is unaffected, and so is
+this verdict: both arms pooled their own errors.
+
+The reviewer's other findings, all minor (P3): `compare`'s production-settings section always
+compares with the weekly config with game lines, so for runs without them it lists the expected
+market and group differences and misses real gaps such as the floor sigma's source (suggested:
+compare with the config resolved for `wf_market_mode: none` and include the sigma's source); the
+driver's check for other runs ran only at each run's start and its pattern misses other launch
+forms (no effect here); and the seeds disagree in sign on pool points (`+92.0` against `-54.0`, all
+weeks) and on total MAE, which is why the two-seed mean is the instrument. Full tables,
+provenance, findings and reproduction scripts: `models/qb_adj_no_lines/REVIEW.md`.

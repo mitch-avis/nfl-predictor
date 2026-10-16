@@ -98,7 +98,8 @@ Log loss guards against a component that sharpens probabilities into overconfide
 **How to reverse it**: change the rule here before rerunning `.agents/sos_port/elo_eval.py`; the
 script prints every step and every interval, so another rule can be applied to the same numbers.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 2. Seeding the first season
 
@@ -127,7 +128,8 @@ the difference is at most `0.000021` in probability.
 **How to reverse it**: pass `EloInputs(initial_ratings=...)` with the table in `ELO_EVAL.md`,
 "538's 1999 preseason ratings".
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 3. Pinning the framework to 538's published numbers
 
@@ -162,7 +164,8 @@ and neutral flag on every game 538 lists, all 5,852 match, with a largest probab
 
 **How to reverse it**: the fixture and its tolerances are in the test; nothing to reverse.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 4. Home sides and neutral sites as this repository's schedule records them
 
@@ -201,7 +204,8 @@ by up to 16 points for a few weeks afterwards.
 **How to reverse it**: patch `neutral` on those games in the schedule frame before calling
 `build_own_elo_features`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 5. Game order and the week of league-level values
 
@@ -228,7 +232,8 @@ game's league-wide inputs must not include that Thursday's result.
 **How to reverse it**: the sort keys in `elo_ratings._ordered`, the window bounds in
 `elo_game_context.rolling_home_field`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 6. Rest and bye
 
@@ -260,7 +265,8 @@ side off a bye.
 
 **How to reverse it**: `EloSettings(rest=True)`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 7. Travel
 
@@ -298,7 +304,8 @@ of 55 instead of 65.
 
 **How to reverse it**: `EloSettings(travel=False)`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 8. Playoff boost
 
@@ -323,7 +330,8 @@ probabilities move away from 0.5.
 
 **How to reverse it**: `EloSettings(playoff_boost=True)`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 9. Rolling home field
 
@@ -356,7 +364,8 @@ because the fixed 55 or 65 points overstate home field since 2020.
 
 **How to reverse it**: `EloSettings(rolling_home_field=False)`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 10. Quarterback box scores and starters
 
@@ -404,7 +413,8 @@ than 538's; the adjustment compares him with his own team's rating, which omits 
 **How to reverse it**: pass other box scores (same columns, `elo_quarterbacks.BOX_SCORE_SCHEMA`)
 to `value_qb_adjustments`, or other per-game adjustments to `EloInputs.qb_adjustments`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 11. The quarterback model
 
@@ -457,7 +467,8 @@ standard deviation, and more than 100 points down for a backup.
 **How to reverse it**: `EloSettings(quarterback=False)`; the constants are in
 `elo_quarterbacks`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 12. The win-total pull
 
@@ -495,7 +506,8 @@ preseason rating moves about two thirds of the way to the win-total rating.
 **How to reverse it**: use `MARKET_FREE_SETTINGS`, or `EloInputs(win_total_weights=...)` for
 fixed weights.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 13. The published columns and their feature group
 
@@ -538,7 +550,8 @@ preset).
 **How to reverse it**: `constants.OWN_ELO_TEAM_STATS`, `OWN_WT_ELO_TEAM_STATS` and their game
 columns, and `elo_ratings.OWN_ELO_VARIANTS`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 14. The rule applied
 
@@ -584,7 +597,8 @@ and `0.21541`.
 **How to reverse it**: rerun `.agents/sos_port/elo_eval.py` under another rule, or pass other
 `EloSettings`.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 15. The starter is known at kickoff
 
@@ -625,7 +639,8 @@ can rate upcoming games for the expected starter, and historical games would kee
 **How to reverse it**: `value_qb_adjustments(..., pre_game_starter="last_starter")` rates every
 game for the starter known before kickoff.
 
-**Review**: not yet reviewed (the numbers reproduce the independent review's).
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); the entry's numbers reproduce the independent review's.
 
 ## 16. Where the remaining quarterback alternative lives
 
@@ -649,7 +664,8 @@ rating replaces VALUE without touching the engine.
 
 **How to reverse it**: nothing to reverse.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.47.0` release's review (two independent rounds, verdict "merge as is";
+[the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 17. The ported quarterback rating as the adjustment (the rule)
 
@@ -722,7 +738,8 @@ numbers compare with `ELO_EVAL.md`.
 
 **How to reverse it**: nothing to reverse.
 
-**Review**: not yet reviewed.
+**Review**: covered by the `0.57.1` release's review (one independent round, verdict "merge after
+small fixes"; [the decision index](../DECISIONS.md)); no separate re-run of this entry is recorded.
 
 ## 18. The ported quarterback rating as the adjustment (the result)
 

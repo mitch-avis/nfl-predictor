@@ -27,6 +27,54 @@
 - `.agents/frontend_audit_notes.md`: web-app problems noticed in passing, pointed to from
   `AGENTS.md` and `web/AGENTS.md`.
 
+## [0.63.4] - 2026-10-16
+
+### Fixed
+
+- The data-status page's leakage-audit card listed flagged columns as `[object Object]`: it now
+  lists each flagged column by name with its reasons in plain words, and lists the failure
+  messages when the audit failed. `web/src/api/types.ts` describes the report as the audit writes
+  it (`LeakageFlag` objects, string failures and warnings).
+- The shared data table put empty values first on a descending sort, so a numeric column's first
+  click led with them; empty values now sort last in both directions, for primary and secondary
+  sort keys.
+- The shared data table's primary sorted header carries `aria-sort`.
+
+## [0.63.3] - 2026-10-16
+
+### Changed
+
+- Every open Dependabot update, taken locally: `astral-sh/setup-uv` `10.3.0` in CI, and in
+  `web/` `@tanstack/react-table` `9.3.1`, `typescript` `7.0.2`, `@types/node` `26.6.5`,
+  `@tanstack/react-query` `5.104.3`, `lucide-react` `1.57.0`, `radix-ui` `1.8.1`, `react-router`
+  `8.4.0`, `tailwind-merge` `3.7.0`, `@vitejs/plugin-react` `6.1.2`, `@vitest/coverage-v8` and
+  `vitest` `5.0.4`, `jsdom` `30.1.2`, `oxlint` `1.88.0` and `vite` `8.3.4`.
+- The shared data table runs on react-table 9 (`useTable` with an explicit sorting feature);
+  its headers, cells, empty state and click-to-sort cycle behave as before, pinned by new tests.
+  One difference: a text column whose first row is empty now sorts ascending on the first click
+  (react-table 9 skips empty values when it picks the direction; 8 read the first row only).
+- `.github/dependabot.yml` groups only minor and patch updates in each ecosystem, so a major
+  update arrives as its own pull request.
+
+## [0.63.2] - 2026-10-16
+
+### Removed
+
+- `nfl_elo.csv` from the web app's data-status file list (`api/readers/data_status.py`): no
+  model, ETL or report code reads it.
+
+## [0.63.1] - 2026-10-16
+
+### Fixed
+
+- The Stade de France (`PAR00`, `2026_07_PIT_NO`) and FC Bayern Munich Stadium (`MUN01`,
+  `2026_10_NE_DET`) get `stadium_roof` `outdoors` and `stadium_type` `open`: both are open-air
+  fields that nflverse's schedule lists as `dome`. The corrections sit in
+  `constants.STADIUM_ROOF_OVERRIDES` and apply to fresh and cached schedules alike; neither venue
+  hosted a game before 2026, so no earlier feature value changes. `constants.py` changed, so
+  every walk-forward checkpoint fingerprint, the weekly stage hashes and the season-cache key
+  move: the first weekly run after the upgrade retrains stage 1 and rebuilds the season cache.
+
 ## [0.63.0] - 2026-10-15
 
 ### Changed

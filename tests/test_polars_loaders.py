@@ -98,6 +98,80 @@ def test_add_stadium_features() -> None:
     assert out.select(pl.col("stadium_state").is_null().all()).item() is True
 
 
+def _roof_schedule() -> pl.DataFrame:
+    """Build prepared schedule rows: two open-air venues nflverse lists as domes and two controls.
+
+    Returns:
+        Schedule frame with `stadium_id` and `stadium_roof`
+
+    """
+    return pl.DataFrame(
+        {
+            "stadium_id": ["PAR00", "MUN01", "NOR00", "DEN00"],
+            "stadium_roof": ["dome", "dome", "dome", "outdoors"],
+        }
+    )
+
+
+def test_apply_schedule_enrichments_overrides_listed_dome_roofs_to_outdoors() -> None:
+    """The Stade de France and Munich rows nflverse marks `dome` come out `outdoors`."""
+    # Arrange
+    df = _roof_schedule()
+
+    # Act
+    out = loaders._apply_schedule_enrichments(df)
+
+    # Assert
+    assert out["stadium_roof"].to_list()[:2] == ["outdoors", "outdoors"]
+
+
+def test_apply_schedule_enrichments_leaves_other_dome_roofs_alone() -> None:
+    """A dome at a venue without an override keeps its nflverse roof."""
+    # Arrange
+    df = _roof_schedule()
+
+    # Act
+    out = loaders._apply_schedule_enrichments(df)
+
+    # Assert
+    assert out["stadium_roof"][2] == "dome"
+    assert out["stadium_type"][2] == "dome"
+
+
+def test_apply_schedule_enrichments_leaves_outdoors_roofs_alone() -> None:
+    """A row nflverse already marks `outdoors` is unchanged."""
+    # Arrange
+    df = _roof_schedule()
+
+    # Act
+    out = loaders._apply_schedule_enrichments(df)
+
+    # Assert
+    assert out["stadium_roof"][3] == "outdoors"
+    assert out["stadium_type"][3] == "open"
+
+
+def test_apply_schedule_enrichments_derives_open_stadium_type_for_overridden_roofs() -> None:
+    """The overridden rows get the outdoors `stadium_type` value, `open`."""
+    # Arrange
+    df = _roof_schedule()
+
+    # Act
+    out = loaders._apply_schedule_enrichments(df)
+
+    # Assert
+    assert out["stadium_type"].to_list()[:2] == ["open", "open"]
+
+
+def test_stadium_roof_overrides_cover_only_venues_in_the_stadium_table() -> None:
+    """Every roof override names a venue `constants.STADIUMS` lists."""
+    # Act
+    unknown = set(constants.STADIUM_ROOF_OVERRIDES) - set(constants.STADIUMS)
+
+    # Assert
+    assert unknown == set()
+
+
 def _keep_team_column(df: pl.DataFrame, _column: str) -> pl.DataFrame:
     """Return the frame unchanged in place of the team-column normalizer."""
     return df

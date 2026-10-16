@@ -349,13 +349,28 @@ def _add_stadium_features(df: pl.DataFrame) -> pl.DataFrame:
     return df.with_columns([stadium_type, altitude])
 
 
+def _override_stadium_roofs(df: pl.DataFrame) -> pl.DataFrame:
+    """Replace the nflverse roof of the venues `constants.STADIUM_ROOF_OVERRIDES` corrects."""
+    if "stadium_id" not in df.columns or "stadium_roof" not in df.columns:
+        return df
+    override = pl.col("stadium_id").replace_strict(
+        constants.STADIUM_ROOF_OVERRIDES, default=None, return_dtype=pl.Utf8
+    )
+    return df.with_columns(
+        pl.coalesce(override, pl.col("stadium_roof").cast(pl.Utf8)).alias("stadium_roof")
+    )
+
+
 def _apply_schedule_enrichments(df: pl.DataFrame) -> pl.DataFrame:
     """Add optional stadium features to a schedule DataFrame.
 
     The columns `constants.STADIUMS` supplies (city, state, a missing name, the elevation) are
     derived again on every load, cached frames included, so a cache written before the table
-    gained or corrected a venue gives the same values as a fresh download.
+    gained or corrected a venue gives the same values as a fresh download. The roof corrections
+    of `constants.STADIUM_ROOF_OVERRIDES` are applied first, the same way, so `stadium_roof`
+    and the `stadium_type` derived from it carry the corrected roof.
     """
+    df = _override_stadium_roofs(df)
     if "stadium_id" in df.columns:
         df = _add_stadium_location(df)
     return _add_stadium_features(df)

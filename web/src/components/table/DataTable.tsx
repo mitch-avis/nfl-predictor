@@ -1,7 +1,10 @@
 import {
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
+  metaHelper,
+  rowSortingFeature,
+  tableFeatures,
+  useTable,
   type CellContext,
   type ColumnDef,
   type HeaderContext,
@@ -9,7 +12,6 @@ import {
   type SortingState,
   type Table,
 } from '@tanstack/react-table'
-import { useReactTable } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 
@@ -42,7 +44,16 @@ interface DataTableMeta {
   renderers?: Record<string, CellRenderer>
 }
 
-function tableMeta(table: Table<Row>): DataTableMeta {
+/** The table features: sorting only, with the cells' metadata typed through `tableMeta`. */
+const features = tableFeatures({
+  rowSortingFeature,
+  sortedRowModel: createSortedRowModel(),
+  tableMeta: metaHelper<DataTableMeta>(),
+})
+
+type Features = typeof features
+
+function tableMeta(table: Table<Features, Row>): DataTableMeta {
   return table.options.meta as DataTableMeta
 }
 
@@ -51,7 +62,7 @@ function tableMeta(table: Table<Row>): DataTableMeta {
  * level and read the current metadata and renderers from the table, so their identity never
  * changes and React updates cells in place instead of remounting them (which dropped focus).
  */
-function HeaderLabel({ column, table }: HeaderContext<Row, unknown>) {
+function HeaderLabel({ column, table }: HeaderContext<Features, Row, unknown>) {
   const meta = tableMeta(table).columnMetadata[column.id]
   return (
     <span className={cn('inline-flex items-center gap-1', isNumericKind(meta) && 'justify-end w-full')}>
@@ -61,21 +72,27 @@ function HeaderLabel({ column, table }: HeaderContext<Row, unknown>) {
   )
 }
 
-/** A cell: the page's renderer for its column when there is one, else the formatted value. */
-function BodyCell({ column, row, table, getValue }: CellContext<Row, unknown>) {
+/**
+ * A cell: the page's renderer for its column when there is one, else the formatted value. It reads
+ * the payload value rather than the accessor's, so a renderer still sees `null` as `null`.
+ */
+function BodyCell({ column, row, table }: CellContext<Features, Row, unknown>) {
   const { columnMetadata, renderers } = tableMeta(table)
   const meta = columnMetadata[column.id]
-  const value = getValue() as Row[string]
+  const value = row.original[column.id]
   const custom = renderers?.[column.id]
   return custom ? custom(value, row.original, meta) : formatCell(meta, value)
 }
 
-/** Sort numbers as numbers and anything else as text, missing values last. */
-function compareCells(left: TableRow<Row>, right: TableRow<Row>, columnId: string): number {
+/**
+ * Sort numbers as numbers and anything else as text. Missing values never reach it: the accessor
+ * reads `null` as `undefined`, which `sortUndefined: 'last'` keeps last in both directions (the
+ * table flips this comparator's result on a descending sort, so it cannot place them itself).
+ */
+function compareCells(left: TableRow<Features, Row>, right: TableRow<Features, Row>, columnId: string): number {
   const av = left.original[columnId]
   const bv = right.original[columnId]
-  if (av === null || av === undefined) return 1
-  if (bv === null || bv === undefined) return -1
+  if (av === null || av === undefined || bv === null || bv === undefined) return 0
   if (typeof av === 'number' && typeof bv === 'number') return av - bv
   return String(av).localeCompare(String(bv))
 }
@@ -103,29 +120,26 @@ export function DataTable({
     stickyOffsets[k] = i * STICKY_WIDTH
   })
 
-  const columnDefs = useMemo<ColumnDef<Row>[]>(
+  const columnDefs = useMemo<ColumnDef<Features, Row>[]>(
     () =>
       keys.map((key) => ({
         id: key,
-        accessorFn: (row) => row[key],
+        accessorFn: (row) => row[key] ?? undefined,
         header: HeaderLabel,
         cell: BodyCell,
-        sortingFn: compareCells,
+        sortFn: compareCells,
         sortUndefined: 'last',
       })),
     [keys],
   )
   const meta: DataTableMeta = { columnMetadata: table.column_metadata, renderers }
 
-  // TanStack Table exposes imperative handlers by design; this component keeps them local.
-  // oxlint-disable-next-line react/incompatible-library
-  const instance = useReactTable({
+  const instance = useTable({
+    features,
     data: table.rows,
     columns: columnDefs,
     state: { sorting },
     onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
     meta,
   })
 
@@ -143,6 +157,8 @@ export function DataTable({
                 const meta = table.column_metadata[header.column.id]
                 const sorted = header.column.getIsSorted()
                 const sticky = header.column.id in stickyOffsets
+                const primary = sorted && header.column.getSortIndex() === 0
+                const ariaSort = primary ? (sorted === 'asc' ? 'ascending' : 'descending') : undefined
                 const style: CSSProperties | undefined = sticky
                   ? { position: 'sticky', left: stickyOffsets[header.column.id], minWidth: STICKY_WIDTH, zIndex: 30 }
                   : undefined
@@ -150,6 +166,7 @@ export function DataTable({
                   <th
                     key={header.id}
                     style={style}
+                    aria-sort={ariaSort}
                     className={cn(
                       'whitespace-nowrap border-b bg-card px-2.5 font-medium text-muted-foreground',
                       dense ? 'py-1.5' : 'py-2.5',
@@ -175,7 +192,7 @@ export function DataTable({
         <tbody>
           {instance.getRowModel().rows.map((row, index) => (
             <tr key={rowKey ? rowKey(row.original, index) : row.id} className={cn('group/row hover:bg-accent/30', rowClassName?.(row.original))}>
-              {row.getVisibleCells().map((cell) => {
+              {row.getAllCells().map((cell) => {
                 const key = cell.column.id
                 const meta = table.column_metadata[key]
                 const value = row.original[key]

@@ -30,7 +30,6 @@ DATASET_FILES: tuple[tuple[str, str], ...] = (
     ("all_data.csv", "Same games without the diff columns."),
     ("completed_games_ml.csv", "Training set: played games with features and targets."),
     ("completed_games.csv", "Played games without the diff columns."),
-    ("nfl_elo.csv", "Team Elo input."),
     ("qb_elos.csv", "Quarterback Elo input (copied from nfeloqb)."),
 )
 CACHE_FILE_RE = re.compile(r"^(pbp|schedule)_(\d{4})(?:_reg)?\.parquet$")

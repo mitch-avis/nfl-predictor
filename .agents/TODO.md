@@ -296,6 +296,20 @@ Steps:
    1999, full crews in `load_officials`), game-day weather (temperature and wind for outdoor
    games), attendance, and team health (nflverse injury reports since 2009). Each first passes a
    pick-time check (what is known before Thursday for an upcoming game), then a measured arm.
+   - [x] Pick-time checks written 2026-10-16 (notes only, no runs): `.agents/step8_pick_time.md`.
+     Verdicts: team health passes only with a lagged proxy (last week's final injury report plus
+     starters absent last game, from the cached snap counts); weather passes only with a venue
+     climatology proxy and mainly moves the display-only total; the referee crew fails while
+     nflverse's officials feed is off (parked); attendance fails (recorded after the game, no
+     nflverse source). The notes' open questions (the proxy, both tracks, retiring two ideas, the
+     pick-time line) are the user's; the measured arms wait for those answers.
+   - [ ] Retractable roofs differ between training and prediction rows (found 2026-10-16 by the
+     pick-time checks, `.agents/step8_pick_time.md`, "Incidental finding"): `stadium_type` is the
+     schedule's roof (`utils/polars/loaders.py:329-334`), a one-hot model feature; played games at
+     the retractable venues carry the game-day state (`open` or `dome`) while unplayed games there
+     carry `unknown`, a category training never saw. A parity defect under rule 11 and a small
+     game-day leak; the proposed fix (one constant category for those venues) changes feature
+     values, so it waits for the user and groups with the next feature-value change.
    - [ ] Investigation (not a milestone, added 2026-10-16): `data/nfelo_games.csv`, downloaded by
      the user from Robert Greer's `greerreNFL/nfelo`, keyed by `game_id` (4,723 games from 2009
      week 1 to 2026 week 6, counted 2026-10-16). It holds nfelo's pre-game home win probability

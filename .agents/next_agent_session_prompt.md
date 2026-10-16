@@ -6,9 +6,25 @@ Read `AGENTS.md` first and treat its delegation guardrails (rules 1-16) as bindi
 walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6_plan.md` and
 `.agents/sos_port/DECISIONS.md` hold step 6's history.
 
-## State (written 2026-10-15, 22:40 MDT)
+## State (written 2026-10-15, 23:40 MDT)
 
-- **`main` is at `0.62.2`** (`b5b2f53`, not pushed, no tags): python-template `0.1.4` (tagged by
+- **Branch `fix/no-game-lines-sigma-reference` (`0.63.0`, head `611945b`) is ready and waits
+  for the user's approval to merge** (`GUARD_OK=1 git merge --no-ff`, then the CUDA sync and the
+  gate on `main`). The main checkout is on this branch. What it does (the user chose this fix
+  2026-10-15): a run without game lines (the weekly run's `--wf-market-mode none`, or `train`
+  without market features and anchor) defaults its floor-sigma reference to
+  `constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS`
+  (`models/qb_adj_no_lines/no_lines_seed{42,7}`) instead of the market-anchored production runs; a listed value still wins in every mode;
+  `options.resolve_floor_sigma_reference_runs` mirrors the feature-group default, and
+  `config/weekly_run.yaml` leaves the key out so it follows the mode. Production (mode hybrid)
+  resolves to the same runs and settings as before; `constants.py` changed, so every
+  walk-forward checkpoint fingerprint moved. Tests first (they fail on `3bde4dd`); independent
+  review approved with four P3 doc findings, all fixed on the branch; the reviewer's 25
+  adversarial tests (all pass, uncommitted) are in
+  `~/scratch/sigma_review/test_adversarial_sigma_reference.py`. Gate exit `0` on `611945b`,
+  4,406 tests, `src/` coverage 96.32%. The branch also closes the follow-up (`TODO.md`,
+  `ARCHIVE.md`, `.agents/benchmarks.md`).
+- **`main` is at `0.62.2`** (`3bde4dd`, not pushed, no tags): python-template `0.1.4` (tagged by
   the user) through `copier update` on `build/python-template-0.1.4`, merged `--no-ff` with the
   user's approval. The gate's separate "src coverage" step is gone (pytest's `fail_under`
   measures `src/` alone since `0.62.1`); `tests/test_gate_script.py` pins that, and failed
@@ -19,10 +35,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
   a tie, so `qb_adj` stays in `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` and no default
   changes) and recorded by an agent that did not produce them (`b810142`, `.agents/benchmarks.md`
   "The quarterback adjustment without game lines"; `1c24b8c` closes the `TODO.md` step 7 item).
-  Gate exit `0` on `1c24b8c`. The review found an open rule-11 gap, logged in `TODO.md` "Open
-  follow-ups" as the user's decision: a weekly run with `--wf-market-mode none` takes its floor
-  sigma from the market-anchored reference runs (`weekly_run/pipeline.py`
-  `load_reference_pool`, no market-mode branch). The weekly run with game lines is unaffected.
+  Gate exit `0` on `1c24b8c`. The review's rule-11 finding (runs without game lines took the
+  market-anchored sigma reference) is fixed on the branch above.
 - `0.62.1` (`eedfa70`, merged with the user's approval): coverage measures `src/` alone
   (`[tool.coverage.run]` `source = ["src"]`), the user's edit minus its `omit` line (`tests/*`
   was redundant; `src/*/__init__.py` matched only the one-line `src/nfl_predictor/__init__.py`).
@@ -79,6 +93,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 
 ## Next, in order
 
+0. **Merge `fix/no-game-lines-sigma-reference`** once the user approves (see State), then the
+   CUDA sync, the gate on `main`, and delete the branch.
 1. **`../nfeloqb`, a backup's first start** (approved 2026-10-15, test first): the next-week
    projection rates the starter with `current_value`, while the played row uses
    `get_value(team)`, which applies the backup rule (Baltimore's Week 5 projection was off by
@@ -118,6 +134,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 - `train`'s `--no-market-anchor`/`--no-market-transform` and its `--exclude-market` default list:
   accepted.
 - The no-game-lines list keeps `qb_adj` (measured: a tie, `models/qb_adj_no_lines/REVIEW.md`).
+- Runs without game lines take their own floor-sigma reference,
+  `models/qb_adj_no_lines/no_lines_seed{42,7}` (chosen by the user; `0.63.0` on the branch).
 - The `_fill_side_qb` fix: investigate first, then fix (done, `0.60.1`).
 - `.agents/m60/INVENTORY.md` and `PROPOSAL.md` stay frozen with their old helper names.
 - Merges no longer wait for the Monday game this week (the picks are in).
@@ -125,7 +143,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
   reopening, reordering or retiring undone items still asks.
 - Merged scratch worktrees removed 2026-10-15; the reviewers' adversarial tests are in
   `~/scratch/review_archive/`. Kept: `~/scratch/qb_measure` (the new-file build, for the
-  win-total measurement), `~/scratch/qb_adj_nolines` (the running measurement's code) and
+  win-total measurement), `~/scratch/qb_adj_nolines` (the code of the `qb_adj` measurement,
+  whose reference runs are now the default sigma reference without game lines) and
   `~/scratch/step6/data` (step 6's candidate build, cited by `.agents/sos_port/*.md`).
 - Earlier the same day: the Las Vegas fork fix (done); `qb_adj` as features, off until measured;
   the grouped measurement and its ladder; the backup first-start fork fix; the stale win-total
@@ -134,11 +153,8 @@ walk-forward ("`qb_elos.csv` measurement" is the newest section). `.agents/step6
 
 ## Open for the user
 
-- The floor sigma of weekly runs without game lines (the review's rule-11 gap): recommended, a
-  reference of their own for that mode (`models/qb_adj_no_lines/no_lines_seed{42,7}`, which
-  match step 6's runs without game lines game for game), a small code change with a test that
-  moves only runs without game lines; the alternative records the shared sigma as an approved
-  difference. Its row in `TODO.md`'s follow-up-to-step table waits for the user's choice.
+- Merging `fix/no-game-lines-sigma-reference` (`0.63.0`) into `main`: reviewed, gate green;
+  production's settings unchanged.
 - The test suite: the user asked about pruning; recommended no blanket review (4,392 tests run
   in about 57 seconds on 8 workers, and coverage of `tests/` never drove their number).
 - The harness worktrees `.claude/worktrees/agent-*` (including `feat/qb-adj-features` and

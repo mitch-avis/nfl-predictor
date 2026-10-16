@@ -405,9 +405,36 @@ def test_data_routes(project_root: Path, viewer_client: TestClient, app: FastAPI
     assert names["completed_games_ml.csv"]["exists"] is True
     assert names["completed_games_ml.csv"]["rows"] == 1
     assert names["all_data_ml.csv"]["exists"] is False
+    assert names["ratings/"]["file_count"] is None
     assert payload["cache"] == {"schedule": [], "pbp": []}
+    assert payload["cache_files"] == []
+    assert payload["other_seasons"] == {"team_rankings": [], "etl_seasons": []}
     assert payload["leakage_audit"] is None
     assert [f["name"] for f in payload["predict_files"]] == ["week_03_predictions.csv"]
+
+
+def test_data_status_reports_the_caches_on_disk(
+    project_root: Path, viewer_client: TestClient, app: FastAPI
+) -> None:
+    """Data status reads the nflreadpy and nfelo caches under the settings' data directory."""
+    # Arrange
+    _seed(project_root, app)
+    cache_root = project_root / "data" / "cache"
+    (cache_root / "nflreadpy").mkdir(parents=True)
+    (cache_root / "nflreadpy" / "snap_counts_2025_reg.parquet").write_bytes(b"x")
+    (cache_root / "nflreadpy" / "players.parquet").write_bytes(b"x")
+    (cache_root / "nfelo").mkdir()
+    (cache_root / "nfelo" / "lines.csv").write_bytes(b"x")
+
+    # Act
+    payload = viewer_client.get("/api/data/status").json()
+
+    # Assert
+    assert payload["cache"]["snap_counts"] == [2025]
+    assert [(f["cache"], f["name"]) for f in payload["cache_files"]] == [
+        ("nflreadpy", "players.parquet"),
+        ("nfelo", "lines.csv"),
+    ]
 
 
 def test_data_unattached_lists_prediction_files(

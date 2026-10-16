@@ -5,18 +5,18 @@ from __future__ import annotations
 import json
 import os
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import pytest
 
+from nfl_predictor import constants
 from nfl_predictor.api.readers import betting, cache, data_status, model, power, predictions
 from nfl_predictor.api.runs.files import resolve_run_files
 from tests.api import factories
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from nfl_predictor.api.db import Database
 
 
@@ -645,8 +645,8 @@ def test_wf_compare_prefers_deterministic_ranking(tmp_path: Path) -> None:
     assert table.rows[0]["wf_rank"] == 1
 
 
-def test_dataset_files_list_the_inputs_the_pipeline_reads() -> None:
-    """The data-status page lists the ETL outputs and the quarterback Elo input, in order."""
+def test_dataset_files_list_the_files_the_pipeline_writes_and_reads() -> None:
+    """The data-status page lists the ETL outputs, its build records and its inputs, in order."""
     # Act
     names = [name for name, _description in data_status.DATASET_FILES]
 
@@ -656,8 +656,72 @@ def test_dataset_files_list_the_inputs_the_pipeline_reads() -> None:
         "all_data.csv",
         "completed_games_ml.csv",
         "completed_games.csv",
+        "strength_snapshots.csv",
+        "ratings/",
+        "market_lines_metadata.json",
+        "own_elo_metadata.json",
         "qb_elos.csv",
+        "meta_data.csv",
     ]
+
+
+# Data-path constants the files card leaves out on purpose, each with its reason.
+DATASET_FILE_EXCLUSIONS: dict[str, str] = {
+    "ETL_SEASON_CACHE_DIRNAME": "a cache under data/cache/, shown in the cache card",
+}
+
+
+def _data_path_constants() -> dict[str, str]:
+    """Return the data-file constants in ``constants.py`` outside the cache, by name.
+
+    A ``*_NAME`` constant is a file's base name and a ``*_DIRNAME`` constant a directory's; a
+    ``Path`` constant counts when it lies under the data directory but not under its cache.
+    """
+    found: dict[str, str] = {}
+    cache_root = constants.DATA_PATH / "cache"
+    for name, value in vars(constants).items():
+        if not name.isupper():
+            continue
+        if isinstance(value, str) and name.endswith("_DIRNAME"):
+            found[name] = f"{value}/"
+        elif isinstance(value, str) and name.endswith("_NAME"):
+            found[name] = value
+        elif (
+            isinstance(value, Path)
+            and value.is_relative_to(constants.DATA_PATH)
+            and value != constants.DATA_PATH
+            and not value.is_relative_to(cache_root)
+        ):
+            found[name] = value.relative_to(constants.DATA_PATH).as_posix()
+    return found
+
+
+def test_dataset_files_cover_every_data_path_constant() -> None:
+    """Every data-file constant is listed on the files card or excluded with a reason."""
+    # Arrange
+    listed = {name for name, _description in data_status.DATASET_FILES}
+    stems = {name.rsplit(".", 1)[0] for name in listed}
+
+    # Act
+    missing = {
+        constant: value
+        for constant, value in _data_path_constants().items()
+        if value not in listed and value not in stems and constant not in DATASET_FILE_EXCLUSIONS
+    }
+
+    # Assert
+    assert missing == {}
+    assert set(DATASET_FILE_EXCLUSIONS) <= set(vars(constants))
+
+
+def test_dataset_files_have_unique_names_and_descriptions() -> None:
+    """Each listed file appears once and says what the pipeline does with it."""
+    # Act
+    names = [name for name, _description in data_status.DATASET_FILES]
+
+    # Assert
+    assert len(names) == len(set(names))
+    assert all(description.strip() for _name, description in data_status.DATASET_FILES)
 
 
 def test_file_status_reads_rows_and_seasons(project_root: Path) -> None:
@@ -697,24 +761,138 @@ def test_file_status_of_a_missing_file_does_not_exist(project_root: Path) -> Non
     assert not status.exists
 
 
-def test_cache_coverage_lists_seasons_per_family(project_root: Path) -> None:
-    """Cache coverage lists each nflreadpy family's seasons and ignores other files."""
+def test_file_status_of_a_json_file_has_size_without_rows(project_root: Path) -> None:
+    """A JSON build record reports its size and time but no rows or seasons."""
     # Arrange
-    cache_dir = project_root / "data" / "cache" / "nflreadpy"
+    data = project_root / "data"
+    (data / "own_elo_metadata.json").write_text('{"a": 1}', encoding="utf-8")
+
+    # Act
+    status = data_status.file_status(data, "own_elo_metadata.json", "d")
+
+    # Assert
+    assert status.exists
+    assert status.size == len('{"a": 1}')
+    assert status.modified_at is not None
+    assert status.rows is None
+    assert status.seasons is None
+    assert status.file_count is None
+
+
+def test_file_status_of_a_directory_counts_its_files(project_root: Path) -> None:
+    """A directory entry reports its file count, total size, newest time and season range."""
+    # Arrange
+    ratings = project_root / "data" / "ratings"
+    ratings.mkdir()
+    (ratings / "2024_ratings.parquet").write_bytes(b"abc")
+    (ratings / "2026_qb_ratings.parquet").write_bytes(b"defgh")
+    (ratings / "notes.txt").write_bytes(b"z")
+    os.utime(ratings / "2024_ratings.parquet", (1_000_000_000, 1_000_000_000))
+    os.utime(ratings / "2026_qb_ratings.parquet", (2_000_000_000, 2_000_000_000))
+    os.utime(ratings / "notes.txt", (1_500_000_000, 1_500_000_000))
+
+    # Act
+    status = data_status.file_status(project_root / "data", "ratings/", "d")
+
+    # Assert
+    assert status.exists
+    assert status.file_count == 3
+    assert status.size == 9
+    assert status.modified_at == data_status.iso_time(2_000_000_000)
+    assert status.seasons == (2024, 2026)
+    assert status.rows is None
+
+
+def test_file_status_of_an_empty_directory_has_no_time(project_root: Path) -> None:
+    """An empty directory exists with no files, no size and no modified time."""
+    # Arrange
+    (project_root / "data" / "ratings").mkdir()
+
+    # Act
+    status = data_status.file_status(project_root / "data", "ratings/", "d")
+
+    # Assert
+    assert status.exists
+    assert status.file_count == 0
+    assert status.size == 0
+    assert status.modified_at is None
+    assert status.seasons is None
+
+
+def test_file_status_of_a_missing_directory_does_not_exist(project_root: Path) -> None:
+    """A missing directory entry reports that it does not exist."""
+    # Act
+    status = data_status.file_status(project_root / "data", "ratings/", "d")
+
+    # Assert
+    assert not status.exists
+    assert status.file_count is None
+
+
+def _write_nflreadpy_cache(cache_dir: Path) -> None:
+    """Write season files for every nflreadpy source, a non-season file and some clutter."""
     cache_dir.mkdir(parents=True)
     for name in (
-        "pbp_2024_reg.parquet",
         "schedule_2025.parquet",
         "schedule_2024.parquet",
+        "pbp_2024_reg.parquet",
+        "pbp_2024_all.parquet",
+        "official_team_stats_2025_reg.parquet",
+        "team_stats_2024_reg.parquet",
+        "player_stats_week_2023_reg.parquet",
+        "snap_counts_2025_reg.parquet",
+        "rosters_2002.parquet",
+        "rosters_weekly_2003_all.parquet",
+        "players.parquet",
         "junk.txt",
     ):
-        (cache_dir / name).write_bytes(b"")
+        (cache_dir / name).write_bytes(b"x")
+    (cache_dir / "backup_old").mkdir()
+    (cache_dir / "backup_old" / "schedule_1990.parquet").write_bytes(b"x")
+
+
+def test_cache_coverage_lists_seasons_per_source(project_root: Path) -> None:
+    """Cache coverage lists every season-partitioned nflreadpy source found on disk."""
+    # Arrange
+    cache_dir = project_root / "data" / "cache" / "nflreadpy"
+    _write_nflreadpy_cache(cache_dir)
 
     # Act
     coverage = data_status.cache_coverage(cache_dir)
 
     # Assert
-    assert coverage == {"schedule": [2024, 2025], "pbp": [2024]}
+    assert coverage == {
+        "schedule": [2024, 2025],
+        "pbp": [2024],
+        "official_team_stats": [2025],
+        "team_stats": [2024],
+        "player_stats_week": [2023],
+        "snap_counts": [2025],
+        "rosters": [2002],
+        "rosters_weekly": [2003],
+    }
+
+
+def test_cache_coverage_keeps_schedule_and_pbp_first(project_root: Path) -> None:
+    """The schedule and play-by-play keys come first, then the other sources by name."""
+    # Arrange
+    cache_dir = project_root / "data" / "cache" / "nflreadpy"
+    _write_nflreadpy_cache(cache_dir)
+
+    # Act
+    coverage = data_status.cache_coverage(cache_dir)
+
+    # Assert
+    assert list(coverage) == [
+        "schedule",
+        "pbp",
+        "official_team_stats",
+        "player_stats_week",
+        "rosters",
+        "rosters_weekly",
+        "snap_counts",
+        "team_stats",
+    ]
 
 
 def test_cache_coverage_of_a_missing_directory_is_empty(project_root: Path) -> None:
@@ -724,6 +902,76 @@ def test_cache_coverage_of_a_missing_directory_is_empty(project_root: Path) -> N
 
     # Assert
     assert coverage == {"schedule": [], "pbp": []}
+
+
+def test_cache_files_list_entries_that_are_not_season_files(project_root: Path) -> None:
+    """Non-season cache entries are listed per cache, a directory with its file count."""
+    # Arrange
+    cache_root = project_root / "data" / "cache"
+    _write_nflreadpy_cache(cache_root / "nflreadpy")
+    nfelo = cache_root / "nfelo"
+    (nfelo / "snapshots").mkdir(parents=True)
+    (nfelo / "lines.csv").write_bytes(b"12345")
+    (nfelo / "snapshots" / "lines_aaa.csv").write_bytes(b"12")
+    (nfelo / "snapshots" / "lines_bbb.csv").write_bytes(b"345")
+    os.utime(nfelo / "snapshots" / "lines_bbb.csv", (2_000_000_000, 2_000_000_000))
+    (nfelo / "win_totals" / "snapshots").mkdir(parents=True)
+    (nfelo / "win_totals" / "wt_ratings.csv").write_bytes(b"1")
+
+    # Act
+    files = data_status.cache_files({"nflreadpy": cache_root / "nflreadpy", "nfelo": nfelo})
+
+    # Assert
+    summary = [(f.cache, f.name, f.file_count, f.size) for f in files]
+    assert summary == [
+        ("nflreadpy", "backup_old/", 1, 1),
+        ("nflreadpy", "junk.txt", 1, 1),
+        ("nflreadpy", "players.parquet", 1, 1),
+        ("nfelo", "lines.csv", 1, 5),
+        ("nfelo", "snapshots/", 2, 5),
+        ("nfelo", "win_totals/", 1, 1),
+    ]
+    snapshots = next(f for f in files if f.name == "snapshots/")
+    assert snapshots.modified_at == data_status.iso_time(2_000_000_000)
+
+
+def test_cache_files_of_missing_caches_are_empty(project_root: Path) -> None:
+    """Caches that do not exist list no files."""
+    # Act
+    files = data_status.cache_files({"nfelo": project_root / "data" / "cache" / "nfelo"})
+
+    # Assert
+    assert files == []
+
+
+def test_other_seasons_list_team_rankings_and_etl_season_builds(project_root: Path) -> None:
+    """TeamRankings scrapes and the ETL's season builds report the seasons they hold."""
+    # Arrange
+    data = project_root / "data"
+    for season in (2025, 2024):
+        (data / str(season)).mkdir()
+        (data / str(season) / f"{season}_week_01_team_rankings.csv").write_bytes(b"x")
+    (data / "2026").mkdir()
+    (data / "backup_2023").mkdir()
+    (data / "backup_2023" / "2023_week_01_team_rankings.csv").write_bytes(b"x")
+    etl = data / "cache" / "etl_seasons"
+    for name in ("season_2001", "season_1999", "other"):
+        (etl / name).mkdir(parents=True)
+
+    # Act
+    seasons = data_status.other_seasons(data)
+
+    # Assert
+    assert seasons == {"team_rankings": [2024, 2025], "etl_seasons": [1999, 2001]}
+
+
+def test_other_seasons_of_an_empty_data_directory_are_empty(project_root: Path) -> None:
+    """With nothing on disk both season lists are empty."""
+    # Act
+    seasons = data_status.other_seasons(project_root / "data")
+
+    # Assert
+    assert seasons == {"team_rankings": [], "etl_seasons": []}
 
 
 def test_latest_leakage_audit_without_reports_is_none(project_root: Path) -> None:

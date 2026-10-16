@@ -874,7 +874,8 @@ points and margin MAE. Weeks 3-18 the same, except that the arms tie on pool poi
 each). Weeks 1 and 2, the candidate leads on every column except week 2 total MAE. The rank table
 for every window and column is in `REVIEW.md`.
 
-**The floor sigma in a weekly run without game lines: an open rule-11 gap.** The reviewer's one
+**The floor sigma in a weekly run without game lines: a rule-11 gap, fixed in `0.63.0`.** The
+reviewer's one
 rule-11 finding (severity P2). The reference arm is what `nfl-predictor weekly --wf-market-mode
 none` (and `train` and `backtest` without market features or anchor) does, except for the floor
 sigma's source. The weekly run loads its floor-sigma reference runs in every market mode
@@ -885,12 +886,10 @@ sigma's source. The weekly run loads its floor-sigma reference runs in every mar
 sigma from the anchored model's out-of-fold errors (final pooled `13.3184` and `13.3182`), while
 every walk-forward without game lines, these runs and step 6's, pools its own (final `13.3969` and
 `13.4341` for the reference). That weekly run's probabilities would be slightly sharper than the
-ones measured here (a sigma about `0.1` lower). The difference is not approved. The fix is the
-user's decision, due when a weekly prediction without game lines is adopted (`HYPOTHESIS.md`
-scopes the reference question out until then); the reviewer suggests pointing mode `none` at a
-reference without game lines (`no_lines_seed{42,7}` here qualify) or warning when the mode and the
-reference runs' market settings disagree. The weekly run with game lines is unaffected, and so is
-this verdict: both arms pooled their own errors.
+ones measured here (a sigma about `0.1` lower). The user chose the fix on 2026-10-15: since
+`0.63.0` a run without game lines defaults to `constants.NO_GAME_LINES_FLOOR_SIGMA_REFERENCE_RUNS`,
+this measurement's reference arm (`no_lines_seed{42,7}`). The weekly run with game lines is
+unaffected, and so is this verdict: both arms pooled their own errors.
 
 The reviewer's other findings, all minor (P3): `compare`'s production-settings section always
 compares with the weekly config with game lines, so for runs without them it lists the expected

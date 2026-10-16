@@ -266,7 +266,7 @@ Steps:
      sha256 `8c1028438a66594c8ecb1445ed8fcf4403ccf0e7a8c2cd3a1f1ed4c34519ce06`; two arms on the
      grouped measurement's new-file cut, two seeds, four runs, code at `main` `d791846`: a tie, the
      group stays in `constants.NO_GAME_LINES_DISABLED_FEATURE_GROUPS` and no default changes; the
-     review's floor-sigma gap is under "Open follow-ups";
+     review's floor-sigma gap is fixed in `0.63.0` (`ARCHIVE.md`);
    - open: `../nfeloqb`, a backup's first start in next-week projections rated as played rows
      rate it (`get_value(team)` in place of `current_value`), test first;
    - open: the fork's win-total file ends at 2023: its own measurement after the grouped one,
@@ -571,18 +571,6 @@ Acceptance:
 
 Each group names the archived milestone it came from; the milestone's full record is in
 `ARCHIVE.md`. Resolved items have moved there.
-
-### From the `qb_adj` measurement without game lines (2026-10-15, step 7)
-
-- [ ] (the user's decision) The floor sigma in a weekly run without game lines, an open rule-11
-      gap: `weekly_run/pipeline.py` loads
-      `floor_sigma.load_reference_pool(args.floor_sigma_reference_runs)` in every market mode
-      (`ml/floor_sigma.py` has no market-mode branch), and those runs are the market-anchored
-      `models/qb_elos_measure/new_file_seed{42,7}`. A weekly run with `--wf-market-mode none`
-      would take a sigma about `0.1` lower (final `13.3184`/`13.3182`) than the measured reference
-      without game lines pooled from its own errors (`13.3969`/`13.4341`), so slightly sharper
-      probabilities than measured. The weekly run with game lines is unaffected. Options and
-      numbers: `.agents/benchmarks.md`, "The quarterback adjustment without game lines".
 
 ### From the step-3 merge test (2026-09-28)
 

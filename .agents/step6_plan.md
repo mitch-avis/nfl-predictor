@@ -204,7 +204,9 @@ small and local.
   field) and leaves Madrid blank; this feeds `stadium_type`. Recommendation: no override now,
   because the current season's schedule is downloaded again on every ETL run; recheck before the
   Paris game (2026-10-25) and add a roof override then if it is still wrong
-  (`.agents/sos_port/decisions/pbp_columns.md`).
+  (`.agents/sos_port/decisions/pbp_columns.md`). Status 2026-10-16: the user chose overrides
+  for Paris and Munich (`outdoors`, `0.63.1`, entry 13); Melbourne stays as nflverse has it;
+  Madrid's blank roof reads `unknown` and falls under step 8's retractable-roof item.
 
 ## User decisions during the run (2026-10-10, about 13:20)
 

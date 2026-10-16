@@ -654,6 +654,8 @@ fixed, is in `.agents/step6_plan.md` ("Small open findings from the integration 
       the identity pair (on/off, two seeds) with the other feature-value changes. Measured in the
       next-opponent identity test (a tie, `models/step4/REVIEW.md`); dropped from the model by
       the user (2026-10-02) and pruned by default in `0.44.0`. The ETL still writes the pair.
+      The contents of `models/step4/`, that `REVIEW.md` included, were deleted on 2026-10-16
+      (`.agents/models_cleanup/deleted_2026-10-16.txt`); the result stands as reviewed.
 - [ ] (step 6, phase 3) The early-season strength snapshot, which drives the default power
       rankings and the `adj_*` model features, is dominated by last season. At 2026 snapshot week
       3 (two games per team) the published composite correlates far more with the regressed 2025

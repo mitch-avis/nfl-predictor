@@ -15,7 +15,9 @@
   `2026_10_NE_DET`) get `stadium_roof` `outdoors` and `stadium_type` `open`: both are open-air
   fields that nflverse's schedule lists as `dome`. The corrections sit in
   `constants.STADIUM_ROOF_OVERRIDES` and apply to fresh and cached schedules alike; neither venue
-  hosted a game before 2026, so no earlier feature value changes.
+  hosted a game before 2026, so no earlier feature value changes. `constants.py` changed, so
+  every walk-forward checkpoint fingerprint, the weekly stage hashes and the season-cache key
+  move: the first weekly run after the upgrade retrains stage 1 and rebuilds the season cache.
 
 ## [0.63.0] - 2026-10-15
 

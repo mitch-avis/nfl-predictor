@@ -355,7 +355,7 @@ step that absorbs it; none is left for "when the area is next touched":
 | 2 (Milestone 60) | All resolved in Milestone 60 (`ARCHIVE.md`, "Step-2 follow-ups, resolved in Milestone 60") |
 | 3 (parity) | Narrowed 59.2, the out-of-fold calibration pool (Milestone 59); the four calibration-window items: `select_calibration_data`, `--train-calibration-seasons 1`, `--include-postseason` roll-back, `_split_train_calibration_holdout` (2026-09-11 review); the per-template live web checks and the blend power rankings (Milestone 60); the feature-importance aggregation (2026-09-25 review) |
 | 4, first | Done, apart from the low-priority schedule fallback (step-3 merge test group). The play-by-play cache key (Milestone 45), bit-reproducible rebuilds (Milestone 46), the CSV type guessing (step-3 merge test), the incremental ETL (Week 3 run), the split-review follow-ups and the schedule cache were resolved in `0.37.2`-`0.38.2` |
-| 6, phases 3-4 (from step 4) | Checked 2026-10-16 by `.agents/sos_port/followup_check.py`: four retired (feed neither the production model nor the default power rankings) and two resolved in `0.54.0`, recorded in `ARCHIVE.md`, "Roadmap step 6 - Follow-ups from step 4". Still open, each feeding production: the early-season stat blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3 in step 9); what is left of `_attach_qb_features`, of scramble attribution and of the QB identity chain (2026-09-11 review) |
+| 6, phases 3-4 (from step 4) | Checked 2026-10-16 by `.agents/sos_port/followup_check.py`: three retired (feed neither the production model nor the default power rankings) and two resolved in `0.54.0`, recorded in `ARCHIVE.md`, "Roadmap step 6 - Follow-ups from step 4". Still open: the early-season strength snapshot, which drives the composite rankings of `nfl-predictor rankings` and the web Power rankings job; and, each feeding production, the early-season stat blend's weeks 3-18 margin MAE cost (Milestone 49, with 55.3 in step 9); what is left of `_attach_qb_features`, of scramble attribution and of the QB identity chain (2026-09-11 review) |
 
 Rules for every feature milestone:
 
@@ -654,6 +654,25 @@ fixed, is in `.agents/step6_plan.md` ("Small open findings from the integration 
       the identity pair (on/off, two seeds) with the other feature-value changes. Measured in the
       next-opponent identity test (a tie, `models/step4/REVIEW.md`); dropped from the model by
       the user (2026-10-02) and pruned by default in `0.44.0`. The ETL still writes the pair.
+- [ ] (step 6, phase 3) The early-season strength snapshot, which drives the default power
+      rankings and the `adj_*` model features, is dominated by last season. At 2026 snapshot week
+      3 (two games per team) the published composite correlates far more with the regressed 2025
+      full-season solve than with the 2026 in-season solve, and for the four EPA components the
+      prior contributes about three times the spread (`strength_prior_share.py`). Two causes: the
+      in-season solve is shrunk twice, once by the ridge penalty (stronger with fewer games) and
+      again by the blend weight `games / (games + PRIOR_BLEND_GAMES)`, while the prior is a
+      17-game solve regressed by one third; and the prior carries no off-season information. The
+      composite also reads per-snap EPA and special teams only, not wins or points, so a
+      head-to-head result moves it only through that game's EPA. Task 55.3 measures `K`; it
+      should take the double shrinkage into account, because `K = 4` does not give the in-season
+      solve the weight its comment in `constants.py` describes.
+      Status 2026-10-16: no longer a model input (the `strength` group is left out since
+      `0.59.0`), and the weekly run ranks on the blend (`weekly_run/config.py:46`), but the
+      snapshot still drives two default rankings through the composite: `nfl-predictor rankings`
+      without `--method` (`reporting/power_rankings.py:1264` `resolve_ranking_options`,
+      `cli/rankings.py:113`, `README.md:1064`), and the web app's Power rankings job, which passes
+      no `--method` (`api/jobs/catalog.py:279-297` `_build_power_rankings`) and whose rankings the
+      Power page shows. Open.
 
 ### From the 2026 Week 3 weekly run (2026-09-24)
 

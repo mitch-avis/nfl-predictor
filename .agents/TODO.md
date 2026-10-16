@@ -378,7 +378,8 @@ Rules for every feature milestone:
   plus a one-hop schedule-strength companion. The QB milestone tried the same two lenses on
   quarterbacks (task 53.6) and dropped them; its remaining form is the adjusted rate (53.7).
 - Keep walk-forward comparison artifacts under `models/`; numbers reported in these files must be
-  auditable from disk, except from the runs listed in `.agents/models_cleanup/`.
+  auditable from disk, except from the runs listed in
+  `.agents/models_cleanup/deleted_2026-10-16.txt`, whose directories were deleted on 2026-10-16.
 
 ---
 

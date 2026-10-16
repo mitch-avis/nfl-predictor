@@ -143,18 +143,18 @@ export function DataStatusPage() {
                       </div>
                       {(query.data.leakage_audit.flagged_columns ?? []).length > 0 ? (
                         <ul className="space-y-0.5 text-xs">
-                          {(query.data.leakage_audit.flagged_columns ?? []).map((flag) => (
-                            <li key={flag.column}>
+                          {(query.data.leakage_audit.flagged_columns ?? []).map((flag, index) => (
+                            <li key={`${index}:${flag.column}`}>
                               <span className="font-mono">{flag.column}</span>
-                              <span className="text-muted-foreground"> · {readableReasons(flag.reason)}</span>
+                              {readableReasons(flag.reason) ? <span className="text-muted-foreground"> · {readableReasons(flag.reason)}</span> : null}
                             </li>
                           ))}
                         </ul>
                       ) : null}
                       {!query.data.leakage_audit.ok && (query.data.leakage_audit.failures ?? []).length > 0 ? (
                         <ul className="space-y-0.5 text-xs text-destructive">
-                          {(query.data.leakage_audit.failures ?? []).map((failure) => (
-                            <li key={failure}>{failure}</li>
+                          {(query.data.leakage_audit.failures ?? []).map((failure, index) => (
+                            <li key={`${index}:${failure}`}>{failure}</li>
                           ))}
                         </ul>
                       ) : null}

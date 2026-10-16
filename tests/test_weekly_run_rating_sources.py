@@ -213,25 +213,19 @@ def test_weekly_rankings_skip_unreadable_model_predictions(
 
 
 @pytest.mark.parametrize(
-    ("season", "missing", "reason"),
-    [
-        (None, None, "unable to infer season/week"),
-        (2024, "data_ml", "missing"),
-        (2024, "schedule", "missing"),
-    ],
+    ("season", "missing"), [(None, None), (2024, "all_data_ml.csv"), (2024, "schedule.csv")]
 )
 def test_weekly_rankings_skipped_before_ranking_log_a_warning(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
     season: int | None,
     missing: str | None,
-    reason: str,
 ) -> None:
     # Arrange
     data_ml = tmp_path / "all_data_ml.csv"
     schedule = tmp_path / "schedule.csv"
-    for path, name in ((data_ml, "data_ml"), (schedule, "schedule")):
-        if name != missing:
+    for path in (data_ml, schedule):
+        if path.name != missing:
             path.write_text("season,week\n", encoding="utf-8")
     argv = [
         "--power-rankings-data-ml",
@@ -261,8 +255,10 @@ def test_weekly_rankings_skipped_before_ranking_log_a_warning(
     # Assert
     assert written.paths == []
     skips = [r for r in caplog.records if r.getMessage().startswith("Power rankings skipped")]
-    assert [r.levelno for r in skips] == [logging.WARNING]
-    assert reason in skips[0].getMessage()
+    reason = "unable to infer season/week." if missing is None else f"missing {tmp_path / missing}"
+    assert [(r.levelno, r.getMessage()) for r in skips] == [
+        (logging.WARNING, f"Power rankings skipped: {reason}")
+    ]
 
 
 DEFAULT_SOURCE_FLAGS = [

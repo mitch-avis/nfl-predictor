@@ -50,18 +50,26 @@ leaving it stale.
   whose rankings are stamped one week earlier, which can be one of those experiments rather than
   the production run for that week. Direction: mark runs as production or experiment, and take
   the previous week only from production runs.
+- 2026-10-16, Power rankings page and the Jobs page's Power rankings job: the job
+  (`_build_power_rankings`, `src/nfl_predictor/api/jobs/catalog.py:279-297`) runs
+  `nfl-predictor rankings` without `--method`, so it ranks with that command's default, the
+  composite of the strength snapshot, while the weekly run ranks with the blend
+  (`src/nfl_predictor/weekly_run/config.py:46`). A ranking the web writes into a run directory
+  therefore differs from the one production wrote there. Direction: pass the weekly run's method
+  and blend inputs, or label the method on the page.
 
 ## UI and code
 
 - 2026-10-16, `DataTable`: a button inside a button. The column's info button
   (`web/src/components/common/InfoTooltip.tsx:11`, rendered by `HeaderLabel` at
-  `DataTable.tsx:70`) sits inside the sort button (`DataTable.tsx:177-185`). That is invalid HTML,
-  and the sort button's `aria-label` ("Sort by X", line 181) hides the column description from
-  screen readers. Direction: put the info button beside the sort button, not inside it.
-- 2026-10-16, `DataTable` table semantics: the header cells (`<th>` at `DataTable.tsx:166`) have
-  no `scope="col"` and the table (line 152) no `<caption>`; only the primary sorted header carries
-  `aria-sort` (line 169), so a secondary sort key shows only as an icon (line 184), and
-  multi-column sorting by shift-click is not discoverable.
+  `web/src/components/table/DataTable.tsx:70`) sits inside the sort button
+  (`web/src/components/table/DataTable.tsx:177-185`). That is invalid HTML, and the sort button's
+  `aria-label` ("Sort by X", line 181) hides the column description from screen readers. Direction:
+  put the info button beside the sort button, not inside it.
+- 2026-10-16, `DataTable` table semantics: the header cells (`<th>` at
+  `web/src/components/table/DataTable.tsx:166`) have no `scope="col"` and the table (line 152) no
+  `<caption>`; only the primary sorted header carries `aria-sort` (line 169), so a secondary sort
+  key shows only as an icon (line 184), and multi-column sorting by shift-click is not discoverable.
 - 2026-10-16, inconsistent tables: `web/src/pages/Runs.tsx`, `DataStatus.tsx`, `Users.tsx` and
   `Jobs.tsx` use the plain `web/src/components/ui/table.tsx` (no sorting, heat colors or sticky
   header), while `web/src/pages/HeadToHead.tsx:85`,
@@ -75,8 +83,9 @@ leaving it stale.
 - 2026-10-16, dead script: `web/package.json:14` defines `gen:api` as
   `node scripts/gen-api-types.mjs`, and `web/scripts/` does not exist. `.agents/web_ui_plan.md:410`
   describes it as a type-drift check that CI runs; CI does not.
-- 2026-10-16, `DataTable` empty state: the empty message (`DataTable.tsx:147`) is a plain `div`
-  without `role="status"`. Loading and error states are handled per page and were not reviewed.
+- 2026-10-16, `DataTable` empty state: the empty message
+  (`web/src/components/table/DataTable.tsx:147`) is a plain `div` without `role="status"`. Loading
+  and error states are handled per page and were not reviewed.
 
 ## Fixed since noted
 

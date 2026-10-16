@@ -86,10 +86,14 @@ def tracked_python_files() -> list[Path]:
 
 
 def scan_files(root: Path, files: list[Path]) -> list[str]:
-    """Return the suppression hits of ``files``, each named relative to ``root``."""
+    """Return the suppression hits of ``files``, each named relative to ``root``.
+
+    A tracked file deleted from the working tree has nothing to scan and is skipped.
+    """
     return [
         hit
         for path in files
+        if path.is_file()
         for hit in suppression_hits(path.read_text(encoding="utf-8"), str(path.relative_to(root)))
     ]
 
